@@ -45,19 +45,23 @@ unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
     return std::make_unique<DiagnosticsEngine>(diagID, &*diagOpts, diagClient);
 }
 
+unique_ptr<Driver> initializeDriver(DiagnosticsEngine &Diags) {
+    std::string tripleStr = llvm::sys::getProcessTriple();
+    llvm::Triple triple(tripleStr);
+    auto driver = std::make_unique<Driver>("/usr/bin/clang", triple.str(), Diags);
+    driver->setTitle("clang/llvm example");
+    driver->setCheckInputsExist(false);
+    return driver;
+}
+
 int main(int argc, const char **argv) {
     auto diags = initializeDiagnostics();
 
-    std::string tripleStr = llvm::sys::getProcessTriple();
-    llvm::Triple triple(tripleStr);
-
-    Driver driver("/usr/bin/clang", triple.str(), *diags);
-    driver.setTitle("clang/llvm example");
-    driver.setCheckInputsExist(false);
+    auto driver = initializeDriver(*diags);
 
     auto args = initializeArgs<16>(argv, argc);
 
-    std::unique_ptr<Compilation> comp(driver.BuildCompilation(args));
+    std::unique_ptr<Compilation> comp(driver->BuildCompilation(args));
     if (!comp) {
         return 1;
     }
