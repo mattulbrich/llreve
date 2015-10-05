@@ -76,23 +76,22 @@ ErrorOr<const driver::Command &> getCmd(Compilation &Comp,
     return makeErrorOr(Cmd);
 }
 
-template <typename T> ErrorOr<T> makeErrorOr(T Arg) {
-    return ErrorOr<T>(Arg);
-}
+template <typename T> ErrorOr<T> makeErrorOr(T Arg) { return ErrorOr<T>(Arg); }
 
-int main(int argc, const char **argv) {
+unique_ptr<llvm::Module> getModule(int argc, const char **argv,
+                                   CodeGenAction &Act) {
     auto diags = initializeDiagnostics();
     auto driver = initializeDriver(*diags);
     auto args = initializeArgs<16>(argv, argc);
 
     std::unique_ptr<Compilation> comp(driver->BuildCompilation(args));
     if (!comp) {
-        return 1;
+        return nullptr;
     }
 
     auto CmdOrError = getCmd(*comp, *diags);
     if (!CmdOrError) {
-        return 1;
+        return nullptr;
     }
     auto Cmd = CmdOrError.get();
 
@@ -110,19 +109,20 @@ int main(int argc, const char **argv) {
     Clang.createDiagnostics();
     if (!Clang.hasDiagnostics()) {
         cout << "Couldn't enable diagnostics\n";
-        return 1;
+        return nullptr;
     }
 
-    // Create and execute the frontend to generate an LLVM bitcode module.
-    std::unique_ptr<CodeGenAction> act(new EmitLLVMOnlyAction());
-    if (!Clang.ExecuteAction(*act)) {
+    if (!Clang.ExecuteAction(Act)) {
         cout << "Couldn't execute action\n";
-        return 1;
+        return nullptr;
     }
+    return Act.takeModule();
+}
 
-    unique_ptr<llvm::Module> mod = act->takeModule();
-    if (!mod) {
-        cerr << "Error taking module\n";
+int main(int argc, const char **argv) {
+    std::unique_ptr<CodeGenAction> act(new EmitLLVMOnlyAction());
+    auto mod = getModule(argc, argv, *act);
+    if (mod == nullptr) {
         return 1;
     }
 
