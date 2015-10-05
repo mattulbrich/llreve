@@ -48,10 +48,32 @@ unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
 unique_ptr<Driver> initializeDriver(DiagnosticsEngine &Diags) {
     std::string tripleStr = llvm::sys::getProcessTriple();
     llvm::Triple triple(tripleStr);
-    auto driver = std::make_unique<Driver>("/usr/bin/clang", triple.str(), Diags);
+    auto driver =
+        std::make_unique<Driver>("/usr/bin/clang", triple.str(), Diags);
     driver->setTitle("clang/llvm example");
     driver->setCheckInputsExist(false);
     return driver;
+}
+
+ErrorOr<const driver::Command &> getCmd(Compilation &Comp,
+                                        DiagnosticsEngine &Diags) {
+    const driver::JobList &jobs = Comp.getJobs();
+
+    // there should be only one job
+    if (jobs.size() != 1) {
+        SmallString<256> Msg;
+        llvm::raw_svector_ostream OS(Msg);
+        jobs.Print(OS, "; ", true);
+        Diags.Report(diag::err_fe_expected_compiler_job) << OS.str();
+        return ErrorOr<const driver::Command &>(error_code());
+    }
+
+    const driver::Command &Cmd = cast<driver::Command>(*jobs.begin());
+    if (StringRef(Cmd.getCreator().getName()) != "clang") {
+        Diags.Report(diag::err_fe_expected_clang_command);
+        return ErrorOr<const driver::Command &>(error_code());
+    }
+    return ErrorOr<const driver::Command &>(Cmd);
 }
 
 int main(int argc, const char **argv) {
@@ -64,23 +86,11 @@ int main(int argc, const char **argv) {
         return 1;
     }
 
-    // There should only be one job
-    const driver::JobList &jobs = comp->getJobs();
-
-    // there should be only one job
-    if (jobs.size() != 1) {
-        SmallString<256> Msg;
-        llvm::raw_svector_ostream OS(Msg);
-        jobs.Print(OS, "; ", true);
-        diags->Report(diag::err_fe_expected_compiler_job) << OS.str();
+    auto CmdOrError = getCmd(*comp, *diags);
+    if (!CmdOrError) {
         return 1;
     }
-
-    const driver::Command &Cmd = cast<driver::Command>(*jobs.begin());
-    if (StringRef(Cmd.getCreator().getName()) != "clang") {
-        diags->Report(diag::err_fe_expected_clang_command);
-        return 1;
-    }
+    auto Cmd = CmdOrError.get();
 
     const driver::ArgStringList &CCArgs = Cmd.getArguments();
     std::unique_ptr<CompilerInvocation> CI(new CompilerInvocation);
@@ -125,7 +135,7 @@ int main(int argc, const char **argv) {
     return 0;
 }
 
-void doAnalysis(llvm::Function& fun) {
+void doAnalysis(llvm::Function &fun) {
     FunctionAnalysisManager fam(true); // enable debug log
     fam.registerPass(DominatorTreeAnalysis());
     fam.registerPass(LoopAnalysis());
