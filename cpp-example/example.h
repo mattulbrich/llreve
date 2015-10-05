@@ -9,3 +9,4 @@ auto initializeDriver(clang::DiagnosticsEngine &Diags)
 auto doAnalysis(llvm::Function &Fun) -> void;
 auto getCmd(clang::driver::Compilation &Comp, clang::DiagnosticsEngine &Diags)
     -> llvm::ErrorOr<const clang::driver::Command &>;
+template <typename T> auto makeErrorOr(T Arg) -> llvm::ErrorOr<T>;

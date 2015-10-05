@@ -73,7 +73,11 @@ ErrorOr<const driver::Command &> getCmd(Compilation &Comp,
         Diags.Report(diag::err_fe_expected_clang_command);
         return ErrorOr<const driver::Command &>(error_code());
     }
-    return ErrorOr<const driver::Command &>(Cmd);
+    return makeErrorOr(Cmd);
+}
+
+template <typename T> ErrorOr<T> makeErrorOr(T Arg) {
+    return ErrorOr<T>(Arg);
 }
 
 int main(int argc, const char **argv) {
