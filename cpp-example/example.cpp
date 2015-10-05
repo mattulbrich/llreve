@@ -27,26 +27,31 @@ using namespace clang::driver;
 using namespace llvm;
 using namespace std;
 
-template <int N> SmallVector<const char*, N> initializeArgs(const char **argv, int argc) {
+template <int N>
+SmallVector<const char *, N> initializeArgs(const char **argv, int argc) {
     SmallVector<const char *, N> args;
-    args.push_back(argv[0]); // add executable name
-    args.push_back("-xc"); // force language to C
+    args.push_back(argv[0]);            // add executable name
+    args.push_back("-xc");              // force language to C
     args.append(argv + 1, argv + argc); // add remaining args
-    args.push_back("-fsyntax-only"); // don't do more work than necessary
+    args.push_back("-fsyntax-only");    // don't do more work than necessary
     return args;
 }
 
+unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
+    const IntrusiveRefCntPtr<DiagnosticOptions> diagOpts =
+        new DiagnosticOptions();
+    auto diagClient = new TextDiagnosticPrinter(llvm::errs(), &*diagOpts);
+    const IntrusiveRefCntPtr<DiagnosticIDs> diagID(new DiagnosticIDs());
+    return std::make_unique<DiagnosticsEngine>(diagID, &*diagOpts, diagClient);
+}
+
 int main(int argc, const char **argv) {
-    IntrusiveRefCntPtr<DiagnosticOptions> diagOpts = new DiagnosticOptions();
-    auto diagClient =
-        new TextDiagnosticPrinter(llvm::errs(), &*diagOpts);
-    IntrusiveRefCntPtr<DiagnosticIDs> diagID(new DiagnosticIDs());
-    DiagnosticsEngine diags(diagID, &*diagOpts, diagClient);
+    auto diags = initializeDiagnostics();
 
     std::string tripleStr = llvm::sys::getProcessTriple();
     llvm::Triple triple(tripleStr);
 
-    Driver driver("/usr/bin/clang", triple.str(), diags);
+    Driver driver("/usr/bin/clang", triple.str(), *diags);
     driver.setTitle("clang/llvm example");
     driver.setCheckInputsExist(false);
 
@@ -65,13 +70,13 @@ int main(int argc, const char **argv) {
         SmallString<256> Msg;
         llvm::raw_svector_ostream OS(Msg);
         jobs.Print(OS, "; ", true);
-        diags.Report(diag::err_fe_expected_compiler_job) << OS.str();
+        diags->Report(diag::err_fe_expected_compiler_job) << OS.str();
         return 1;
     }
 
     const driver::Command &Cmd = cast<driver::Command>(*jobs.begin());
     if (llvm::StringRef(Cmd.getCreator().getName()) != "clang") {
-        diags.Report(diag::err_fe_expected_clang_command);
+        diags->Report(diag::err_fe_expected_clang_command);
         return 1;
     }
 
@@ -79,7 +84,7 @@ int main(int argc, const char **argv) {
     std::unique_ptr<CompilerInvocation> CI(new CompilerInvocation);
     CompilerInvocation::CreateFromArgs(
         *CI, const_cast<const char **>(CCArgs.data()),
-        const_cast<const char **>(CCArgs.data()) + CCArgs.size(), diags);
+        const_cast<const char **>(CCArgs.data()) + CCArgs.size(), *diags);
 
     // Show invocation if verbose
     if (CI->getHeaderSearchOpts().Verbose) {
