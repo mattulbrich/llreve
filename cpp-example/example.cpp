@@ -56,9 +56,7 @@ unique_ptr<Driver> initializeDriver(DiagnosticsEngine &Diags) {
 
 int main(int argc, const char **argv) {
     auto diags = initializeDiagnostics();
-
     auto driver = initializeDriver(*diags);
-
     auto args = initializeArgs<16>(argv, argc);
 
     std::unique_ptr<Compilation> comp(driver->BuildCompilation(args));
@@ -79,7 +77,7 @@ int main(int argc, const char **argv) {
     }
 
     const driver::Command &Cmd = cast<driver::Command>(*jobs.begin());
-    if (llvm::StringRef(Cmd.getCreator().getName()) != "clang") {
+    if (StringRef(Cmd.getCreator().getName()) != "clang") {
         diags->Report(diag::err_fe_expected_clang_command);
         return 1;
     }
@@ -89,13 +87,6 @@ int main(int argc, const char **argv) {
     CompilerInvocation::CreateFromArgs(
         *CI, const_cast<const char **>(CCArgs.data()),
         const_cast<const char **>(CCArgs.data()) + CCArgs.size(), *diags);
-
-    // Show invocation if verbose
-    if (CI->getHeaderSearchOpts().Verbose) {
-        llvm::errs() << "clang invocation:\n";
-        jobs.Print(llvm::errs(), "\n", true);
-        llvm::errs() << "\n";
-    }
 
     // Create a compiler instance to handle the actual work.
     CompilerInstance Clang;
@@ -126,8 +117,15 @@ int main(int argc, const char **argv) {
         errs() << "Couldn't find a function\n";
         return 1;
     }
-    llvm::Function &fun = funOrError.get();
 
+    doAnalysis(funOrError.get());
+
+    llvm::llvm_shutdown();
+
+    return 0;
+}
+
+void doAnalysis(llvm::Function& fun) {
     FunctionAnalysisManager fam(true); // enable debug log
     fam.registerPass(DominatorTreeAnalysis());
     fam.registerPass(LoopAnalysis());
@@ -138,10 +136,6 @@ int main(int argc, const char **argv) {
     auto results = fpm.run(fun, &fam);
 
     fam.getResult<LoopAnalysis>(fun).print(errs());
-
-    llvm::llvm_shutdown();
-
-    return 0;
 }
 
 ErrorOr<Function &> getFunction(llvm::Module &mod) {
