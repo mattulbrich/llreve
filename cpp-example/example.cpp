@@ -27,6 +27,15 @@ using namespace clang::driver;
 using namespace llvm;
 using namespace std;
 
+template <int N> SmallVector<const char*, N> initializeArgs(const char **argv, int argc) {
+    SmallVector<const char *, N> args;
+    args.push_back(argv[0]); // add executable name
+    args.push_back("-xc"); // force language to C
+    args.append(argv + 1, argv + argc); // add remaining args
+    args.push_back("-fsyntax-only"); // don't do more work than necessary
+    return args;
+}
+
 int main(int argc, const char **argv) {
     IntrusiveRefCntPtr<DiagnosticOptions> diagOpts = new DiagnosticOptions();
     auto diagClient =
@@ -41,16 +50,8 @@ int main(int argc, const char **argv) {
     driver.setTitle("clang/llvm example");
     driver.setCheckInputsExist(false);
 
-    // handle arguments
-    SmallVector<const char *, 16> args;
-    args.push_back(argv[0]); // add executable name
-    args.push_back("-xc"); // force language to c
-    args.append(argv + 1, argv + argc); // add remaining args
-    args.push_back("-fsyntax-only"); // don't do more work than necessary
+    auto args = initializeArgs<16>(argv, argc);
 
-    for(auto arg: args) {
-        cout << "Argument: " << arg << endl;
-    }
     std::unique_ptr<Compilation> comp(driver.BuildCompilation(args));
     if (!comp) {
         return 1;
