@@ -22,14 +22,26 @@
 
 #include "example.h"
 
-using namespace clang;
-using namespace clang::driver;
-using namespace llvm;
-using namespace std;
+using clang::CodeGenAction;
+using clang::CompilerInstance;
+using clang::CompilerInvocation;
+using clang::DiagnosticsEngine;
+
+using clang::driver::ArgStringList;
+using clang::driver::Command;
+using clang::driver::Compilation;
+using clang::driver::Driver;
+using clang::driver::JobList;
+
+using llvm::ErrorOr;
+using llvm::errs;
+using llvm::IntrusiveRefCntPtr;
+
+using std::unique_ptr;
 
 template <int N>
-SmallVector<const char *, N> initializeArgs(const char **argv, int argc) {
-    SmallVector<const char *, N> args;
+llvm::SmallVector<const char *, N> initializeArgs(const char **argv, int argc) {
+    llvm::SmallVector<const char *, N> args;
     args.push_back(argv[0]);            // add executable name
     args.push_back("-xc");              // force language to C
     args.append(argv + 1, argv + argc); // add remaining args
@@ -38,10 +50,12 @@ SmallVector<const char *, N> initializeArgs(const char **argv, int argc) {
 }
 
 unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
-    const IntrusiveRefCntPtr<DiagnosticOptions> diagOpts =
-        new DiagnosticOptions();
-    auto diagClient = new TextDiagnosticPrinter(llvm::errs(), &*diagOpts);
-    const IntrusiveRefCntPtr<DiagnosticIDs> diagID(new DiagnosticIDs());
+    const IntrusiveRefCntPtr<clang::DiagnosticOptions> diagOpts =
+        new clang::DiagnosticOptions();
+    auto diagClient =
+        new clang::TextDiagnosticPrinter(llvm::errs(), &*diagOpts);
+    const IntrusiveRefCntPtr<clang::DiagnosticIDs> diagID(
+        new clang::DiagnosticIDs());
     return std::make_unique<DiagnosticsEngine>(diagID, &*diagOpts, diagClient);
 }
 
@@ -55,31 +69,29 @@ unique_ptr<Driver> initializeDriver(DiagnosticsEngine &Diags) {
     return driver;
 }
 
-ErrorOr<const driver::Command &> getCmd(Compilation &Comp,
-                                        DiagnosticsEngine &Diags) {
-    const driver::JobList &jobs = Comp.getJobs();
+ErrorOr<const Command &> getCmd(Compilation &Comp, DiagnosticsEngine &Diags) {
+    const JobList &jobs = Comp.getJobs();
 
     // there should be only one job
     if (jobs.size() != 1) {
-        SmallString<256> Msg;
+        llvm::SmallString<256> Msg;
         llvm::raw_svector_ostream OS(Msg);
         jobs.Print(OS, "; ", true);
-        Diags.Report(diag::err_fe_expected_compiler_job) << OS.str();
-        return ErrorOr<const driver::Command &>(error_code());
+        Diags.Report(clang::diag::err_fe_expected_compiler_job) << OS.str();
+        return ErrorOr<const Command &>(std::error_code());
     }
 
-    const driver::Command &Cmd = cast<driver::Command>(*jobs.begin());
+    const Command &Cmd = llvm::cast<Command>(*jobs.begin());
     if (StringRef(Cmd.getCreator().getName()) != "clang") {
-        Diags.Report(diag::err_fe_expected_clang_command);
-        return ErrorOr<const driver::Command &>(error_code());
+        Diags.Report(clang::diag::err_fe_expected_clang_command);
+        return ErrorOr<const Command &>(std::error_code());
     }
     return makeErrorOr(Cmd);
 }
 
 template <typename T> ErrorOr<T> makeErrorOr(T Arg) { return ErrorOr<T>(Arg); }
 
-unique_ptr<llvm::Module> getModule(int argc, const char **argv,
-                                   CodeGenAction &Act) {
+unique_ptr<clang::CodeGenAction> getModule(int argc, const char **argv) {
     auto diags = initializeDiagnostics();
     auto driver = initializeDriver(*diags);
     auto args = initializeArgs<16>(argv, argc);
@@ -95,7 +107,7 @@ unique_ptr<llvm::Module> getModule(int argc, const char **argv,
     }
     auto Cmd = CmdOrError.get();
 
-    const driver::ArgStringList &CCArgs = Cmd.getArguments();
+    const ArgStringList &CCArgs = Cmd.getArguments();
     std::unique_ptr<CompilerInvocation> CI(new CompilerInvocation);
     CompilerInvocation::CreateFromArgs(
         *CI, const_cast<const char **>(CCArgs.data()),
@@ -108,25 +120,31 @@ unique_ptr<llvm::Module> getModule(int argc, const char **argv,
     // Create the compilers actual diagnostics engine.
     Clang.createDiagnostics();
     if (!Clang.hasDiagnostics()) {
-        cout << "Couldn't enable diagnostics\n";
+        std::cout << "Couldn't enable diagnostics\n";
         return nullptr;
     }
 
-    if (!Clang.ExecuteAction(Act)) {
-        cout << "Couldn't execute action\n";
+    std::unique_ptr<CodeGenAction> Act(new clang::EmitLLVMOnlyAction());
+
+    if (!Clang.ExecuteAction(*Act)) {
+        std::cout << "Couldn't execute action\n";
         return nullptr;
     }
-    return Act.takeModule();
+    return Act;
 }
 
 int main(int argc, const char **argv) {
-    std::unique_ptr<CodeGenAction> act(new EmitLLVMOnlyAction());
-    auto mod = getModule(argc, argv, *act);
-    if (mod == nullptr) {
+    auto Act = getModule(argc, argv);
+    if (!Act) {
         return 1;
     }
 
-    ErrorOr<llvm::Function &> funOrError = getFunction(*mod);
+    auto Mod = Act->takeModule();
+    if (!Mod) {
+        return 1;
+    }
+
+    ErrorOr<llvm::Function &> funOrError = getFunction(*Mod);
     if (!funOrError) {
         errs() << "Couldn't find a function\n";
         return 1;
@@ -140,27 +158,27 @@ int main(int argc, const char **argv) {
 }
 
 void doAnalysis(llvm::Function &fun) {
-    FunctionAnalysisManager fam(true); // enable debug log
-    fam.registerPass(DominatorTreeAnalysis());
-    fam.registerPass(LoopAnalysis());
+    llvm::FunctionAnalysisManager fam(true); // enable debug log
+    fam.registerPass(llvm::DominatorTreeAnalysis());
+    fam.registerPass(llvm::LoopAnalysis());
 
-    FunctionPassManager fpm(true); // enable debug log
+    llvm::FunctionPassManager fpm(true); // enable debug log
 
-    fpm.addPass(PrintFunctionPass(errs())); // dump function
+    fpm.addPass(llvm::PrintFunctionPass(errs())); // dump function
     auto results = fpm.run(fun, &fam);
 
-    fam.getResult<LoopAnalysis>(fun).print(errs());
+    fam.getResult<llvm::LoopAnalysis>(fun).print(errs());
 }
 
-ErrorOr<Function &> getFunction(llvm::Module &mod) {
+ErrorOr<llvm::Function &> getFunction(llvm::Module &mod) {
     if (mod.getFunctionList().size() == 0) {
-        return ErrorOr<Function &>(error_code());
+        return ErrorOr<llvm::Function &>(std::error_code());
     }
-    Function &fun = mod.getFunctionList().front();
+    llvm::Function &fun = mod.getFunctionList().front();
     if (mod.getFunctionList().size() > 1) {
         llvm::errs() << "Warning: There is more than one function in the "
                         "module, choosing “"
                      << fun.getName() << "”\n";
     }
-    return ErrorOr<Function &>(fun);
+    return ErrorOr<llvm::Function &>(fun);
 }

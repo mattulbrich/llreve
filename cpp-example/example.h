@@ -1,3 +1,6 @@
+#ifndef EXAMPLE_H
+#define EXAMPLE_H
+
 auto main(int argc, const char **argv9) -> int;
 auto getFunction(llvm::Module &mod) -> llvm::ErrorOr<llvm::Function &>;
 template <int N>
@@ -10,5 +13,7 @@ auto doAnalysis(llvm::Function &Fun) -> void;
 auto getCmd(clang::driver::Compilation &Comp, clang::DiagnosticsEngine &Diags)
     -> llvm::ErrorOr<const clang::driver::Command &>;
 template <typename T> auto makeErrorOr(T Arg) -> llvm::ErrorOr<T>;
-auto getModule(int argc, const char **argv, clang::CodeGenAction &Act)
-    -> std::unique_ptr<llvm::Module>;
+auto getModule(int argc, const char **argv)
+    -> std::unique_ptr<clang::CodeGenAction>;
+
+#endif // EXAMPLE_H
