@@ -1,7 +1,12 @@
 cmake_minimum_required(VERSION 2.8.8)
 project(llvm-cpp-example)
 set(CMAKE_CXX_COMPILER "/usr/bin/clang++")
-set(CMAKE_CXX_FLAGS "-Weverything -Wno-c++98-compat -std=c++1z")
+set(CMAKE_CXX_FLAGS
+"-Weverything \
+-Wno-c++98-compat \
+-Wno-exit-time-destructors \
+-Wno-global-constructors \
+-std=c++1z")
 
 find_package(LLVM REQUIRED CONFIG)
 

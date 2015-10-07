@@ -10,6 +10,7 @@ using llvm::StringRef;
 
 PreservedAnalyses UniqueNamePass::run(llvm::Function &F,
                                       llvm::FunctionAnalysisManager *AM) {
+    (void)AM;
     for (auto &Arg : F.args()) {
         Arg.setName(rename(Arg.getName(), Prefix));
     }
