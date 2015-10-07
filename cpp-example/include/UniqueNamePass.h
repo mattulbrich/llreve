@@ -3,7 +3,7 @@
 
 #include "llvm/IR/PassManager.h"
 
-struct UniqueNamePass {
+class UniqueNamePass {
   public:
     UniqueNamePass(const llvm::StringRef Prefix_) : Prefix(Prefix_) {}
     llvm::PreservedAnalyses run(llvm::Function &F,
