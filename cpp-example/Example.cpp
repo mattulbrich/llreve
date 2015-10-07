@@ -8,9 +8,7 @@
 #include "clang/Frontend/CompilerInvocation.h"
 #include "clang/Frontend/FrontendDiagnostic.h"
 #include "clang/Frontend/TextDiagnosticPrinter.h"
-#include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/LoopInfo.h"
-#include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/IR/Dominators.h"
@@ -24,6 +22,7 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
 
+#include "AnnotStackPass.h"
 #include "Example.h"
 #include "UniqueNamePass.h"
 
@@ -175,16 +174,12 @@ void doAnalysis(llvm::Function &Fun) {
     llvm::FunctionAnalysisManager Fam(true); // enable debug log
     Fam.registerPass(llvm::DominatorTreeAnalysis());
     Fam.registerPass(llvm::LoopAnalysis());
-    Fam.registerPass(llvm::TargetIRAnalysis());
-    Fam.registerPass(llvm::AssumptionAnalysis());
 
     llvm::FunctionPassManager Fpm(true); // enable debug log
 
+    Fpm.addPass(UniqueNamePass("1___")); // prefix register names
+    Fpm.addPass(AnnotStackPass()); // annotate load/store of stack variables
     Fpm.addPass(llvm::PrintFunctionPass(errs())); // dump function
-    Fpm.addPass(llvm::SimplifyCFGPass());
-    Fpm.addPass(llvm::PrintFunctionPass(errs()));
-    Fpm.addPass(UniqueNamePass("1___"));
-    Fpm.addPass(llvm::PrintFunctionPass(errs()));
     Fpm.run(Fun, &Fam);
 
     Fam.getResult<llvm::LoopAnalysis>(Fun).print(errs());
