@@ -96,12 +96,12 @@ unique_ptr<clang::CodeGenAction> getModule(int Argc, const char **Argv) {
     auto driver = initializeDriver(*diags);
     auto args = initializeArgs<16>(Argv, Argc);
 
-    std::unique_ptr<Compilation> comp(driver->BuildCompilation(args));
-    if (!comp) {
+    std::unique_ptr<Compilation> Comp(driver->BuildCompilation(args));
+    if (!Comp) {
         return nullptr;
     }
 
-    auto CmdOrError = getCmd(*comp, *diags);
+    auto CmdOrError = getCmd(*Comp, *diags);
     if (!CmdOrError) {
         return nullptr;
     }
