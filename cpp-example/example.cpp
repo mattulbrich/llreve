@@ -40,13 +40,13 @@ using llvm::IntrusiveRefCntPtr;
 using std::unique_ptr;
 
 template <int N>
-llvm::SmallVector<const char *, N> initializeArgs(const char **argv, int argc) {
-    llvm::SmallVector<const char *, N> args;
-    args.push_back(argv[0]);            // add executable name
-    args.push_back("-xc");              // force language to C
-    args.append(argv + 1, argv + argc); // add remaining args
-    args.push_back("-fsyntax-only");    // don't do more work than necessary
-    return args;
+llvm::SmallVector<const char *, N> initializeArgs(const char **Argv, int Argc) {
+    llvm::SmallVector<const char *, N> Args;
+    Args.push_back(Argv[0]);            // add executable name
+    Args.push_back("-xc");              // force language to C
+    Args.append(Argv + 1, Argv + Argc); // add remaining args
+    Args.push_back("-fsyntax-only");    // don't do more work than necessary
+    return Args;
 }
 
 unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
@@ -70,18 +70,18 @@ unique_ptr<Driver> initializeDriver(DiagnosticsEngine &Diags) {
 }
 
 ErrorOr<const Command &> getCmd(Compilation &Comp, DiagnosticsEngine &Diags) {
-    const JobList &jobs = Comp.getJobs();
+    const JobList &Jobs = Comp.getJobs();
 
     // there should be only one job
-    if (jobs.size() != 1) {
+    if (Jobs.size() != 1) {
         llvm::SmallString<256> Msg;
         llvm::raw_svector_ostream OS(Msg);
-        jobs.Print(OS, "; ", true);
+        Jobs.Print(OS, "; ", true);
         Diags.Report(clang::diag::err_fe_expected_compiler_job) << OS.str();
         return ErrorOr<const Command &>(std::error_code());
     }
 
-    const Command &Cmd = llvm::cast<Command>(*jobs.begin());
+    const Command &Cmd = llvm::cast<Command>(*Jobs.begin());
     if (StringRef(Cmd.getCreator().getName()) != "clang") {
         Diags.Report(clang::diag::err_fe_expected_clang_command);
         return ErrorOr<const Command &>(std::error_code());
@@ -91,10 +91,10 @@ ErrorOr<const Command &> getCmd(Compilation &Comp, DiagnosticsEngine &Diags) {
 
 template <typename T> ErrorOr<T> makeErrorOr(T Arg) { return ErrorOr<T>(Arg); }
 
-unique_ptr<clang::CodeGenAction> getModule(int argc, const char **argv) {
+unique_ptr<clang::CodeGenAction> getModule(int Argc, const char **Argv) {
     auto diags = initializeDiagnostics();
     auto driver = initializeDriver(*diags);
-    auto args = initializeArgs<16>(argv, argc);
+    auto args = initializeArgs<16>(Argv, Argc);
 
     std::unique_ptr<Compilation> comp(driver->BuildCompilation(args));
     if (!comp) {
@@ -133,8 +133,8 @@ unique_ptr<clang::CodeGenAction> getModule(int argc, const char **argv) {
     return Act;
 }
 
-int main(int argc, const char **argv) {
-    auto Act = getModule(argc, argv);
+int main(int Argc, const char **Argv) {
+    auto Act = getModule(Argc, Argv);
     if (!Act) {
         return 1;
     }
@@ -144,41 +144,41 @@ int main(int argc, const char **argv) {
         return 1;
     }
 
-    ErrorOr<llvm::Function &> funOrError = getFunction(*Mod);
-    if (!funOrError) {
+    ErrorOr<llvm::Function &> FunOrError = getFunction(*Mod);
+    if (!FunOrError) {
         errs() << "Couldn't find a function\n";
         return 1;
     }
 
-    doAnalysis(funOrError.get());
+    doAnalysis(FunOrError.get());
 
     llvm::llvm_shutdown();
 
     return 0;
 }
 
-void doAnalysis(llvm::Function &fun) {
-    llvm::FunctionAnalysisManager fam(true); // enable debug log
-    fam.registerPass(llvm::DominatorTreeAnalysis());
-    fam.registerPass(llvm::LoopAnalysis());
+void doAnalysis(llvm::Function &Fun) {
+    llvm::FunctionAnalysisManager Fam(true); // enable debug log
+    Fam.registerPass(llvm::DominatorTreeAnalysis());
+    Fam.registerPass(llvm::LoopAnalysis());
 
-    llvm::FunctionPassManager fpm(true); // enable debug log
+    llvm::FunctionPassManager Fpm(true); // enable debug log
 
-    fpm.addPass(llvm::PrintFunctionPass(errs())); // dump function
-    auto results = fpm.run(fun, &fam);
+    Fpm.addPass(llvm::PrintFunctionPass(errs())); // dump function
+    Fpm.run(Fun, &Fam);
 
-    fam.getResult<llvm::LoopAnalysis>(fun).print(errs());
+    Fam.getResult<llvm::LoopAnalysis>(Fun).print(errs());
 }
 
-ErrorOr<llvm::Function &> getFunction(llvm::Module &mod) {
-    if (mod.getFunctionList().size() == 0) {
+ErrorOr<llvm::Function &> getFunction(llvm::Module &Mod) {
+    if (Mod.getFunctionList().size() == 0) {
         return ErrorOr<llvm::Function &>(std::error_code());
     }
-    llvm::Function &fun = mod.getFunctionList().front();
-    if (mod.getFunctionList().size() > 1) {
+    llvm::Function &Fun = Mod.getFunctionList().front();
+    if (Mod.getFunctionList().size() > 1) {
         llvm::errs() << "Warning: There is more than one function in the "
                         "module, choosing “"
-                     << fun.getName() << "”\n";
+                     << Fun.getName() << "”\n";
     }
-    return ErrorOr<llvm::Function &>(fun);
+    return ErrorOr<llvm::Function &>(Fun);
 }
