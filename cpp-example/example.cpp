@@ -60,13 +60,13 @@ unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
 }
 
 unique_ptr<Driver> initializeDriver(DiagnosticsEngine &Diags) {
-    std::string tripleStr = llvm::sys::getProcessTriple();
-    llvm::Triple triple(tripleStr);
-    auto driver =
-        std::make_unique<Driver>("/usr/bin/clang", triple.str(), Diags);
-    driver->setTitle("clang/llvm example");
-    driver->setCheckInputsExist(false);
-    return driver;
+    std::string TripleStr = llvm::sys::getProcessTriple();
+    llvm::Triple Triple(TripleStr);
+    auto Driver =
+        std::make_unique<clang::driver::Driver>("/usr/bin/clang", Triple.str(), Diags);
+    Driver->setTitle("clang/llvm example");
+    Driver->setCheckInputsExist(false);
+    return Driver;
 }
 
 ErrorOr<const Command &> getCmd(Compilation &Comp, DiagnosticsEngine &Diags) {
@@ -92,26 +92,26 @@ ErrorOr<const Command &> getCmd(Compilation &Comp, DiagnosticsEngine &Diags) {
 template <typename T> ErrorOr<T> makeErrorOr(T Arg) { return ErrorOr<T>(Arg); }
 
 unique_ptr<clang::CodeGenAction> getModule(int Argc, const char **Argv) {
-    auto diags = initializeDiagnostics();
-    auto driver = initializeDriver(*diags);
-    auto args = initializeArgs<16>(Argv, Argc);
+    auto Diags = initializeDiagnostics();
+    auto Driver = initializeDriver(*Diags);
+    auto Args = initializeArgs<16>(Argv, Argc);
 
-    std::unique_ptr<Compilation> Comp(driver->BuildCompilation(args));
+    std::unique_ptr<Compilation> Comp(Driver->BuildCompilation(Args));
     if (!Comp) {
         return nullptr;
     }
 
-    auto CmdOrError = getCmd(*Comp, *diags);
+    auto CmdOrError = getCmd(*Comp, *Diags);
     if (!CmdOrError) {
         return nullptr;
     }
     auto Cmd = CmdOrError.get();
 
     const ArgStringList &CCArgs = Cmd.getArguments();
-    std::unique_ptr<CompilerInvocation> CI(new CompilerInvocation);
+    auto CI = std::make_unique<CompilerInvocation>();
     CompilerInvocation::CreateFromArgs(
         *CI, const_cast<const char **>(CCArgs.data()),
-        const_cast<const char **>(CCArgs.data()) + CCArgs.size(), *diags);
+        const_cast<const char **>(CCArgs.data()) + CCArgs.size(), *Diags);
 
     // Create a compiler instance to handle the actual work.
     CompilerInstance Clang;
@@ -124,7 +124,7 @@ unique_ptr<clang::CodeGenAction> getModule(int Argc, const char **Argv) {
         return nullptr;
     }
 
-    std::unique_ptr<CodeGenAction> Act(new clang::EmitLLVMOnlyAction());
+    std::unique_ptr<CodeGenAction> Act = std::make_unique<clang::EmitLLVMOnlyAction>();
 
     if (!Clang.ExecuteAction(*Act)) {
         std::cout << "Couldn't execute action\n";
