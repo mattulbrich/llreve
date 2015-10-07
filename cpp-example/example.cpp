@@ -8,7 +8,9 @@
 #include "clang/Frontend/CompilerInvocation.h"
 #include "clang/Frontend/FrontendDiagnostic.h"
 #include "clang/Frontend/TextDiagnosticPrinter.h"
+#include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/IR/Dominators.h"
@@ -19,6 +21,8 @@
 #include "llvm/Support/Path.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Scalar/SimplifyCFG.h"
 
 #include "example.h"
 
@@ -39,13 +43,18 @@ using llvm::IntrusiveRefCntPtr;
 
 using std::unique_ptr;
 
+static llvm::cl::opt<std::string> FileName(llvm::cl::Positional,
+                                           llvm::cl::desc("Input file"),
+                                           llvm::cl::Required);
+
 template <int N>
-llvm::SmallVector<const char *, N> initializeArgs(const char **Argv, int Argc) {
+llvm::SmallVector<const char *, N> initializeArgs(const char *ExeName,
+                                                  std::string Input) {
     llvm::SmallVector<const char *, N> Args;
-    Args.push_back(Argv[0]);            // add executable name
-    Args.push_back("-xc");              // force language to C
-    Args.append(Argv + 1, Argv + Argc); // add remaining args
-    Args.push_back("-fsyntax-only");    // don't do more work than necessary
+    Args.push_back(ExeName);         // add executable name
+    Args.push_back("-xc");           // force language to C
+    Args.push_back(Input.c_str());   // add input file
+    Args.push_back("-fsyntax-only"); // don't do more work than necessary
     return Args;
 }
 
@@ -62,8 +71,8 @@ unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
 unique_ptr<Driver> initializeDriver(DiagnosticsEngine &Diags) {
     std::string TripleStr = llvm::sys::getProcessTriple();
     llvm::Triple Triple(TripleStr);
-    auto Driver =
-        std::make_unique<clang::driver::Driver>("/usr/bin/clang", Triple.str(), Diags);
+    auto Driver = std::make_unique<clang::driver::Driver>("/usr/bin/clang",
+                                                          Triple.str(), Diags);
     Driver->setTitle("clang/llvm example");
     Driver->setCheckInputsExist(false);
     return Driver;
@@ -91,10 +100,11 @@ ErrorOr<const Command &> getCmd(Compilation &Comp, DiagnosticsEngine &Diags) {
 
 template <typename T> ErrorOr<T> makeErrorOr(T Arg) { return ErrorOr<T>(Arg); }
 
-unique_ptr<clang::CodeGenAction> getModule(int Argc, const char **Argv) {
+unique_ptr<clang::CodeGenAction> getModule(const char *ExeName,
+                                           std::string Input) {
     auto Diags = initializeDiagnostics();
     auto Driver = initializeDriver(*Diags);
-    auto Args = initializeArgs<16>(Argv, Argc);
+    auto Args = initializeArgs<16>(ExeName, Input);
 
     std::unique_ptr<Compilation> Comp(Driver->BuildCompilation(Args));
     if (!Comp) {
@@ -124,7 +134,8 @@ unique_ptr<clang::CodeGenAction> getModule(int Argc, const char **Argv) {
         return nullptr;
     }
 
-    std::unique_ptr<CodeGenAction> Act = std::make_unique<clang::EmitLLVMOnlyAction>();
+    std::unique_ptr<CodeGenAction> Act =
+        std::make_unique<clang::EmitLLVMOnlyAction>();
 
     if (!Clang.ExecuteAction(*Act)) {
         std::cout << "Couldn't execute action\n";
@@ -134,7 +145,9 @@ unique_ptr<clang::CodeGenAction> getModule(int Argc, const char **Argv) {
 }
 
 int main(int Argc, const char **Argv) {
-    auto Act = getModule(Argc, Argv);
+    llvm::cl::ParseCommandLineOptions(Argc, Argv, "reve\n");
+
+    auto Act = getModule(Argv[0], FileName);
     if (!Act) {
         return 1;
     }
@@ -159,12 +172,17 @@ int main(int Argc, const char **Argv) {
 
 void doAnalysis(llvm::Function &Fun) {
     llvm::FunctionAnalysisManager Fam(true); // enable debug log
+    llvm::SimplifyCFGPass IndVarPass;
     Fam.registerPass(llvm::DominatorTreeAnalysis());
     Fam.registerPass(llvm::LoopAnalysis());
+    Fam.registerPass(llvm::TargetIRAnalysis());
+    Fam.registerPass(llvm::AssumptionAnalysis());
 
     llvm::FunctionPassManager Fpm(true); // enable debug log
 
     Fpm.addPass(llvm::PrintFunctionPass(errs())); // dump function
+    Fpm.addPass(IndVarPass);
+    Fpm.addPass(llvm::PrintFunctionPass(errs()));
     Fpm.run(Fun, &Fam);
 
     Fam.getResult<llvm::LoopAnalysis>(Fun).print(errs());
