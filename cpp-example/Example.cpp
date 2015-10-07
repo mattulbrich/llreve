@@ -25,6 +25,7 @@
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
 
 #include "Example.h"
+#include "UniqueNamePass.h"
 
 using clang::CodeGenAction;
 using clang::CompilerInstance;
@@ -172,7 +173,6 @@ int main(int Argc, const char **Argv) {
 
 void doAnalysis(llvm::Function &Fun) {
     llvm::FunctionAnalysisManager Fam(true); // enable debug log
-    llvm::SimplifyCFGPass IndVarPass;
     Fam.registerPass(llvm::DominatorTreeAnalysis());
     Fam.registerPass(llvm::LoopAnalysis());
     Fam.registerPass(llvm::TargetIRAnalysis());
@@ -181,7 +181,9 @@ void doAnalysis(llvm::Function &Fun) {
     llvm::FunctionPassManager Fpm(true); // enable debug log
 
     Fpm.addPass(llvm::PrintFunctionPass(errs())); // dump function
-    Fpm.addPass(IndVarPass);
+    Fpm.addPass(llvm::SimplifyCFGPass());
+    Fpm.addPass(llvm::PrintFunctionPass(errs()));
+    Fpm.addPass(UniqueNamePass());
     Fpm.addPass(llvm::PrintFunctionPass(errs()));
     Fpm.run(Fun, &Fam);
 
