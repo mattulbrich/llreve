@@ -183,7 +183,7 @@ void doAnalysis(llvm::Function &Fun) {
     Fpm.addPass(llvm::PrintFunctionPass(errs())); // dump function
     Fpm.addPass(llvm::SimplifyCFGPass());
     Fpm.addPass(llvm::PrintFunctionPass(errs()));
-    Fpm.addPass(UniqueNamePass());
+    Fpm.addPass(UniqueNamePass("1___"));
     Fpm.addPass(llvm::PrintFunctionPass(errs()));
     Fpm.run(Fun, &Fam);
 
