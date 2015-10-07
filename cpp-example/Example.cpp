@@ -24,7 +24,7 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
 
-#include "example.h"
+#include "Example.h"
 
 using clang::CodeGenAction;
 using clang::CompilerInstance;
