@@ -1,4 +1,6 @@
 #include <iostream>
+#include <tuple>
+
 #include "clang/CodeGen/CodeGenAction.h"
 #include "clang/Basic/DiagnosticOptions.h"
 #include "clang/Driver/Compilation.h"
@@ -43,17 +45,21 @@ using llvm::IntrusiveRefCntPtr;
 
 using std::unique_ptr;
 
-static llvm::cl::opt<std::string> FileName(llvm::cl::Positional,
-                                           llvm::cl::desc("Input file"),
-                                           llvm::cl::Required);
+static llvm::cl::opt<std::string> FileName1(llvm::cl::Positional,
+                                            llvm::cl::desc("Input file 1"),
+                                            llvm::cl::Required);
+static llvm::cl::opt<std::string> FileName2(llvm::cl::Positional,
+                                            llvm::cl::desc("Input file 2"),
+                                            llvm::cl::Required);
 
 template <int N>
-llvm::SmallVector<const char *, N> initializeArgs(const char *ExeName,
-                                                  std::string Input) {
+llvm::SmallVector<const char *, N>
+initializeArgs(const char *ExeName, std::string Input1, std::string Input2) {
     llvm::SmallVector<const char *, N> Args;
-    Args.push_back(ExeName);         // add executable name
-    Args.push_back("-xc");           // force language to C
-    Args.push_back(Input.c_str());   // add input file
+    Args.push_back(ExeName);        // add executable name
+    Args.push_back("-xc");          // force language to C
+    Args.push_back(Input1.c_str()); // add input file
+    Args.push_back(Input2.c_str());
     Args.push_back("-fsyntax-only"); // don't do more work than necessary
     return Args;
 }
@@ -61,7 +67,7 @@ llvm::SmallVector<const char *, N> initializeArgs(const char *ExeName,
 unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
     const IntrusiveRefCntPtr<clang::DiagnosticOptions> diagOpts =
         new clang::DiagnosticOptions();
-    auto diagClient =
+    auto  diagClient =
         new clang::TextDiagnosticPrinter(llvm::errs(), &*diagOpts);
     const IntrusiveRefCntPtr<clang::DiagnosticIDs> diagID(
         new clang::DiagnosticIDs());
@@ -78,67 +84,74 @@ unique_ptr<Driver> initializeDriver(DiagnosticsEngine &Diags) {
     return Driver;
 }
 
-ErrorOr<const Command &> getCmd(Compilation &Comp, DiagnosticsEngine &Diags) {
+ErrorOr<std::tuple<ArgStringList, ArgStringList>>
+getCmd(Compilation &Comp, DiagnosticsEngine &Diags) {
     const JobList &Jobs = Comp.getJobs();
 
-    // there should be only one job
-    if (Jobs.size() != 1) {
+    // there should be exactly two jobs
+    if (Jobs.size() != 2) {
         llvm::SmallString<256> Msg;
         llvm::raw_svector_ostream OS(Msg);
         Jobs.Print(OS, "; ", true);
         Diags.Report(clang::diag::err_fe_expected_compiler_job) << OS.str();
-        return ErrorOr<const Command &>(std::error_code());
+        return ErrorOr<std::tuple<ArgStringList, ArgStringList>>(
+            std::error_code());
     }
 
-    const Command &Cmd = llvm::cast<Command>(*Jobs.begin());
-    if (StringRef(Cmd.getCreator().getName()) != "clang") {
-        Diags.Report(clang::diag::err_fe_expected_clang_command);
-        return ErrorOr<const Command &>(std::error_code());
+    std::vector<ArgStringList> Args;
+    for (auto &Cmd : Jobs) {
+        Args.push_back(Cmd.getArguments());
     }
-    return makeErrorOr(Cmd);
+
+    return makeErrorOr(std::make_tuple(
+        Jobs.begin()->getArguments(), std::next(Jobs.begin())->getArguments()));
 }
 
 template <typename T> ErrorOr<T> makeErrorOr(T Arg) { return ErrorOr<T>(Arg); }
 
-unique_ptr<clang::CodeGenAction> getModule(const char *ExeName,
-                                           std::string Input) {
+std::tuple<unique_ptr<clang::CodeGenAction>, unique_ptr<clang::CodeGenAction>>
+getModule(const char *ExeName, std::string Input1, std::string Input2) {
     auto Diags = initializeDiagnostics();
     auto Driver = initializeDriver(*Diags);
-    auto Args = initializeArgs<16>(ExeName, Input);
+    auto Args = initializeArgs<16>(ExeName, Input1, Input2);
 
     std::unique_ptr<Compilation> Comp(Driver->BuildCompilation(Args));
     if (!Comp) {
-        return nullptr;
+        return std::make_tuple(nullptr, nullptr);
     }
 
-    auto CmdOrError = getCmd(*Comp, *Diags);
-    if (!CmdOrError) {
-        return nullptr;
+    auto CmdArgsOrError = getCmd(*Comp, *Diags);
+    if (!CmdArgsOrError) {
+        return std::make_tuple(nullptr, nullptr);
     }
-    auto Cmd = CmdOrError.get();
+    auto CmdArgs = CmdArgsOrError.get();
 
-    const ArgStringList &CCArgs = Cmd.getArguments();
+    auto Act1 = getAction(std::get<0>(CmdArgs), *Diags);
+    auto Act2 = getAction(std::get<1>(CmdArgs), *Diags);
+    if (!Act1 || !Act2) {
+        return std::make_tuple(nullptr, nullptr);
+    }
+
+    return std::make_tuple(std::move(Act1), std::move(Act2));
+}
+
+std::unique_ptr<CodeGenAction> getAction(const ArgStringList &CCArgs,
+                                         clang::DiagnosticsEngine &Diags) {
     auto CI = std::make_unique<CompilerInvocation>();
     CompilerInvocation::CreateFromArgs(
         *CI, const_cast<const char **>(CCArgs.data()),
-        const_cast<const char **>(CCArgs.data()) + CCArgs.size(), *Diags);
-
-    // Create a compiler instance to handle the actual work.
+        const_cast<const char **>(CCArgs.data()) + CCArgs.size(), Diags);
     CompilerInstance Clang;
     Clang.setInvocation(CI.release());
-
-    // Create the compilers actual diagnostics engine.
     Clang.createDiagnostics();
     if (!Clang.hasDiagnostics()) {
-        std::cout << "Couldn't enable diagnostics\n";
+        std::cerr << "Couldn't enable diagnostics\n";
         return nullptr;
     }
-
     std::unique_ptr<CodeGenAction> Act =
         std::make_unique<clang::EmitLLVMOnlyAction>();
-
     if (!Clang.ExecuteAction(*Act)) {
-        std::cout << "Couldn't execute action\n";
+        std::cerr << "Couldn't execute action\n";
         return nullptr;
     }
     return Act;
@@ -147,23 +160,29 @@ unique_ptr<clang::CodeGenAction> getModule(const char *ExeName,
 int main(int Argc, const char **Argv) {
     llvm::cl::ParseCommandLineOptions(Argc, Argv, "reve\n");
 
-    auto Act = getModule(Argv[0], FileName);
-    if (!Act) {
+    auto ActTuple = getModule(Argv[0], FileName1, FileName2);
+    auto Act1 = std::move(std::get<0>(ActTuple));
+    auto Act2 = std::move(std::get<1>(ActTuple));
+    if (!Act1 || !Act2) {
         return 1;
     }
 
-    auto Mod = Act->takeModule();
-    if (!Mod) {
+    auto Mod1 = Act1->takeModule();
+    auto Mod2 = Act2->takeModule();
+    if (!Mod1 || !Mod2) {
         return 1;
     }
 
-    ErrorOr<llvm::Function &> FunOrError = getFunction(*Mod);
-    if (!FunOrError) {
+    ErrorOr<llvm::Function &> FunOrError1 = getFunction(*Mod1);
+    ErrorOr<llvm::Function &> FunOrError2 = getFunction(*Mod2);
+
+    if (!FunOrError1 || !FunOrError2) {
         errs() << "Couldn't find a function\n";
         return 1;
     }
 
-    doAnalysis(FunOrError.get());
+    doAnalysis(FunOrError1.get());
+    doAnalysis(FunOrError2.get());
 
     llvm::llvm_shutdown();
 
