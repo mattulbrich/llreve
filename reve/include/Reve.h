@@ -1,5 +1,5 @@
-#ifndef EXAMPLE_H
-#define EXAMPLE_H
+#ifndef REVE_H
+#define REVE_H
 
 auto main(int Argc, const char **Argv) -> int;
 auto getFunction(llvm::Module &Mod) -> llvm::ErrorOr<llvm::Function &>;
@@ -19,4 +19,4 @@ auto getAction(const llvm::opt::ArgStringList &CCArgs,
                clang::DiagnosticsEngine &Diags)
     -> std::unique_ptr<clang::CodeGenAction>;
 
-#endif // EXAMPLE_H
+#endif // REVE_H

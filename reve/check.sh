@@ -4,7 +4,7 @@ cd build
 make clean
 cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
 make
-./example ~/code/reve/Horn/experiments/production/while/loop_1.spl ~/code/reve/Horn/experiments/production/while/loop_2.spl
+./reve ~/code/reve/Horn/experiments/production/while/loop_1.spl ~/code/reve/Horn/experiments/production/while/loop_2.spl
 sources=(../*.cpp)
 echo "Running clang-tidy"
 clang-tidy "${sources[@]}"

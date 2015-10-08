@@ -25,7 +25,7 @@
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
 
 #include "AnnotStackPass.h"
-#include "Example.h"
+#include "Reve.h"
 #include "UniqueNamePass.h"
 
 using clang::CodeGenAction;
@@ -67,7 +67,7 @@ initializeArgs(const char *ExeName, std::string Input1, std::string Input2) {
 unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
     const IntrusiveRefCntPtr<clang::DiagnosticOptions> diagOpts =
         new clang::DiagnosticOptions();
-    auto  diagClient =
+    auto   diagClient =
         new clang::TextDiagnosticPrinter(llvm::errs(), &*diagOpts);
     const IntrusiveRefCntPtr<clang::DiagnosticIDs> diagID(
         new clang::DiagnosticIDs());
@@ -79,7 +79,7 @@ unique_ptr<Driver> initializeDriver(DiagnosticsEngine &Diags) {
     llvm::Triple Triple(TripleStr);
     auto Driver = std::make_unique<clang::driver::Driver>("/usr/bin/clang",
                                                           Triple.str(), Diags);
-    Driver->setTitle("clang/llvm example");
+    Driver->setTitle("reve");
     Driver->setCheckInputsExist(false);
     return Driver;
 }

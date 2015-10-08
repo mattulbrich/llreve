@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.8)
-project(llvm-cpp-example)
+project(llvm-reve)
 set(CMAKE_CXX_COMPILER "/usr/bin/clang++")
 set(CMAKE_CXX_FLAGS
 "-Weverything \
@@ -16,7 +16,7 @@ message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 include_directories(${LLVM_INCLUDE_DIRS} include)
 add_definitions(${LLVM_DEFINITIONS})
 
-add_executable(example Example.cpp UniqueNamePass.cpp AnnotStackPass.cpp)
+add_executable(reve Reve.cpp UniqueNamePass.cpp AnnotStackPass.cpp)
 
 llvm_map_components_to_libnames(llvm_libs
   core
@@ -36,7 +36,7 @@ llvm_map_components_to_libnames(llvm_libs
   mcjit
   )
 
-target_link_libraries(example
+target_link_libraries(reve
   -Wl,--start-group
   # clang
   # clangARCMigrate

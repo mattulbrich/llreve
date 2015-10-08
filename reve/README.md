@@ -1,4 +1,4 @@
-### LLVM/Clang example
+### Reve
 
 #### Installation
 
@@ -21,5 +21,5 @@ so make sure you have the right one.
 Run using
 
 ```
-./example path/to/c/file
+./reve path/to/c/file1 path/to/c/file2
 ```
