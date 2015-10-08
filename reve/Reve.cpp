@@ -10,6 +10,7 @@
 #include "clang/Frontend/CompilerInvocation.h"
 #include "clang/Frontend/FrontendDiagnostic.h"
 #include "clang/Frontend/TextDiagnosticPrinter.h"
+#include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
@@ -25,6 +26,7 @@
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
 
 #include "AnnotStackPass.h"
+#include "Mem2Reg.h"
 #include "Reve.h"
 #include "UniqueNamePass.h"
 
@@ -67,7 +69,7 @@ initializeArgs(const char *ExeName, std::string Input1, std::string Input2) {
 unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
     const IntrusiveRefCntPtr<clang::DiagnosticOptions> diagOpts =
         new clang::DiagnosticOptions();
-    auto   diagClient =
+    auto diagClient =
         new clang::TextDiagnosticPrinter(llvm::errs(), &*diagOpts);
     const IntrusiveRefCntPtr<clang::DiagnosticIDs> diagID(
         new clang::DiagnosticIDs());
@@ -193,11 +195,13 @@ void doAnalysis(llvm::Function &Fun) {
     llvm::FunctionAnalysisManager Fam(true); // enable debug log
     Fam.registerPass(llvm::DominatorTreeAnalysis());
     Fam.registerPass(llvm::LoopAnalysis());
+    Fam.registerPass(llvm::AssumptionAnalysis());
 
     llvm::FunctionPassManager Fpm(true); // enable debug log
 
     Fpm.addPass(UniqueNamePass("1___")); // prefix register names
     Fpm.addPass(AnnotStackPass()); // annotate load/store of stack variables
+    Fpm.addPass(PromotePass()); // mem2reg
     Fpm.addPass(llvm::PrintFunctionPass(errs())); // dump function
     Fpm.run(Fun, &Fam);
 
