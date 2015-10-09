@@ -17,21 +17,13 @@ add_definitions(${LLVM_DEFINITIONS})
 add_executable(reve Reve.cpp UniqueNamePass.cpp AnnotStackPass.cpp Mem2Reg.cpp)
 
 llvm_map_components_to_libnames(llvm_libs
-  core
-  support
-  option
-  bitreader
-  mcparser
-  transformutils
-  instrumentation
-  profiledata
-  x86codegen
-  ipo
   bitwriter
-  objcarcopts
   irreader
   linker
-  mcjit
+  objcarcopts
+  option
+  passes
+  x86codegen
   )
 
 target_link_libraries(reve

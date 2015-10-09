@@ -18,6 +18,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/IR/IRPrintingPasses.h"
+#include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/TargetSelect.h"
@@ -192,20 +193,19 @@ int main(int Argc, const char **Argv) {
 }
 
 void doAnalysis(llvm::Function &Fun) {
-    llvm::FunctionAnalysisManager Fam(true); // enable debug log
-    Fam.registerPass(llvm::DominatorTreeAnalysis());
-    Fam.registerPass(llvm::LoopAnalysis());
-    Fam.registerPass(llvm::AssumptionAnalysis());
+    llvm::PassBuilder PB;
+    llvm::FunctionAnalysisManager FAM(true); // enable debug log
+    PB.registerFunctionAnalyses(FAM);
 
-    llvm::FunctionPassManager Fpm(true); // enable debug log
+    llvm::FunctionPassManager FPM(true); // enable debug log
 
-    Fpm.addPass(UniqueNamePass("1___")); // prefix register names
-    Fpm.addPass(AnnotStackPass()); // annotate load/store of stack variables
-    Fpm.addPass(PromotePass()); // mem2reg
-    Fpm.addPass(llvm::PrintFunctionPass(errs())); // dump function
-    Fpm.run(Fun, &Fam);
+    FPM.addPass(UniqueNamePass("1___")); // prefix register names
+    FPM.addPass(AnnotStackPass()); // annotate load/store of stack variables
+    FPM.addPass(PromotePass()); // mem2reg
+    FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
+    FPM.run(Fun, &FAM);
 
-    Fam.getResult<llvm::LoopAnalysis>(Fun).print(errs());
+    FAM.getResult<llvm::LoopAnalysis>(Fun).print(errs());
 }
 
 ErrorOr<llvm::Function &> getFunction(llvm::Module &Mod) {
