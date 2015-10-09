@@ -1,8 +1,9 @@
-#include <iostream>
-#include <tuple>
+#include "Reve.h"
 
-#include "clang/CodeGen/CodeGenAction.h"
-#include "clang/Basic/DiagnosticOptions.h"
+#include "AnnotStackPass.h"
+#include "Mem2Reg.h"
+#include "UniqueNamePass.h"
+
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/Driver.h"
 #include "clang/Driver/Tool.h"
@@ -10,14 +11,15 @@
 #include "clang/Frontend/CompilerInvocation.h"
 #include "clang/Frontend/FrontendDiagnostic.h"
 #include "clang/Frontend/TextDiagnosticPrinter.h"
+
+#include "llvm/ADT/SmallString.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/LoopInfo.h"
-#include "llvm/ADT/SmallString.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/IR/Dominators.h"
+#include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PassManager.h"
-#include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/Path.h"
@@ -26,10 +28,8 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
 
-#include "AnnotStackPass.h"
-#include "Mem2Reg.h"
-#include "Reve.h"
-#include "UniqueNamePass.h"
+#include <iostream>
+#include <tuple>
 
 using clang::CodeGenAction;
 using clang::CompilerInstance;
@@ -68,13 +68,13 @@ initializeArgs(const char *ExeName, std::string Input1, std::string Input2) {
 }
 
 unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
-    const IntrusiveRefCntPtr<clang::DiagnosticOptions> diagOpts =
+    const IntrusiveRefCntPtr<clang::DiagnosticOptions> DiagOpts =
         new clang::DiagnosticOptions();
-    auto diagClient =
-        new clang::TextDiagnosticPrinter(llvm::errs(), &*diagOpts);
-    const IntrusiveRefCntPtr<clang::DiagnosticIDs> diagID(
+    auto DiagClient =
+        new clang::TextDiagnosticPrinter(llvm::errs(), &*DiagOpts);
+    const IntrusiveRefCntPtr<clang::DiagnosticIDs> DiagID(
         new clang::DiagnosticIDs());
-    return std::make_unique<DiagnosticsEngine>(diagID, &*diagOpts, diagClient);
+    return std::make_unique<DiagnosticsEngine>(DiagID, &*DiagOpts, DiagClient);
 }
 
 unique_ptr<Driver> initializeDriver(DiagnosticsEngine &Diags) {
@@ -142,8 +142,8 @@ std::unique_ptr<CodeGenAction> getAction(const ArgStringList &CCArgs,
                                          clang::DiagnosticsEngine &Diags) {
     auto CI = std::make_unique<CompilerInvocation>();
     CompilerInvocation::CreateFromArgs(
-        *CI, const_cast<const char **>(CCArgs.data()),
-        const_cast<const char **>(CCArgs.data()) + CCArgs.size(), Diags);
+        *CI,  (CCArgs.data()),
+         (CCArgs.data()) + CCArgs.size(), Diags);
     CompilerInstance Clang;
     Clang.setInvocation(CI.release());
     Clang.createDiagnostics();

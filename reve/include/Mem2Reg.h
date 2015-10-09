@@ -1,5 +1,5 @@
-#ifndef MEM_2_REG_H
-#define MEM_2_REG_H
+#ifndef MEM2REG_H
+#define MEM2REG_H
 
 #include "llvm/IR/PassManager.h"
 
@@ -11,4 +11,4 @@ struct PromotePass {
     static llvm::StringRef name() { return "PromotePass"; }
 };
 
-#endif // MEM_2_REG_H
+#endif // MEM2REG_H

@@ -1,5 +1,10 @@
 #ifndef REVE_H
 #define REVE_H
+#include "clang/CodeGen/CodeGenAction.h"
+#include "clang/Driver/Driver.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/PassManager.h"
+#include "llvm/Option/Option.h"
 
 auto main(int Argc, const char **Argv) -> int;
 auto getFunction(llvm::Module &Mod) -> llvm::ErrorOr<llvm::Function &>;

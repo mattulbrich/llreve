@@ -1,10 +1,10 @@
-#include <iostream>
-#include <set>
+#include "AnnotStackPass.h"
 
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/PassManager.h"
 
-#include "AnnotStackPass.h"
+#include <iostream>
+#include <set>
 
 llvm::PreservedAnalyses AnnotStackPass::run(llvm::Function &F,
                                             llvm::FunctionAnalysisManager *AM) {
