@@ -55,18 +55,21 @@ static llvm::cl::opt<std::string> FileName2(llvm::cl::Positional,
                                             llvm::cl::desc("Input file 2"),
                                             llvm::cl::Required);
 
+/// Initialize the argument vector to produce the llvm assembly for
+/// the two C files
 template <int N>
 llvm::SmallVector<const char *, N>
 initializeArgs(const char *ExeName, std::string Input1, std::string Input2) {
     llvm::SmallVector<const char *, N> Args;
-    Args.push_back(ExeName);        // add executable name
-    Args.push_back("-xc");          // force language to C
-    Args.push_back(Input1.c_str()); // add input file
+    Args.push_back(ExeName);         // add executable name
+    Args.push_back("-xc");           // force language to C
+    Args.push_back(Input1.c_str());  // add input file
     Args.push_back(Input2.c_str());
     Args.push_back("-fsyntax-only"); // don't do more work than necessary
     return Args;
 }
 
+/// Set up the diagnostics engine
 unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
     const IntrusiveRefCntPtr<clang::DiagnosticOptions> DiagOpts =
         new clang::DiagnosticOptions();
@@ -77,9 +80,11 @@ unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
     return std::make_unique<DiagnosticsEngine>(DiagID, &*DiagOpts, DiagClient);
 }
 
+/// Initialize the driver
 unique_ptr<Driver> initializeDriver(DiagnosticsEngine &Diags) {
     std::string TripleStr = llvm::sys::getProcessTriple();
     llvm::Triple Triple(TripleStr);
+    // TODO: Find the correct path instead of hardcoding it
     auto Driver = std::make_unique<clang::driver::Driver>("/usr/bin/clang",
                                                           Triple.str(), Diags);
     Driver->setTitle("reve");
@@ -87,6 +92,7 @@ unique_ptr<Driver> initializeDriver(DiagnosticsEngine &Diags) {
     return Driver;
 }
 
+/// This creates the compilations commands to compile to assembly
 ErrorOr<std::tuple<ArgStringList, ArgStringList>>
 getCmd(Compilation &Comp, DiagnosticsEngine &Diags) {
     const JobList &Jobs = Comp.getJobs();
@@ -110,8 +116,10 @@ getCmd(Compilation &Comp, DiagnosticsEngine &Diags) {
         Jobs.begin()->getArguments(), std::next(Jobs.begin())->getArguments()));
 }
 
+/// Wrapper function to allow inferenece of template parameters
 template <typename T> ErrorOr<T> makeErrorOr(T Arg) { return ErrorOr<T>(Arg); }
 
+/// Compile the inputs to llvm assembly and return those modules
 std::tuple<unique_ptr<clang::CodeGenAction>, unique_ptr<clang::CodeGenAction>>
 getModule(const char *ExeName, std::string Input1, std::string Input2) {
     auto Diags = initializeDiagnostics();
@@ -129,8 +137,8 @@ getModule(const char *ExeName, std::string Input1, std::string Input2) {
     }
     auto CmdArgs = CmdArgsOrError.get();
 
-    auto Act1 = getAction(std::get<0>(CmdArgs), *Diags);
-    auto Act2 = getAction(std::get<1>(CmdArgs), *Diags);
+    auto Act1 = getCodeGenAction(std::get<0>(CmdArgs), *Diags);
+    auto Act2 = getCodeGenAction(std::get<1>(CmdArgs), *Diags);
     if (!Act1 || !Act2) {
         return std::make_tuple(nullptr, nullptr);
     }
@@ -138,12 +146,12 @@ getModule(const char *ExeName, std::string Input1, std::string Input2) {
     return std::make_tuple(std::move(Act1), std::move(Act2));
 }
 
-std::unique_ptr<CodeGenAction> getAction(const ArgStringList &CCArgs,
-                                         clang::DiagnosticsEngine &Diags) {
+/// Build the CodeGenAction corresponding to the arguments
+std::unique_ptr<CodeGenAction>
+getCodeGenAction(const ArgStringList &CCArgs, clang::DiagnosticsEngine &Diags) {
     auto CI = std::make_unique<CompilerInvocation>();
-    CompilerInvocation::CreateFromArgs(
-        *CI,  (CCArgs.data()),
-         (CCArgs.data()) + CCArgs.size(), Diags);
+    CompilerInvocation::CreateFromArgs(*CI, (CCArgs.data()),
+                                       (CCArgs.data()) + CCArgs.size(), Diags);
     CompilerInstance Clang;
     Clang.setInvocation(CI.release());
     Clang.createDiagnostics();
@@ -161,17 +169,19 @@ std::unique_ptr<CodeGenAction> getAction(const ArgStringList &CCArgs,
 }
 
 int main(int Argc, const char **Argv) {
+    // The actual arguments are declared statically so we don't need
+    // to pass those in here
     llvm::cl::ParseCommandLineOptions(Argc, Argv, "reve\n");
 
     auto ActTuple = getModule(Argv[0], FileName1, FileName2);
-    auto Act1 = std::move(std::get<0>(ActTuple));
-    auto Act2 = std::move(std::get<1>(ActTuple));
+    const auto Act1 = std::move(std::get<0>(ActTuple));
+    const auto Act2 = std::move(std::get<1>(ActTuple));
     if (!Act1 || !Act2) {
         return 1;
     }
 
-    auto Mod1 = Act1->takeModule();
-    auto Mod2 = Act2->takeModule();
+    const auto Mod1 = Act1->takeModule();
+    const auto Mod2 = Act2->takeModule();
     if (!Mod1 || !Mod2) {
         return 1;
     }
@@ -184,24 +194,26 @@ int main(int Argc, const char **Argv) {
         return 1;
     }
 
-    doAnalysis(FunOrError1.get());
-    doAnalysis(FunOrError2.get());
+    preprocessModule(FunOrError1.get(), "1___");
+    preprocessModule(FunOrError2.get(), "2___");
+
+    convertToSMT(FunOrError1.get(), FunOrError2.get());
 
     llvm::llvm_shutdown();
 
     return 0;
 }
 
-void doAnalysis(llvm::Function &Fun) {
+void preprocessModule(llvm::Function &Fun, std::string Prefix) {
     llvm::PassBuilder PB;
-    llvm::FunctionAnalysisManager FAM(true); // enable debug log
-    PB.registerFunctionAnalyses(FAM);
+    llvm::FunctionAnalysisManager FAM(true);      // enable debug log
+    PB.registerFunctionAnalyses(FAM);             // register basic analyses
 
-    llvm::FunctionPassManager FPM(true); // enable debug log
+    llvm::FunctionPassManager FPM(true);          // enable debug log
 
-    FPM.addPass(UniqueNamePass("1___")); // prefix register names
-    FPM.addPass(AnnotStackPass()); // annotate load/store of stack variables
-    FPM.addPass(PromotePass()); // mem2reg
+    FPM.addPass(UniqueNamePass(Prefix));          // prefix register names
+    FPM.addPass(AnnotStackPass());                // annotate load/store of stack variables
+    FPM.addPass(PromotePass());                   // mem2reg
     FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
     FPM.run(Fun, &FAM);
 
@@ -219,4 +231,8 @@ ErrorOr<llvm::Function &> getFunction(llvm::Module &Mod) {
                      << Fun.getName() << "”\n";
     }
     return ErrorOr<llvm::Function &>(Fun);
+}
+
+void convertToSMT(llvm::Function &Mod1, llvm::Function &Mod2) {
+    errs() << "Convert so SMT\n";
 }

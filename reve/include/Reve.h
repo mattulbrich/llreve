@@ -14,14 +14,15 @@ auto initializeArgs(const char *ExeName, std::string Input1, std::string Input2)
 auto initializeDiagnostics(void) -> std::unique_ptr<clang::DiagnosticsEngine>;
 auto initializeDriver(clang::DiagnosticsEngine &Diags)
     -> std::unique_ptr<clang::driver::Driver>;
-auto doAnalysis(llvm::Function &Fun) -> void;
+auto preprocessModule(llvm::Function &Fun, std::string Prefix) -> void;
 auto getCmd(clang::driver::Compilation &Comp, clang::DiagnosticsEngine &Diags)
     -> llvm::ErrorOr<std::tuple<llvm::opt::ArgStringList, llvm::opt::ArgStringList>>;
 template <typename T> auto makeErrorOr(T Arg) -> llvm::ErrorOr<T>;
 auto getModule(const char *ExeName, std::string Input1, std::string Input2)
     -> std::tuple<std::unique_ptr<clang::CodeGenAction>, std::unique_ptr<clang::CodeGenAction>>;
-auto getAction(const llvm::opt::ArgStringList &CCArgs,
+auto getCodeGenAction(const llvm::opt::ArgStringList &CCArgs,
                clang::DiagnosticsEngine &Diags)
     -> std::unique_ptr<clang::CodeGenAction>;
+auto convertToSMT(llvm::Function &Mod1, llvm::Function &Mod2) -> void;
 
 #endif // REVE_H

@@ -14,7 +14,6 @@ class UniqueNamePass {
     const llvm::StringRef Prefix;
 };
 
-const std::string rename(std::string Name, std::string Prefix);
-void makePrefixed(llvm::Value Val, std::string Prefix);
+void makePrefixed(llvm::Value& Val, std::string Prefix);
 
 #endif // UNIQUENAMEPASS_H

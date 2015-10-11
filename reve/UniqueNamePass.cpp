@@ -12,20 +12,21 @@ PreservedAnalyses UniqueNamePass::run(llvm::Function &F,
                                       llvm::FunctionAnalysisManager *AM) {
     (void)AM;
     for (auto &Arg : F.args()) {
-        Arg.setName(rename(Arg.getName(), Prefix));
+        makePrefixed(Arg, Prefix);
     }
     for (auto &Block : F) {
         for (auto &Inst : Block) {
-            Inst.setName(rename(Inst.getName(), Prefix));
+            makePrefixed(Inst, Prefix);
         }
     }
     return PreservedAnalyses::none();
 }
 
-const std::string rename(std::string Name, std::string Prefix) {
-    return Prefix + Name;
-}
-
-void makePrefixed(llvm::Value Val, std::string Prefix) {
-    Val.setName(rename(Val.getName(), Prefix));
+void makePrefixed(llvm::Value& Val, std::string Prefix) {
+    // Note: The identity of values is not given by their names, so a
+    // lot of register are simply unnamed. The numbers you see in the
+    // output are only created when converting the assembly to a
+    // string, so for most values, we simply set the complete name
+    // here.
+    Val.setName(Prefix + Val.getName());
 }
