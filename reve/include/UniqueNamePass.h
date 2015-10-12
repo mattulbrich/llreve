@@ -14,6 +14,6 @@ class UniqueNamePass {
     const llvm::StringRef Prefix;
 };
 
-void makePrefixed(llvm::Value& Val, std::string Prefix);
+void makePrefixed(llvm::Value& Val, std::string Prefix, std::map<llvm::StringRef, int> &InstructionNames);
 
 #endif // UNIQUENAMEPASS_H

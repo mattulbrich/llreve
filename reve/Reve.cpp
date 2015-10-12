@@ -1,6 +1,7 @@
 #include "Reve.h"
 
 #include "AnnotStackPass.h"
+#include "CFGPrinter.h"
 #include "Mem2Reg.h"
 #include "UniqueNamePass.h"
 
@@ -20,6 +21,7 @@
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PassManager.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/Path.h"
@@ -194,8 +196,8 @@ int main(int Argc, const char **Argv) {
         return 1;
     }
 
-    preprocessModule(FunOrError1.get(), "1___");
-    preprocessModule(FunOrError2.get(), "2___");
+    preprocessModule(FunOrError1.get(), "1");
+    preprocessModule(FunOrError2.get(), "2");
 
     convertToSMT(FunOrError1.get(), FunOrError2.get());
 
@@ -215,6 +217,8 @@ void preprocessModule(llvm::Function &Fun, std::string Prefix) {
     FPM.addPass(AnnotStackPass());                // annotate load/store of stack variables
     FPM.addPass(PromotePass());                   // mem2reg
     FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
+    // FPM.addPass(CFGViewerPass()); // show cfg
+    FPM.addPass(llvm::VerifierPass());
     FPM.run(Fun, &FAM);
 
     FAM.getResult<llvm::LoopAnalysis>(Fun).print(errs());
