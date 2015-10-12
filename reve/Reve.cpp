@@ -3,6 +3,8 @@
 #include "AnnotStackPass.h"
 #include "CFGPrinter.h"
 #include "Mem2Reg.h"
+#include "SExpr.h"
+#include "SMT.h"
 #include "UniqueNamePass.h"
 
 #include "clang/Driver/Compilation.h"
@@ -63,9 +65,9 @@ template <int N>
 llvm::SmallVector<const char *, N>
 initializeArgs(const char *ExeName, std::string Input1, std::string Input2) {
     llvm::SmallVector<const char *, N> Args;
-    Args.push_back(ExeName);         // add executable name
-    Args.push_back("-xc");           // force language to C
-    Args.push_back(Input1.c_str());  // add input file
+    Args.push_back(ExeName);        // add executable name
+    Args.push_back("-xc");          // force language to C
+    Args.push_back(Input1.c_str()); // add input file
     Args.push_back(Input2.c_str());
     Args.push_back("-fsyntax-only"); // don't do more work than necessary
     return Args;
@@ -208,14 +210,14 @@ int main(int Argc, const char **Argv) {
 
 void preprocessModule(llvm::Function &Fun, std::string Prefix) {
     llvm::PassBuilder PB;
-    llvm::FunctionAnalysisManager FAM(true);      // enable debug log
-    PB.registerFunctionAnalyses(FAM);             // register basic analyses
+    llvm::FunctionAnalysisManager FAM(true); // enable debug log
+    PB.registerFunctionAnalyses(FAM);        // register basic analyses
 
-    llvm::FunctionPassManager FPM(true);          // enable debug log
+    llvm::FunctionPassManager FPM(true); // enable debug log
 
-    FPM.addPass(UniqueNamePass(Prefix));          // prefix register names
-    FPM.addPass(AnnotStackPass());                // annotate load/store of stack variables
-    FPM.addPass(PromotePass());                   // mem2reg
+    FPM.addPass(UniqueNamePass(Prefix)); // prefix register names
+    FPM.addPass(AnnotStackPass()); // annotate load/store of stack variables
+    FPM.addPass(PromotePass());    // mem2reg
     FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
     // FPM.addPass(CFGViewerPass()); // show cfg
     FPM.addPass(llvm::VerifierPass());
@@ -238,5 +240,11 @@ ErrorOr<llvm::Function &> getFunction(llvm::Module &Mod) {
 }
 
 void convertToSMT(llvm::Function &Mod1, llvm::Function &Mod2) {
-    errs() << "Convert so SMT\n";
+    errs() << "Converting so SMT\n";
+    std::vector<std::unique_ptr<SMTExpr>> SMT;
+    SetLogic A("HORN");
+    SMT.push_back(std::make_unique<SetLogic>("HORN"));
+    for (auto &Expr : SMT) {
+        std::cout << *Expr->toSExpr();
+    }
 }
