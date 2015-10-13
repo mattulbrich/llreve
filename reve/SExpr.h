@@ -6,6 +6,8 @@
 #include <ostream>
 #include <vector>
 
+namespace sexpr {
+
 template <typename T> class SExpr {
   public:
     virtual void serialize(std::ostream &OS, size_t Indent) const = 0;
@@ -62,6 +64,7 @@ template <typename T>
 std::ostream &operator<<(std::ostream &OS, const SExpr<T> &Val) {
     Val.serialize(OS, 0);
     return OS;
+}
 }
 
 #endif // SEXPR_H
