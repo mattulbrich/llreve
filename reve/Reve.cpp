@@ -252,8 +252,25 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2) {
     for (auto &Arg : Fun2.args()) {
         Vars.push_back(SortedVar(Arg.getName(), "Int"));
     }
-    // TODO: CheckSat is just a dummy value
-    SMT.push_back(std::make_unique<Forall>(Vars, std::make_unique<CheckSat>()));
+    // Force input values to be the same
+    std::vector<std::tuple<std::string, std::unique_ptr<const SMTExpr>>> Defs;
+    for (auto I1 = Fun1.args().begin(), I2 = Fun2.args().begin(),
+              E1 = Fun1.args().end(), E2 = Fun2.args().end();
+         I1 != E1 && I2 != E2; ++I1, ++I2) {
+        Defs.push_back(std::make_tuple(
+            I1->getName(),
+            std::make_unique<Primitive<std::string>>(I2->getName())));
+    }
+
+    std::vector<std::unique_ptr<const SMTExpr>> Args;
+    Args.push_back(std::make_unique<const Primitive<std::string>>("true"));
+    Args.push_back(std::make_unique<const Primitive<std::string>>("true"));
+
+    std::unique_ptr<const SMTExpr> Impl =
+        std::make_unique<const Op>("=>", std::move(Args));
+
+    SMT.push_back(std::make_unique<Forall>(
+        Vars, std::make_unique<Let>(std::move(Defs), std::move(Impl))));
 
     SMT.push_back(std::make_unique<CheckSat>());
     SMT.push_back(std::make_unique<GetModel>());

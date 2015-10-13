@@ -47,12 +47,15 @@ template <typename T> class List : public SExpr<T> {
     void serialize(std::ostream &OS, size_t Indent) const override {
         OS << "(";
         auto It = Elements.begin();
-        (*It)->serialize(OS, Indent + 1);
-        ++It;
-        for (auto E = Elements.end(); It != E; ++It) {
-            OS << std::endl;
-            OS << std::string(Indent + 1, ' ');
+        auto E = Elements.end();
+        if (It != E) {
             (*It)->serialize(OS, Indent + 1);
+            ++It;
+            for (; It != E; ++It) {
+                OS << std::endl;
+                OS << std::string(Indent + 1, ' ');
+                (*It)->serialize(OS, Indent + 1);
+            }
         }
         OS << ")";
     }

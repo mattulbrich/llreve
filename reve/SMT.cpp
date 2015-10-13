@@ -2,6 +2,7 @@
 
 #include "SExpr.h"
 
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -17,8 +18,7 @@ SMTExpr::~SMTExpr() {}
 
 unique_ptr<SExpr> SetLogic::toSExpr() const {
     std::vector<unique_ptr<SExpr>> Args;
-    unique_ptr<SExpr> LogicPtr =
-        make_unique<const Value<std::string>>(Logic);
+    unique_ptr<SExpr> LogicPtr = make_unique<const Value<std::string>>(Logic);
 
     Args.push_back(std::move(LogicPtr));
     return make_unique<Apply<std::string>>("set-logic", std::move(Args));
@@ -55,4 +55,26 @@ unique_ptr<SExpr> SortedVar::toSExpr() const {
     std::vector<unique_ptr<SExpr>> Type_;
     Type_.push_back(make_unique<const Value<std::string>>(Type));
     return make_unique<Apply<std::string>>(Name, std::move(Type_));
+}
+
+unique_ptr<SExpr> Let::toSExpr() const {
+    std::vector<unique_ptr<SExpr>> Args;
+    std::vector<unique_ptr<SExpr>> Defs_;
+    for (auto &Def : Defs) {
+        std::vector<unique_ptr<SExpr>> Args_;
+        Args_.push_back(std::get<1>(Def)->toSExpr());
+        Defs_.push_back(make_unique<Apply<std::string>>(std::get<0>(Def),
+                                                        std::move(Args_)));
+    }
+    Args.push_back(make_unique<List<std::string>>(std::move(Defs_)));
+    Args.push_back(Expr->toSExpr());
+    return make_unique<Apply<std::string>>("let", std::move(Args));
+}
+
+unique_ptr<SExpr> Op::toSExpr() const {
+    std::vector<unique_ptr<SExpr>> Args_;
+    for (auto &Arg : Args) {
+        Args_.push_back(Arg->toSExpr());
+    }
+    return make_unique<Apply<std::string>>(OpName, std::move(Args_));
 }
