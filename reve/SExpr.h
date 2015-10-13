@@ -8,37 +8,60 @@
 
 template <typename T> class SExpr {
   public:
-    virtual void serialize(std::ostream &OS) const = 0;
-    virtual ~SExpr() {}
-    SExpr() {}
-    SExpr(SExpr &SExpr) {}
+    virtual void serialize(std::ostream &OS, size_t Indent) const = 0;
+    virtual ~SExpr() = default;
+    SExpr() = default;
+    SExpr(const SExpr &SExpr) = default;
 };
 
 template <typename T> class Value : public SExpr<T> {
   public:
-    Value(T Val_) : Val(Val_) {}
-    void serialize(std::ostream &OS) const { OS << Val; }
+    explicit Value(T Val_) : Val(Val_) {}
+    void serialize(std::ostream &OS, size_t Indent) const override {
+        OS << Val; }
     T Val;
 };
 
 template <typename T> class Apply : public SExpr<T> {
   public:
-    Apply(T Fun_, std::vector<std::shared_ptr<SExpr<T>>> Args_)
-        : Fun(Fun_), Args(Args_) {}
-    void serialize(std::ostream &OS) const {
+    Apply(T Fun_, std::vector<std::unique_ptr<const SExpr<T>>> Args_)
+        : Fun(Fun_), Args(std::move(Args_)) {}
+    void serialize(std::ostream &OS, size_t Indent) const override {
         OS << "(" << Fun;
         for (auto &Arg : Args) {
-            OS << " " << *Arg;
+            OS << std::endl;
+            OS << std::string(Indent + 3, ' ');
+            Arg->serialize(OS, Indent + 3);
         }
         OS << ")";
     }
     T Fun;
-    std::vector<std::shared_ptr<SExpr<T>>> Args;
+    std::vector<std::unique_ptr<const SExpr<T>>> Args;
+};
+
+template <typename T> class List : public SExpr<T> {
+  public:
+    explicit List(std::vector<std::unique_ptr<const SExpr<T>>> Elements_)
+        : Elements(std::move(Elements_)) {}
+    void serialize(std::ostream &OS, size_t Indent) const override {
+        OS << "(";
+        auto It = Elements.begin();
+        (*It)->serialize(OS, Indent + 1);
+        ++It;
+        for (auto E = Elements.end(); It != E; ++It) {
+            OS << std::endl;
+            OS << std::string(Indent + 1, ' ');
+            (*It)->serialize(OS, Indent + 1);
+        }
+        OS << ")";
+    }
+    T Fun;
+    std::vector<std::unique_ptr<const SExpr<T>>> Elements;
 };
 
 template <typename T>
 std::ostream &operator<<(std::ostream &OS, const SExpr<T> &Val) {
-    Val.serialize(OS);
+    Val.serialize(OS, 0);
     return OS;
 }
 

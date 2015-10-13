@@ -239,12 +239,26 @@ ErrorOr<llvm::Function &> getFunction(llvm::Module &Mod) {
     return ErrorOr<llvm::Function &>(Fun);
 }
 
-void convertToSMT(llvm::Function &Mod1, llvm::Function &Mod2) {
+void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2) {
     errs() << "Converting so SMT\n";
     std::vector<std::unique_ptr<SMTExpr>> SMT;
     SetLogic A("HORN");
     SMT.push_back(std::make_unique<SetLogic>("HORN"));
+
+    std::vector<SortedVar> Vars;
+    for (auto &Arg : Fun1.args()) {
+        Vars.push_back(SortedVar(Arg.getName(), "Int"));
+    }
+    for (auto &Arg : Fun2.args()) {
+        Vars.push_back(SortedVar(Arg.getName(), "Int"));
+    }
+    // TODO: CheckSat is just a dummy value
+    SMT.push_back(std::make_unique<Forall>(Vars, std::make_unique<CheckSat>()));
+
+    SMT.push_back(std::make_unique<CheckSat>());
+    SMT.push_back(std::make_unique<GetModel>());
     for (auto &Expr : SMT) {
         std::cout << *Expr->toSExpr();
+        std::cout << std::endl;
     }
 }
