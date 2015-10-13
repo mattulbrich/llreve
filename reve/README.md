@@ -16,15 +16,12 @@ First we install some basic tools
 apt-get install cmake wget
 ```
 
-Now we need to add a repository for llvm and a
-backport of libstdc++
+Now we need to add a repository for llvm
 
 ```
-apt-get install software-properties-common # probably already installed
 echo 'deb http://llvm.org/apt/trusty/ llvm-toolchain-trusty-3.7 main' >> /etc/apt/sources.list
 echo 'deb-src http://llvm.org/apt/trusty/ llvm-toolchain-trusty-3.7 main' >> /etc/apt/sources.list
 wget -O - http://llvm.org/apt/llvm-snapshot.gpg.key|apt-key add -
-add-apt-repository ppa:ubuntu-toolchain-r/test
 apt-get update
 ```
 
@@ -33,12 +30,6 @@ Then we install clang
 ```
 apt-get install clang-3.7 libclang-3.7-dev
 ln -s /usr/bin/clang++-3.7 /usr/bin/clang++ # cmake looks for clang++
-```
-
-and libstdc++.
-
-```
-apt-get install libstdc++-5-dev
 ```
 
 Finally we need two other dependencies, which are probably installed
