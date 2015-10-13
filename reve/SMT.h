@@ -3,6 +3,7 @@
 
 #include "SExpr.h"
 
+#include <sstream>
 #include <string>
 
 using SExpr = const sexpr::SExpr<std::string>;
@@ -73,7 +74,9 @@ template <typename T> class Primitive : public SMTExpr {
   public:
     explicit Primitive(const T Val_) : Val(Val_) {}
     std::unique_ptr<SExpr> toSExpr() const override {
-        return std::make_unique<sexpr::Value<std::string>>(Val);
+        std::stringstream SStream;
+        SStream << Val;
+        return std::make_unique<sexpr::Value<std::string>>(SStream.str());
     }
     const T Val;
 };
