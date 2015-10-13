@@ -7,7 +7,7 @@
 #include <vector>
 
 using std::unique_ptr;
-using std::make_unique;
+using llvm::make_unique;
 
 using sexpr::Apply;
 using sexpr::Value;

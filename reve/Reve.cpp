@@ -81,7 +81,7 @@ unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
         new clang::TextDiagnosticPrinter(llvm::errs(), &*DiagOpts);
     const IntrusiveRefCntPtr<clang::DiagnosticIDs> DiagID(
         new clang::DiagnosticIDs());
-    return std::make_unique<DiagnosticsEngine>(DiagID, &*DiagOpts, DiagClient);
+    return llvm::make_unique<DiagnosticsEngine>(DiagID, &*DiagOpts, DiagClient);
 }
 
 /// Initialize the driver
@@ -89,7 +89,7 @@ unique_ptr<Driver> initializeDriver(DiagnosticsEngine &Diags) {
     std::string TripleStr = llvm::sys::getProcessTriple();
     llvm::Triple Triple(TripleStr);
     // TODO: Find the correct path instead of hardcoding it
-    auto Driver = std::make_unique<clang::driver::Driver>("/usr/bin/clang",
+    auto Driver = llvm::make_unique<clang::driver::Driver>("/usr/bin/clang",
                                                           Triple.str(), Diags);
     Driver->setTitle("reve");
     Driver->setCheckInputsExist(false);
@@ -153,7 +153,7 @@ getModule(const char *ExeName, std::string Input1, std::string Input2) {
 /// Build the CodeGenAction corresponding to the arguments
 std::unique_ptr<CodeGenAction>
 getCodeGenAction(const ArgStringList &CCArgs, clang::DiagnosticsEngine &Diags) {
-    auto CI = std::make_unique<CompilerInvocation>();
+    auto CI = llvm::make_unique<CompilerInvocation>();
     CompilerInvocation::CreateFromArgs(*CI, (CCArgs.data()),
                                        (CCArgs.data()) + CCArgs.size(), Diags);
     CompilerInstance Clang;
@@ -164,7 +164,7 @@ getCodeGenAction(const ArgStringList &CCArgs, clang::DiagnosticsEngine &Diags) {
         return nullptr;
     }
     std::unique_ptr<CodeGenAction> Act =
-        std::make_unique<clang::EmitLLVMOnlyAction>();
+        llvm::make_unique<clang::EmitLLVMOnlyAction>();
     if (!Clang.ExecuteAction(*Act)) {
         std::cerr << "Couldn't execute action\n";
         return nullptr;
@@ -243,7 +243,7 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2) {
     errs() << "Converting so SMT\n";
     std::vector<std::unique_ptr<SMTExpr>> SMT;
     SetLogic A("HORN");
-    SMT.push_back(std::make_unique<SetLogic>("HORN"));
+    SMT.push_back(llvm::make_unique<SetLogic>("HORN"));
 
     std::vector<SortedVar> Vars;
     for (auto &Arg : Fun1.args()) {
@@ -259,21 +259,21 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2) {
          I1 != E1 && I2 != E2; ++I1, ++I2) {
         Defs.push_back(std::make_tuple(
             I1->getName(),
-            std::make_unique<Primitive<std::string>>(I2->getName())));
+            llvm::make_unique<Primitive<std::string>>(I2->getName())));
     }
 
     std::vector<std::unique_ptr<const SMTExpr>> Args;
-    Args.push_back(std::make_unique<const Primitive<std::string>>("true"));
-    Args.push_back(std::make_unique<const Primitive<std::string>>("true"));
+    Args.push_back(llvm::make_unique<const Primitive<std::string>>("true"));
+    Args.push_back(llvm::make_unique<const Primitive<std::string>>("true"));
 
     std::unique_ptr<const SMTExpr> Impl =
-        std::make_unique<const Op>("=>", std::move(Args));
+        llvm::make_unique<const Op>("=>", std::move(Args));
 
-    SMT.push_back(std::make_unique<Forall>(
-        Vars, std::make_unique<Let>(std::move(Defs), std::move(Impl))));
+    SMT.push_back(llvm::make_unique<Forall>(
+        Vars, llvm::make_unique<Let>(std::move(Defs), std::move(Impl))));
 
-    SMT.push_back(std::make_unique<CheckSat>());
-    SMT.push_back(std::make_unique<GetModel>());
+    SMT.push_back(llvm::make_unique<CheckSat>());
+    SMT.push_back(llvm::make_unique<GetModel>());
     for (auto &Expr : SMT) {
         std::cout << *Expr->toSExpr();
         std::cout << std::endl;

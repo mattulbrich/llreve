@@ -3,6 +3,8 @@
 
 #include "SExpr.h"
 
+#include "llvm/ADT/STLExtras.h"
+
 #include <sstream>
 #include <string>
 
@@ -76,7 +78,7 @@ template <typename T> class Primitive : public SMTExpr {
     std::unique_ptr<SExpr> toSExpr() const override {
         std::stringstream SStream;
         SStream << Val;
-        return std::make_unique<sexpr::Value<std::string>>(SStream.str());
+        return llvm::make_unique<sexpr::Value<std::string>>(SStream.str());
     }
     const T Val;
 };
