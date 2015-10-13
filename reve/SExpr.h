@@ -17,8 +17,7 @@ template <typename T> class SExpr {
 template <typename T> class Value : public SExpr<T> {
   public:
     explicit Value(T Val_) : Val(Val_) {}
-    void serialize(std::ostream &OS, size_t Indent) const override {
-        OS << Val; }
+    void serialize(std::ostream &OS, size_t) const override { OS << Val; }
     T Val;
 };
 
