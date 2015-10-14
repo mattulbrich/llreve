@@ -241,7 +241,7 @@ ErrorOr<llvm::Function &> getFunction(llvm::Module &Mod) {
 
 void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2) {
     errs() << "Converting so SMT\n";
-    std::vector<std::unique_ptr<SMTExpr>> SMT;
+    std::vector<std::unique_ptr<const SMTExpr>> SMT;
     SetLogic A("HORN");
     SMT.push_back(llvm::make_unique<SetLogic>("HORN"));
 
@@ -269,8 +269,12 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2) {
     std::unique_ptr<const SMTExpr> Impl =
         llvm::make_unique<const Op>("=>", std::move(Args));
 
-    SMT.push_back(llvm::make_unique<Forall>(
-        Vars, llvm::make_unique<Let>(std::move(Defs), std::move(Impl))));
+    std::unique_ptr<const SMTExpr> Forall =
+        llvm::make_unique<const class Forall>(
+                                  Vars, llvm::make_unique<Let>(std::move(Defs), std::move(Impl)));
+
+    std::unique_ptr<const SMTExpr> Assert = llvm::make_unique<const class Assert>(std::move(Forall));
+    SMT.push_back(std::move(Assert));
 
     SMT.push_back(llvm::make_unique<CheckSat>());
     SMT.push_back(llvm::make_unique<GetModel>());
