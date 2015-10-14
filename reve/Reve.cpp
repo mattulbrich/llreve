@@ -90,7 +90,7 @@ unique_ptr<Driver> initializeDriver(DiagnosticsEngine &Diags) {
     llvm::Triple Triple(TripleStr);
     // TODO: Find the correct path instead of hardcoding it
     auto Driver = llvm::make_unique<clang::driver::Driver>("/usr/bin/clang",
-                                                          Triple.str(), Diags);
+                                                           Triple.str(), Diags);
     Driver->setTitle("reve");
     Driver->setCheckInputsExist(false);
     return Driver;
@@ -215,12 +215,12 @@ void preprocessModule(llvm::Function &Fun, std::string Prefix) {
 
     llvm::FunctionPassManager FPM(true); // enable debug log
 
-    FPM.addPass(UniqueNamePass(Prefix)); // prefix register names
     FPM.addPass(AnnotStackPass()); // annotate load/store of stack variables
     FPM.addPass(PromotePass());    // mem2reg
-    FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
     // FPM.addPass(CFGViewerPass()); // show cfg
+    FPM.addPass(UniqueNamePass(Prefix)); // prefix register names
     FPM.addPass(llvm::VerifierPass());
+    FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
     FPM.run(Fun, &FAM);
 
     FAM.getResult<llvm::LoopAnalysis>(Fun).print(errs());
