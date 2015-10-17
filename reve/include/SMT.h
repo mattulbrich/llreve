@@ -97,4 +97,10 @@ class Op : public SMTExpr {
     std::unique_ptr<const SExpr> toSExpr() const override;
 };
 
+auto makeBinOp(std::string OpName, std::string Arg_1, std::string Arg_2) -> std::unique_ptr<Op>;
+auto makeBinOp(std::string OpName, SMTRef Arg_1, SMTRef Arg_2) -> std::unique_ptr<Op>;
+auto makeUnaryOp(std::string OpName, std::string Arg) -> std::unique_ptr<Op>;
+auto makeUnaryOp(std::string OpName, SMTRef Arg) -> std::unique_ptr<Op>;
+auto name(std::string Name) -> SMTRef;
+
 #endif // SMT_H

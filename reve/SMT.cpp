@@ -77,3 +77,33 @@ SExprRef Op::toSExpr() const {
     }
     return make_unique<Apply<std::string>>(OpName, std::move(Args_));
 }
+
+std::unique_ptr<Op> makeBinOp(std::string OpName, std::string Arg_1, std::string Arg_2) {
+    std::vector<SMTRef> Args;
+    Args.push_back(name(Arg_1));
+    Args.push_back(name(Arg_2));
+    return make_unique<Op>(OpName, std::move(Args));
+}
+
+std::unique_ptr<Op> makeBinOp(std::string OpName, SMTRef Arg_1, SMTRef Arg_2) {
+    std::vector<SMTRef> Args;
+    Args.push_back(std::move(Arg_1));
+    Args.push_back(std::move(Arg_2));
+    return make_unique<Op>(OpName, std::move(Args));
+}
+
+std::unique_ptr<Op> makeUnaryOp(std::string OpName, std::string Arg) {
+    std::vector<SMTRef> Args;
+    Args.push_back(name(Arg));
+    return make_unique<Op>(OpName, std::move(Args));
+}
+
+std::unique_ptr<Op> makeUnaryOp(std::string OpName, SMTRef Arg) {
+    std::vector<SMTRef> Args;
+    Args.push_back(std::move(Arg));
+    return make_unique<Op>(OpName, std::move(Args));
+}
+
+SMTRef name(std::string Name) {
+    return make_unique<Primitive<std::string>>(Name);
+}
