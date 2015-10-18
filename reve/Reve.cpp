@@ -47,12 +47,14 @@ using clang::driver::Compilation;
 using clang::driver::Driver;
 using clang::driver::JobList;
 
+using llvm::CmpInst;
 using llvm::ErrorOr;
 using llvm::errs;
+using llvm::Instruction;
 using llvm::IntrusiveRefCntPtr;
-using llvm::CmpInst;
 
 using std::unique_ptr;
+using std::string;
 
 static llvm::cl::opt<std::string> FileName1(llvm::cl::Positional,
                                             llvm::cl::desc("Input file 1"),
@@ -257,23 +259,28 @@ void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
     errs() << "Loops in program 2\n\t";
     FAM_2->getResult<llvm::LoopAnalysis>(Fun_2).print(errs());
 
-    std::vector<std::unique_ptr<const SMTExpr>> SMT;
+    std::vector<SMTRef> SMT;
 
     // Set logic to horn
     SetLogic A("HORN");
     SMT.push_back(llvm::make_unique<SetLogic>("HORN"));
 
+    std::vector<string> FunArgs_1;
+    std::vector<string> FunArgs_2;
+
     // Forall quantifier over input variables
     std::vector<SortedVar> Vars;
     for (auto &Arg : Fun_1.args()) {
         Vars.push_back(SortedVar(Arg.getName(), "Int"));
+        FunArgs_1.push_back(Arg.getName());
     }
     for (auto &Arg : Fun_2.args()) {
         Vars.push_back(SortedVar(Arg.getName(), "Int"));
+        FunArgs_2.push_back(Arg.getName());
     }
 
     // Force input values to be the same
-    std::vector<std::tuple<std::string, std::unique_ptr<const SMTExpr>>> Defs;
+    std::vector<std::tuple<std::string, SMTRef>> Defs;
     for (auto I1 = Fun_1.args().begin(), I2 = Fun_2.args().begin(),
               E1 = Fun_1.args().end(), E2 = Fun_2.args().end();
          I1 != E1 && I2 != E2; ++I1, ++I2) {
@@ -281,23 +288,28 @@ void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
     }
 
     // trivial implication
-    std::vector<std::unique_ptr<const SMTExpr>> Args;
-    Args.push_back(name("true"));
-    std::unique_ptr<const SMTExpr> MainClause =
-        walkCFG(Fun_1.getEntryBlock(), Fun_2.getEntryBlock(),
-                FAM_1->getResult<llvm::LoopAnalysis>(Fun_1),
-                FAM_2->getResult<llvm::LoopAnalysis>(Fun_2), nullptr, nullptr);
-    Args.push_back(std::move(MainClause));
+    std::vector<size_t> Funs;
+    SMTRef MainClause =
+        walkCFG(&Fun_1.getEntryBlock(), &Fun_2.getEntryBlock(),
+                &FAM_1->getResult<llvm::LoopAnalysis>(Fun_1),
+                &FAM_2->getResult<llvm::LoopAnalysis>(Fun_2), nullptr, nullptr,
+                1, Funs, FunArgs_1, FunArgs_2);
 
-    std::unique_ptr<const SMTExpr> Impl =
-        llvm::make_unique<const Op>("=>", std::move(Args));
+    SMTRef Impl = makeBinOp("=>", name("true"), std::move(MainClause));
 
-    std::unique_ptr<const SMTExpr> Forall =
-        llvm::make_unique<const class Forall>(
-            Vars, llvm::make_unique<Let>(std::move(Defs), std::move(Impl)));
+    SMTRef Forall = llvm::make_unique<const class Forall>(
+        Vars, llvm::make_unique<Let>(std::move(Defs), std::move(Impl)));
 
-    std::unique_ptr<const SMTExpr> Assert =
-        llvm::make_unique<const class Assert>(std::move(Forall));
+    // Declare invariants
+    int i = 0;
+    for (auto ArgCount : Funs) {
+        std::vector<string> InTypes(ArgCount, "Int");
+        SMT.push_back(llvm::make_unique<Fun>("INV_" + std::to_string(i),
+                                             InTypes, "Bool"));
+        ++i;
+    }
+
+    SMTRef Assert = llvm::make_unique<const class Assert>(std::move(Forall));
     SMT.push_back(std::move(Assert));
 
     SMT.push_back(llvm::make_unique<CheckSat>());
@@ -308,62 +320,322 @@ void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
     }
 }
 
-std::unique_ptr<const SMTExpr>
-walkCFG(const llvm::BasicBlock &BB_1, const llvm::BasicBlock &BB_2,
-        llvm::LoopInfo &LoopInfo_1, llvm::LoopInfo &LoopInfo_2,
-        const llvm::BasicBlock *PrevBB_1, const llvm::BasicBlock *PrevBB_2) {
-    if (!LoopInfo_1.isLoopHeader(&BB_1)) {
-        std::vector<std::tuple<std::string, std::unique_ptr<const SMTExpr>>>
-            Defs;
-        for (auto Instr = BB_1.begin(), E = std::prev(BB_1.end(), 1);
-             Instr != E; ++Instr) {
-            if (!Instr->getType()->isVoidTy()) {
-                Defs.push_back(toDef(*Instr, PrevBB_1));
-            } else {
-                errs() << "Void instruction\n";
-            }
-        }
-        auto TermInst = BB_1.getTerminator();
-        std::unique_ptr<const SMTExpr> Clause;
-        if (auto BranchInst = llvm::dyn_cast<llvm::BranchInst>(TermInst)) {
-            if (BranchInst->isUnconditional()) {
-                assert(BranchInst->getNumSuccessors() == 1);
-                Clause = walkCFG(*BranchInst->getSuccessor(0), BB_2, LoopInfo_1,
-                                 LoopInfo_2, &BB_1, &BB_2);
-            } else {
-                assert(BranchInst->getNumSuccessors() == 2);
-                auto CondName = BranchInst->getCondition()->getName();
-                Clause = makeBinOp(
-                    "and",
-                    makeBinOp("=>", name(CondName),
-                              walkCFG(*BranchInst->getSuccessor(0), BB_2,
-                                      LoopInfo_1, LoopInfo_2, &BB_1, &BB_2)),
-                    makeBinOp("=>", makeUnaryOp("not", CondName),
-                              walkCFG(*BranchInst->getSuccessor(1), BB_2,
-                                      LoopInfo_1, LoopInfo_2, &BB_1, &BB_2)));
-            }
-        } else if (auto RetInst = llvm::dyn_cast<llvm::ReturnInst>(TermInst)) {
-            std::vector<std::tuple<std::string, std::unique_ptr<const SMTExpr>>>
-                ResultDef;
-            ResultDef.push_back(std::make_tuple(
-                "result$1",
-                name(getInstrNameOrValue(RetInst->getReturnValue()))));
-            Clause = llvm::make_unique<const Let>(std::move(ResultDef),
-                                                  name("DUMMY"));
-        } else {
-            errs() << "Unsupported terminator instruction\n";
-            Clause = name("DUMMY");
-        }
-        return llvm::make_unique<const Let>(std::move(Defs), std::move(Clause));
+SMTRef stepCFG(const llvm::BasicBlock *CurrentBB,
+               const llvm::BasicBlock *OtherBB, llvm::LoopInfo *LoopInfo_1,
+               llvm::LoopInfo *LoopInfo_2,
+               const llvm::BasicBlock *PrevCurrentBB,
+               const llvm::BasicBlock *PrevOtherBB, int Program,
+               std::vector<size_t> &Funs, std::vector<string> CurrentFunArgs,
+               std::vector<string> OtherFunArgs) {
+    std::vector<std::tuple<std::string, SMTRef>> Defs;
+    for (auto Instr = CurrentBB->begin(), E = std::prev(CurrentBB->end(), 1);
+         Instr != E; ++Instr) {
+        assert(!Instr->getType()->isVoidTy());
+        Defs.push_back(toDef(*Instr, PrevCurrentBB));
     }
+    auto TermInst = CurrentBB->getTerminator();
+    SMTRef Clause;
+    if (auto BranchInst = llvm::dyn_cast<llvm::BranchInst>(TermInst)) {
+        if (BranchInst->isUnconditional()) {
+            assert(BranchInst->getNumSuccessors() == 1);
+            Clause = walkCFG(BranchInst->getSuccessor(0), OtherBB, LoopInfo_1,
+                             LoopInfo_2, CurrentBB, PrevOtherBB, Program, Funs,
+                             CurrentFunArgs, OtherFunArgs);
+        } else {
+            assert(BranchInst->getNumSuccessors() == 2);
+            auto CondName = BranchInst->getCondition()->getName();
+            Clause = makeBinOp(
+                "and", makeBinOp("=>", name(CondName),
+                                 walkCFG(BranchInst->getSuccessor(0), OtherBB,
+                                         LoopInfo_1, LoopInfo_2, CurrentBB,
+                                         PrevOtherBB, Program, Funs,
+                                         CurrentFunArgs, OtherFunArgs)),
+                makeBinOp("=>", makeUnaryOp("not", CondName),
+                          walkCFG(BranchInst->getSuccessor(1), OtherBB,
+                                  LoopInfo_1, LoopInfo_2, CurrentBB,
+                                  PrevOtherBB, Program, Funs, CurrentFunArgs,
+                                  OtherFunArgs)));
+        }
+    } else if (auto RetInst = llvm::dyn_cast<llvm::ReturnInst>(TermInst)) {
+        std::vector<std::tuple<std::string, SMTRef>> ResultDef;
+        ResultDef.push_back(std::make_tuple(
+            "result$" + std::to_string(Program),
+            name(getInstrNameOrValue(RetInst->getReturnValue()))));
+        Clause = llvm::make_unique<const Let>(
+            std::move(ResultDef),
+            walkCFG(OtherBB, nullptr, LoopInfo_2, LoopInfo_1, PrevOtherBB,
+                    CurrentBB, swapIndex(Program), Funs, OtherFunArgs,
+                    CurrentFunArgs));
+    } else {
+        errs() << "Unsupported terminator instruction\n";
+        Clause = name("DUMMY");
+    }
+
+    // SMT does not support recursive lets, so we nest the defs in separate lets
+    SMTRef Lets = std::move(Clause);
+    for (auto I = Defs.rbegin(), E = Defs.rend(); I != E; ++I) {
+        std::vector<std::tuple<std::string, SMTRef>> Def;
+        Def.push_back(std::move(*I));
+        Lets = llvm::make_unique<const Let>(std::move(Def), std::move(Lets));
+    }
+    return Lets;
+}
+
+SMTRef stepLoopBlock(
+    const llvm::BasicBlock *CurrentBB, llvm::LoopInfo *LoopInfo,
+    const llvm::BasicBlock *PrevCurrentBB, std::vector<string> CurrentFunArgs,
+    std::function<SMTRef()> InvariantCont,
+    std::function<SMTRef(const llvm::BasicBlock *BB, llvm::LoopInfo *LoopInfo,
+                         const llvm::BasicBlock *PrevBB)> ExitCont) {
+    errs() << "\n---\n";
+    errs() << "LOOPING THROUGH BLOCKS\n";
+    CurrentBB->print(errs());
+    errs() << "\n---\n";
+    if (!LoopInfo->getLoopFor(CurrentBB)) {
+        errs() << "EXITING\n";
+        return ExitCont(CurrentBB, LoopInfo, PrevCurrentBB);
+    }
+    if (LoopInfo->getLoopFor(PrevCurrentBB) &&
+        LoopInfo->isLoopHeader(CurrentBB)) {
+        errs() << "INVARIANTING\n";
+        errs() << "PREVIOUS BLOCK\n";
+        PrevCurrentBB->print(errs());
+        return InvariantCont();
+    }
+    std::vector<std::tuple<std::string, SMTRef>> Defs;
+    for (auto Instr = CurrentBB->begin(), E = std::prev(CurrentBB->end(), 1);
+         Instr != E; ++Instr) {
+        assert(!Instr->getType()->isVoidTy());
+        // Ignore phinodes because they are bound in a forall
+        if (!llvm::isa<llvm::PHINode>(Instr)) {
+            Defs.push_back(toDef(*Instr, PrevCurrentBB));
+        }
+    }
+    auto TermInst = CurrentBB->getTerminator();
+    SMTRef Clause;
+    if (auto BranchInst = llvm::dyn_cast<llvm::BranchInst>(TermInst)) {
+        if (BranchInst->isUnconditional()) {
+            assert(BranchInst->getNumSuccessors() == 1);
+            Clause =
+                stepLoopBlock(BranchInst->getSuccessor(0), LoopInfo, CurrentBB,
+                              CurrentFunArgs, InvariantCont, ExitCont);
+        } else {
+            assert(BranchInst->getNumSuccessors() == 2);
+            auto CondName = BranchInst->getCondition()->getName();
+            Clause = makeBinOp(
+                "and",
+                makeBinOp("=>", name(CondName),
+                          stepLoopBlock(BranchInst->getSuccessor(0), LoopInfo,
+                                        CurrentBB, CurrentFunArgs,
+                                        InvariantCont, ExitCont)),
+                makeBinOp("=>", makeUnaryOp("not", CondName),
+                          stepLoopBlock(BranchInst->getSuccessor(1), LoopInfo,
+                                        CurrentBB, CurrentFunArgs,
+                                        InvariantCont, ExitCont)));
+        }
+    } else if (auto RetInst = llvm::dyn_cast<llvm::ReturnInst>(TermInst)) {
+        std::vector<std::tuple<std::string, SMTRef>> ResultDef;
+        ResultDef.push_back(std::make_tuple(
+            "result$1", name(getInstrNameOrValue(RetInst->getReturnValue()))));
+        Clause =
+            llvm::make_unique<const Let>(std::move(ResultDef), name("DUMMY"));
+    } else {
+        errs() << "Unsupported terminator instruction\n";
+        Clause = name("DUMMY");
+    }
+
+    // SMT does not support recursive lets, so split them up
+    SMTRef Lets = std::move(Clause);
+    for (auto I = Defs.rbegin(), E = Defs.rend(); I != E; ++I) {
+        std::vector<std::tuple<std::string, SMTRef>> Def;
+        Def.push_back(std::move(*I));
+        Lets = llvm::make_unique<const Let>(std::move(Def), std::move(Lets));
+    }
+    return Lets;
+}
+
+SMTRef walkCFG(const llvm::BasicBlock *CurrentBB,
+               const llvm::BasicBlock *OtherBB, llvm::LoopInfo *LoopInfo_1,
+               llvm::LoopInfo *LoopInfo_2,
+               const llvm::BasicBlock *PrevCurrentBB,
+               const llvm::BasicBlock *PrevOtherBB, int Program,
+               std::vector<size_t> &Funs, std::vector<string> CurrentFunArgs,
+               std::vector<string> OtherFunArgs) {
+    errs() << "Walking CFG\n";
+    errs() << "CurrentBB\n";
+    if (CurrentBB) {
+        CurrentBB->print(errs());
+    } else {
+        errs() << "END\n";
+    }
+    errs() << "\nOtherBB\n";
+    if (OtherBB) {
+        OtherBB->print(errs());
+    } else {
+        errs() << "END\n";
+    }
+    errs() << "\n---\n\n";
+    if (CurrentBB && !LoopInfo_1->isLoopHeader(CurrentBB)) {
+        return stepCFG(CurrentBB, OtherBB, LoopInfo_1, LoopInfo_2,
+                       PrevCurrentBB, PrevOtherBB, Program, Funs,
+                       CurrentFunArgs, OtherFunArgs);
+    } else if (OtherBB && !LoopInfo_2->isLoopHeader(OtherBB)) {
+        return stepCFG(OtherBB, CurrentBB, LoopInfo_2, LoopInfo_1, PrevOtherBB,
+                       PrevCurrentBB, swapIndex(Program), Funs, OtherFunArgs,
+                       CurrentFunArgs);
+    } else if (!CurrentBB && OtherBB) {
+        errs() << "LOOP at OtherBB\n";
+    } else if (CurrentBB && !OtherBB) {
+        errs() << "LOOP at CurrentBB\n";
+        const llvm::Loop *Loop = LoopInfo_1->getLoopFor(CurrentBB);
+        assert(Loop);
+        auto PhiNodes = extractPhiNodes(*Loop);
+        Funs.push_back(CurrentFunArgs.size() + OtherFunArgs.size() +
+                       PhiNodes.size());
+        std::vector<string> InitialArgs;
+        std::vector<string> PreCondArgs;
+        std::vector<string> PostCondArgs;
+
+        InitialArgs.insert(InitialArgs.end(), CurrentFunArgs.begin(),
+                           CurrentFunArgs.end());
+        InitialArgs.insert(InitialArgs.end(), OtherFunArgs.begin(),
+                           OtherFunArgs.end());
+
+        calcInvArgs(PhiNodes, PreCondArgs, InitialArgs, PostCondArgs, Loop);
+
+        std::string InvName = "INV_" + std::to_string(Funs.size() - 1);
+        std::vector<SMTRef> Clauses;
+        Clauses.push_back(makeOp(InvName, InitialArgs));
+
+        std::vector<SortedVar> Vars;
+        for (auto Arg : PreCondArgs) {
+            Vars.push_back(SortedVar(Arg, "Int"));
+        }
+
+        PreCondArgs.insert(PreCondArgs.begin(), OtherFunArgs.begin(),
+                           OtherFunArgs.end());
+        PreCondArgs.insert(PreCondArgs.begin(), CurrentFunArgs.begin(),
+                           CurrentFunArgs.end());
+        PostCondArgs.insert(PostCondArgs.begin(), OtherFunArgs.begin(),
+                            OtherFunArgs.end());
+        PostCondArgs.insert(PostCondArgs.begin(), CurrentFunArgs.begin(),
+                            CurrentFunArgs.end());
+
+        SMTRef Forall = llvm::make_unique<const class Forall>(
+            Vars,
+            makeBinOp("=>", makeOp(InvName, PreCondArgs),
+                      stepLoopBlock(
+                          CurrentBB, LoopInfo_1, PrevCurrentBB, CurrentFunArgs,
+                          [InvName, PostCondArgs]() {
+                              return makeOp(InvName, PostCondArgs);
+                          },
+                          [OtherBB, LoopInfo_2, PrevOtherBB, Funs,
+                           CurrentFunArgs, OtherFunArgs,
+                           Program](const llvm::BasicBlock *BB,
+                                    llvm::LoopInfo *LoopInfo,
+                                    const llvm::BasicBlock *PrevBB) mutable {
+                              return walkCFG(BB, OtherBB, LoopInfo, LoopInfo_2,
+                                             PrevBB, PrevOtherBB, Program, Funs,
+                                             CurrentFunArgs, OtherFunArgs);
+                          })));
+        Clauses.push_back(std::move(Forall));
+        return llvm::make_unique<Op>("and", std::move(Clauses));
+    } else if (CurrentBB && OtherBB) {
+        errs() << "LOOP mutual\n";
+        const llvm::Loop *Loop_1 = LoopInfo_1->getLoopFor(CurrentBB);
+        const llvm::Loop *Loop_2 = LoopInfo_2->getLoopFor(OtherBB);
+        assert(Loop_1 && Loop_2);
+
+        auto PhiNodes_1 = extractPhiNodes(*Loop_1);
+        auto PhiNodes_2 = extractPhiNodes(*Loop_2);
+        Funs.push_back(CurrentFunArgs.size() + OtherFunArgs.size() +
+                       PhiNodes_1.size() + PhiNodes_2.size());
+        std::vector<string> InitialArgs;
+        std::vector<string> PreCondArgs;
+        std::vector<string> PostCondArgs;
+
+        InitialArgs.insert(InitialArgs.end(), CurrentFunArgs.begin(),
+                           CurrentFunArgs.end());
+        InitialArgs.insert(InitialArgs.end(), OtherFunArgs.begin(),
+                           OtherFunArgs.end());
+
+        calcInvArgs(PhiNodes_1, PreCondArgs, InitialArgs, PostCondArgs, Loop_1);
+        calcInvArgs(PhiNodes_2, PreCondArgs, InitialArgs, PostCondArgs, Loop_2);
+
+        std::string InvName = "INV_" + std::to_string(Funs.size() - 1);
+        std::vector<SMTRef> Clauses;
+        Clauses.push_back(makeOp(InvName, InitialArgs));
+
+        std::vector<SortedVar> Vars;
+        for (auto Arg : PreCondArgs) {
+            Vars.push_back(SortedVar(Arg, "Int"));
+        }
+
+        PreCondArgs.insert(PreCondArgs.begin(), OtherFunArgs.begin(),
+                           OtherFunArgs.end());
+        PreCondArgs.insert(PreCondArgs.begin(), CurrentFunArgs.begin(),
+                           CurrentFunArgs.end());
+        PostCondArgs.insert(PostCondArgs.begin(), OtherFunArgs.begin(),
+                            OtherFunArgs.end());
+        PostCondArgs.insert(PostCondArgs.begin(), CurrentFunArgs.begin(),
+                            CurrentFunArgs.end());
+
+        errs() << "SHOW PREVIOUS BLOCK\n";
+        PrevOtherBB->print(errs());
+        SMTRef Forall = llvm::make_unique<const class Forall>(
+            Vars,
+            makeBinOp(
+                "=>", makeOp(InvName, PreCondArgs), name("MUTUAL DUMMY")
+                // stepLoopBlock(
+                //     CurrentBB, LoopInfo_1, PrevCurrentBB, CurrentFunArgs,
+                //     [OtherBB, LoopInfo_2, PrevOtherBB, OtherFunArgs, InvName,
+                //      PostCondArgs, Funs, CurrentFunArgs, CurrentBB, Program,
+                //      PrevCurrentBB, LoopInfo_1]() {
+                //         return stepLoopBlock(
+                //             OtherBB, LoopInfo_2, PrevOtherBB, OtherFunArgs,
+                //             [InvName, PostCondArgs]() {
+                //                 return makeOp(InvName, PostCondArgs);
+                //             },
+                //             [OtherBB, LoopInfo_2, PrevOtherBB, Funs,
+                //              CurrentFunArgs, OtherFunArgs, CurrentBB,
+                //              PrevCurrentBB, LoopInfo_1,
+                //              Program](const llvm::BasicBlock *BB,
+                //                       llvm::LoopInfo *LoopInfo,
+                //                       const llvm::BasicBlock *PrevBB) mutable
+                //                       {
+                //                 return walkCFG(CurrentBB, BB, LoopInfo_1,
+                //                                LoopInfo, PrevCurrentBB,
+                //                                PrevBB,
+                //                                Program, Funs, CurrentFunArgs,
+                //                                OtherFunArgs);
+                //             });
+                //     },
+                //     [OtherBB, LoopInfo_2, PrevOtherBB, Funs, CurrentFunArgs,
+                //      OtherFunArgs, Program](
+                //         const llvm::BasicBlock *BB, llvm::LoopInfo *LoopInfo,
+                //         const llvm::BasicBlock *PrevBB) mutable {
+                //         return walkCFG(OtherBB, BB, LoopInfo_2, LoopInfo,
+                //                        PrevOtherBB, PrevBB, Program, Funs,
+                //                        OtherFunArgs, CurrentFunArgs);
+                //     })
+                ));
+        Clauses.push_back(std::move(Forall));
+        return llvm::make_unique<Op>("and", std::move(Clauses));
+    } else {
+        return makeBinOp("=", "result$1", "result$2");
+    }
+    errs() << "\n---\n\n";
     return name("DUMMY");
 }
 
-std::tuple<std::string, std::unique_ptr<const SMTExpr>>
-toDef(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB) {
+std::tuple<std::string, SMTRef> toDef(const llvm::Instruction &Instr,
+                                      const llvm::BasicBlock *PrevBB) {
     if (auto BinOp = llvm::dyn_cast<llvm::BinaryOperator>(&Instr)) {
-        errs() << BinOp->getOpcodeName();
-        errs() << "Binary operator\n";
+        return std::make_tuple(
+            BinOp->getName(),
+            makeBinOp(getOpName(*BinOp),
+                      getInstrNameOrValue(BinOp->getOperand(0)),
+                      getInstrNameOrValue(BinOp->getOperand(1))));
     }
     if (auto CmpInst = llvm::dyn_cast<llvm::CmpInst>(&Instr)) {
         auto Cmp = makeBinOp(getPredName(CmpInst->getPredicate()),
@@ -377,7 +649,39 @@ toDef(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB) {
         return std::make_tuple(PhiInst->getName(),
                                name(getInstrNameOrValue(Val)));
     }
+    if (auto SelectInst = llvm::dyn_cast<llvm::SelectInst>(&Instr)) {
+        return std::make_tuple(
+            SelectInst->getName(),
+            makeOp("ite", {getInstrNameOrValue(SelectInst->getCondition()),
+                           getInstrNameOrValue(SelectInst->getTrueValue()),
+                           getInstrNameOrValue(SelectInst->getFalseValue())}));
+    }
+    errs() << Instr << "\n";
     errs() << "Couldn't convert instruction to def\n";
+    return std::make_tuple("UNKNOWN INSTRUCTION", name("UNKNOWN ARGS"));
+}
+
+std::vector<const llvm::PHINode *> extractPhiNodes(const llvm::Loop &Loop) {
+    std::vector<const llvm::PHINode *> PhiNodes;
+    for (auto &BB : Loop.getBlocks()) {
+        for (auto &Inst : *BB) {
+            if (auto PhiNode = llvm::dyn_cast<llvm::PHINode>(&Inst)) {
+                PhiNodes.push_back(PhiNode);
+            }
+        }
+    }
+    return PhiNodes;
+}
+
+std::string getOpName(const llvm::BinaryOperator &Op) {
+    switch (Op.getOpcode()) {
+    case Instruction::Add:
+        return "+";
+    case Instruction::Sub:
+        return "-";
+    default:
+        return Op.getOpcodeName();
+    }
 }
 
 std::string getPredName(llvm::CmpInst::Predicate Pred) {
@@ -394,4 +698,31 @@ std::string getInstrNameOrValue(const llvm::Value *Val) {
         return ConstInt->getValue().toString(10, 1);
     }
     return Val->getName();
+}
+
+int swapIndex(int i) {
+    assert(i == 1 || i == 2);
+    return i == 1 ? 2 : 1;
+}
+
+void calcInvArgs(std::vector<const llvm::PHINode *> PhiNodes,
+                 std::vector<std::string> &PreCondArgs,
+                 std::vector<std::string> &InitialArgs,
+                 std::vector<std::string> &PostCondArgs,
+                 const llvm::Loop *Loop) {
+    for (auto PhiNode : PhiNodes) {
+        // Variable name
+        PreCondArgs.push_back(PhiNode->getName());
+        for (auto I = PhiNode->block_begin(), E = PhiNode->block_end(); I != E;
+             ++I) {
+            if (!Loop->contains(*I)) {
+                // Find initial value
+                InitialArgs.push_back(
+                    getInstrNameOrValue(PhiNode->getIncomingValueForBlock(*I)));
+            } else {
+                PostCondArgs.push_back(
+                    getInstrNameOrValue(PhiNode->getIncomingValueForBlock(*I)));
+            }
+        }
+    }
 }

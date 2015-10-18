@@ -32,8 +32,7 @@ class SetLogic : public SMTExpr {
 
 class Assert : public SMTExpr {
   public:
-    explicit Assert(SMTRef Expr_)
-        : Expr(std::move(Expr_)) {}
+    explicit Assert(SMTRef Expr_) : Expr(std::move(Expr_)) {}
     SMTRef Expr;
     SExprRef toSExpr() const override;
 };
@@ -71,9 +70,7 @@ class Let : public SMTExpr {
     SExprRef toSExpr() const override;
     std::vector<std::tuple<std::string, SMTRef>> Defs;
     SMTRef Expr;
-    Let(std::vector<std::tuple<std::string, SMTRef>>
-            Defs_,
-        SMTRef Expr_)
+    Let(std::vector<std::tuple<std::string, SMTRef>> Defs_, SMTRef Expr_)
         : Defs(std::move(Defs_)), Expr(std::move(Expr_)) {}
 };
 
@@ -97,10 +94,24 @@ class Op : public SMTExpr {
     std::unique_ptr<const SExpr> toSExpr() const override;
 };
 
-auto makeBinOp(std::string OpName, std::string Arg_1, std::string Arg_2) -> std::unique_ptr<Op>;
-auto makeBinOp(std::string OpName, SMTRef Arg_1, SMTRef Arg_2) -> std::unique_ptr<Op>;
+auto makeBinOp(std::string OpName, std::string Arg_1, std::string Arg_2)
+    -> std::unique_ptr<Op>;
+auto makeBinOp(std::string OpName, SMTRef Arg_1, SMTRef Arg_2)
+    -> std::unique_ptr<Op>;
 auto makeUnaryOp(std::string OpName, std::string Arg) -> std::unique_ptr<Op>;
 auto makeUnaryOp(std::string OpName, SMTRef Arg) -> std::unique_ptr<Op>;
 auto name(std::string Name) -> SMTRef;
+auto makeOp(std::string OpName, std::vector<std::string> Args) -> SMTRef;
+
+class Fun : public SMTExpr {
+  public:
+    Fun(std::string FunName_, std::vector<std::string> InTypes_,
+        std::string OutType_)
+        : FunName(FunName_), InTypes(InTypes_), OutType(OutType_) {}
+    std::string FunName;
+    std::vector<std::string> InTypes;
+    std::string OutType;
+    SExprRef toSExpr() const override;
+};
 
 #endif // SMT_H

@@ -2,6 +2,7 @@
 
 #include "SExpr.h"
 
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -106,4 +107,24 @@ std::unique_ptr<Op> makeUnaryOp(std::string OpName, SMTRef Arg) {
 
 SMTRef name(std::string Name) {
     return make_unique<Primitive<std::string>>(Name);
+}
+
+SMTRef makeOp(std::string OpName, std::vector<std::string> Args) {
+    std::vector<SMTRef> Args_;
+    for (auto Arg : Args) {
+        Args_.push_back(name(Arg));
+    }
+    return make_unique<Op>(OpName, std::move(Args_));
+}
+
+SExprRef Fun::toSExpr() const {
+    std::vector<SExprRef> InTypes_;
+    for (auto InType : InTypes) {
+        InTypes_.push_back(name(InType)->toSExpr());
+    }
+    std::vector<SExprRef> Args;
+    Args.push_back(name(FunName)->toSExpr());
+    Args.push_back(make_unique<List<std::string>>(std::move(InTypes_)));
+    Args.push_back(name(OutType)->toSExpr());
+    return make_unique<Apply<std::string>>("declare-fun", std::move(Args));
 }
