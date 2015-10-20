@@ -377,21 +377,17 @@ SMTRef stepLoopBlock(
     std::function<SMTRef()> InvariantCont,
     std::function<SMTRef(const llvm::BasicBlock *BB, llvm::LoopInfo *LoopInfo,
                          const llvm::BasicBlock *PrevBB)> ExitCont) {
-    errs() << "\n---\n";
-    errs() << "LOOPING THROUGH BLOCKS\n";
-    CurrentBB->print(errs());
-    errs() << "\n---\n";
+    // we are at the exit of the loop
     if (!LoopInfo->getLoopFor(CurrentBB)) {
-        errs() << "EXITING\n";
         return ExitCont(CurrentBB, LoopInfo, PrevCurrentBB);
     }
+
+    // we are back at the header
     if (LoopInfo->getLoopFor(PrevCurrentBB) &&
         LoopInfo->isLoopHeader(CurrentBB)) {
-        errs() << "INVARIANTING\n";
-        errs() << "PREVIOUS BLOCK\n";
-        PrevCurrentBB->print(errs());
         return InvariantCont();
     }
+
     std::vector<std::tuple<std::string, SMTRef>> Defs =
         instrToDefs(CurrentBB, PrevCurrentBB, true);
 
@@ -438,20 +434,6 @@ SMTRef walkCFG(const llvm::BasicBlock *CurrentBB,
                const llvm::BasicBlock *PrevOtherBB, int Program,
                std::vector<size_t> &Funs, std::vector<string> CurrentFunArgs,
                std::vector<string> OtherFunArgs) {
-    errs() << "Walking CFG\n";
-    errs() << "CurrentBB\n";
-    if (CurrentBB) {
-        CurrentBB->print(errs());
-    } else {
-        errs() << "END\n";
-    }
-    errs() << "\nOtherBB\n";
-    if (OtherBB) {
-        OtherBB->print(errs());
-    } else {
-        errs() << "END\n";
-    }
-    errs() << "\n---\n\n";
     if (CurrentBB && !LoopInfo_1->isLoopHeader(CurrentBB)) {
         return stepCFG(CurrentBB, OtherBB, LoopInfo_1, LoopInfo_2,
                        PrevCurrentBB, PrevOtherBB, Program, Funs,
@@ -461,9 +443,8 @@ SMTRef walkCFG(const llvm::BasicBlock *CurrentBB,
                        PrevCurrentBB, swapIndex(Program), Funs, OtherFunArgs,
                        CurrentFunArgs);
     } else if (!CurrentBB && OtherBB) {
-        errs() << "LOOP at OtherBB\n";
+        errs() << "LOOP at OtherBB\n"; // TODO: implement;
     } else if (CurrentBB && !OtherBB) {
-        errs() << "LOOP at CurrentBB\n";
         const llvm::Loop *Loop = LoopInfo_1->getLoopFor(CurrentBB);
         assert(Loop);
         auto PhiNodes = extractPhiNodes(*Loop);
@@ -518,7 +499,6 @@ SMTRef walkCFG(const llvm::BasicBlock *CurrentBB,
         Clauses.push_back(std::move(Forall));
         return llvm::make_unique<Op>("and", std::move(Clauses));
     } else if (CurrentBB && OtherBB) {
-        errs() << "LOOP mutual\n";
         const llvm::Loop *Loop_1 = LoopInfo_1->getLoopFor(CurrentBB);
         const llvm::Loop *Loop_2 = LoopInfo_2->getLoopFor(OtherBB);
         assert(Loop_1 && Loop_2);
@@ -557,12 +537,10 @@ SMTRef walkCFG(const llvm::BasicBlock *CurrentBB,
         PostCondArgs.insert(PostCondArgs.begin(), CurrentFunArgs.begin(),
                             CurrentFunArgs.end());
 
-        errs() << "SHOW PREVIOUS BLOCK\n";
-        PrevOtherBB->print(errs());
         SMTRef Forall = llvm::make_unique<const class Forall>(
             Vars,
             makeBinOp(
-                "=>", makeOp(InvName, PreCondArgs), // name("MUTUAL DUMMY")
+                "=>", makeOp(InvName, PreCondArgs),
                 stepLoopBlock(
                     CurrentBB, LoopInfo_1, PrevCurrentBB, CurrentFunArgs,
                     [OtherBB, LoopInfo_2, PrevOtherBB, OtherFunArgs, InvName,
