@@ -29,10 +29,19 @@ template <typename T> class Apply : public SExpr<T> {
         : Fun(Fun_), Args(std::move(Args_)) {}
     void serialize(std::ostream &OS, size_t Indent) const override {
         OS << "(" << Fun;
-        for (auto &Arg : Args) {
-            OS << std::endl;
-            OS << std::string(Indent + 3, ' ');
-            Arg->serialize(OS, Indent + 3);
+        std::vector<std::string> AtomicOps = {"+", "-", "<=", "<"};
+        if (std::find(AtomicOps.begin(), AtomicOps.end(), Fun) !=
+            AtomicOps.end()) {
+            for (auto &Arg : Args) {
+                OS << " ";
+                Arg->serialize(OS, Indent);
+            }
+        } else {
+            for (auto &Arg : Args) {
+                OS << std::endl;
+                OS << std::string(Indent + 3, ' ');
+                Arg->serialize(OS, Indent + 3);
+            }
         }
         OS << ")";
     }
