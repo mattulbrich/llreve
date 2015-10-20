@@ -65,5 +65,9 @@ auto extractPhiNodes(const llvm::Loop &Loop)
     -> std::vector<const llvm::PHINode *>;
 auto getOpName(const llvm::BinaryOperator &Op) -> std::string;
 auto swapIndex(int i) -> int;
+auto nestLets(SMTRef Clause, std::vector<std::tuple<std::string, SMTRef>> Defs)
+    -> SMTRef;
+auto instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB, bool Loop)
+    -> std::vector<std::tuple<std::string, SMTRef>>;
 
 #endif // REVE_H

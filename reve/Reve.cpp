@@ -327,12 +327,9 @@ SMTRef stepCFG(const llvm::BasicBlock *CurrentBB,
                const llvm::BasicBlock *PrevOtherBB, int Program,
                std::vector<size_t> &Funs, std::vector<string> CurrentFunArgs,
                std::vector<string> OtherFunArgs) {
-    std::vector<std::tuple<std::string, SMTRef>> Defs;
-    for (auto Instr = CurrentBB->begin(), E = std::prev(CurrentBB->end(), 1);
-         Instr != E; ++Instr) {
-        assert(!Instr->getType()->isVoidTy());
-        Defs.push_back(toDef(*Instr, PrevCurrentBB));
-    }
+    std::vector<std::tuple<std::string, SMTRef>> Defs =
+        instrToDefs(CurrentBB, PrevCurrentBB, false);
+
     auto TermInst = CurrentBB->getTerminator();
     SMTRef Clause;
     if (auto BranchInst = llvm::dyn_cast<llvm::BranchInst>(TermInst)) {
@@ -371,14 +368,7 @@ SMTRef stepCFG(const llvm::BasicBlock *CurrentBB,
         Clause = name("DUMMY");
     }
 
-    // SMT does not support recursive lets, so we nest the defs in separate lets
-    SMTRef Lets = std::move(Clause);
-    for (auto I = Defs.rbegin(), E = Defs.rend(); I != E; ++I) {
-        std::vector<std::tuple<std::string, SMTRef>> Def;
-        Def.push_back(std::move(*I));
-        Lets = llvm::make_unique<const Let>(std::move(Def), std::move(Lets));
-    }
-    return Lets;
+    return nestLets(std::move(Clause), std::move(Defs));
 }
 
 SMTRef stepLoopBlock(
@@ -402,15 +392,9 @@ SMTRef stepLoopBlock(
         PrevCurrentBB->print(errs());
         return InvariantCont();
     }
-    std::vector<std::tuple<std::string, SMTRef>> Defs;
-    for (auto Instr = CurrentBB->begin(), E = std::prev(CurrentBB->end(), 1);
-         Instr != E; ++Instr) {
-        assert(!Instr->getType()->isVoidTy());
-        // Ignore phinodes because they are bound in a forall
-        if (!llvm::isa<llvm::PHINode>(Instr)) {
-            Defs.push_back(toDef(*Instr, PrevCurrentBB));
-        }
-    }
+    std::vector<std::tuple<std::string, SMTRef>> Defs =
+        instrToDefs(CurrentBB, PrevCurrentBB, true);
+
     auto TermInst = CurrentBB->getTerminator();
     SMTRef Clause;
     if (auto BranchInst = llvm::dyn_cast<llvm::BranchInst>(TermInst)) {
@@ -444,14 +428,7 @@ SMTRef stepLoopBlock(
         Clause = name("DUMMY");
     }
 
-    // SMT does not support recursive lets, so split them up
-    SMTRef Lets = std::move(Clause);
-    for (auto I = Defs.rbegin(), E = Defs.rend(); I != E; ++I) {
-        std::vector<std::tuple<std::string, SMTRef>> Def;
-        Def.push_back(std::move(*I));
-        Lets = llvm::make_unique<const Let>(std::move(Def), std::move(Lets));
-    }
-    return Lets;
+    return nestLets(std::move(Clause), std::move(Defs));
 }
 
 SMTRef walkCFG(const llvm::BasicBlock *CurrentBB,
@@ -585,40 +562,49 @@ SMTRef walkCFG(const llvm::BasicBlock *CurrentBB,
         SMTRef Forall = llvm::make_unique<const class Forall>(
             Vars,
             makeBinOp(
-                "=>", makeOp(InvName, PreCondArgs), name("MUTUAL DUMMY")
-                // stepLoopBlock(
-                //     CurrentBB, LoopInfo_1, PrevCurrentBB, CurrentFunArgs,
-                //     [OtherBB, LoopInfo_2, PrevOtherBB, OtherFunArgs, InvName,
-                //      PostCondArgs, Funs, CurrentFunArgs, CurrentBB, Program,
-                //      PrevCurrentBB, LoopInfo_1]() {
-                //         return stepLoopBlock(
-                //             OtherBB, LoopInfo_2, PrevOtherBB, OtherFunArgs,
-                //             [InvName, PostCondArgs]() {
-                //                 return makeOp(InvName, PostCondArgs);
-                //             },
-                //             [OtherBB, LoopInfo_2, PrevOtherBB, Funs,
-                //              CurrentFunArgs, OtherFunArgs, CurrentBB,
-                //              PrevCurrentBB, LoopInfo_1,
-                //              Program](const llvm::BasicBlock *BB,
-                //                       llvm::LoopInfo *LoopInfo,
-                //                       const llvm::BasicBlock *PrevBB) mutable
-                //                       {
-                //                 return walkCFG(CurrentBB, BB, LoopInfo_1,
-                //                                LoopInfo, PrevCurrentBB,
-                //                                PrevBB,
-                //                                Program, Funs, CurrentFunArgs,
-                //                                OtherFunArgs);
-                //             });
-                //     },
-                //     [OtherBB, LoopInfo_2, PrevOtherBB, Funs, CurrentFunArgs,
-                //      OtherFunArgs, Program](
-                //         const llvm::BasicBlock *BB, llvm::LoopInfo *LoopInfo,
-                //         const llvm::BasicBlock *PrevBB) mutable {
-                //         return walkCFG(OtherBB, BB, LoopInfo_2, LoopInfo,
-                //                        PrevOtherBB, PrevBB, Program, Funs,
-                //                        OtherFunArgs, CurrentFunArgs);
-                //     })
-                ));
+                "=>", makeOp(InvName, PreCondArgs), // name("MUTUAL DUMMY")
+                stepLoopBlock(
+                    CurrentBB, LoopInfo_1, PrevCurrentBB, CurrentFunArgs,
+                    [OtherBB, LoopInfo_2, PrevOtherBB, OtherFunArgs, InvName,
+                     PostCondArgs, Funs, CurrentFunArgs, CurrentBB, Program,
+                     PrevCurrentBB, LoopInfo_1]() {
+                        return stepLoopBlock(
+                            OtherBB, LoopInfo_2, PrevOtherBB, OtherFunArgs,
+                            [InvName, PostCondArgs]() {
+                                return makeOp(InvName, PostCondArgs);
+                            },
+                            [OtherBB, LoopInfo_2, PrevOtherBB, Funs,
+                             CurrentFunArgs, OtherFunArgs, CurrentBB,
+                             PrevCurrentBB, LoopInfo_1,
+                             Program](const llvm::BasicBlock *BB,
+                                      llvm::LoopInfo *LoopInfo,
+                                      const llvm::BasicBlock *PrevBB) mutable {
+                                return name("true"); // we only allow
+                                                     // simultanous loop
+                                                     // stepping for now
+                            });
+                    },
+                    [OtherBB, LoopInfo_2, PrevOtherBB, Funs, CurrentFunArgs,
+                     OtherFunArgs,
+                     Program](const llvm::BasicBlock *CurrentBB,
+                              llvm::LoopInfo *LoopInfo_1,
+                              const llvm::BasicBlock *PrevCurrentBB) mutable {
+                        return stepLoopBlock(
+                            OtherBB, LoopInfo_2, PrevOtherBB, OtherFunArgs,
+                            []() { return name("true"); }, // we only allow
+                                                           // simulatnous loop
+                                                           // stepping for now
+                            [Program, Funs, CurrentFunArgs, OtherFunArgs,
+                             CurrentBB, LoopInfo_1, PrevCurrentBB](
+                                const llvm::BasicBlock *OtherBB,
+                                llvm::LoopInfo *LoopInfo_2,
+                                const llvm::BasicBlock *PrevOtherBB) mutable {
+                                return walkCFG(CurrentBB, OtherBB, LoopInfo_1,
+                                               LoopInfo_2, PrevCurrentBB,
+                                               PrevOtherBB, Program, Funs,
+                                               CurrentFunArgs, OtherFunArgs);
+                            });
+                    })));
         Clauses.push_back(std::move(Forall));
         return llvm::make_unique<Op>("and", std::move(Clauses));
     } else {
@@ -725,4 +711,33 @@ void calcInvArgs(std::vector<const llvm::PHINode *> PhiNodes,
             }
         }
     }
+}
+
+SMTRef nestLets(SMTRef Clause,
+                std::vector<std::tuple<std::string, SMTRef>> Defs) {
+    SMTRef Lets = std::move(Clause);
+    for (auto I = Defs.rbegin(), E = Defs.rend(); I != E; ++I) {
+        std::vector<std::tuple<std::string, SMTRef>> Def;
+        Def.push_back(std::move(*I));
+        Lets = llvm::make_unique<const Let>(std::move(Def), std::move(Lets));
+    }
+    return Lets;
+}
+
+std::vector<std::tuple<std::string, SMTRef>>
+instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB,
+            bool Loop) {
+    std::vector<std::tuple<std::string, SMTRef>> Defs;
+    assert(BB->size() >=
+           1); // There should be at least a terminator instruction
+    for (auto Instr = BB->begin(), E = std::prev(BB->end(), 1); Instr != E;
+         ++Instr) {
+        assert(!Instr->getType()->isVoidTy());
+        // Ignore phi nodes if we are in a loop as they're bound in a
+        // forall quantifier
+        if (!Loop || !llvm::isa<llvm::PHINode>(Instr)) {
+            Defs.push_back(toDef(*Instr, PrevBB));
+        }
+    }
+    return Defs;
 }
