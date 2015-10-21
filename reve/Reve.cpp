@@ -544,43 +544,40 @@ SMTRef walkCFG(const llvm::BasicBlock *CurrentBB,
                 stepLoopBlock(
                     CurrentBB, LoopInfo_1, PrevCurrentBB, CurrentFunArgs,
                     [OtherBB, LoopInfo_2, PrevOtherBB, OtherFunArgs, InvName,
-                     PostCondArgs, Funs, CurrentFunArgs, CurrentBB, Program,
-                     PrevCurrentBB, LoopInfo_1]() {
+                     PostCondArgs, PrevCurrentBB]() {
                         return stepLoopBlock(
                             OtherBB, LoopInfo_2, PrevOtherBB, OtherFunArgs,
                             [InvName, PostCondArgs]() {
                                 return makeOp(InvName, PostCondArgs);
                             },
-                            [OtherBB, LoopInfo_2, PrevOtherBB, Funs,
-                             CurrentFunArgs, OtherFunArgs, CurrentBB,
-                             PrevCurrentBB, LoopInfo_1,
-                             Program](const llvm::BasicBlock *BB,
-                                      llvm::LoopInfo *LoopInfo,
-                                      const llvm::BasicBlock *PrevBB) mutable {
+                            [](const llvm::BasicBlock *, llvm::LoopInfo *,
+                               const llvm::BasicBlock *) mutable {
                                 return name("true"); // we only allow
                                                      // simultanous loop
                                                      // stepping for now
                             });
                     },
                     [OtherBB, LoopInfo_2, PrevOtherBB, Funs, CurrentFunArgs,
-                     OtherFunArgs,
-                     Program](const llvm::BasicBlock *CurrentBB,
-                              llvm::LoopInfo *LoopInfo_1,
-                              const llvm::BasicBlock *PrevCurrentBB) mutable {
+                     OtherFunArgs, Program](
+                        const llvm::BasicBlock *NewCurrentBB,
+                        llvm::LoopInfo *NewLoopInfo_1,
+                        const llvm::BasicBlock *NewPrevCurrentBB) mutable {
                         return stepLoopBlock(
                             OtherBB, LoopInfo_2, PrevOtherBB, OtherFunArgs,
                             []() { return name("true"); }, // we only allow
                                                            // simulatnous loop
                                                            // stepping for now
                             [Program, Funs, CurrentFunArgs, OtherFunArgs,
-                             CurrentBB, LoopInfo_1, PrevCurrentBB](
-                                const llvm::BasicBlock *OtherBB,
-                                llvm::LoopInfo *LoopInfo_2,
-                                const llvm::BasicBlock *PrevOtherBB) mutable {
-                                return walkCFG(CurrentBB, OtherBB, LoopInfo_1,
-                                               LoopInfo_2, PrevCurrentBB,
-                                               PrevOtherBB, Program, Funs,
-                                               CurrentFunArgs, OtherFunArgs);
+                             NewCurrentBB, NewLoopInfo_1, NewPrevCurrentBB](
+                                const llvm::BasicBlock *NewOtherBB,
+                                llvm::LoopInfo *NewLoopInfo_2,
+                                const llvm::BasicBlock
+                                    *NewPrevOtherBB) mutable {
+                                return walkCFG(NewCurrentBB, NewOtherBB,
+                                               NewLoopInfo_1, NewLoopInfo_2,
+                                               NewPrevCurrentBB, NewPrevOtherBB,
+                                               Program, Funs, CurrentFunArgs,
+                                               OtherFunArgs);
                             });
                     })));
         Clauses.push_back(std::move(Forall));
