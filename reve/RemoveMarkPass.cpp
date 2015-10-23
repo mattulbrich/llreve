@@ -29,7 +29,7 @@ llvm::PreservedAnalyses RemoveMarkPass::run(llvm::Function &Fun,
         // kill the call instruction
         Instr->eraseFromParent();
     }
-    return llvm::PreservedAnalyses::none();
+    return llvm::PreservedAnalyses::all();
 }
 
 void removeAnd(llvm::Instruction *Instr, llvm::BinaryOperator *BinOp) {

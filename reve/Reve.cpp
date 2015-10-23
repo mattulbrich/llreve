@@ -209,6 +209,7 @@ int main(int Argc, const char **Argv) {
     auto FAM_1 = preprocessModule(FunOrError_1.get(), "1");
     auto FAM_2 = preprocessModule(FunOrError_2.get(), "2");
 
+    FAM_1->getResult<PathAnalysis>(FunOrError_1.get());
     // convertToSMT(FunOrError_1.get(), FunOrError_2.get(), std::move(FAM_1),
                  // std::move(FAM_2));
 
@@ -236,7 +237,7 @@ unique_ptr<llvm::FunctionAnalysisManager> preprocessModule(llvm::Function &Fun,
     FPM.addPass(RemoveMarkPass());
     FPM.addPass(llvm::VerifierPass());
     FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
-    // FPM.addPass(CFGViewerPass());                 // show cfg
+    FPM.addPass(CFGViewerPass());                 // show cfg
     FPM.run(Fun, FAM.get());
 
     return FAM;
