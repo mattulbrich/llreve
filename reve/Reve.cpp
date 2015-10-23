@@ -4,6 +4,7 @@
 #include "CFGPrinter.h"
 #include "MarkAnalysis.h"
 #include "Mem2Reg.h"
+#include "PathAnalysis.h"
 #include "RemoveMarkPass.h"
 #include "SExpr.h"
 #include "SMT.h"
@@ -224,6 +225,7 @@ unique_ptr<llvm::FunctionAnalysisManager> preprocessModule(llvm::Function &Fun,
     PB.registerFunctionAnalyses(*FAM); // register basic analyses
     FAM->registerPass(MarkAnalysis());
     FAM->registerPass(UnifyFunctionExitNodes());
+    FAM->registerPass(PathAnalysis());
 
     llvm::FunctionPassManager FPM(true); // enable debug log
 

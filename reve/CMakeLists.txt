@@ -21,6 +21,7 @@ add_executable(reve
   CFGPrinter.cpp
   MarkAnalysis.cpp RemoveMarkPass.cpp
   UnifyFunctionExitNodes.cpp
+  PathAnalysis.cpp
   SMT.cpp SExpr.cpp)
 
 llvm_map_components_to_libnames(llvm_libs
