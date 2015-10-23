@@ -6,10 +6,12 @@ llvm::PreservedAnalyses RemoveMarkPass::run(llvm::Function &Fun,
         AM->getResult<MarkAnalysis>(Fun);
     std::vector<llvm::Instruction *> ToDelete;
     for (auto BBTuple : MarkedBlocks) {
-        auto BB = BBTuple.first;
-        for (auto &Inst : *BB) {
-            if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(&Inst)) {
-                ToDelete.push_back(CallInst);
+        if (BBTuple.second >= 0) {
+            auto BB = BBTuple.first;
+            for (auto &Inst : *BB) {
+                if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(&Inst)) {
+                    ToDelete.push_back(CallInst);
+                }
             }
         }
     }

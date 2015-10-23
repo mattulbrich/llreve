@@ -16,7 +16,11 @@ add_definitions(${LLVM_DEFINITIONS})
 
 add_executable(reve
   Reve.cpp
-  UniqueNamePass.cpp MarkAnalysis.cpp AnnotStackPass.cpp Mem2Reg.cpp CFGPrinter.cpp RemoveMarkPass.cpp
+  UniqueNamePass.cpp MarkAnalysis.cpp
+  AnnotStackPass.cpp Mem2Reg.cpp
+  CFGPrinter.cpp
+  MarkAnalysis.cpp RemoveMarkPass.cpp
+  UnifyFunctionExitNodes.cpp
   SMT.cpp SExpr.cpp)
 
 llvm_map_components_to_libnames(llvm_libs

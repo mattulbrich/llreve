@@ -7,6 +7,7 @@
 #include "RemoveMarkPass.h"
 #include "SExpr.h"
 #include "SMT.h"
+#include "UnifyFunctionExitNodes.h"
 #include "UniqueNamePass.h"
 
 #include "clang/Driver/Compilation.h"
@@ -222,6 +223,7 @@ unique_ptr<llvm::FunctionAnalysisManager> preprocessModule(llvm::Function &Fun,
         true);                         // enable debug log
     PB.registerFunctionAnalyses(*FAM); // register basic analyses
     FAM->registerPass(MarkAnalysis());
+    FAM->registerPass(UnifyFunctionExitNodes());
 
     llvm::FunctionPassManager FPM(true); // enable debug log
 
@@ -232,7 +234,7 @@ unique_ptr<llvm::FunctionAnalysisManager> preprocessModule(llvm::Function &Fun,
     FPM.addPass(RemoveMarkPass());
     FPM.addPass(llvm::VerifierPass());
     FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
-    FPM.addPass(CFGViewerPass());                 // show cfg
+    // FPM.addPass(CFGViewerPass());                 // show cfg
     FPM.run(Fun, FAM.get());
 
     return FAM;
