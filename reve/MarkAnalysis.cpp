@@ -4,14 +4,16 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Instructions.h"
 
+using std::make_pair;
+
 char MarkAnalysis::PassID;
 
-std::map<llvm::BasicBlock *, int>
+std::map<int, llvm::BasicBlock *>
 MarkAnalysis::run(llvm::Function &Fun, llvm::FunctionAnalysisManager *AM) {
-    std::map<llvm::BasicBlock *, int> MarkedBlocks;
+    std::map<int, llvm::BasicBlock *> MarkedBlocks;
     // insert entry block
-    MarkedBlocks.insert(std::pair<llvm::BasicBlock *, int>(&Fun.getEntryBlock(), -1));
-    MarkedBlocks.insert(std::pair<llvm::BasicBlock *, int>(AM->getResult<UnifyFunctionExitNodes>(Fun), -2));
+    MarkedBlocks.insert(make_pair(-1, &Fun.getEntryBlock()));
+    MarkedBlocks.insert(make_pair(-2, AM->getResult<UnifyFunctionExitNodes>(Fun)));
     for (auto &BB : Fun) {
         for (auto &Inst : BB) {
             if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(&Inst)) {
@@ -24,8 +26,7 @@ MarkAnalysis::run(llvm::Function &Fun, llvm::FunctionAnalysisManager *AM) {
                         ID = static_cast<int>(
                             ConstInt->getValue().getSExtValue());
                     }
-                    MarkedBlocks.insert(
-                        std::pair<llvm::BasicBlock *, int>(&BB, ID));
+                    MarkedBlocks.insert(make_pair(ID, &BB));
                     continue;
                 }
             }
