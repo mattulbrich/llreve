@@ -33,7 +33,7 @@ class SetLogic : public SMTExpr {
 
 class Assert : public SMTExpr {
   public:
-    explicit Assert(SMTRef Expr_) : Expr(std::move(Expr_)) {}
+    explicit Assert(SMTRef Expr_) : Expr(Expr_) {}
     SMTRef Expr;
     SExprRef toSExpr() const override;
 };
@@ -50,7 +50,7 @@ class SortedVar : public SMTExpr {
 class Forall : public SMTExpr {
   public:
     Forall(std::vector<SortedVar> Vars_, SMTRef Expr_)
-        : Vars(Vars_), Expr(std::move(Expr_)) {}
+        : Vars(Vars_), Expr(Expr_) {}
     SExprRef toSExpr() const override;
     std::vector<SortedVar> Vars;
     SMTRef Expr;
@@ -72,7 +72,7 @@ class Let : public SMTExpr {
     std::vector<std::tuple<std::string, SMTRef>> Defs;
     SMTRef Expr;
     Let(std::vector<std::tuple<std::string, SMTRef>> Defs_, SMTRef Expr_)
-        : Defs(std::move(Defs_)), Expr(std::move(Expr_)) {}
+        : Defs(Defs_), Expr(Expr_) {}
 };
 
 template <typename T> class Primitive : public SMTExpr {
@@ -89,18 +89,18 @@ template <typename T> class Primitive : public SMTExpr {
 class Op : public SMTExpr {
   public:
     Op(std::string OpName_, std::vector<SMTRef> Args_)
-        : OpName(OpName_), Args(std::move(Args_)) {}
+        : OpName(OpName_), Args(Args_) {}
     std::string OpName;
     std::vector<SMTRef> Args;
-    std::unique_ptr<const SExpr> toSExpr() const override;
+    SExprRef toSExpr() const override;
 };
 
 auto makeBinOp(std::string OpName, std::string Arg_1, std::string Arg_2)
-    -> std::unique_ptr<Op>;
+    -> std::shared_ptr<Op>;
 auto makeBinOp(std::string OpName, SMTRef Arg_1, SMTRef Arg_2)
-    -> std::unique_ptr<Op>;
-auto makeUnaryOp(std::string OpName, std::string Arg) -> std::unique_ptr<Op>;
-auto makeUnaryOp(std::string OpName, SMTRef Arg) -> std::unique_ptr<Op>;
+    -> std::shared_ptr<Op>;
+auto makeUnaryOp(std::string OpName, std::string Arg) -> std::shared_ptr<Op>;
+auto makeUnaryOp(std::string OpName, SMTRef Arg) -> std::shared_ptr<Op>;
 auto name(std::string Name) -> SMTRef;
 auto makeOp(std::string OpName, std::vector<std::string> Args) -> SMTRef;
 

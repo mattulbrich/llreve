@@ -264,7 +264,8 @@ void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
     auto PathMap_2 = FAM_2->getResult<PathAnalysis>(Fun_2);
     auto Marked_1 = FAM_1->getResult<MarkAnalysis>(Fun_1);
     auto Marked_2 = FAM_2->getResult<MarkAnalysis>(Fun_2);
-    std::vector<SMTRef> PathSMTs;
+    std::vector<SMTRef> SMTExprs;
+    SMTExprs.push_back(std::make_shared<SetLogic>("HORN"));
     for (auto &PathMapIt : PathMap_1) {
         for (auto &InnerPathMapIt : PathMapIt.second) {
             int StartIndex = PathMapIt.first;
@@ -276,22 +277,22 @@ void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
                         Path_2, invariant(EndIndex, *Marked_1.at(EndIndex),
                                           *Marked_2.at(EndIndex), Fun_1),
                         2);
-                    PathSMTs.push_back(
+                    SMTExprs.push_back(std::make_shared<Assert>(
                         wrapForall(pathToSMT(Path_1, SMT_2, 1), StartIndex,
                                    *Marked_1.at(StartIndex),
-                                   *Marked_2.at(StartIndex), Fun_1));
+                                   *Marked_2.at(StartIndex), Fun_1)));
                 }
             }
         }
     }
-    for (auto &SMT : PathSMTs) {
+    for (auto &SMT : SMTExprs) {
         std::cout << *SMT->toSExpr();
         std::cout << "\n";
     }
 }
 
 SMTRef pathToSMT(Path Path, SMTRef EndClause, int Program) {
-    SMTRef Clause = std::move(EndClause);
+    SMTRef Clause = EndClause;
     for (auto It = Path.Edges.rbegin(), E = Path.Edges.rend(); It != E; ++It) {
         auto PrevIt = std::next(It, 1);
         auto Prev = Path.Start;
@@ -299,14 +300,14 @@ SMTRef pathToSMT(Path Path, SMTRef EndClause, int Program) {
             Prev = PrevIt->Block;
         }
         auto Defs = instrToDefs(It->Block, Prev, false, Program);
-        Clause = nestLets(std::move(Clause), std::move(Defs));
+        Clause = nestLets(Clause, Defs);
         if (It->Condition) {
             Clause =
-                makeBinOp("=>", std::move(It->Condition), std::move(Clause));
+                makeBinOp("=>", It->Condition, Clause);
         }
     }
     auto Defs = instrToDefs(Path.Start, nullptr, true, Program);
-    Clause = nestLets(std::move(Clause), std::move(Defs));
+    Clause = nestLets(Clause, Defs);
     return Clause;
 }
 
@@ -323,7 +324,7 @@ std::tuple<std::string, SMTRef> toDef(const llvm::Instruction &Instr,
         auto Cmp = makeBinOp(getPredName(CmpInst->getPredicate()),
                              getInstrNameOrValue(CmpInst->getOperand(0)),
                              getInstrNameOrValue(CmpInst->getOperand(1)));
-        return std::make_tuple(CmpInst->getName(), std::move(Cmp));
+        return std::make_tuple(CmpInst->getName(), Cmp);
     }
     if (auto PhiInst = llvm::dyn_cast<llvm::PHINode>(&Instr)) {
         auto Val = PhiInst->getIncomingValueForBlock(PrevBB);
@@ -395,11 +396,11 @@ int swapIndex(int i) {
 
 SMTRef nestLets(SMTRef Clause,
                 std::vector<std::tuple<std::string, SMTRef>> Defs) {
-    SMTRef Lets = std::move(Clause);
+    SMTRef Lets = Clause;
     for (auto I = Defs.rbegin(), E = Defs.rend(); I != E; ++I) {
         std::vector<std::tuple<std::string, SMTRef>> Def;
-        Def.push_back(std::move(*I));
-        Lets = llvm::make_unique<const Let>(std::move(Def), std::move(Lets));
+        Def.push_back(*I);
+        Lets = llvm::make_unique<const Let>(Def, Lets);
     }
     return Lets;
 }
@@ -465,5 +466,6 @@ SMTRef wrapForall(SMTRef Clause, int BlockIndex, llvm::BasicBlock &BB_1,
         // TODO: detect type
         Vars.push_back(SortedVar(Arg, "Int"));
     }
-    return llvm::make_unique<Forall>(Vars, makeBinOp("=>", invariant(BlockIndex, BB_1, BB_2, Fun), Clause));
+    return llvm::make_unique<Forall>(
+        Vars, makeBinOp("=>", invariant(BlockIndex, BB_1, BB_2, Fun), Clause));
 }

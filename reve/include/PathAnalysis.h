@@ -8,7 +8,7 @@
 class Edge {
   public:
     Edge(SMTRef Condition_, llvm::BasicBlock *Block_)
-        : Condition(std::move(Condition_)), Block(Block_) {}
+        : Condition(Condition_), Block(Block_) {}
     SMTRef Condition;
     llvm::BasicBlock *Block;
 };
@@ -16,7 +16,7 @@ class Edge {
 class Path {
   public:
     Path(llvm::BasicBlock *Start_, std::vector<Edge> Edges_)
-        : Start(Start_), Edges(std::move(Edges_)) {}
+        : Start(Start_), Edges(Edges_) {}
     llvm::BasicBlock *Start;
     std::vector<Edge> Edges;
 };

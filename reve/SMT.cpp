@@ -79,30 +79,30 @@ SExprRef Op::toSExpr() const {
     return make_unique<Apply<std::string>>(OpName, std::move(Args_));
 }
 
-std::unique_ptr<Op> makeBinOp(std::string OpName, std::string Arg_1, std::string Arg_2) {
+std::shared_ptr<Op> makeBinOp(std::string OpName, std::string Arg_1, std::string Arg_2) {
     std::vector<SMTRef> Args;
     Args.push_back(name(Arg_1));
     Args.push_back(name(Arg_2));
-    return make_unique<Op>(OpName, std::move(Args));
+    return make_unique<Op>(OpName, Args);
 }
 
-std::unique_ptr<Op> makeBinOp(std::string OpName, SMTRef Arg_1, SMTRef Arg_2) {
+std::shared_ptr<Op> makeBinOp(std::string OpName, SMTRef Arg_1, SMTRef Arg_2) {
     std::vector<SMTRef> Args;
-    Args.push_back(std::move(Arg_1));
-    Args.push_back(std::move(Arg_2));
-    return make_unique<Op>(OpName, std::move(Args));
+    Args.push_back(Arg_1);
+    Args.push_back(Arg_2);
+    return make_unique<Op>(OpName, Args);
 }
 
-std::unique_ptr<Op> makeUnaryOp(std::string OpName, std::string Arg) {
+std::shared_ptr<Op> makeUnaryOp(std::string OpName, std::string Arg) {
     std::vector<SMTRef> Args;
     Args.push_back(name(Arg));
-    return make_unique<Op>(OpName, std::move(Args));
+    return make_unique<Op>(OpName, Args);
 }
 
-std::unique_ptr<Op> makeUnaryOp(std::string OpName, SMTRef Arg) {
+std::shared_ptr<Op> makeUnaryOp(std::string OpName, SMTRef Arg) {
     std::vector<SMTRef> Args;
-    Args.push_back(std::move(Arg));
-    return make_unique<Op>(OpName, std::move(Args));
+    Args.push_back(Arg);
+    return make_unique<Op>(OpName, Args);
 }
 
 SMTRef name(std::string Name) {
@@ -114,7 +114,7 @@ SMTRef makeOp(std::string OpName, std::vector<std::string> Args) {
     for (auto Arg : Args) {
         Args_.push_back(name(Arg));
     }
-    return make_unique<Op>(OpName, std::move(Args_));
+    return make_unique<Op>(OpName, Args_);
 }
 
 SExprRef Fun::toSExpr() const {

@@ -16,7 +16,7 @@ PathMap PathAnalysis::run(llvm::Function &F,
         // don't start at return instructions
         if (BB.first != -2) {
             std::map<int, Paths> NewPaths = findPaths(BB.second, MarkedBlocks);
-            MyPaths.insert(make_pair(BB.first, std::move(NewPaths)));
+            MyPaths.insert(make_pair(BB.first, NewPaths));
         }
     }
 
@@ -55,7 +55,7 @@ findPaths(llvm::BasicBlock *BB,
             FoundPaths.insert(std::make_pair(Index->first, Paths()));
             It = FoundPaths.find(Index->first);
         }
-        It->second.push_back(Path(BB, std::move(PathIt)));
+        It->second.push_back(Path(BB, PathIt));
     }
     return FoundPaths;
 }
@@ -94,7 +94,7 @@ Paths_ traverse(llvm::BasicBlock *BB,
                      BranchInst->getSuccessor(1)));
         }
         for (auto &Path : TraversedPaths_1) {
-            TraversedPaths_0.push_back(std::move(Path));
+            TraversedPaths_0.push_back(Path);
         }
         return TraversedPaths_0;
     }
