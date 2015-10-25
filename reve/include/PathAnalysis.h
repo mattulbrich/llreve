@@ -13,17 +13,18 @@ class Edge {
     llvm::BasicBlock *Block;
 };
 
-class Path_ {
+class Path {
   public:
-    Path_(llvm::BasicBlock *Start_, std::vector<Edge> Edges_)
+    Path(llvm::BasicBlock *Start_, std::vector<Edge> Edges_)
         : Start(Start_), Edges(std::move(Edges_)) {}
     llvm::BasicBlock *Start;
     std::vector<Edge> Edges;
 };
-using Path = std::vector<Edge>;
-using Paths = std::vector<Path>;
+
+using Path_ = std::vector<Edge>;
 using Paths_ = std::vector<Path_>;
-using PathMap = std::map<int, std::map<int, Paths_>>;
+using Paths = std::vector<Path>;
+using PathMap = std::map<int, std::map<int, Paths>>;
 
 class PathAnalysis {
   public:
@@ -38,11 +39,11 @@ class PathAnalysis {
 
 auto findPaths(llvm::BasicBlock *,
                std::map<int, llvm::BasicBlock *> MarkedBlocks)
-    -> std::map<int, Paths_>;
+    -> std::map<int, Paths>;
 
 auto traverse(llvm::BasicBlock *BB,
               std::map<int, llvm::BasicBlock *> MarkedBlocks, bool first)
-    -> Paths;
+    -> Paths_;
 
 auto isTerminator(llvm::BasicBlock *BB,
                   std::map<int, llvm::BasicBlock *> MarkedBlocks) -> bool;

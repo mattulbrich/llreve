@@ -15,7 +15,7 @@ PathMap PathAnalysis::run(llvm::Function &F,
     for (auto BB : MarkedBlocks) {
         // don't start at return instructions
         if (BB.first != -2) {
-            std::map<int, Paths_> NewPaths = findPaths(BB.second, MarkedBlocks);
+            std::map<int, Paths> NewPaths = findPaths(BB.second, MarkedBlocks);
             MyPaths.insert(make_pair(BB.first, std::move(NewPaths)));
         }
     }
@@ -43,28 +43,28 @@ PathMap PathAnalysis::run(llvm::Function &F,
     return MyPaths;
 }
 
-std::map<int, Paths_>
+std::map<int, Paths>
 findPaths(llvm::BasicBlock *BB,
           std::map<int, llvm::BasicBlock *> MarkedBlocks) {
-    std::map<int, Paths_> FoundPaths;
+    std::map<int, Paths> FoundPaths;
     auto MyPaths = traverse(BB, MarkedBlocks, true);
-    for (auto &Path : MyPaths) {
-        auto Index = reverseLookup(Path.back().Block, MarkedBlocks);
+    for (auto &PathIt : MyPaths) {
+        auto Index = reverseLookup(PathIt.back().Block, MarkedBlocks);
         auto It = FoundPaths.find(Index->first);
         if (It == FoundPaths.end()) {
-            FoundPaths.insert(std::make_pair(Index->first, Paths_()));
+            FoundPaths.insert(std::make_pair(Index->first, Paths()));
             It = FoundPaths.find(Index->first);
         }
-        It->second.push_back(Path_(BB, std::move(Path)));
+        It->second.push_back(Path(BB, std::move(PathIt)));
     }
     return FoundPaths;
 }
 
-Paths traverse(llvm::BasicBlock *BB,
+Paths_ traverse(llvm::BasicBlock *BB,
                std::map<int, llvm::BasicBlock *> MarkedBlocks, bool first) {
     if (!first && isTerminator(BB, MarkedBlocks)) {
-        Paths MyPaths;
-        MyPaths.push_back(Path());
+        Paths_ MyPaths;
+        MyPaths.push_back(Path_());
         return MyPaths;
     }
     auto TermInst = BB->getTerminator();
@@ -101,7 +101,7 @@ Paths traverse(llvm::BasicBlock *BB,
     llvm::errs() << "Unknown terminator\n";
     TermInst->print(llvm::errs());
     llvm::errs() << "\n";
-    return Paths();
+    return Paths_();
 }
 
 bool isTerminator(llvm::BasicBlock *BB,
