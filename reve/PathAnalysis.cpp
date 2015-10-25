@@ -1,8 +1,8 @@
 #include "PathAnalysis.h"
 
-#include <iostream>
 #include "MarkAnalysis.h"
 #include "SExpr.h"
+#include <iostream>
 
 #include "llvm/IR/Instructions.h"
 
@@ -15,8 +15,7 @@ PathMap PathAnalysis::run(llvm::Function &F,
     for (auto BB : MarkedBlocks) {
         // don't start at return instructions
         if (BB.first != -2) {
-            std::map<int, Paths> NewPaths =
-                findPaths(BB.second, MarkedBlocks);
+            std::map<int, Paths_> NewPaths = findPaths(BB.second, MarkedBlocks);
             MyPaths.insert(make_pair(BB.first, std::move(NewPaths)));
         }
     }
@@ -28,7 +27,9 @@ PathMap PathAnalysis::run(llvm::Function &F,
     //         llvm::errs() << "End node: " << Paths.first << "\n";
     //         for (auto &Path : Paths.second) {
     //             llvm::errs() << "Path\n";
-    //             for (auto &Edge : Path) {
+    //             Path.Start->print(llvm::errs());
+    //             llvm::errs() << "\n";
+    //             for (auto &Edge : Path.Edges) {
     //                 if (Edge.Condition) {
     //                     std::cerr << *Edge.Condition->toSExpr();
     //                 }
@@ -42,19 +43,19 @@ PathMap PathAnalysis::run(llvm::Function &F,
     return MyPaths;
 }
 
-std::map<int, Paths>
+std::map<int, Paths_>
 findPaths(llvm::BasicBlock *BB,
           std::map<int, llvm::BasicBlock *> MarkedBlocks) {
-    std::map<int, Paths> FoundPaths;
+    std::map<int, Paths_> FoundPaths;
     auto MyPaths = traverse(BB, MarkedBlocks, true);
     for (auto &Path : MyPaths) {
         auto Index = reverseLookup(Path.back().Block, MarkedBlocks);
         auto It = FoundPaths.find(Index->first);
         if (It == FoundPaths.end()) {
-            FoundPaths.insert(std::make_pair(Index->first, Paths()));
+            FoundPaths.insert(std::make_pair(Index->first, Paths_()));
             It = FoundPaths.find(Index->first);
         }
-        It->second.push_back(std::move(Path));
+        It->second.push_back(Path_(BB, std::move(Path)));
     }
     return FoundPaths;
 }
@@ -86,9 +87,11 @@ Paths traverse(llvm::BasicBlock *BB,
                           BranchInst->getSuccessor(0)));
         }
         for (auto &P : TraversedPaths_1) {
-            P.insert(P.begin(),
-                     Edge(makeUnaryOp("not", name(BranchInst->getCondition()->getName())),
-                          BranchInst->getSuccessor(1)));
+            P.insert(
+                P.begin(),
+                Edge(makeUnaryOp("not",
+                                 name(BranchInst->getCondition()->getName())),
+                     BranchInst->getSuccessor(1)));
         }
         for (auto &Path : TraversedPaths_1) {
             TraversedPaths_0.push_back(std::move(Path));
@@ -101,7 +104,8 @@ Paths traverse(llvm::BasicBlock *BB,
     return Paths();
 }
 
-bool isTerminator(llvm::BasicBlock *BB, std::map<int, llvm::BasicBlock *> MarkedBlocks) {
+bool isTerminator(llvm::BasicBlock *BB,
+                  std::map<int, llvm::BasicBlock *> MarkedBlocks) {
     for (auto Pair : MarkedBlocks) {
         if (Pair.second == BB) {
             return true;

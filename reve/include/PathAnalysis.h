@@ -13,9 +13,17 @@ class Edge {
     llvm::BasicBlock *Block;
 };
 
+class Path_ {
+  public:
+    Path_(llvm::BasicBlock *Start_, std::vector<Edge> Edges_)
+        : Start(Start_), Edges(std::move(Edges_)) {}
+    llvm::BasicBlock *Start;
+    std::vector<Edge> Edges;
+};
 using Path = std::vector<Edge>;
 using Paths = std::vector<Path>;
-using PathMap = std::map<int, std::map<int, Paths>>;
+using Paths_ = std::vector<Path_>;
+using PathMap = std::map<int, std::map<int, Paths_>>;
 
 class PathAnalysis {
   public:
@@ -30,7 +38,7 @@ class PathAnalysis {
 
 auto findPaths(llvm::BasicBlock *,
                std::map<int, llvm::BasicBlock *> MarkedBlocks)
-    -> std::map<int, Paths>;
+    -> std::map<int, Paths_>;
 
 auto traverse(llvm::BasicBlock *BB,
               std::map<int, llvm::BasicBlock *> MarkedBlocks, bool first)
@@ -40,10 +48,11 @@ auto isTerminator(llvm::BasicBlock *BB,
                   std::map<int, llvm::BasicBlock *> MarkedBlocks) -> bool;
 
 template <class Key, class T>
-std::_Rb_tree_iterator<std::pair<const Key,T>>
-    reverseLookup(T Val, std::map<Key, T> Map) {
-    return std::find_if(Map.begin(), Map.end(),
-                   [=](const std::pair<Key,T> &P) { return P.second == Val; });
+std::_Rb_tree_iterator<std::pair<const Key, T>>
+reverseLookup(T Val, std::map<Key, T> Map) {
+    return std::find_if(
+        Map.begin(), Map.end(),
+        [=](const std::pair<Key, T> &P) { return P.second == Val; });
 }
 
 #endif // PATHANALYSIS_H
