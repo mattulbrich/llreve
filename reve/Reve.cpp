@@ -378,16 +378,6 @@ std::tuple<string, SMTRef> toDef(const llvm::Instruction &Instr,
     return std::make_tuple("UNKNOWN INSTRUCTION", name("UNKNOWN ARGS"));
 }
 
-std::vector<string> extractPhiNodes(llvm::BasicBlock &BB) {
-    std::vector<string> PhiNodes;
-    for (auto &Inst : BB) {
-        if (auto PhiNode = llvm::dyn_cast<llvm::PHINode>(&Inst)) {
-            PhiNodes.push_back(PhiNode->getName());
-        }
-    }
-    return PhiNodes;
-}
-
 string getOpName(const llvm::BinaryOperator &Op) {
     switch (Op.getOpcode()) {
     case Instruction::Add:
@@ -518,11 +508,26 @@ set<string> freeVars(std::map<int, Paths> PathMap) {
     set<string> FreeVars;
     for (auto &Paths : PathMap) {
         for (auto &Path : Paths.second) {
-            auto PhiNodes = extractPhiNodes(*Path.Start);
-            for (auto &PhiNode : PhiNodes) {
-                FreeVars.insert(PhiNode);
-            }
             set<string> Constructed;
+
+            // the first block is special since we can't resolve phi
+            // nodes here
+            for (auto &Instr : *Path.Start) {
+                Constructed.insert(Instr.getName());
+                if (llvm::isa<llvm::PHINode>(Instr)) {
+                    FreeVars.insert(Instr.getName());
+                    continue;
+                }
+                for (auto Op : Instr.operand_values()) {
+                    if (Constructed.find(Op->getName()) ==
+                        Constructed.end() &&
+                        !Op->getName().empty()) {
+                        FreeVars.insert(Op->getName());
+                    }
+                }
+            }
+
+            // now deal with the rest and ignore phi nodes
             for (auto &Edge : Path.Edges) {
                 for (auto &Instr : *Edge.Block) {
                     Constructed.insert(Instr.getName());

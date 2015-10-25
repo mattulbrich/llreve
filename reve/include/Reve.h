@@ -38,7 +38,6 @@ auto toDef(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB)
     -> std::tuple<std::string, SMTRef>;
 auto getPredName(const llvm::CmpInst::Predicate Pred) -> std::string;
 auto getInstrNameOrValue(const llvm::Value *Val) -> SMTRef;
-auto extractPhiNodes(llvm::BasicBlock &BB) -> std::vector<std::string>;
 auto invariant(int BlockIndex, std::set<std::string> Args) -> SMTRef;
 auto getOpName(const llvm::BinaryOperator &Op) -> std::string;
 auto swapIndex(int i) -> int;
