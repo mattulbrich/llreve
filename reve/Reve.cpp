@@ -58,6 +58,7 @@ using llvm::Instruction;
 using llvm::IntrusiveRefCntPtr;
 
 using std::unique_ptr;
+using std::make_shared;
 using std::string;
 using std::placeholders::_1;
 
@@ -266,9 +267,16 @@ void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
     auto Marked_2 = FAM_2->getResult<MarkAnalysis>(Fun_2);
     std::vector<SMTRef> SMTExprs;
     SMTExprs.push_back(std::make_shared<SetLogic>("HORN"));
+    std::vector<SMTRef> PathExprs;
     for (auto &PathMapIt : PathMap_1) {
+        int StartIndex = PathMapIt.first;
+        if (StartIndex != -1) {
+            // ignore entry node
+            SMTExprs.push_back(invariantDef(StartIndex,
+                                            *Marked_1.at(StartIndex),
+                                            *Marked_2.at(StartIndex), Fun_1));
+        }
         for (auto &InnerPathMapIt : PathMapIt.second) {
-            int StartIndex = PathMapIt.first;
             int EndIndex = InnerPathMapIt.first;
             auto Paths = PathMap_2.at(StartIndex).at(EndIndex);
             for (auto &Path_1 : InnerPathMapIt.second) {
@@ -277,7 +285,7 @@ void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
                         Path_2, invariant(EndIndex, *Marked_1.at(EndIndex),
                                           *Marked_2.at(EndIndex), Fun_1),
                         2);
-                    SMTExprs.push_back(std::make_shared<Assert>(
+                    PathExprs.push_back(std::make_shared<Assert>(
                         wrapForall(pathToSMT(Path_1, SMT_2, 1), StartIndex,
                                    *Marked_1.at(StartIndex),
                                    *Marked_2.at(StartIndex), Fun_1)));
@@ -285,6 +293,7 @@ void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
             }
         }
     }
+    SMTExprs.insert(SMTExprs.end(), PathExprs.begin(), PathExprs.end());
     for (auto &SMT : SMTExprs) {
         std::cout << *SMT->toSExpr();
         std::cout << "\n";
@@ -302,8 +311,7 @@ SMTRef pathToSMT(Path Path, SMTRef EndClause, int Program) {
         auto Defs = instrToDefs(It->Block, Prev, false, Program);
         Clause = nestLets(Clause, Defs);
         if (It->Condition) {
-            Clause =
-                makeBinOp("=>", It->Condition, Clause);
+            Clause = makeBinOp("=>", It->Condition, Clause);
         }
     }
     auto Defs = instrToDefs(Path.Start, nullptr, true, Program);
@@ -329,15 +337,15 @@ std::tuple<std::string, SMTRef> toDef(const llvm::Instruction &Instr,
     if (auto PhiInst = llvm::dyn_cast<llvm::PHINode>(&Instr)) {
         auto Val = PhiInst->getIncomingValueForBlock(PrevBB);
         assert(Val);
-        return std::make_tuple(PhiInst->getName(),
-                               name(getInstrNameOrValue(Val)));
+        return std::make_tuple(PhiInst->getName(), getInstrNameOrValue(Val));
     }
     if (auto SelectInst = llvm::dyn_cast<llvm::SelectInst>(&Instr)) {
-        return std::make_tuple(
-            SelectInst->getName(),
-            makeOp("ite", {getInstrNameOrValue(SelectInst->getCondition()),
-                           getInstrNameOrValue(SelectInst->getTrueValue()),
-                           getInstrNameOrValue(SelectInst->getFalseValue())}));
+        std::vector<SMTRef> Args = {
+            getInstrNameOrValue(SelectInst->getCondition()),
+            getInstrNameOrValue(SelectInst->getTrueValue()),
+            getInstrNameOrValue(SelectInst->getFalseValue())};
+        return std::make_tuple(SelectInst->getName(),
+                               std::make_shared<class Op>("ite", Args));
     }
     errs() << Instr << "\n";
     errs() << "Couldn't convert instruction to def\n";
@@ -382,11 +390,16 @@ std::string getPredName(llvm::CmpInst::Predicate Pred) {
     }
 }
 
-std::string getInstrNameOrValue(const llvm::Value *Val) {
+SMTRef getInstrNameOrValue(const llvm::Value *Val) {
     if (auto ConstInt = llvm::dyn_cast<llvm::ConstantInt>(Val)) {
-        return ConstInt->getValue().toString(10, 1);
+        auto ApInt = ConstInt->getValue();
+        if (ApInt.isNegative()) {
+            return makeUnaryOp("-", name(ApInt.toString(10, 1).substr(1,string::npos)));
+
+        }
+        return name(ApInt.toString(10, 1));
     }
-    return Val->getName();
+    return name(Val->getName());
 }
 
 int swapIndex(int i) {
@@ -437,6 +450,16 @@ SMTRef invariant(int BlockIndex, llvm::BasicBlock &BB_1, llvm::BasicBlock &BB_2,
     return makeOp(invName(BlockIndex), Args);
 }
 
+SMTRef invariantDef(int BlockIndex, llvm::BasicBlock &BB_1,
+                    llvm::BasicBlock &BB_2, llvm::Function &Fun) {
+    std::vector<std::string> Args = extractArgs(BB_1, BB_2, Fun);
+    for (auto &Arg : Args) {
+        // TODO: detect type
+        Arg = "Int";
+    }
+    return std::make_shared<class Fun>(invName(BlockIndex), Args, "Bool");
+}
+
 std::vector<std::string> extractArgs(llvm::BasicBlock &BB_1,
                                      llvm::BasicBlock &BB_2,
                                      llvm::Function &Fun) {
@@ -466,6 +489,10 @@ SMTRef wrapForall(SMTRef Clause, int BlockIndex, llvm::BasicBlock &BB_1,
         // TODO: detect type
         Vars.push_back(SortedVar(Arg, "Int"));
     }
-    return llvm::make_unique<Forall>(
-        Vars, makeBinOp("=>", invariant(BlockIndex, BB_1, BB_2, Fun), Clause));
+    // no entry invariant
+    if (BlockIndex != -1) {
+        Clause =
+            makeBinOp("=>", invariant(BlockIndex, BB_1, BB_2, Fun), Clause);
+    }
+    return llvm::make_unique<Forall>(Vars, Clause);
 }

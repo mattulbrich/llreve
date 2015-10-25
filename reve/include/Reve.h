@@ -37,7 +37,7 @@ auto convertToSMT(llvm::Function &Mod1, llvm::Function &Mod2,
 auto toDef(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB)
     -> std::tuple<std::string, SMTRef>;
 auto getPredName(const llvm::CmpInst::Predicate Pred) -> std::string;
-auto getInstrNameOrValue(const llvm::Value *Val) -> std::string;
+auto getInstrNameOrValue(const llvm::Value *Val) -> SMTRef;
 auto extractPhiNodes(llvm::BasicBlock &BB) -> std::vector<std::string>;
 auto invariant(int BlockIndex, llvm::BasicBlock &BB_1, llvm::BasicBlock &BB_2,
                llvm::Function &Fun) -> SMTRef;
@@ -54,4 +54,6 @@ auto wrapForall(SMTRef Clause, int BlockIndex, llvm::BasicBlock &BB_1,
                 llvm::BasicBlock &BB_2, llvm::Function &Fun) -> SMTRef;
 auto extractArgs(llvm::BasicBlock &BB_1, llvm::BasicBlock &BB_2,
                  llvm::Function &Fun) -> std::vector<std::string>;
+auto invariantDef(int BlockIndex, llvm::BasicBlock &BB_1,
+                  llvm::BasicBlock &BB_2, llvm::Function &Fun) -> SMTRef;
 #endif // REVE_H
