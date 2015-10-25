@@ -265,30 +265,54 @@ void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
     auto PathMap_2 = FAM_2->getResult<PathAnalysis>(Fun_2);
     auto Marked_1 = FAM_1->getResult<MarkAnalysis>(Fun_1);
     auto Marked_2 = FAM_2->getResult<MarkAnalysis>(Fun_2);
+    std::map<int, std::set<std::string>> FreeVarsMap;
     std::vector<SMTRef> SMTExprs;
     SMTExprs.push_back(std::make_shared<SetLogic>("HORN"));
     std::vector<SMTRef> PathExprs;
     for (auto &PathMapIt : PathMap_1) {
         int StartIndex = PathMapIt.first;
+
+        {
+            auto FreeVars_1 = freeVars(PathMap_1.at(StartIndex));
+            auto FreeVars_2 = freeVars(PathMap_2.at(StartIndex));
+            std::set<std::string> FreeVars;
+            std::set_union(FreeVars_1.begin(), FreeVars_1.end(),
+                           FreeVars_2.begin(), FreeVars_2.end(),
+                           inserter(FreeVars, FreeVars.begin()));
+            FreeVarsMap.insert(make_pair(StartIndex, FreeVars));
+        }
+
         if (StartIndex != -1) {
             // ignore entry node
-            SMTExprs.push_back(invariantDef(StartIndex,
-                                            *Marked_1.at(StartIndex),
-                                            *Marked_2.at(StartIndex), Fun_1));
+            SMTExprs.push_back(
+                invariantDef(StartIndex, FreeVarsMap.at(StartIndex)));
         }
+
         for (auto &InnerPathMapIt : PathMapIt.second) {
             int EndIndex = InnerPathMapIt.first;
+            if (FreeVarsMap.find(EndIndex) == FreeVarsMap.end()) {
+                if (EndIndex == -2) {
+                    FreeVarsMap.insert(
+                        make_pair(EndIndex, std::set<std::string>()));
+                } else {
+                    auto FreeVars_1 = freeVars(PathMap_1.at(EndIndex));
+                    auto FreeVars_2 = freeVars(PathMap_2.at(EndIndex));
+                    std::set<std::string> FreeVars;
+                    std::set_union(FreeVars_1.begin(), FreeVars_1.end(),
+                                   FreeVars_2.begin(), FreeVars_2.end(),
+                                   inserter(FreeVars, FreeVars.begin()));
+                    FreeVarsMap.insert(make_pair(EndIndex, FreeVars));
+                }
+            }
             auto Paths = PathMap_2.at(StartIndex).at(EndIndex);
             for (auto &Path_1 : InnerPathMapIt.second) {
                 for (auto &Path_2 : Paths) {
                     auto SMT_2 = pathToSMT(
-                        Path_2, invariant(EndIndex, *Marked_1.at(EndIndex),
-                                          *Marked_2.at(EndIndex), Fun_1),
+                        Path_2, invariant(EndIndex, FreeVarsMap.at(EndIndex)),
                         2);
                     PathExprs.push_back(std::make_shared<Assert>(
                         wrapForall(pathToSMT(Path_1, SMT_2, 1), StartIndex,
-                                   *Marked_1.at(StartIndex),
-                                   *Marked_2.at(StartIndex), Fun_1)));
+                                   FreeVarsMap.at(StartIndex))));
                 }
             }
         }
@@ -394,8 +418,8 @@ SMTRef getInstrNameOrValue(const llvm::Value *Val) {
     if (auto ConstInt = llvm::dyn_cast<llvm::ConstantInt>(Val)) {
         auto ApInt = ConstInt->getValue();
         if (ApInt.isNegative()) {
-            return makeUnaryOp("-", name(ApInt.toString(10, 1).substr(1,string::npos)));
-
+            return makeUnaryOp(
+                "-", name(ApInt.toString(10, 1).substr(1, string::npos)));
         }
         return name(ApInt.toString(10, 1));
     }
@@ -441,37 +465,19 @@ instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB,
     return Defs;
 }
 
-SMTRef invariant(int BlockIndex, llvm::BasicBlock &BB_1, llvm::BasicBlock &BB_2,
-                 llvm::Function &Fun) {
+SMTRef invariant(int BlockIndex, std::set<std::string> Args) {
     if (BlockIndex == -2) {
         return makeBinOp("=", "result$1", "result$2");
     }
-    auto Args = extractArgs(BB_1, BB_2, Fun);
-    return makeOp(invName(BlockIndex), Args);
+    std::vector<std::string> ArgsVect;
+    ArgsVect.insert(ArgsVect.begin(), Args.begin(), Args.end());
+    return makeOp(invName(BlockIndex), ArgsVect);
 }
 
-SMTRef invariantDef(int BlockIndex, llvm::BasicBlock &BB_1,
-                    llvm::BasicBlock &BB_2, llvm::Function &Fun) {
-    std::vector<std::string> Args = extractArgs(BB_1, BB_2, Fun);
-    for (auto &Arg : Args) {
-        // TODO: detect type
-        Arg = "Int";
-    }
+SMTRef invariantDef(int BlockIndex, std::set<std::string> FreeVars) {
+    std::vector<std::string> Args(FreeVars.size(), "Int");
+
     return std::make_shared<class Fun>(invName(BlockIndex), Args, "Bool");
-}
-
-std::vector<std::string> extractArgs(llvm::BasicBlock &BB_1,
-                                     llvm::BasicBlock &BB_2,
-                                     llvm::Function &Fun) {
-    std::vector<std::string> Args;
-    for (auto &Arg : Fun.getArgumentList()) {
-        Args.push_back(Arg.getName());
-    }
-    auto PhiNodes_1 = extractPhiNodes(BB_1);
-    auto PhiNodes_2 = extractPhiNodes(BB_2);
-    Args.insert(Args.end(), PhiNodes_1.begin(), PhiNodes_1.end());
-    Args.insert(Args.end(), PhiNodes_2.begin(), PhiNodes_2.end());
-    return Args;
 }
 
 std::string invName(int Index) {
@@ -481,18 +487,45 @@ std::string invName(int Index) {
     return "INV_" + std::to_string(Index);
 }
 
-SMTRef wrapForall(SMTRef Clause, int BlockIndex, llvm::BasicBlock &BB_1,
-                  llvm::BasicBlock &BB_2, llvm::Function &Fun) {
-    auto Args = extractArgs(BB_1, BB_2, Fun);
+SMTRef wrapForall(SMTRef Clause, int BlockIndex,
+                  std::set<std::string> FreeVars) {
     std::vector<SortedVar> Vars;
-    for (auto &Arg : Args) {
+    for (auto &Arg : FreeVars) {
         // TODO: detect type
         Vars.push_back(SortedVar(Arg, "Int"));
     }
     // no entry invariant
     if (BlockIndex != -1) {
-        Clause =
-            makeBinOp("=>", invariant(BlockIndex, BB_1, BB_2, Fun), Clause);
+        Clause = makeBinOp("=>", invariant(BlockIndex, FreeVars), Clause);
     }
     return llvm::make_unique<Forall>(Vars, Clause);
+}
+
+std::set<std::string> freeVars(std::map<int, Paths> PathMap) {
+    std::set<std::string> FreeVars;
+    for (auto &Paths : PathMap) {
+        for (auto &Path : Paths.second) {
+            auto PhiNodes = extractPhiNodes(*Path.Start);
+            for (auto &PhiNode : PhiNodes) {
+                FreeVars.insert(PhiNode);
+            }
+            std::set<std::string> Constructed;
+            for (auto &Edge : Path.Edges) {
+                for (auto &Instr : *Edge.Block) {
+                    Constructed.insert(Instr.getName());
+                    if (llvm::isa<llvm::PHINode>(Instr)) {
+                        continue;
+                    }
+                    for (auto Op : Instr.operand_values()) {
+                        if (Constructed.find(Op->getName()) ==
+                                Constructed.end() &&
+                            !Op->getName().empty()) {
+                            FreeVars.insert(Op->getName());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return FreeVars;
 }

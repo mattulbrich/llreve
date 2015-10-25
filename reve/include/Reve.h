@@ -39,8 +39,7 @@ auto toDef(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB)
 auto getPredName(const llvm::CmpInst::Predicate Pred) -> std::string;
 auto getInstrNameOrValue(const llvm::Value *Val) -> SMTRef;
 auto extractPhiNodes(llvm::BasicBlock &BB) -> std::vector<std::string>;
-auto invariant(int BlockIndex, llvm::BasicBlock &BB_1, llvm::BasicBlock &BB_2,
-               llvm::Function &Fun) -> SMTRef;
+auto invariant(int BlockIndex, std::set<std::string> Args) -> SMTRef;
 auto getOpName(const llvm::BinaryOperator &Op) -> std::string;
 auto swapIndex(int i) -> int;
 auto nestLets(SMTRef Clause, std::vector<std::tuple<std::string, SMTRef>> Defs)
@@ -50,10 +49,8 @@ auto instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB,
     -> std::vector<std::tuple<std::string, SMTRef>>;
 auto pathToSMT(Path Path, SMTRef EndClause, int Program) -> SMTRef;
 auto invName(int Index) -> std::string;
-auto wrapForall(SMTRef Clause, int BlockIndex, llvm::BasicBlock &BB_1,
-                llvm::BasicBlock &BB_2, llvm::Function &Fun) -> SMTRef;
-auto extractArgs(llvm::BasicBlock &BB_1, llvm::BasicBlock &BB_2,
-                 llvm::Function &Fun) -> std::vector<std::string>;
-auto invariantDef(int BlockIndex, llvm::BasicBlock &BB_1,
-                  llvm::BasicBlock &BB_2, llvm::Function &Fun) -> SMTRef;
+auto wrapForall(SMTRef Clause, int BlockIndex, std::set<std::string> FreeVars)
+    -> SMTRef;
+auto invariantDef(int BlockIndex, std::set<std::string> FreeVars) -> SMTRef;
+auto freeVars(std::map<int, Paths> Paths) -> std::set<std::string>;
 #endif // REVE_H
