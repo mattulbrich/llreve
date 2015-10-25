@@ -265,7 +265,8 @@ void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
     auto PathMap_2 = FAM_2->getResult<PathAnalysis>(Fun_2);
     auto Marked_1 = FAM_1->getResult<MarkAnalysis>(Fun_1);
     auto Marked_2 = FAM_2->getResult<MarkAnalysis>(Fun_2);
-    std::map<int, std::set<std::string>> FreeVarsMap = freeVarsMap(PathMap_1, PathMap_2);
+    std::map<int, std::set<std::string>> FreeVarsMap =
+        freeVarsMap(PathMap_1, PathMap_2);
     std::vector<SMTRef> SMTExprs;
     std::vector<SMTRef> PathExprs;
 
@@ -289,6 +290,27 @@ void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
                     PathExprs.push_back(std::make_shared<Assert>(
                         wrapForall(pathToSMT(Path_1, SMT_2, 1), StartIndex,
                                    FreeVarsMap.at(StartIndex))));
+                }
+            }
+        }
+    }
+
+    // generate forbidden paths
+    for (auto &PathMapIt : PathMap_1) {
+        int StartIndex = PathMapIt.first;
+        for (auto &InnerPathMapIt_1 : PathMapIt.second) {
+            int EndIndex = InnerPathMapIt_1.first;
+            for (auto &InnerPathMapIt_2 : PathMap_2.at(StartIndex)) {
+                if (EndIndex != InnerPathMapIt_2.first) {
+                    for (auto &Path_1 : InnerPathMapIt_1.second) {
+                        for (auto &Path_2 : InnerPathMapIt_2.second) {
+                            auto SMT_2 = pathToSMT(Path_2, name("false"), 2);
+                            PathExprs.push_back(std::make_shared<Assert>(
+                                wrapForall(pathToSMT(Path_1, SMT_2, 1),
+                                           StartIndex,
+                                           FreeVarsMap.at(StartIndex))));
+                        }
+                    }
                 }
             }
         }
@@ -515,9 +537,8 @@ std::map<int, std::set<std::string>> freeVarsMap(PathMap Map_1, PathMap Map_2) {
         auto FreeVars_1 = freeVars(Map_1.at(Index));
         auto FreeVars_2 = freeVars(Map_2.at(Index));
         std::set<std::string> FreeVars;
-        std::set_union(FreeVars_1.begin(), FreeVars_1.end(),
-                       FreeVars_2.begin(), FreeVars_2.end(),
-                       inserter(FreeVars, FreeVars.begin()));
+        std::set_union(FreeVars_1.begin(), FreeVars_1.end(), FreeVars_2.begin(),
+                       FreeVars_2.end(), inserter(FreeVars, FreeVars.begin()));
         FreeVarsMap.insert(make_pair(Index, FreeVars));
     }
     FreeVarsMap.insert(make_pair(-2, std::set<std::string>()));
