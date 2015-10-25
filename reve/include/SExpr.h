@@ -29,9 +29,16 @@ template <typename T> class Apply : public SExpr<T> {
         : Fun(Fun_), Args(std::move(Args_)) {}
     void serialize(std::ostream &OS, size_t Indent) const override {
         OS << "(" << Fun;
-        std::vector<std::string> AtomicOps = {"+", "-", "<=", "<", ">", ">=", "="};
-        if (std::find(AtomicOps.begin(), AtomicOps.end(), Fun) !=
-            AtomicOps.end()) {
+        std::vector<std::string> AtomicOps = {"+", "-",  "<=", "<",
+                                              ">", ">=", "=",  "not"};
+        std::vector<std::string> ForceIndentOps = {"assert"};
+        bool AtomicOp = std::find(AtomicOps.begin(), AtomicOps.end(), Fun) !=
+                        AtomicOps.end();
+        bool SimpleOp = Args.size() <= 1 &&
+                        std::find(ForceIndentOps.begin(), ForceIndentOps.end(),
+                                  Fun) == ForceIndentOps.end();
+        bool Inv = Fun.substr(0, 3) == "INV";
+        if (AtomicOp || SimpleOp || Inv) {
             for (auto &Arg : Args) {
                 OS << " ";
                 Arg->serialize(OS, Indent);

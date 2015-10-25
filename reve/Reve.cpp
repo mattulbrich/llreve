@@ -317,6 +317,8 @@ void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
     }
 
     SMTExprs.insert(SMTExprs.end(), PathExprs.begin(), PathExprs.end());
+    SMTExprs.push_back(make_shared<CheckSat>());
+    SMTExprs.push_back(make_shared<GetModel>());
 
     for (auto &SMT : SMTExprs) {
         std::cout << *SMT->toSExpr();
