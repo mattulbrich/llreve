@@ -5,9 +5,9 @@
 
 #include "llvm/ADT/STLExtras.h"
 
+#include <set>
 #include <sstream>
 #include <string>
-#include <set>
 
 using std::set;
 using std::string;
@@ -21,6 +21,10 @@ class SMTExpr {
   public:
     virtual SExprRef toSExpr() const = 0;
     virtual set<string> uses() const = 0;
+    virtual shared_ptr<const SMTExpr> compressLets(
+        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs =
+            std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>>())
+        const = 0;
     virtual ~SMTExpr();
     SMTExpr(const SMTExpr &Expr) = default;
     SMTExpr() = default;
@@ -33,6 +37,9 @@ class SetLogic : public SMTExpr {
     explicit SetLogic(std::string Logic_) : Logic(Logic_) {}
     SExprRef toSExpr() const override;
     set<string> uses() const override;
+    shared_ptr<const SMTExpr> compressLets(
+        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        const override;
     std::string Logic;
 };
 
@@ -42,6 +49,9 @@ class Assert : public SMTExpr {
     SMTRef Expr;
     SExprRef toSExpr() const override;
     set<string> uses() const override;
+    shared_ptr<const SMTExpr> compressLets(
+        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        const override;
 };
 
 class SortedVar : public SMTExpr {
@@ -52,6 +62,9 @@ class SortedVar : public SMTExpr {
     const std::string Type;
     SExprRef toSExpr() const override;
     set<string> uses() const override;
+    shared_ptr<const SMTExpr> compressLets(
+        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        const override;
 };
 
 class Forall : public SMTExpr {
@@ -62,18 +75,27 @@ class Forall : public SMTExpr {
     std::vector<SortedVar> Vars;
     SMTRef Expr;
     set<string> uses() const override;
+    shared_ptr<const SMTExpr> compressLets(
+        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        const override;
 };
 
 class CheckSat : public SMTExpr {
   public:
     SExprRef toSExpr() const override;
     set<string> uses() const override;
+    shared_ptr<const SMTExpr> compressLets(
+        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        const override;
 };
 
 class GetModel : public SMTExpr {
   public:
     SExprRef toSExpr() const override;
     set<string> uses() const override;
+    shared_ptr<const SMTExpr> compressLets(
+        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        const override;
 };
 
 class Let : public SMTExpr {
@@ -84,6 +106,9 @@ class Let : public SMTExpr {
     Let(std::vector<std::tuple<std::string, SMTRef>> Defs_, SMTRef Expr_)
         : Defs(Defs_), Expr(Expr_) {}
     set<string> uses() const override;
+    shared_ptr<const SMTExpr> compressLets(
+        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        const override;
 };
 
 template <typename T> class Primitive : public SMTExpr {
@@ -95,9 +120,10 @@ template <typename T> class Primitive : public SMTExpr {
         return llvm::make_unique<sexpr::Value<std::string>>(SStream.str());
     }
     const T Val;
-    set<string> uses() const override {
-        return set<string>();
-    }
+    set<string> uses() const override { return set<string>(); }
+    shared_ptr<const SMTExpr> compressLets(
+        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        const override;
 };
 
 class Op : public SMTExpr {
@@ -108,6 +134,9 @@ class Op : public SMTExpr {
     std::vector<SMTRef> Args;
     SExprRef toSExpr() const override;
     set<string> uses() const override;
+    shared_ptr<const SMTExpr> compressLets(
+        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        const override;
 };
 
 auto makeBinOp(std::string OpName, std::string Arg_1, std::string Arg_2)
@@ -129,6 +158,12 @@ class Fun : public SMTExpr {
     std::string OutType;
     SExprRef toSExpr() const override;
     set<string> uses() const override;
+    shared_ptr<const SMTExpr> compressLets(
+        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        const override;
 };
+
+auto nestLets(SMTRef Clause, std::vector<std::tuple<std::string, SMTRef>> Defs)
+    -> SMTRef;
 
 #endif // SMT_H

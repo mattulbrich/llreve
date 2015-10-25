@@ -63,11 +63,11 @@ using std::string;
 using std::placeholders::_1;
 
 static llvm::cl::opt<string> FileName1(llvm::cl::Positional,
-                                            llvm::cl::desc("Input file 1"),
-                                            llvm::cl::Required);
+                                       llvm::cl::desc("Input file 1"),
+                                       llvm::cl::Required);
 static llvm::cl::opt<string> FileName2(llvm::cl::Positional,
-                                            llvm::cl::desc("Input file 2"),
-                                            llvm::cl::Required);
+                                       llvm::cl::desc("Input file 2"),
+                                       llvm::cl::Required);
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
@@ -265,8 +265,7 @@ void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
     auto PathMap_2 = FAM_2->getResult<PathAnalysis>(Fun_2);
     auto Marked_1 = FAM_1->getResult<MarkAnalysis>(Fun_1);
     auto Marked_2 = FAM_2->getResult<MarkAnalysis>(Fun_2);
-    std::map<int, set<string>> FreeVarsMap =
-        freeVarsMap(PathMap_1, PathMap_2);
+    std::map<int, set<string>> FreeVarsMap = freeVarsMap(PathMap_1, PathMap_2);
     std::vector<SMTRef> SMTExprs;
     std::vector<SMTRef> PathExprs;
 
@@ -321,7 +320,8 @@ void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
     SMTExprs.push_back(make_shared<GetModel>());
 
     for (auto &SMT : SMTExprs) {
-        std::cout << *SMT->toSExpr();
+        std::cout << *SMT->compressLets()
+                          ->toSExpr();
         std::cout << "\n";
     }
 }
@@ -346,7 +346,7 @@ SMTRef pathToSMT(Path Path, SMTRef EndClause, int Program) {
 }
 
 std::tuple<string, SMTRef> toDef(const llvm::Instruction &Instr,
-                                      const llvm::BasicBlock *PrevBB) {
+                                 const llvm::BasicBlock *PrevBB) {
     if (auto BinOp = llvm::dyn_cast<llvm::BinaryOperator>(&Instr)) {
         return std::make_tuple(
             BinOp->getName(),
@@ -423,28 +423,6 @@ int swapIndex(int i) {
     return i == 1 ? 2 : 1;
 }
 
-SMTRef nestLets(SMTRef Clause,
-                std::vector<std::tuple<string, SMTRef>> Defs) {
-    SMTRef Lets = Clause;
-    set<string> Uses;
-    std::vector<std::tuple<string, SMTRef>> DefsAccum;
-    for (auto I = Defs.rbegin(), E = Defs.rend(); I != E; ++I) {
-        if (Uses.find(std::get<0>(*I)) != Uses.end()) {
-            Lets = llvm::make_unique<const Let>(DefsAccum, Lets);
-            Uses = set<string>();
-            DefsAccum = std::vector<std::tuple<string, SMTRef>>();
-        }
-        DefsAccum.insert(DefsAccum.begin(), *I);
-        for (auto Use : std::get<1>(*I)->uses()) {
-            Uses.insert(Use);
-        }
-    }
-    if (!DefsAccum.empty()) {
-        Lets = llvm::make_unique<const Let>(DefsAccum, Lets);
-    }
-    return Lets;
-}
-
 std::vector<std::tuple<string, SMTRef>>
 instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB,
             bool IgnorePhis, int Program) {
@@ -490,8 +468,7 @@ string invName(int Index) {
     return "INV_" + std::to_string(Index);
 }
 
-SMTRef wrapForall(SMTRef Clause, int BlockIndex,
-                  set<string> FreeVars) {
+SMTRef wrapForall(SMTRef Clause, int BlockIndex, set<string> FreeVars) {
     std::vector<SortedVar> Vars;
     for (auto &Arg : FreeVars) {
         // TODO: detect type
@@ -519,8 +496,7 @@ set<string> freeVars(std::map<int, Paths> PathMap) {
                     continue;
                 }
                 for (auto Op : Instr.operand_values()) {
-                    if (Constructed.find(Op->getName()) ==
-                        Constructed.end() &&
+                    if (Constructed.find(Op->getName()) == Constructed.end() &&
                         !Op->getName().empty()) {
                         FreeVars.insert(Op->getName());
                     }
@@ -556,7 +532,7 @@ std::map<int, set<string>> freeVarsMap(PathMap Map_1, PathMap Map_2) {
         auto FreeVars_2 = freeVars(Map_2.at(Index));
         set<string> FreeVars;
         set_union(FreeVars_1.begin(), FreeVars_1.end(), FreeVars_2.begin(),
-                       FreeVars_2.end(), inserter(FreeVars, FreeVars.begin()));
+                  FreeVars_2.end(), inserter(FreeVars, FreeVars.begin()));
         FreeVarsMap.insert(make_pair(Index, FreeVars));
     }
     FreeVarsMap.insert(make_pair(-2, set<string>()));

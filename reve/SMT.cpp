@@ -8,7 +8,7 @@
 #include <vector>
 
 using llvm::make_unique;
-
+using std::make_shared;
 using sexpr::Apply;
 using sexpr::Value;
 using sexpr::List;
@@ -168,12 +168,97 @@ SExprRef Fun::toSExpr() const {
     return make_unique<Apply<std::string>>("declare-fun", std::move(Args));
 }
 
-set<string> Fun::uses() const {
-    return set<string>();
-}
+set<string> Fun::uses() const { return set<string>(); }
 
 template <> set<string> Primitive<string>::uses() const {
     set<string> Uses;
     Uses.insert(Val);
     return Uses;
+}
+
+SMTRef SetLogic::compressLets(
+    std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+    const {
+    return nestLets(make_shared<SetLogic>(Logic), Defs);
+}
+
+SMTRef Assert::compressLets(
+    std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+    const {
+    return nestLets(make_shared<Assert>(Expr->compressLets()), Defs);
+}
+
+SMTRef SortedVar::compressLets(
+    std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+    const {
+    return nestLets(make_shared<SortedVar>(Name, Type), Defs);
+}
+
+SMTRef Forall::compressLets(
+    std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+    const {
+    return nestLets(make_shared<Forall>(Vars, Expr->compressLets()), Defs);
+}
+
+SMTRef CheckSat::compressLets(
+    std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+    const {
+    return nestLets(make_shared<CheckSat>(), Defs);
+}
+
+SMTRef GetModel::compressLets(
+    std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+    const {
+    return nestLets(make_shared<GetModel>(), Defs);
+}
+
+SMTRef Let::compressLets(
+    std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs_)
+    const {
+    Defs_.insert(Defs_.end(), Defs.begin(), Defs.end());
+    return Expr->compressLets(Defs_);
+}
+
+SMTRef Op::compressLets(
+    std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+    const {
+    std::vector<SMTRef> Args_;
+    for (auto Arg : Args) {
+        Args_.push_back(Arg->compressLets());
+    }
+    return nestLets(make_shared<Op>(OpName, Args_), Defs);
+}
+
+SMTRef Fun::compressLets(
+    std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+    const {
+    return nestLets(make_shared<Fun>(FunName, InTypes, OutType), Defs);
+}
+
+template <typename T>
+SMTRef Primitive<T>::compressLets(
+    std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+    const {
+    return nestLets(make_shared<Primitive<T>>(Val), Defs);
+}
+
+SMTRef nestLets(SMTRef Clause, std::vector<std::tuple<string, SMTRef>> Defs) {
+    SMTRef Lets = Clause;
+    set<string> Uses;
+    std::vector<std::tuple<string, SMTRef>> DefsAccum;
+    for (auto I = Defs.rbegin(), E = Defs.rend(); I != E; ++I) {
+        if (Uses.find(std::get<0>(*I)) != Uses.end()) {
+            Lets = llvm::make_unique<const Let>(DefsAccum, Lets);
+            Uses = set<string>();
+            DefsAccum = std::vector<std::tuple<string, SMTRef>>();
+        }
+        DefsAccum.insert(DefsAccum.begin(), *I);
+        for (auto Use : std::get<1>(*I)->uses()) {
+            Uses.insert(Use);
+        }
+    }
+    if (!DefsAccum.empty()) {
+        Lets = llvm::make_unique<const Let>(DefsAccum, Lets);
+    }
+    return Lets;
 }

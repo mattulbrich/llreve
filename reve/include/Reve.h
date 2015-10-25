@@ -41,8 +41,6 @@ auto getInstrNameOrValue(const llvm::Value *Val) -> SMTRef;
 auto invariant(int BlockIndex, std::set<std::string> Args) -> SMTRef;
 auto getOpName(const llvm::BinaryOperator &Op) -> std::string;
 auto swapIndex(int i) -> int;
-auto nestLets(SMTRef Clause, std::vector<std::tuple<std::string, SMTRef>> Defs)
-    -> SMTRef;
 auto instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB,
                  bool IgnorePhis, int Program)
     -> std::vector<std::tuple<std::string, SMTRef>>;
