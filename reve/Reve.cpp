@@ -59,6 +59,7 @@ using llvm::IntrusiveRefCntPtr;
 
 using std::unique_ptr;
 using std::string;
+using std::placeholders::_1;
 
 static llvm::cl::opt<std::string> FileName1(llvm::cl::Positional,
                                             llvm::cl::desc("Input file 1"),
@@ -209,9 +210,8 @@ int main(int Argc, const char **Argv) {
     auto FAM_1 = preprocessModule(FunOrError_1.get(), "1");
     auto FAM_2 = preprocessModule(FunOrError_2.get(), "2");
 
-    FAM_1->getResult<PathAnalysis>(FunOrError_1.get());
-    // convertToSMT(FunOrError_1.get(), FunOrError_2.get(), std::move(FAM_1),
-                 // std::move(FAM_2));
+    convertToSMT(FunOrError_1.get(), FunOrError_2.get(), std::move(FAM_1),
+                 std::move(FAM_2));
 
     llvm::llvm_shutdown();
 
@@ -237,7 +237,7 @@ unique_ptr<llvm::FunctionAnalysisManager> preprocessModule(llvm::Function &Fun,
     FPM.addPass(RemoveMarkPass());
     FPM.addPass(llvm::VerifierPass());
     FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
-    FPM.addPass(CFGViewerPass());                 // show cfg
+    // FPM.addPass(CFGViewerPass());                 // show cfg
     FPM.run(Fun, FAM.get());
 
     return FAM;
@@ -259,342 +259,55 @@ ErrorOr<llvm::Function &> getFunction(llvm::Module &Mod) {
 void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
                   unique_ptr<llvm::FunctionAnalysisManager> FAM_1,
                   unique_ptr<llvm::FunctionAnalysisManager> FAM_2) {
-    errs() << "Converting so SMT\n";
-
-    // Print loop detection
-    errs() << "Loops in program 1\n\t";
-    FAM_1->getResult<llvm::LoopAnalysis>(Fun_1).print(errs());
-    errs() << "Loops in program 2\n\t";
-    FAM_2->getResult<llvm::LoopAnalysis>(Fun_2).print(errs());
-
-    std::vector<SMTRef> SMT;
-
-    // Set logic to horn
-    SetLogic A("HORN");
-    SMT.push_back(llvm::make_unique<SetLogic>("HORN"));
-
-    std::vector<string> FunArgs_1;
-    std::vector<string> FunArgs_2;
-
-    // Forall quantifier over input variables
-    std::vector<SortedVar> Vars;
-    for (auto &Arg : Fun_1.args()) {
-        Vars.push_back(SortedVar(Arg.getName(), "Int"));
-        FunArgs_1.push_back(Arg.getName());
-    }
-    for (auto &Arg : Fun_2.args()) {
-        Vars.push_back(SortedVar(Arg.getName(), "Int"));
-        FunArgs_2.push_back(Arg.getName());
-    }
-
-    // Force input values to be the same
-    std::vector<std::tuple<std::string, SMTRef>> Defs;
-    for (auto I1 = Fun_1.args().begin(), I2 = Fun_2.args().begin(),
-              E1 = Fun_1.args().end(), E2 = Fun_2.args().end();
-         I1 != E1 && I2 != E2; ++I1, ++I2) {
-        Defs.push_back(std::make_tuple(I1->getName(), name(I2->getName())));
-    }
-
-    // trivial implication
-    std::vector<size_t> Funs;
-    SMTRef MainClause =
-        walkCFG(&Fun_1.getEntryBlock(), &Fun_2.getEntryBlock(),
-                &FAM_1->getResult<llvm::LoopAnalysis>(Fun_1),
-                &FAM_2->getResult<llvm::LoopAnalysis>(Fun_2), nullptr, nullptr,
-                1, Funs, FunArgs_1, FunArgs_2);
-
-    SMTRef Impl = makeBinOp("=>", name("true"), std::move(MainClause));
-
-    SMTRef Forall = llvm::make_unique<const class Forall>(
-        Vars, llvm::make_unique<Let>(std::move(Defs), std::move(Impl)));
-
-    // Declare invariants
-    int i = 0;
-    for (auto ArgCount : Funs) {
-        std::vector<string> InTypes(ArgCount, "Int");
-        SMT.push_back(llvm::make_unique<Fun>("INV_" + std::to_string(i),
-                                             InTypes, "Bool"));
-        ++i;
-    }
-
-    SMTRef Assert = llvm::make_unique<const class Assert>(std::move(Forall));
-    SMT.push_back(std::move(Assert));
-
-    SMT.push_back(llvm::make_unique<CheckSat>());
-    SMT.push_back(llvm::make_unique<GetModel>());
-    for (auto &Expr : SMT) {
-        std::cout << *Expr->toSExpr();
-        std::cout << std::endl;
-    }
-}
-
-SMTRef stepCFG(const llvm::BasicBlock *CurrentBB,
-               const llvm::BasicBlock *OtherBB, llvm::LoopInfo *LoopInfo_1,
-               llvm::LoopInfo *LoopInfo_2,
-               const llvm::BasicBlock *PrevCurrentBB,
-               const llvm::BasicBlock *PrevOtherBB, int Program,
-               std::vector<size_t> &Funs, std::vector<string> CurrentFunArgs,
-               std::vector<string> OtherFunArgs) {
-    std::vector<std::tuple<std::string, SMTRef>> Defs =
-        instrToDefs(CurrentBB, PrevCurrentBB, false);
-
-    auto TermInst = CurrentBB->getTerminator();
-    SMTRef Clause;
-    if (auto BranchInst = llvm::dyn_cast<llvm::BranchInst>(TermInst)) {
-        if (BranchInst->isUnconditional()) {
-            assert(BranchInst->getNumSuccessors() == 1);
-            Clause = walkCFG(BranchInst->getSuccessor(0), OtherBB, LoopInfo_1,
-                             LoopInfo_2, CurrentBB, PrevOtherBB, Program, Funs,
-                             CurrentFunArgs, OtherFunArgs);
-        } else {
-            assert(BranchInst->getNumSuccessors() == 2);
-            auto CondName = BranchInst->getCondition()->getName();
-            Clause = makeBinOp(
-                "and", makeBinOp("=>", name(CondName),
-                                 walkCFG(BranchInst->getSuccessor(0), OtherBB,
-                                         LoopInfo_1, LoopInfo_2, CurrentBB,
-                                         PrevOtherBB, Program, Funs,
-                                         CurrentFunArgs, OtherFunArgs)),
-                makeBinOp("=>", makeUnaryOp("not", CondName),
-                          walkCFG(BranchInst->getSuccessor(1), OtherBB,
-                                  LoopInfo_1, LoopInfo_2, CurrentBB,
-                                  PrevOtherBB, Program, Funs, CurrentFunArgs,
-                                  OtherFunArgs)));
+    // TODO: check that the marks are the same
+    auto PathMap_1 = FAM_1->getResult<PathAnalysis>(Fun_1);
+    auto PathMap_2 = FAM_2->getResult<PathAnalysis>(Fun_2);
+    auto Marked_1 = FAM_1->getResult<MarkAnalysis>(Fun_1);
+    auto Marked_2 = FAM_2->getResult<MarkAnalysis>(Fun_2);
+    std::vector<SMTRef> PathSMTs;
+    for (auto &PathMapIt : PathMap_1) {
+        for (auto &InnerPathMapIt : PathMapIt.second) {
+            int StartIndex = PathMapIt.first;
+            int EndIndex = InnerPathMapIt.first;
+            auto Paths = PathMap_2.at(StartIndex).at(EndIndex);
+            for (auto &Path_1 : InnerPathMapIt.second) {
+                for (auto &Path_2 : Paths) {
+                    auto SMT_2 = pathToSMT(
+                        Path_2, invariant(EndIndex, *Marked_1.at(EndIndex),
+                                          *Marked_2.at(EndIndex), Fun_1),
+                        2);
+                    PathSMTs.push_back(
+                        wrapForall(pathToSMT(Path_1, SMT_2, 1), StartIndex,
+                                   *Marked_1.at(StartIndex),
+                                   *Marked_2.at(StartIndex), Fun_1));
+                }
+            }
         }
-    } else if (auto RetInst = llvm::dyn_cast<llvm::ReturnInst>(TermInst)) {
-        std::vector<std::tuple<std::string, SMTRef>> ResultDef;
-        ResultDef.push_back(std::make_tuple(
-            "result$" + std::to_string(Program),
-            name(getInstrNameOrValue(RetInst->getReturnValue()))));
-        Clause = llvm::make_unique<const Let>(
-            std::move(ResultDef),
-            walkCFG(OtherBB, nullptr, LoopInfo_2, LoopInfo_1, PrevOtherBB,
-                    CurrentBB, swapIndex(Program), Funs, OtherFunArgs,
-                    CurrentFunArgs));
-    } else {
-        errs() << "Unsupported terminator instruction\n";
-        Clause = name("DUMMY");
     }
-
-    return nestLets(std::move(Clause), std::move(Defs));
+    for (auto &SMT : PathSMTs) {
+        std::cout << *SMT->toSExpr();
+        std::cout << "\n";
+    }
 }
 
-SMTRef stepLoopBlock(
-    const llvm::BasicBlock *CurrentBB, llvm::LoopInfo *LoopInfo,
-    const llvm::BasicBlock *PrevCurrentBB, std::vector<string> CurrentFunArgs,
-    std::function<SMTRef()> InvariantCont,
-    std::function<SMTRef(const llvm::BasicBlock *BB, llvm::LoopInfo *LoopInfo,
-                         const llvm::BasicBlock *PrevBB)> ExitCont) {
-    // we are at the exit of the loop
-    if (!LoopInfo->getLoopFor(CurrentBB)) {
-        return ExitCont(CurrentBB, LoopInfo, PrevCurrentBB);
-    }
-
-    // we are back at the header
-    if (LoopInfo->getLoopFor(PrevCurrentBB) &&
-        LoopInfo->isLoopHeader(CurrentBB)) {
-        return InvariantCont();
-    }
-
-    std::vector<std::tuple<std::string, SMTRef>> Defs =
-        instrToDefs(CurrentBB, PrevCurrentBB, true);
-
-    auto TermInst = CurrentBB->getTerminator();
-    SMTRef Clause;
-    if (auto BranchInst = llvm::dyn_cast<llvm::BranchInst>(TermInst)) {
-        if (BranchInst->isUnconditional()) {
-            assert(BranchInst->getNumSuccessors() == 1);
+SMTRef pathToSMT(Path Path, SMTRef EndClause, int Program) {
+    SMTRef Clause = std::move(EndClause);
+    for (auto It = Path.Edges.rbegin(), E = Path.Edges.rend(); It != E; ++It) {
+        auto PrevIt = std::next(It, 1);
+        auto Prev = Path.Start;
+        if (PrevIt != E) {
+            Prev = PrevIt->Block;
+        }
+        auto Defs = instrToDefs(It->Block, Prev, false, Program);
+        Clause = nestLets(std::move(Clause), std::move(Defs));
+        if (It->Condition) {
             Clause =
-                stepLoopBlock(BranchInst->getSuccessor(0), LoopInfo, CurrentBB,
-                              CurrentFunArgs, InvariantCont, ExitCont);
-        } else {
-            assert(BranchInst->getNumSuccessors() == 2);
-            auto CondName = BranchInst->getCondition()->getName();
-            Clause = makeBinOp(
-                "and",
-                makeBinOp("=>", name(CondName),
-                          stepLoopBlock(BranchInst->getSuccessor(0), LoopInfo,
-                                        CurrentBB, CurrentFunArgs,
-                                        InvariantCont, ExitCont)),
-                makeBinOp("=>", makeUnaryOp("not", CondName),
-                          stepLoopBlock(BranchInst->getSuccessor(1), LoopInfo,
-                                        CurrentBB, CurrentFunArgs,
-                                        InvariantCont, ExitCont)));
+                makeBinOp("=>", std::move(It->Condition), std::move(Clause));
         }
-    } else if (auto RetInst = llvm::dyn_cast<llvm::ReturnInst>(TermInst)) {
-        std::vector<std::tuple<std::string, SMTRef>> ResultDef;
-        ResultDef.push_back(std::make_tuple(
-            "result$1", name(getInstrNameOrValue(RetInst->getReturnValue()))));
-        Clause =
-            llvm::make_unique<const Let>(std::move(ResultDef), name("DUMMY"));
-    } else {
-        errs() << "Unsupported terminator instruction\n";
-        Clause = name("DUMMY");
     }
-
-    return nestLets(std::move(Clause), std::move(Defs));
-}
-
-SMTRef walkCFG(const llvm::BasicBlock *CurrentBB,
-               const llvm::BasicBlock *OtherBB, llvm::LoopInfo *LoopInfo_1,
-               llvm::LoopInfo *LoopInfo_2,
-               const llvm::BasicBlock *PrevCurrentBB,
-               const llvm::BasicBlock *PrevOtherBB, int Program,
-               std::vector<size_t> &Funs, std::vector<string> CurrentFunArgs,
-               std::vector<string> OtherFunArgs) {
-    if (CurrentBB && !LoopInfo_1->isLoopHeader(CurrentBB)) {
-        return stepCFG(CurrentBB, OtherBB, LoopInfo_1, LoopInfo_2,
-                       PrevCurrentBB, PrevOtherBB, Program, Funs,
-                       CurrentFunArgs, OtherFunArgs);
-    } else if (OtherBB && !LoopInfo_2->isLoopHeader(OtherBB)) {
-        return stepCFG(OtherBB, CurrentBB, LoopInfo_2, LoopInfo_1, PrevOtherBB,
-                       PrevCurrentBB, swapIndex(Program), Funs, OtherFunArgs,
-                       CurrentFunArgs);
-    } else if (!CurrentBB && OtherBB) {
-        errs() << "LOOP at OtherBB\n"; // TODO: implement;
-    } else if (CurrentBB && !OtherBB) {
-        const llvm::Loop *Loop = LoopInfo_1->getLoopFor(CurrentBB);
-        assert(Loop);
-        auto PhiNodes = extractPhiNodes(*Loop);
-        Funs.push_back(CurrentFunArgs.size() + OtherFunArgs.size() +
-                       PhiNodes.size());
-        std::vector<string> InitialArgs;
-        std::vector<string> PreCondArgs;
-        std::vector<string> PostCondArgs;
-
-        InitialArgs.insert(InitialArgs.end(), CurrentFunArgs.begin(),
-                           CurrentFunArgs.end());
-        InitialArgs.insert(InitialArgs.end(), OtherFunArgs.begin(),
-                           OtherFunArgs.end());
-
-        calcInvArgs(PhiNodes, PreCondArgs, InitialArgs, PostCondArgs, Loop);
-
-        std::string InvName = "INV_" + std::to_string(Funs.size() - 1);
-        std::vector<SMTRef> Clauses;
-        Clauses.push_back(makeOp(InvName, InitialArgs));
-
-        std::vector<SortedVar> Vars;
-        for (auto Arg : PreCondArgs) {
-            Vars.push_back(SortedVar(Arg, "Int"));
-        }
-
-        PreCondArgs.insert(PreCondArgs.begin(), OtherFunArgs.begin(),
-                           OtherFunArgs.end());
-        PreCondArgs.insert(PreCondArgs.begin(), CurrentFunArgs.begin(),
-                           CurrentFunArgs.end());
-        PostCondArgs.insert(PostCondArgs.begin(), OtherFunArgs.begin(),
-                            OtherFunArgs.end());
-        PostCondArgs.insert(PostCondArgs.begin(), CurrentFunArgs.begin(),
-                            CurrentFunArgs.end());
-
-        SMTRef Forall = llvm::make_unique<const class Forall>(
-            Vars,
-            makeBinOp("=>", makeOp(InvName, PreCondArgs),
-                      stepLoopBlock(
-                          CurrentBB, LoopInfo_1, PrevCurrentBB, CurrentFunArgs,
-                          [InvName, PostCondArgs]() {
-                              return makeOp(InvName, PostCondArgs);
-                          },
-                          [OtherBB, LoopInfo_2, PrevOtherBB, Funs,
-                           CurrentFunArgs, OtherFunArgs,
-                           Program](const llvm::BasicBlock *BB,
-                                    llvm::LoopInfo *LoopInfo,
-                                    const llvm::BasicBlock *PrevBB) mutable {
-                              return walkCFG(BB, OtherBB, LoopInfo, LoopInfo_2,
-                                             PrevBB, PrevOtherBB, Program, Funs,
-                                             CurrentFunArgs, OtherFunArgs);
-                          })));
-        Clauses.push_back(std::move(Forall));
-        return llvm::make_unique<Op>("and", std::move(Clauses));
-    } else if (CurrentBB && OtherBB) {
-        const llvm::Loop *Loop_1 = LoopInfo_1->getLoopFor(CurrentBB);
-        const llvm::Loop *Loop_2 = LoopInfo_2->getLoopFor(OtherBB);
-        assert(Loop_1 && Loop_2);
-
-        auto PhiNodes_1 = extractPhiNodes(*Loop_1);
-        auto PhiNodes_2 = extractPhiNodes(*Loop_2);
-        Funs.push_back(CurrentFunArgs.size() + OtherFunArgs.size() +
-                       PhiNodes_1.size() + PhiNodes_2.size());
-        std::vector<string> InitialArgs;
-        std::vector<string> PreCondArgs;
-        std::vector<string> PostCondArgs;
-
-        InitialArgs.insert(InitialArgs.end(), CurrentFunArgs.begin(),
-                           CurrentFunArgs.end());
-        InitialArgs.insert(InitialArgs.end(), OtherFunArgs.begin(),
-                           OtherFunArgs.end());
-
-        calcInvArgs(PhiNodes_1, PreCondArgs, InitialArgs, PostCondArgs, Loop_1);
-        calcInvArgs(PhiNodes_2, PreCondArgs, InitialArgs, PostCondArgs, Loop_2);
-
-        std::string InvName = "INV_" + std::to_string(Funs.size() - 1);
-        std::vector<SMTRef> Clauses;
-        Clauses.push_back(makeOp(InvName, InitialArgs));
-
-        std::vector<SortedVar> Vars;
-        for (auto Arg : PreCondArgs) {
-            Vars.push_back(SortedVar(Arg, "Int"));
-        }
-
-        PreCondArgs.insert(PreCondArgs.begin(), OtherFunArgs.begin(),
-                           OtherFunArgs.end());
-        PreCondArgs.insert(PreCondArgs.begin(), CurrentFunArgs.begin(),
-                           CurrentFunArgs.end());
-        PostCondArgs.insert(PostCondArgs.begin(), OtherFunArgs.begin(),
-                            OtherFunArgs.end());
-        PostCondArgs.insert(PostCondArgs.begin(), CurrentFunArgs.begin(),
-                            CurrentFunArgs.end());
-
-        SMTRef Forall = llvm::make_unique<const class Forall>(
-            Vars,
-            makeBinOp(
-                "=>", makeOp(InvName, PreCondArgs),
-                stepLoopBlock(
-                    CurrentBB, LoopInfo_1, PrevCurrentBB, CurrentFunArgs,
-                    [OtherBB, LoopInfo_2, PrevOtherBB, OtherFunArgs, InvName,
-                     PostCondArgs, PrevCurrentBB]() {
-                        return stepLoopBlock(
-                            OtherBB, LoopInfo_2, PrevOtherBB, OtherFunArgs,
-                            [InvName, PostCondArgs]() {
-                                return makeOp(InvName, PostCondArgs);
-                            },
-                            [](const llvm::BasicBlock *, llvm::LoopInfo *,
-                               const llvm::BasicBlock *) mutable {
-                                return name("true"); // we only allow
-                                                     // simultanous loop
-                                                     // stepping for now
-                            });
-                    },
-                    [OtherBB, LoopInfo_2, PrevOtherBB, Funs, CurrentFunArgs,
-                     OtherFunArgs, Program](
-                        const llvm::BasicBlock *NewCurrentBB,
-                        llvm::LoopInfo *NewLoopInfo_1,
-                        const llvm::BasicBlock *NewPrevCurrentBB) mutable {
-                        return stepLoopBlock(
-                            OtherBB, LoopInfo_2, PrevOtherBB, OtherFunArgs,
-                            []() { return name("true"); }, // we only allow
-                                                           // simulatnous loop
-                                                           // stepping for now
-                            [Program, Funs, CurrentFunArgs, OtherFunArgs,
-                             NewCurrentBB, NewLoopInfo_1, NewPrevCurrentBB](
-                                const llvm::BasicBlock *NewOtherBB,
-                                llvm::LoopInfo *NewLoopInfo_2,
-                                const llvm::BasicBlock
-                                    *NewPrevOtherBB) mutable {
-                                return walkCFG(NewCurrentBB, NewOtherBB,
-                                               NewLoopInfo_1, NewLoopInfo_2,
-                                               NewPrevCurrentBB, NewPrevOtherBB,
-                                               Program, Funs, CurrentFunArgs,
-                                               OtherFunArgs);
-                            });
-                    })));
-        Clauses.push_back(std::move(Forall));
-        return llvm::make_unique<Op>("and", std::move(Clauses));
-    } else {
-        return makeBinOp("=", "result$1", "result$2");
-    }
-    errs() << "\n---\n\n";
-    return name("DUMMY");
+    auto Defs = instrToDefs(Path.Start, nullptr, true, Program);
+    Clause = nestLets(std::move(Clause), std::move(Defs));
+    return Clause;
 }
 
 std::tuple<std::string, SMTRef> toDef(const llvm::Instruction &Instr,
@@ -630,13 +343,11 @@ std::tuple<std::string, SMTRef> toDef(const llvm::Instruction &Instr,
     return std::make_tuple("UNKNOWN INSTRUCTION", name("UNKNOWN ARGS"));
 }
 
-std::vector<const llvm::PHINode *> extractPhiNodes(const llvm::Loop &Loop) {
-    std::vector<const llvm::PHINode *> PhiNodes;
-    for (auto &BB : Loop.getBlocks()) {
-        for (auto &Inst : *BB) {
-            if (auto PhiNode = llvm::dyn_cast<llvm::PHINode>(&Inst)) {
-                PhiNodes.push_back(PhiNode);
-            }
+std::vector<std::string> extractPhiNodes(llvm::BasicBlock &BB) {
+    std::vector<std::string> PhiNodes;
+    for (auto &Inst : BB) {
+        if (auto PhiNode = llvm::dyn_cast<llvm::PHINode>(&Inst)) {
+            PhiNodes.push_back(PhiNode->getName());
         }
     }
     return PhiNodes;
@@ -656,7 +367,15 @@ std::string getOpName(const llvm::BinaryOperator &Op) {
 std::string getPredName(llvm::CmpInst::Predicate Pred) {
     switch (Pred) {
     case CmpInst::ICMP_SLT:
+        return "<";
+    case CmpInst::ICMP_SLE:
         return "<=";
+    case CmpInst::ICMP_EQ:
+        return "=";
+    case CmpInst::ICMP_SGE:
+        return ">=";
+    case CmpInst::ICMP_SGT:
+        return ">";
     default:
         return "unsupported predicate";
     }
@@ -674,28 +393,6 @@ int swapIndex(int i) {
     return i == 1 ? 2 : 1;
 }
 
-void calcInvArgs(std::vector<const llvm::PHINode *> PhiNodes,
-                 std::vector<std::string> &PreCondArgs,
-                 std::vector<std::string> &InitialArgs,
-                 std::vector<std::string> &PostCondArgs,
-                 const llvm::Loop *Loop) {
-    for (auto PhiNode : PhiNodes) {
-        // Variable name
-        PreCondArgs.push_back(PhiNode->getName());
-        for (auto I = PhiNode->block_begin(), E = PhiNode->block_end(); I != E;
-             ++I) {
-            if (!Loop->contains(*I)) {
-                // Find initial value
-                InitialArgs.push_back(
-                    getInstrNameOrValue(PhiNode->getIncomingValueForBlock(*I)));
-            } else {
-                PostCondArgs.push_back(
-                    getInstrNameOrValue(PhiNode->getIncomingValueForBlock(*I)));
-            }
-        }
-    }
-}
-
 SMTRef nestLets(SMTRef Clause,
                 std::vector<std::tuple<std::string, SMTRef>> Defs) {
     SMTRef Lets = std::move(Clause);
@@ -709,7 +406,7 @@ SMTRef nestLets(SMTRef Clause,
 
 std::vector<std::tuple<std::string, SMTRef>>
 instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB,
-            bool Loop) {
+            bool IgnorePhis, int Program) {
     std::vector<std::tuple<std::string, SMTRef>> Defs;
     assert(BB->size() >=
            1); // There should be at least a terminator instruction
@@ -718,9 +415,55 @@ instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB,
         assert(!Instr->getType()->isVoidTy());
         // Ignore phi nodes if we are in a loop as they're bound in a
         // forall quantifier
-        if (!Loop || !llvm::isa<llvm::PHINode>(Instr)) {
+        if (!IgnorePhis || !llvm::isa<llvm::PHINode>(Instr)) {
             Defs.push_back(toDef(*Instr, PrevBB));
         }
     }
+    if (auto RetInst = llvm::dyn_cast<llvm::ReturnInst>(BB->getTerminator())) {
+        Defs.push_back(
+            std::make_tuple("result$" + std::to_string(Program),
+                            name(RetInst->getReturnValue()->getName())));
+    }
     return Defs;
+}
+
+SMTRef invariant(int BlockIndex, llvm::BasicBlock &BB_1, llvm::BasicBlock &BB_2,
+                 llvm::Function &Fun) {
+    if (BlockIndex == -2) {
+        return makeBinOp("=", "result$1", "result$2");
+    }
+    auto Args = extractArgs(BB_1, BB_2, Fun);
+    return makeOp(invName(BlockIndex), Args);
+}
+
+std::vector<std::string> extractArgs(llvm::BasicBlock &BB_1,
+                                     llvm::BasicBlock &BB_2,
+                                     llvm::Function &Fun) {
+    std::vector<std::string> Args;
+    for (auto &Arg : Fun.getArgumentList()) {
+        Args.push_back(Arg.getName());
+    }
+    auto PhiNodes_1 = extractPhiNodes(BB_1);
+    auto PhiNodes_2 = extractPhiNodes(BB_2);
+    Args.insert(Args.end(), PhiNodes_1.begin(), PhiNodes_1.end());
+    Args.insert(Args.end(), PhiNodes_2.begin(), PhiNodes_2.end());
+    return Args;
+}
+
+std::string invName(int Index) {
+    if (Index == -1) {
+        return "INV_ENTRY";
+    }
+    return "INV_" + std::to_string(Index);
+}
+
+SMTRef wrapForall(SMTRef Clause, int BlockIndex, llvm::BasicBlock &BB_1,
+                  llvm::BasicBlock &BB_2, llvm::Function &Fun) {
+    auto Args = extractArgs(BB_1, BB_2, Fun);
+    std::vector<SortedVar> Vars;
+    for (auto &Arg : Args) {
+        // TODO: detect type
+        Vars.push_back(SortedVar(Arg, "Int"));
+    }
+    return llvm::make_unique<Forall>(Vars, makeBinOp("=>", invariant(BlockIndex, BB_1, BB_2, Fun), Clause));
 }

@@ -8,6 +8,7 @@
 #include <sstream>
 #include <string>
 
+using std::shared_ptr;
 using std::unique_ptr;
 
 using SExpr = const sexpr::SExpr<std::string>;
@@ -21,7 +22,7 @@ class SMTExpr {
     SMTExpr() = default;
 };
 
-using SMTRef = unique_ptr<const SMTExpr>;
+using SMTRef = shared_ptr<const SMTExpr>;
 
 class SetLogic : public SMTExpr {
   public:

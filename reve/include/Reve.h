@@ -1,6 +1,7 @@
 #ifndef REVE_H
 #define REVE_H
 
+#include "PathAnalysis.h"
 #include "SMT.h"
 
 #include "clang/CodeGen/CodeGenAction.h"
@@ -33,41 +34,24 @@ auto getCodeGenAction(const llvm::opt::ArgStringList &CCArgs,
 auto convertToSMT(llvm::Function &Mod1, llvm::Function &Mod2,
                   std::unique_ptr<llvm::FunctionAnalysisManager> FAM_1,
                   std::unique_ptr<llvm::FunctionAnalysisManager> FAM_2) -> void;
-auto walkCFG(const llvm::BasicBlock *CurrentBB, const llvm::BasicBlock *OtherBB,
-             llvm::LoopInfo *LoopInfo_1, llvm::LoopInfo *LoopInfo_2,
-             const llvm::BasicBlock *PrevCurrentBB,
-             const llvm::BasicBlock *PrevOtherBB, int Program,
-             std::vector<size_t> &Funs, std::vector<std::string> CurrentFunArgs,
-             std::vector<std::string> OtherFunArgs) -> SMTRef;
-auto stepCFG(const llvm::BasicBlock *CurrentBB, const llvm::BasicBlock *OtherBB,
-             llvm::LoopInfo *LoopInfo_1, llvm::LoopInfo *LoopInfo_2,
-             const llvm::BasicBlock *PrevCurrentBB,
-             const llvm::BasicBlock *PrevOtherBB, int Program,
-             std::vector<size_t> &Funs, std::vector<std::string> CurrentFunArgs,
-             std::vector<std::string> OtherFunArgs) -> SMTRef;
-auto calcInvArgs(std::vector<const llvm::PHINode *> PhiNodes,
-                 std::vector<std::string> &PreCondArgs,
-                 std::vector<std::string> &InitialArgs,
-                 std::vector<std::string> &PostCondArgs, const llvm::Loop *Loop)
-    -> void;
-auto stepLoopBlock(
-    const llvm::BasicBlock *CurrentBB, llvm::LoopInfo *LoopInfo,
-    const llvm::BasicBlock *PrevCurrentBB,
-    std::vector<std::string> CurrentFunArgs,
-    std::function<SMTRef()> InvariantCont,
-    std::function<SMTRef(const llvm::BasicBlock *BB, llvm::LoopInfo *LoopInfo,
-                         const llvm::BasicBlock *PrevBB)> ExitCont) -> SMTRef;
 auto toDef(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB)
     -> std::tuple<std::string, SMTRef>;
 auto getPredName(const llvm::CmpInst::Predicate Pred) -> std::string;
 auto getInstrNameOrValue(const llvm::Value *Val) -> std::string;
-auto extractPhiNodes(const llvm::Loop &Loop)
-    -> std::vector<const llvm::PHINode *>;
+auto extractPhiNodes(llvm::BasicBlock &BB) -> std::vector<std::string>;
+auto invariant(int BlockIndex, llvm::BasicBlock &BB_1, llvm::BasicBlock &BB_2,
+               llvm::Function &Fun) -> SMTRef;
 auto getOpName(const llvm::BinaryOperator &Op) -> std::string;
 auto swapIndex(int i) -> int;
 auto nestLets(SMTRef Clause, std::vector<std::tuple<std::string, SMTRef>> Defs)
     -> SMTRef;
-auto instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB, bool Loop)
+auto instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB,
+                 bool IgnorePhis, int Program)
     -> std::vector<std::tuple<std::string, SMTRef>>;
-
+auto pathToSMT(Path Path, SMTRef EndClause, int Program) -> SMTRef;
+auto invName(int Index) -> std::string;
+auto wrapForall(SMTRef Clause, int BlockIndex, llvm::BasicBlock &BB_1,
+                llvm::BasicBlock &BB_2, llvm::Function &Fun) -> SMTRef;
+auto extractArgs(llvm::BasicBlock &BB_1, llvm::BasicBlock &BB_2,
+                 llvm::Function &Fun) -> std::vector<std::string>;
 #endif // REVE_H
