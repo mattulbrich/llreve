@@ -7,7 +7,10 @@
 
 #include <sstream>
 #include <string>
+#include <set>
 
+using std::set;
+using std::string;
 using std::shared_ptr;
 using std::unique_ptr;
 
@@ -17,6 +20,7 @@ using SExprRef = unique_ptr<SExpr>;
 class SMTExpr {
   public:
     virtual SExprRef toSExpr() const = 0;
+    virtual set<string> uses() const = 0;
     virtual ~SMTExpr();
     SMTExpr(const SMTExpr &Expr) = default;
     SMTExpr() = default;
@@ -28,6 +32,7 @@ class SetLogic : public SMTExpr {
   public:
     explicit SetLogic(std::string Logic_) : Logic(Logic_) {}
     SExprRef toSExpr() const override;
+    set<string> uses() const override;
     std::string Logic;
 };
 
@@ -36,6 +41,7 @@ class Assert : public SMTExpr {
     explicit Assert(SMTRef Expr_) : Expr(Expr_) {}
     SMTRef Expr;
     SExprRef toSExpr() const override;
+    set<string> uses() const override;
 };
 
 class SortedVar : public SMTExpr {
@@ -45,6 +51,7 @@ class SortedVar : public SMTExpr {
     const std::string Name;
     const std::string Type;
     SExprRef toSExpr() const override;
+    set<string> uses() const override;
 };
 
 class Forall : public SMTExpr {
@@ -54,16 +61,19 @@ class Forall : public SMTExpr {
     SExprRef toSExpr() const override;
     std::vector<SortedVar> Vars;
     SMTRef Expr;
+    set<string> uses() const override;
 };
 
 class CheckSat : public SMTExpr {
   public:
     SExprRef toSExpr() const override;
+    set<string> uses() const override;
 };
 
 class GetModel : public SMTExpr {
   public:
     SExprRef toSExpr() const override;
+    set<string> uses() const override;
 };
 
 class Let : public SMTExpr {
@@ -73,6 +83,7 @@ class Let : public SMTExpr {
     SMTRef Expr;
     Let(std::vector<std::tuple<std::string, SMTRef>> Defs_, SMTRef Expr_)
         : Defs(Defs_), Expr(Expr_) {}
+    set<string> uses() const override;
 };
 
 template <typename T> class Primitive : public SMTExpr {
@@ -84,6 +95,9 @@ template <typename T> class Primitive : public SMTExpr {
         return llvm::make_unique<sexpr::Value<std::string>>(SStream.str());
     }
     const T Val;
+    set<string> uses() const override {
+        return set<string>();
+    }
 };
 
 class Op : public SMTExpr {
@@ -93,6 +107,7 @@ class Op : public SMTExpr {
     std::string OpName;
     std::vector<SMTRef> Args;
     SExprRef toSExpr() const override;
+    set<string> uses() const override;
 };
 
 auto makeBinOp(std::string OpName, std::string Arg_1, std::string Arg_2)
@@ -113,6 +128,7 @@ class Fun : public SMTExpr {
     std::vector<std::string> InTypes;
     std::string OutType;
     SExprRef toSExpr() const override;
+    set<string> uses() const override;
 };
 
 #endif // SMT_H

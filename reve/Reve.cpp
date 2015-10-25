@@ -62,10 +62,10 @@ using std::make_shared;
 using std::string;
 using std::placeholders::_1;
 
-static llvm::cl::opt<std::string> FileName1(llvm::cl::Positional,
+static llvm::cl::opt<string> FileName1(llvm::cl::Positional,
                                             llvm::cl::desc("Input file 1"),
                                             llvm::cl::Required);
-static llvm::cl::opt<std::string> FileName2(llvm::cl::Positional,
+static llvm::cl::opt<string> FileName2(llvm::cl::Positional,
                                             llvm::cl::desc("Input file 2"),
                                             llvm::cl::Required);
 
@@ -73,7 +73,7 @@ static llvm::cl::opt<std::string> FileName2(llvm::cl::Positional,
 /// the two C files
 template <int N>
 llvm::SmallVector<const char *, N>
-initializeArgs(const char *ExeName, std::string Input1, std::string Input2) {
+initializeArgs(const char *ExeName, string Input1, string Input2) {
     llvm::SmallVector<const char *, N> Args;
     Args.push_back(ExeName);        // add executable name
     Args.push_back("-xc");          // force language to C
@@ -96,7 +96,7 @@ unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
 
 /// Initialize the driver
 unique_ptr<Driver> initializeDriver(DiagnosticsEngine &Diags) {
-    std::string TripleStr = llvm::sys::getProcessTriple();
+    string TripleStr = llvm::sys::getProcessTriple();
     llvm::Triple Triple(TripleStr);
     // TODO: Find the correct path instead of hardcoding it
     auto Driver = llvm::make_unique<clang::driver::Driver>("/usr/bin/clang",
@@ -135,7 +135,7 @@ template <typename T> ErrorOr<T> makeErrorOr(T Arg) { return ErrorOr<T>(Arg); }
 
 /// Compile the inputs to llvm assembly and return those modules
 std::tuple<unique_ptr<clang::CodeGenAction>, unique_ptr<clang::CodeGenAction>>
-getModule(const char *ExeName, std::string Input1, std::string Input2) {
+getModule(const char *ExeName, string Input1, string Input2) {
     auto Diags = initializeDiagnostics();
     auto Driver = initializeDriver(*Diags);
     auto Args = initializeArgs<16>(ExeName, Input1, Input2);
@@ -220,7 +220,7 @@ int main(int Argc, const char **Argv) {
 }
 
 unique_ptr<llvm::FunctionAnalysisManager> preprocessModule(llvm::Function &Fun,
-                                                           std::string Prefix) {
+                                                           string Prefix) {
     llvm::PassBuilder PB;
     auto FAM = llvm::make_unique<llvm::FunctionAnalysisManager>(
         true);                         // enable debug log
@@ -265,7 +265,7 @@ void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
     auto PathMap_2 = FAM_2->getResult<PathAnalysis>(Fun_2);
     auto Marked_1 = FAM_1->getResult<MarkAnalysis>(Fun_1);
     auto Marked_2 = FAM_2->getResult<MarkAnalysis>(Fun_2);
-    std::map<int, std::set<std::string>> FreeVarsMap =
+    std::map<int, set<string>> FreeVarsMap =
         freeVarsMap(PathMap_1, PathMap_2);
     std::vector<SMTRef> SMTExprs;
     std::vector<SMTRef> PathExprs;
@@ -345,7 +345,7 @@ SMTRef pathToSMT(Path Path, SMTRef EndClause, int Program) {
     return Clause;
 }
 
-std::tuple<std::string, SMTRef> toDef(const llvm::Instruction &Instr,
+std::tuple<string, SMTRef> toDef(const llvm::Instruction &Instr,
                                       const llvm::BasicBlock *PrevBB) {
     if (auto BinOp = llvm::dyn_cast<llvm::BinaryOperator>(&Instr)) {
         return std::make_tuple(
@@ -378,8 +378,8 @@ std::tuple<std::string, SMTRef> toDef(const llvm::Instruction &Instr,
     return std::make_tuple("UNKNOWN INSTRUCTION", name("UNKNOWN ARGS"));
 }
 
-std::vector<std::string> extractPhiNodes(llvm::BasicBlock &BB) {
-    std::vector<std::string> PhiNodes;
+std::vector<string> extractPhiNodes(llvm::BasicBlock &BB) {
+    std::vector<string> PhiNodes;
     for (auto &Inst : BB) {
         if (auto PhiNode = llvm::dyn_cast<llvm::PHINode>(&Inst)) {
             PhiNodes.push_back(PhiNode->getName());
@@ -388,7 +388,7 @@ std::vector<std::string> extractPhiNodes(llvm::BasicBlock &BB) {
     return PhiNodes;
 }
 
-std::string getOpName(const llvm::BinaryOperator &Op) {
+string getOpName(const llvm::BinaryOperator &Op) {
     switch (Op.getOpcode()) {
     case Instruction::Add:
         return "+";
@@ -399,7 +399,7 @@ std::string getOpName(const llvm::BinaryOperator &Op) {
     }
 }
 
-std::string getPredName(llvm::CmpInst::Predicate Pred) {
+string getPredName(llvm::CmpInst::Predicate Pred) {
     switch (Pred) {
     case CmpInst::ICMP_SLT:
         return "<";
@@ -434,20 +434,31 @@ int swapIndex(int i) {
 }
 
 SMTRef nestLets(SMTRef Clause,
-                std::vector<std::tuple<std::string, SMTRef>> Defs) {
+                std::vector<std::tuple<string, SMTRef>> Defs) {
     SMTRef Lets = Clause;
+    set<string> Uses;
+    std::vector<std::tuple<string, SMTRef>> DefsAccum;
     for (auto I = Defs.rbegin(), E = Defs.rend(); I != E; ++I) {
-        std::vector<std::tuple<std::string, SMTRef>> Def;
-        Def.push_back(*I);
-        Lets = llvm::make_unique<const Let>(Def, Lets);
+        if (Uses.find(std::get<0>(*I)) != Uses.end()) {
+            Lets = llvm::make_unique<const Let>(DefsAccum, Lets);
+            Uses = set<string>();
+            DefsAccum = std::vector<std::tuple<string, SMTRef>>();
+        }
+        DefsAccum.insert(DefsAccum.begin(), *I);
+        for (auto Use : std::get<1>(*I)->uses()) {
+            Uses.insert(Use);
+        }
+    }
+    if (!DefsAccum.empty()) {
+        Lets = llvm::make_unique<const Let>(DefsAccum, Lets);
     }
     return Lets;
 }
 
-std::vector<std::tuple<std::string, SMTRef>>
+std::vector<std::tuple<string, SMTRef>>
 instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB,
             bool IgnorePhis, int Program) {
-    std::vector<std::tuple<std::string, SMTRef>> Defs;
+    std::vector<std::tuple<string, SMTRef>> Defs;
     assert(BB->size() >=
            1); // There should be at least a terminator instruction
     for (auto Instr = BB->begin(), E = std::prev(BB->end(), 1); Instr != E;
@@ -467,22 +478,22 @@ instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB,
     return Defs;
 }
 
-SMTRef invariant(int BlockIndex, std::set<std::string> Args) {
+SMTRef invariant(int BlockIndex, set<string> Args) {
     if (BlockIndex == -2) {
         return makeBinOp("=", "result$1", "result$2");
     }
-    std::vector<std::string> ArgsVect;
+    std::vector<string> ArgsVect;
     ArgsVect.insert(ArgsVect.begin(), Args.begin(), Args.end());
     return makeOp(invName(BlockIndex), ArgsVect);
 }
 
-SMTRef invariantDef(int BlockIndex, std::set<std::string> FreeVars) {
-    std::vector<std::string> Args(FreeVars.size(), "Int");
+SMTRef invariantDef(int BlockIndex, set<string> FreeVars) {
+    std::vector<string> Args(FreeVars.size(), "Int");
 
     return std::make_shared<class Fun>(invName(BlockIndex), Args, "Bool");
 }
 
-std::string invName(int Index) {
+string invName(int Index) {
     if (Index == -1) {
         return "INV_ENTRY";
     }
@@ -490,7 +501,7 @@ std::string invName(int Index) {
 }
 
 SMTRef wrapForall(SMTRef Clause, int BlockIndex,
-                  std::set<std::string> FreeVars) {
+                  set<string> FreeVars) {
     std::vector<SortedVar> Vars;
     for (auto &Arg : FreeVars) {
         // TODO: detect type
@@ -503,15 +514,15 @@ SMTRef wrapForall(SMTRef Clause, int BlockIndex,
     return llvm::make_unique<Forall>(Vars, Clause);
 }
 
-std::set<std::string> freeVars(std::map<int, Paths> PathMap) {
-    std::set<std::string> FreeVars;
+set<string> freeVars(std::map<int, Paths> PathMap) {
+    set<string> FreeVars;
     for (auto &Paths : PathMap) {
         for (auto &Path : Paths.second) {
             auto PhiNodes = extractPhiNodes(*Path.Start);
             for (auto &PhiNode : PhiNodes) {
                 FreeVars.insert(PhiNode);
             }
-            std::set<std::string> Constructed;
+            set<string> Constructed;
             for (auto &Edge : Path.Edges) {
                 for (auto &Instr : *Edge.Block) {
                     Constructed.insert(Instr.getName());
@@ -532,17 +543,17 @@ std::set<std::string> freeVars(std::map<int, Paths> PathMap) {
     return FreeVars;
 }
 
-std::map<int, std::set<std::string>> freeVarsMap(PathMap Map_1, PathMap Map_2) {
-    std::map<int, std::set<std::string>> FreeVarsMap;
+std::map<int, set<string>> freeVarsMap(PathMap Map_1, PathMap Map_2) {
+    std::map<int, set<string>> FreeVarsMap;
     for (auto &It : Map_1) {
         int Index = It.first;
         auto FreeVars_1 = freeVars(Map_1.at(Index));
         auto FreeVars_2 = freeVars(Map_2.at(Index));
-        std::set<std::string> FreeVars;
-        std::set_union(FreeVars_1.begin(), FreeVars_1.end(), FreeVars_2.begin(),
+        set<string> FreeVars;
+        set_union(FreeVars_1.begin(), FreeVars_1.end(), FreeVars_2.begin(),
                        FreeVars_2.end(), inserter(FreeVars, FreeVars.begin()));
         FreeVarsMap.insert(make_pair(Index, FreeVars));
     }
-    FreeVarsMap.insert(make_pair(-2, std::set<std::string>()));
+    FreeVarsMap.insert(make_pair(-2, set<string>()));
     return FreeVarsMap;
 }

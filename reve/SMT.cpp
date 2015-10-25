@@ -24,21 +24,29 @@ SExprRef SetLogic::toSExpr() const {
     return make_unique<Apply<std::string>>("set-logic", std::move(Args));
 }
 
+set<string> SetLogic::uses() const { return set<string>(); }
+
 SExprRef CheckSat::toSExpr() const {
     std::vector<SExprRef> Args;
     return make_unique<Apply<std::string>>("check-sat", std::move(Args));
 }
+
+set<string> CheckSat::uses() const { return set<string>(); }
 
 SExprRef GetModel::toSExpr() const {
     std::vector<SExprRef> Args;
     return make_unique<Apply<std::string>>("get-model", std::move(Args));
 }
 
+set<string> GetModel::uses() const { return set<string>(); }
+
 SExprRef Assert::toSExpr() const {
     std::vector<SExprRef> Args;
     Args.push_back(Expr->toSExpr());
     return make_unique<Apply<std::string>>("assert", std::move(Args));
 }
+
+set<string> Assert::uses() const { return Expr->uses(); }
 
 SExprRef Forall::toSExpr() const {
     std::vector<SExprRef> Args;
@@ -51,10 +59,17 @@ SExprRef Forall::toSExpr() const {
     return make_unique<Apply<std::string>>("forall", std::move(Args));
 }
 
+set<string> Forall::uses() const { return Expr->uses(); }
+
 SExprRef SortedVar::toSExpr() const {
     std::vector<SExprRef> Type_;
     Type_.push_back(make_unique<const Value<std::string>>(Type));
     return make_unique<Apply<std::string>>(Name, std::move(Type_));
+}
+
+set<string> SortedVar::uses() const {
+    set<string> Uses = {Name};
+    return Uses;
 }
 
 SExprRef Let::toSExpr() const {
@@ -71,6 +86,19 @@ SExprRef Let::toSExpr() const {
     return make_unique<Apply<std::string>>("let", std::move(Args));
 }
 
+set<string> Let::uses() const {
+    set<string> Uses;
+    for (auto Def : Defs) {
+        for (auto Use : std::get<1>(Def)->uses()) {
+            Uses.insert(Use);
+        }
+    }
+    for (auto Use : Expr->uses()) {
+        Uses.insert(Use);
+    }
+    return Uses;
+}
+
 SExprRef Op::toSExpr() const {
     std::vector<SExprRef> Args_;
     for (auto &Arg : Args) {
@@ -79,7 +107,18 @@ SExprRef Op::toSExpr() const {
     return make_unique<Apply<std::string>>(OpName, std::move(Args_));
 }
 
-std::shared_ptr<Op> makeBinOp(std::string OpName, std::string Arg_1, std::string Arg_2) {
+set<string> Op::uses() const {
+    set<string> Uses;
+    for (auto Arg : Args) {
+        for (auto Use : Arg->uses()) {
+            Uses.insert(Use);
+        }
+    }
+    return Uses;
+}
+
+std::shared_ptr<Op> makeBinOp(std::string OpName, std::string Arg_1,
+                              std::string Arg_2) {
     std::vector<SMTRef> Args;
     Args.push_back(name(Arg_1));
     Args.push_back(name(Arg_2));
@@ -127,4 +166,14 @@ SExprRef Fun::toSExpr() const {
     Args.push_back(make_unique<List<std::string>>(std::move(InTypes_)));
     Args.push_back(name(OutType)->toSExpr());
     return make_unique<Apply<std::string>>("declare-fun", std::move(Args));
+}
+
+set<string> Fun::uses() const {
+    return set<string>();
+}
+
+template <> set<string> Primitive<string>::uses() const {
+    set<string> Uses;
+    Uses.insert(Val);
+    return Uses;
 }
