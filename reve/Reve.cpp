@@ -265,45 +265,21 @@ void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
     auto PathMap_2 = FAM_2->getResult<PathAnalysis>(Fun_2);
     auto Marked_1 = FAM_1->getResult<MarkAnalysis>(Fun_1);
     auto Marked_2 = FAM_2->getResult<MarkAnalysis>(Fun_2);
-    std::map<int, std::set<std::string>> FreeVarsMap;
+    std::map<int, std::set<std::string>> FreeVarsMap = freeVarsMap(PathMap_1, PathMap_2);
     std::vector<SMTRef> SMTExprs;
-    SMTExprs.push_back(std::make_shared<SetLogic>("HORN"));
     std::vector<SMTRef> PathExprs;
+
+    SMTExprs.push_back(std::make_shared<SetLogic>("HORN"));
+
     for (auto &PathMapIt : PathMap_1) {
         int StartIndex = PathMapIt.first;
-
-        {
-            auto FreeVars_1 = freeVars(PathMap_1.at(StartIndex));
-            auto FreeVars_2 = freeVars(PathMap_2.at(StartIndex));
-            std::set<std::string> FreeVars;
-            std::set_union(FreeVars_1.begin(), FreeVars_1.end(),
-                           FreeVars_2.begin(), FreeVars_2.end(),
-                           inserter(FreeVars, FreeVars.begin()));
-            FreeVarsMap.insert(make_pair(StartIndex, FreeVars));
-        }
-
         if (StartIndex != -1) {
             // ignore entry node
             SMTExprs.push_back(
                 invariantDef(StartIndex, FreeVarsMap.at(StartIndex)));
         }
-
         for (auto &InnerPathMapIt : PathMapIt.second) {
             int EndIndex = InnerPathMapIt.first;
-            if (FreeVarsMap.find(EndIndex) == FreeVarsMap.end()) {
-                if (EndIndex == -2) {
-                    FreeVarsMap.insert(
-                        make_pair(EndIndex, std::set<std::string>()));
-                } else {
-                    auto FreeVars_1 = freeVars(PathMap_1.at(EndIndex));
-                    auto FreeVars_2 = freeVars(PathMap_2.at(EndIndex));
-                    std::set<std::string> FreeVars;
-                    std::set_union(FreeVars_1.begin(), FreeVars_1.end(),
-                                   FreeVars_2.begin(), FreeVars_2.end(),
-                                   inserter(FreeVars, FreeVars.begin()));
-                    FreeVarsMap.insert(make_pair(EndIndex, FreeVars));
-                }
-            }
             auto Paths = PathMap_2.at(StartIndex).at(EndIndex);
             for (auto &Path_1 : InnerPathMapIt.second) {
                 for (auto &Path_2 : Paths) {
@@ -317,7 +293,9 @@ void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
             }
         }
     }
+
     SMTExprs.insert(SMTExprs.end(), PathExprs.begin(), PathExprs.end());
+
     for (auto &SMT : SMTExprs) {
         std::cout << *SMT->toSExpr();
         std::cout << "\n";
@@ -528,4 +506,20 @@ std::set<std::string> freeVars(std::map<int, Paths> PathMap) {
         }
     }
     return FreeVars;
+}
+
+std::map<int, std::set<std::string>> freeVarsMap(PathMap Map_1, PathMap Map_2) {
+    std::map<int, std::set<std::string>> FreeVarsMap;
+    for (auto &It : Map_1) {
+        int Index = It.first;
+        auto FreeVars_1 = freeVars(Map_1.at(Index));
+        auto FreeVars_2 = freeVars(Map_2.at(Index));
+        std::set<std::string> FreeVars;
+        std::set_union(FreeVars_1.begin(), FreeVars_1.end(),
+                       FreeVars_2.begin(), FreeVars_2.end(),
+                       inserter(FreeVars, FreeVars.begin()));
+        FreeVarsMap.insert(make_pair(Index, FreeVars));
+    }
+    FreeVarsMap.insert(make_pair(-2, std::set<std::string>()));
+    return FreeVarsMap;
 }

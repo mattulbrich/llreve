@@ -53,4 +53,5 @@ auto wrapForall(SMTRef Clause, int BlockIndex, std::set<std::string> FreeVars)
     -> SMTRef;
 auto invariantDef(int BlockIndex, std::set<std::string> FreeVars) -> SMTRef;
 auto freeVars(std::map<int, Paths> Paths) -> std::set<std::string>;
+auto freeVarsMap(PathMap Map_1, PathMap Map_2) -> std::map<int, std::set<std::string>>;
 #endif // REVE_H
