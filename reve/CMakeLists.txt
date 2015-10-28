@@ -14,15 +14,9 @@ message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 include_directories(${LLVM_INCLUDE_DIRS} include)
 add_definitions(${LLVM_DEFINITIONS})
 
-add_executable(reve
-  Reve.cpp
-  UniqueNamePass.cpp MarkAnalysis.cpp
-  AnnotStackPass.cpp Mem2Reg.cpp
-  CFGPrinter.cpp
-  MarkAnalysis.cpp RemoveMarkPass.cpp
-  UnifyFunctionExitNodes.cpp
-  PathAnalysis.cpp
-  SMT.cpp SExpr.cpp)
+file(GLOB sources *.cpp)
+
+add_executable(reve ${sources})
 
 llvm_map_components_to_libnames(llvm_libs
   bitwriter
