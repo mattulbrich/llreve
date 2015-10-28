@@ -35,32 +35,16 @@ llvm_map_components_to_libnames(llvm_libs
   )
 
 target_link_libraries(reve
-  -Wl,--start-group
-  # clang
-  # clangARCMigrate
+  clangFrontend
+  clangDriver
+  clangSerialization
+  clangCodeGen
+  clangParse
+  clangSema
   clangAST
-  # clangASTMatchers
   clangAnalysis
   clangBasic
-  clangCodeGen
-  clangDriver
-  # clangDynamicASTMatchers
   clangEdit
-  # clangFormat
-  clangFrontend
-  # clangFrontendTool
-  # clangIndex
   clangLex
-  clangParse
-  # clangRewrite
-  # clangRewriteFrontend
-  clangSema
-  clangSerialization
-  # clangStaticAnalyzerCheckers
-  # clangStaticAnalyzerCore
-  # clangStaticAnalyzerFrontend
-  # clangTooling
-  # clangToolingCore
   ${llvm_libs}
- -Wl,--end-group
   )
