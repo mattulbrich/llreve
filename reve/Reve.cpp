@@ -514,8 +514,10 @@ SMTRef wrapForall(SMTRef Clause, int BlockIndex, set<string> FreeVars) {
     return llvm::make_unique<Forall>(Vars, Clause);
 }
 
-set<string> freeVars(std::map<int, Paths> PathMap) {
+std::pair<set<string>, set<string>> freeVars(std::map<int, Paths> PathMap) {
     set<string> FreeVars;
+    set<string> ConstructedIntersection;
+    bool First = true;
     for (auto &Paths : PathMap) {
         for (auto &Path : Paths.second) {
             set<string> Constructed;
@@ -552,21 +554,40 @@ set<string> freeVars(std::map<int, Paths> PathMap) {
                     }
                 }
             }
+
+            set<string> NewConstructedIntersection;
+            if (First) {
+                ConstructedIntersection = Constructed;
+            } else {
+                std::set_intersection(
+                    Constructed.begin(), Constructed.end(),
+                    ConstructedIntersection.begin(),
+                    ConstructedIntersection.end(),
+                    inserter(NewConstructedIntersection,
+                             NewConstructedIntersection.begin()));
+                ConstructedIntersection = NewConstructedIntersection;
+            }
+            First = false;
         }
     }
-    return FreeVars;
+    return std::make_pair(FreeVars, ConstructedIntersection);
 }
 
 std::map<int, set<string>> freeVarsMap(PathMap Map_1, PathMap Map_2) {
     std::map<int, set<string>> FreeVarsMap;
+    std::map<int, set<string>> Constructed;
     for (auto &It : Map_1) {
         int Index = It.first;
         auto FreeVars_1 = freeVars(Map_1.at(Index));
         auto FreeVars_2 = freeVars(Map_2.at(Index));
-        set<string> FreeVars;
-        set_union(FreeVars_1.begin(), FreeVars_1.end(), FreeVars_2.begin(),
-                  FreeVars_2.end(), inserter(FreeVars, FreeVars.begin()));
-        FreeVarsMap.insert(make_pair(Index, FreeVars));
+        for (auto Var : FreeVars_2.first) {
+            FreeVars_1.first.insert(Var);
+        }
+        FreeVarsMap.insert(make_pair(Index, FreeVars_1.first));
+        for (auto Var : FreeVars_2.second) {
+            FreeVars_1.second.insert(Var);
+        }
+        Constructed.insert(make_pair(Index, FreeVars_1.second));
     }
     FreeVarsMap.insert(make_pair(-2, set<string>()));
 
@@ -580,8 +601,11 @@ std::map<int, set<string>> freeVarsMap(PathMap Map_1, PathMap Map_2) {
             for (auto &ItInner : It.second) {
                 int EndIndex = ItInner.first;
                 for (auto Var : FreeVarsMap.at(EndIndex)) {
-                    auto Inserted = FreeVarsMap.at(StartIndex).insert(Var);
-                    changed = Inserted.second;
+                    if (Constructed.at(StartIndex).find(Var) ==
+                        Constructed.at(StartIndex).end()) {
+                        auto Inserted = FreeVarsMap.at(StartIndex).insert(Var);
+                        changed = Inserted.second;
+                    }
                 }
             }
         }
