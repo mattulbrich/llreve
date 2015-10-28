@@ -569,5 +569,23 @@ std::map<int, set<string>> freeVarsMap(PathMap Map_1, PathMap Map_2) {
         FreeVarsMap.insert(make_pair(Index, FreeVars));
     }
     FreeVarsMap.insert(make_pair(-2, set<string>()));
+
+    // search for a least fixpoint
+    // don't tell anyone I wrote that
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (auto &It : Map_1) {
+            int StartIndex = It.first;
+            for (auto &ItInner : It.second) {
+                int EndIndex = ItInner.first;
+                for (auto Var : FreeVarsMap.at(EndIndex)) {
+                    auto Inserted = FreeVarsMap.at(StartIndex).insert(Var);
+                    changed = Inserted.second;
+                }
+            }
+        }
+    }
+
     return FreeVarsMap;
 }
