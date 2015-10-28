@@ -37,6 +37,7 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
 
+#include <fstream>
 #include <iostream>
 #include <tuple>
 
@@ -68,6 +69,9 @@ static llvm::cl::opt<string> FileName1(llvm::cl::Positional,
 static llvm::cl::opt<string> FileName2(llvm::cl::Positional,
                                        llvm::cl::desc("Input file 2"),
                                        llvm::cl::Required);
+static llvm::cl::opt<string>
+    OutputFileName("o", llvm::cl::desc("SMT output filename"),
+                   llvm::cl::value_desc("filename"));
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
@@ -319,10 +323,25 @@ void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
     SMTExprs.push_back(make_shared<CheckSat>());
     SMTExprs.push_back(make_shared<GetModel>());
 
+    std::streambuf *Buf;
+    std::ofstream OFStream;
+
+    if (!OutputFileName.empty()) {
+        OFStream.open(OutputFileName);
+        Buf = OFStream.rdbuf();
+    } else {
+        Buf = std::cout.rdbuf();
+    }
+
+    std::ostream OutFile(Buf);
+
     for (auto &SMT : SMTExprs) {
-        std::cout << *SMT->compressLets()
-                          ->toSExpr();
-        std::cout << "\n";
+        OutFile << *SMT->compressLets()->toSExpr();
+        OutFile << "\n";
+    }
+
+    if (!OutputFileName.empty()) {
+        OFStream.close();
     }
 }
 
