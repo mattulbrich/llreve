@@ -370,25 +370,34 @@ std::tuple<string, SMTRef> toDef(const llvm::Instruction &Instr,
         return std::make_tuple(
             BinOp->getName(),
             makeBinOp(getOpName(*BinOp),
-                      getInstrNameOrValue(BinOp->getOperand(0)),
-                      getInstrNameOrValue(BinOp->getOperand(1))));
+                      getInstrNameOrValue(BinOp->getOperand(0),
+                                          BinOp->getOperand(0)->getType()),
+                      getInstrNameOrValue(BinOp->getOperand(1),
+                                          BinOp->getOperand(1)->getType())));
     }
     if (auto CmpInst = llvm::dyn_cast<llvm::CmpInst>(&Instr)) {
-        auto Cmp = makeBinOp(getPredName(CmpInst->getPredicate()),
-                             getInstrNameOrValue(CmpInst->getOperand(0)),
-                             getInstrNameOrValue(CmpInst->getOperand(1)));
+        auto Cmp =
+            makeBinOp(getPredName(CmpInst->getPredicate()),
+                      getInstrNameOrValue(CmpInst->getOperand(0),
+                                          CmpInst->getOperand(0)->getType()),
+                      getInstrNameOrValue(CmpInst->getOperand(1),
+                                          CmpInst->getOperand(0)->getType()));
         return std::make_tuple(CmpInst->getName(), Cmp);
     }
     if (auto PhiInst = llvm::dyn_cast<llvm::PHINode>(&Instr)) {
         auto Val = PhiInst->getIncomingValueForBlock(PrevBB);
         assert(Val);
-        return std::make_tuple(PhiInst->getName(), getInstrNameOrValue(Val));
+        return std::make_tuple(PhiInst->getName(),
+                               getInstrNameOrValue(Val, Val->getType()));
     }
     if (auto SelectInst = llvm::dyn_cast<llvm::SelectInst>(&Instr)) {
+        auto Cond = SelectInst->getCondition();
+        auto TrueVal = SelectInst->getTrueValue();
+        auto FalseVal = SelectInst->getFalseValue();
         std::vector<SMTRef> Args = {
-            getInstrNameOrValue(SelectInst->getCondition()),
-            getInstrNameOrValue(SelectInst->getTrueValue()),
-            getInstrNameOrValue(SelectInst->getFalseValue())};
+            getInstrNameOrValue(Cond, Cond->getType()),
+            getInstrNameOrValue(TrueVal, TrueVal->getType()),
+            getInstrNameOrValue(FalseVal, FalseVal->getType())};
         return std::make_tuple(SelectInst->getName(),
                                std::make_shared<class Op>("ite", Args));
     }
@@ -420,14 +429,19 @@ string getPredName(llvm::CmpInst::Predicate Pred) {
         return ">=";
     case CmpInst::ICMP_SGT:
         return ">";
+    case CmpInst::ICMP_NE:
+        return "distinct";
     default:
         return "unsupported predicate";
     }
 }
 
-SMTRef getInstrNameOrValue(const llvm::Value *Val) {
+SMTRef getInstrNameOrValue(const llvm::Value *Val, const llvm::Type *Ty) {
     if (auto ConstInt = llvm::dyn_cast<llvm::ConstantInt>(Val)) {
         auto ApInt = ConstInt->getValue();
+        if (ApInt.isIntN(1) && Ty->isIntegerTy(1)) {
+            return name(ApInt.getBoolValue() ? "true" : "false");
+        }
         if (ApInt.isNegative()) {
             return makeUnaryOp(
                 "-", name(ApInt.toString(10, 1).substr(1, string::npos)));

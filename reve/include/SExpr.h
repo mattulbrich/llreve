@@ -30,7 +30,7 @@ template <typename T> class Apply : public SExpr<T> {
     void serialize(std::ostream &OS, size_t Indent) const override {
         OS << "(" << Fun;
         std::vector<std::string> AtomicOps = {"+", "-",  "<=", "<",
-                                              ">", ">=", "=",  "not"};
+                                              ">", ">=", "=",  "not", "distinct"};
         std::vector<std::string> ForceIndentOps = {"assert"};
         bool AtomicOp = std::find(AtomicOps.begin(), AtomicOps.end(), Fun) !=
                         AtomicOps.end();
