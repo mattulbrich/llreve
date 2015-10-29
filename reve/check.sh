@@ -6,4 +6,4 @@ make
 ./reve ../../examples/break_1.c ../../examples/break_2.c
 cd ..
 echo "Running clang-tidy"
-clang-tidy -p build *.cpp
+clang-tidy -fix -p build *.cpp

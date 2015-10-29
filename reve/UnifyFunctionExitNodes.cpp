@@ -8,7 +8,7 @@ using llvm::BasicBlock;
 using llvm::Function;
 
 BasicBlock *UnifyFunctionExitNodes::run(llvm::Function &Fun,
-                                        llvm::FunctionAnalysisManager *) {
+                                        llvm::FunctionAnalysisManager * /*unused*/) {
     // Loop over all of the blocks in a function, tracking all of the blocks
     // that
     // return.
@@ -17,11 +17,13 @@ BasicBlock *UnifyFunctionExitNodes::run(llvm::Function &Fun,
     BasicBlock *ReturnBlock = nullptr;
     std::vector<BasicBlock *> ReturningBlocks;
     std::vector<BasicBlock *> UnreachableBlocks;
-    for (Function::iterator I = Fun.begin(), E = Fun.end(); I != E; ++I)
-        if (llvm::isa<llvm::ReturnInst>(I->getTerminator()))
+    for (Function::iterator I = Fun.begin(), E = Fun.end(); I != E; ++I) {
+        if (llvm::isa<llvm::ReturnInst>(I->getTerminator())) {
             ReturningBlocks.push_back(I);
-        else if (llvm::isa<llvm::UnreachableInst>(I->getTerminator()))
+        } else if (llvm::isa<llvm::UnreachableInst>(I->getTerminator())) {
             UnreachableBlocks.push_back(I);
+}
+}
 
     // Then unreachable blocks.
     if (UnreachableBlocks.empty()) {
@@ -46,7 +48,8 @@ BasicBlock *UnifyFunctionExitNodes::run(llvm::Function &Fun,
     if (ReturningBlocks.empty()) {
         ReturnBlock = nullptr;
         return ReturnBlock; // No blocks return
-    } else if (ReturningBlocks.size() == 1) {
+    }
+    if (ReturningBlocks.size() == 1) {
         ReturnBlock =
             ReturningBlocks.front(); // Already has a single return block
         return ReturnBlock;
@@ -82,8 +85,9 @@ BasicBlock *UnifyFunctionExitNodes::run(llvm::Function &Fun,
         // Add an incoming element to the PHI node for every return instruction
         // that
         // is merging into this new block...
-        if (PN)
+        if (PN) {
             PN->addIncoming(BB->getTerminator()->getOperand(0), BB);
+}
 
         BB->getInstList().pop_back(); // Remove the return insn
         llvm::BranchInst::Create(NewRetBlock, BB);

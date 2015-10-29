@@ -2,7 +2,7 @@
 
 #include "AnnotStackPass.h"
 #include "CFGPrinter.h"
-#include "MarkAnalysis.h"
+#include "llvm/IR/PassManager.h"
 #include "Mem2Reg.h"
 #include "PathAnalysis.h"
 #include "RemoveMarkPass.h"
@@ -102,7 +102,7 @@ unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
 unique_ptr<Driver> initializeDriver(DiagnosticsEngine &Diags) {
     string TripleStr = llvm::sys::getProcessTriple();
     llvm::Triple Triple(TripleStr);
-    // TODO: Find the correct path instead of hardcoding it
+    // TODO(moritz): Find the correct path instead of hardcoding it
     auto Driver = llvm::make_unique<clang::driver::Driver>("/usr/bin/clang",
                                                            Triple.str(), Diags);
     Driver->setTitle("reve");
@@ -264,7 +264,7 @@ ErrorOr<llvm::Function &> getFunction(llvm::Module &Mod) {
 void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
                   unique_ptr<llvm::FunctionAnalysisManager> FAM_1,
                   unique_ptr<llvm::FunctionAnalysisManager> FAM_2) {
-    // TODO: check that the marks are the same
+    // TODO(moritz): check that the marks are the same
     auto PathMap_1 = FAM_1->getResult<PathAnalysis>(Fun_1);
     auto PathMap_2 = FAM_2->getResult<PathAnalysis>(Fun_2);
     auto Marked_1 = FAM_1->getResult<MarkAnalysis>(Fun_1);
@@ -504,7 +504,7 @@ string invName(int Index) {
 SMTRef wrapForall(SMTRef Clause, int BlockIndex, set<string> FreeVars) {
     std::vector<SortedVar> Vars;
     for (auto &Arg : FreeVars) {
-        // TODO: detect type
+        // TODO(moritz): detect type
         Vars.push_back(SortedVar(Arg, "Int"));
     }
     // no entry invariant

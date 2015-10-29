@@ -1,4 +1,7 @@
-#include "llvm/IR/PassManager.h"
+#ifndef CFGPRINTER_H
+#define CFGPRINTER_H
+
+#include "MarkAnalysis.h"
 
 class CFGViewerPass {
   public:
@@ -6,3 +9,5 @@ class CFGViewerPass {
         -> llvm::PreservedAnalyses;
     static auto name() -> llvm::StringRef { return "CFGViewerPass"; }
 };
+
+#endif // CFGPRINTER_H
