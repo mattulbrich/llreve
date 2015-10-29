@@ -31,16 +31,16 @@ auto getModule(const char *ExeName, std::string Input1, std::string Input2)
 auto getCodeGenAction(const llvm::opt::ArgStringList &CCArgs,
                       clang::DiagnosticsEngine &Diags)
     -> std::unique_ptr<clang::CodeGenAction>;
-auto convertToSMT(llvm::Function &Mod1, llvm::Function &Mod2,
-                  std::unique_ptr<llvm::FunctionAnalysisManager> FAM_1,
-                  std::unique_ptr<llvm::FunctionAnalysisManager> FAM_2) -> void;
+auto convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
+                  std::unique_ptr<llvm::FunctionAnalysisManager> Fam1,
+                  std::unique_ptr<llvm::FunctionAnalysisManager> Fam2) -> void;
 auto toDef(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB)
     -> std::tuple<std::string, SMTRef>;
 auto getPredName(const llvm::CmpInst::Predicate Pred) -> std::string;
 auto getInstrNameOrValue(const llvm::Value *Val, const llvm::Type *Ty) -> SMTRef;
 auto invariant(int BlockIndex, std::set<std::string> Args) -> SMTRef;
 auto getOpName(const llvm::BinaryOperator &Op) -> std::string;
-auto swapIndex(int i) -> int;
+auto swapIndex(int I) -> int;
 auto instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB,
                  bool IgnorePhis, int Program)
     -> std::vector<std::tuple<std::string, SMTRef>>;
@@ -49,6 +49,6 @@ auto invName(int Index) -> std::string;
 auto wrapForall(SMTRef Clause, int BlockIndex, std::set<std::string> FreeVars)
     -> SMTRef;
 auto invariantDef(int BlockIndex, std::set<std::string> FreeVars) -> SMTRef;
-auto freeVars(std::map<int, Paths> Paths) -> std::pair<std::set<std::string>, std::set<std::string>>;
-auto freeVarsMap(PathMap Map_1, PathMap Map_2) -> std::map<int, std::set<std::string>>;
+auto freeVars(std::map<int, Paths> PathMap) -> std::pair<std::set<std::string>, std::set<std::string>>;
+auto freeVarsMap(PathMap Map1, PathMap Map2) -> std::map<int, std::set<std::string>>;
 #endif // REVE_H

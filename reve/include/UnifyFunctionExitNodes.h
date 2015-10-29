@@ -7,8 +7,8 @@ class UnifyFunctionExitNodes {
   public:
     typedef llvm::BasicBlock* Result;
     static llvm::StringRef name() { return "UnifyFunctionExitNodes"; }
-    Result run(llvm::Function &F, llvm::FunctionAnalysisManager *AM);
     static void *ID() { return static_cast<void *>(&PassID); }
+    Result run(llvm::Function &Fun, llvm::FunctionAnalysisManager *AM);
 
   private:
     static char PassID;

@@ -6,7 +6,7 @@ llvm::PreservedAnalyses RemoveMarkPass::run(llvm::Function &Fun,
         AM->getResult<MarkAnalysis>(Fun);
     std::vector<llvm::Instruction *> ToDelete;
     for (auto BBTuple : MarkedBlocks) {
-        if (BBTuple.second >= 0) {
+        if (BBTuple.first >= 0) {
             auto BB = BBTuple.second;
             for (auto &Inst : *BB) {
                 if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(&Inst)) {
@@ -45,29 +45,29 @@ void removeAnd(llvm::Instruction *Instr, llvm::BinaryOperator *BinOp) {
 
     // replace all uses of and with the operand
     auto Replace = llvm::dyn_cast<llvm::User>(ReplaceVal);
-    if (!Replace) {
+    if (Replace == nullptr) {
         return;
     }
-    for (auto &Use_ : BinOp->uses()) {
-        if (auto Used_ = llvm::dyn_cast<llvm::User>(Use_.getUser())) {
-            Used_->replaceUsesOfWith(BinOp, Replace);
+    for (auto &Use : BinOp->uses()) {
+        if (auto Used = llvm::dyn_cast<llvm::User>(Use.getUser())) {
+            Used->replaceUsesOfWith(BinOp, Replace);
         }
     }
     BinOp->eraseFromParent();
 
     // try to remove the zext and all uses of it
     auto ZExt = llvm::dyn_cast<llvm::ZExtInst>(Replace);
-    if (!ZExt) {
+    if (ZExt == nullptr) {
         return;
     }
-    for (auto &Use_ : ZExt->uses()) {
-        if (auto Used_ = llvm::dyn_cast<llvm::Instruction>(Use_.getUser())) {
-            for (auto &Use__ : Used_->uses()) {
+    for (auto User : ZExt->users()) {
+        if (auto UserInstr = llvm::dyn_cast<llvm::Instruction>(User)) {
+            for (auto &Use__ : User->uses()) {
                 if (auto Used__ = llvm::dyn_cast<llvm::User>(Use__.getUser())) {
-                    Used__->replaceUsesOfWith(Used_, ZExt->getOperand(0));
+                    Used__->replaceUsesOfWith(User, ZExt->getOperand(0));
                 }
             }
-            Used_->eraseFromParent();
+            UserInstr->eraseFromParent();
         }
     }
     ZExt->eraseFromParent();

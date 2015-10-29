@@ -3,7 +3,7 @@
 #include "AnnotStackPass.h"
 #include "CFGPrinter.h"
 #include "llvm/IR/PassManager.h"
-#include "Mem2Reg.h"
+#include "llvm/IR/PassManager.h"
 #include "PathAnalysis.h"
 #include "RemoveMarkPass.h"
 #include "SExpr.h"
@@ -192,31 +192,31 @@ int main(int Argc, const char **Argv) {
     llvm::cl::ParseCommandLineOptions(Argc, Argv, "reve\n");
 
     auto ActTuple = getModule(Argv[0], FileName1, FileName2);
-    const auto Act_1 = std::move(std::get<0>(ActTuple));
-    const auto Act_2 = std::move(std::get<1>(ActTuple));
-    if (!Act_1 || !Act_2) {
+    const auto Act1 = std::move(std::get<0>(ActTuple));
+    const auto Act2 = std::move(std::get<1>(ActTuple));
+    if (!Act1 || !Act2) {
         return 1;
     }
 
-    const auto Mod_1 = Act_1->takeModule();
-    const auto Mod_2 = Act_2->takeModule();
-    if (!Mod_2 || !Mod_2) {
+    const auto Mod1 = Act1->takeModule();
+    const auto Mod2 = Act2->takeModule();
+    if (!Mod2 || !Mod2) {
         return 1;
     }
 
-    ErrorOr<llvm::Function &> FunOrError_1 = getFunction(*Mod_1);
-    ErrorOr<llvm::Function &> FunOrError_2 = getFunction(*Mod_2);
+    ErrorOr<llvm::Function &> FunOrError1 = getFunction(*Mod1);
+    ErrorOr<llvm::Function &> FunOrError2 = getFunction(*Mod2);
 
-    if (!FunOrError_1 || !FunOrError_2) {
+    if (!FunOrError1 || !FunOrError2) {
         errs() << "Couldn't find a function\n";
         return 1;
     }
 
-    auto FAM_1 = preprocessModule(FunOrError_1.get(), "1");
-    auto FAM_2 = preprocessModule(FunOrError_2.get(), "2");
+    auto Fam1 = preprocessModule(FunOrError1.get(), "1");
+    auto Fam2 = preprocessModule(FunOrError2.get(), "2");
 
-    convertToSMT(FunOrError_1.get(), FunOrError_2.get(), std::move(FAM_1),
-                 std::move(FAM_2));
+    convertToSMT(FunOrError1.get(), FunOrError2.get(), std::move(Fam1),
+                 std::move(Fam2));
 
     llvm::llvm_shutdown();
 
@@ -261,21 +261,21 @@ ErrorOr<llvm::Function &> getFunction(llvm::Module &Mod) {
     return ErrorOr<llvm::Function &>(Fun);
 }
 
-void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
-                  unique_ptr<llvm::FunctionAnalysisManager> FAM_1,
-                  unique_ptr<llvm::FunctionAnalysisManager> FAM_2) {
+void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
+                  unique_ptr<llvm::FunctionAnalysisManager> Fam1,
+                  unique_ptr<llvm::FunctionAnalysisManager> Fam2) {
     // TODO(moritz): check that the marks are the same
-    auto PathMap_1 = FAM_1->getResult<PathAnalysis>(Fun_1);
-    auto PathMap_2 = FAM_2->getResult<PathAnalysis>(Fun_2);
-    auto Marked_1 = FAM_1->getResult<MarkAnalysis>(Fun_1);
-    auto Marked_2 = FAM_2->getResult<MarkAnalysis>(Fun_2);
-    std::map<int, set<string>> FreeVarsMap = freeVarsMap(PathMap_1, PathMap_2);
+    auto PathMap1 = Fam1->getResult<PathAnalysis>(Fun1);
+    auto PathMap2 = Fam2->getResult<PathAnalysis>(Fun2);
+    auto Marked1 = Fam1->getResult<MarkAnalysis>(Fun1);
+    auto Marked2 = Fam2->getResult<MarkAnalysis>(Fun2);
+    std::map<int, set<string>> FreeVarsMap = freeVarsMap(PathMap1, PathMap2);
     std::vector<SMTRef> SMTExprs;
     std::vector<SMTRef> PathExprs;
 
     SMTExprs.push_back(std::make_shared<SetLogic>("HORN"));
 
-    for (auto &PathMapIt : PathMap_1) {
+    for (auto &PathMapIt : PathMap1) {
         int StartIndex = PathMapIt.first;
         if (StartIndex != -1) {
             // ignore entry node
@@ -284,14 +284,14 @@ void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
         }
         for (auto &InnerPathMapIt : PathMapIt.second) {
             int EndIndex = InnerPathMapIt.first;
-            auto Paths = PathMap_2.at(StartIndex).at(EndIndex);
-            for (auto &Path_1 : InnerPathMapIt.second) {
-                for (auto &Path_2 : Paths) {
-                    auto SMT_2 = pathToSMT(
-                        Path_2, invariant(EndIndex, FreeVarsMap.at(EndIndex)),
+            auto Paths = PathMap2.at(StartIndex).at(EndIndex);
+            for (auto &Path1 : InnerPathMapIt.second) {
+                for (auto &Path2 : Paths) {
+                    auto Smt2 = pathToSMT(
+                        Path2, invariant(EndIndex, FreeVarsMap.at(EndIndex)),
                         2);
                     PathExprs.push_back(std::make_shared<Assert>(
-                        wrapForall(pathToSMT(Path_1, SMT_2, 1), StartIndex,
+                        wrapForall(pathToSMT(Path1, Smt2, 1), StartIndex,
                                    FreeVarsMap.at(StartIndex))));
                 }
             }
@@ -299,17 +299,17 @@ void convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
     }
 
     // generate forbidden paths
-    for (auto &PathMapIt : PathMap_1) {
+    for (auto &PathMapIt : PathMap1) {
         int StartIndex = PathMapIt.first;
-        for (auto &InnerPathMapIt_1 : PathMapIt.second) {
-            int EndIndex = InnerPathMapIt_1.first;
-            for (auto &InnerPathMapIt_2 : PathMap_2.at(StartIndex)) {
-                if (EndIndex != InnerPathMapIt_2.first) {
-                    for (auto &Path_1 : InnerPathMapIt_1.second) {
-                        for (auto &Path_2 : InnerPathMapIt_2.second) {
-                            auto SMT_2 = pathToSMT(Path_2, name("false"), 2);
+        for (auto &InnerPathMapIt1 : PathMapIt.second) {
+            int EndIndex = InnerPathMapIt1.first;
+            for (auto &InnerPathMapIt2 : PathMap2.at(StartIndex)) {
+                if (EndIndex != InnerPathMapIt2.first) {
+                    for (auto &Path1 : InnerPathMapIt1.second) {
+                        for (auto &Path2 : InnerPathMapIt2.second) {
+                            auto Smt2 = pathToSMT(Path2, name("false"), 2);
                             PathExprs.push_back(std::make_shared<Assert>(
-                                wrapForall(pathToSMT(Path_1, SMT_2, 1),
+                                wrapForall(pathToSMT(Path1, Smt2, 1),
                                            StartIndex,
                                            FreeVarsMap.at(StartIndex))));
                         }
@@ -444,9 +444,9 @@ SMTRef getInstrNameOrValue(const llvm::Value *Val, const llvm::Type *Ty) {
         }
         if (ApInt.isNegative()) {
             return makeUnaryOp(
-                "-", name(ApInt.toString(10, 1).substr(1, string::npos)));
+                "-", name(ApInt.toString(10, true).substr(1, string::npos)));
         }
-        return name(ApInt.toString(10, 1));
+        return name(ApInt.toString(10, true));
     }
     return name(Val->getName());
 }
@@ -573,30 +573,30 @@ std::pair<set<string>, set<string>> freeVars(std::map<int, Paths> PathMap) {
     return std::make_pair(FreeVars, ConstructedIntersection);
 }
 
-std::map<int, set<string>> freeVarsMap(PathMap Map_1, PathMap Map_2) {
+std::map<int, set<string>> freeVarsMap(PathMap Map1, PathMap Map2) {
     std::map<int, set<string>> FreeVarsMap;
     std::map<int, set<string>> Constructed;
-    for (auto &It : Map_1) {
+    for (auto &It : Map1) {
         int Index = It.first;
-        auto FreeVars_1 = freeVars(Map_1.at(Index));
-        auto FreeVars_2 = freeVars(Map_2.at(Index));
-        for (auto Var : FreeVars_2.first) {
-            FreeVars_1.first.insert(Var);
+        auto FreeVars1 = freeVars(Map1.at(Index));
+        auto FreeVars2 = freeVars(Map2.at(Index));
+        for (auto Var : FreeVars2.first) {
+            FreeVars1.first.insert(Var);
         }
-        FreeVarsMap.insert(make_pair(Index, FreeVars_1.first));
-        for (auto Var : FreeVars_2.second) {
-            FreeVars_1.second.insert(Var);
+        FreeVarsMap.insert(make_pair(Index, FreeVars1.first));
+        for (auto Var : FreeVars2.second) {
+            FreeVars1.second.insert(Var);
         }
-        Constructed.insert(make_pair(Index, FreeVars_1.second));
+        Constructed.insert(make_pair(Index, FreeVars1.second));
     }
     FreeVarsMap.insert(make_pair(-2, set<string>()));
 
     // search for a least fixpoint
     // don't tell anyone I wrote that
-    bool changed = true;
-    while (changed) {
-        changed = false;
-        for (auto &It : Map_1) {
+    bool Changed = true;
+    while (Changed) {
+        Changed = false;
+        for (auto &It : Map1) {
             int StartIndex = It.first;
             for (auto &ItInner : It.second) {
                 int EndIndex = ItInner.first;
@@ -604,7 +604,7 @@ std::map<int, set<string>> freeVarsMap(PathMap Map_1, PathMap Map_2) {
                     if (Constructed.at(StartIndex).find(Var) ==
                         Constructed.at(StartIndex).end()) {
                         auto Inserted = FreeVarsMap.at(StartIndex).insert(Var);
-                        changed = Inserted.second;
+                        Changed = Inserted.second;
                     }
                 }
             }

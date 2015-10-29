@@ -7,16 +7,16 @@
 
 class Edge {
   public:
-    Edge(SMTRef Condition_, llvm::BasicBlock *Block_)
-        : Condition(Condition_), Block(Block_) {}
+    Edge(SMTRef Condition, llvm::BasicBlock *Block)
+        : Condition(std::move(Condition)), Block(std::move(Block)) {}
     SMTRef Condition;
     llvm::BasicBlock *Block;
 };
 
 class Path {
   public:
-    Path(llvm::BasicBlock *Start_, std::vector<Edge> Edges_)
-        : Start(Start_), Edges(Edges_) {}
+    Path(llvm::BasicBlock *Start, std::vector<Edge> Edges)
+        : Start(std::move(Start)), Edges(std::move(Edges)) {}
     llvm::BasicBlock *Start;
     std::vector<Edge> Edges;
 };
@@ -30,19 +30,19 @@ class PathAnalysis {
   public:
     typedef PathMap Result;
     static llvm::StringRef name() { return "PathAnalysis"; }
-    Result run(llvm::Function &Fun, llvm::FunctionAnalysisManager *AM);
     static void *ID() { return static_cast<void *>(&PassID); }
+    Result run(llvm::Function &F, llvm::FunctionAnalysisManager *AM);
 
   private:
     static char PassID;
 };
 
-auto findPaths(llvm::BasicBlock * BB,
+auto findPaths(llvm::BasicBlock *BB,
                std::map<int, llvm::BasicBlock *> MarkedBlocks)
     -> std::map<int, Paths>;
 
 auto traverse(llvm::BasicBlock *BB,
-              std::map<int, llvm::BasicBlock *> MarkedBlocks, bool first)
+              std::map<int, llvm::BasicBlock *> MarkedBlocks, bool First)
     -> Paths_;
 
 auto isTerminator(llvm::BasicBlock *BB,

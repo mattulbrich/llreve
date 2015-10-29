@@ -14,7 +14,7 @@ using sexpr::Value;
 using sexpr::List;
 
 // Avoid out-of-line warning by defining function here
-SMTExpr::~SMTExpr() {}
+SMTExpr::~SMTExpr() = default;
 
 SExprRef SetLogic::toSExpr() const {
     std::vector<SExprRef> Args;
@@ -62,9 +62,9 @@ SExprRef Forall::toSExpr() const {
 set<string> Forall::uses() const { return Expr->uses(); }
 
 SExprRef SortedVar::toSExpr() const {
-    std::vector<SExprRef> Type_;
-    Type_.push_back(make_unique<const Value<std::string>>(Type));
-    return make_unique<Apply<std::string>>(Name, std::move(Type_));
+    std::vector<SExprRef> TypeSExpr;
+    TypeSExpr.push_back(make_unique<const Value<std::string>>(Type));
+    return make_unique<Apply<std::string>>(Name, std::move(TypeSExpr));
 }
 
 set<string> SortedVar::uses() const {
@@ -74,14 +74,14 @@ set<string> SortedVar::uses() const {
 
 SExprRef Let::toSExpr() const {
     std::vector<SExprRef> Args;
-    std::vector<SExprRef> Defs_;
+    std::vector<SExprRef> DefSExprs;
     for (auto &Def : Defs) {
-        std::vector<SExprRef> Args_;
-        Args_.push_back(std::get<1>(Def)->toSExpr());
-        Defs_.push_back(make_unique<Apply<std::string>>(std::get<0>(Def),
-                                                        std::move(Args_)));
+        std::vector<SExprRef> ArgSExprs;
+        ArgSExprs.push_back(std::get<1>(Def)->toSExpr());
+        DefSExprs.push_back(make_unique<Apply<std::string>>(std::get<0>(Def),
+                                                        std::move(ArgSExprs)));
     }
-    Args.push_back(make_unique<List<std::string>>(std::move(Defs_)));
+    Args.push_back(make_unique<List<std::string>>(std::move(DefSExprs)));
     Args.push_back(Expr->toSExpr());
     return make_unique<Apply<std::string>>("let", std::move(Args));
 }
@@ -100,11 +100,11 @@ set<string> Let::uses() const {
 }
 
 SExprRef Op::toSExpr() const {
-    std::vector<SExprRef> Args_;
+    std::vector<SExprRef> ArgSExprs;
     for (auto &Arg : Args) {
-        Args_.push_back(Arg->toSExpr());
+        ArgSExprs.push_back(Arg->toSExpr());
     }
-    return make_unique<Apply<std::string>>(OpName, std::move(Args_));
+    return make_unique<Apply<std::string>>(OpName, std::move(ArgSExprs));
 }
 
 set<string> Op::uses() const {
@@ -117,18 +117,18 @@ set<string> Op::uses() const {
     return Uses;
 }
 
-std::shared_ptr<Op> makeBinOp(std::string OpName, std::string Arg_1,
-                              std::string Arg_2) {
+std::shared_ptr<Op> makeBinOp(std::string OpName, std::string Arg1,
+                              std::string Arg2) {
     std::vector<SMTRef> Args;
-    Args.push_back(name(Arg_1));
-    Args.push_back(name(Arg_2));
+    Args.push_back(name(Arg1));
+    Args.push_back(name(Arg2));
     return make_unique<Op>(OpName, Args);
 }
 
-std::shared_ptr<Op> makeBinOp(std::string OpName, SMTRef Arg_1, SMTRef Arg_2) {
+std::shared_ptr<Op> makeBinOp(std::string OpName, SMTRef Arg1, SMTRef Arg2) {
     std::vector<SMTRef> Args;
-    Args.push_back(Arg_1);
-    Args.push_back(Arg_2);
+    Args.push_back(Arg1);
+    Args.push_back(Arg2);
     return make_unique<Op>(OpName, Args);
 }
 
@@ -149,21 +149,21 @@ SMTRef name(std::string Name) {
 }
 
 SMTRef makeOp(std::string OpName, std::vector<std::string> Args) {
-    std::vector<SMTRef> Args_;
+    std::vector<SMTRef> SMTArgs;
     for (auto Arg : Args) {
-        Args_.push_back(name(Arg));
+        SMTArgs.push_back(name(Arg));
     }
-    return make_unique<Op>(OpName, Args_);
+    return make_unique<Op>(OpName, SMTArgs);
 }
 
 SExprRef Fun::toSExpr() const {
-    std::vector<SExprRef> InTypes_;
+    std::vector<SExprRef> InTypeSExprs;
     for (auto InType : InTypes) {
-        InTypes_.push_back(name(InType)->toSExpr());
+        InTypeSExprs.push_back(name(InType)->toSExpr());
     }
     std::vector<SExprRef> Args;
     Args.push_back(name(FunName)->toSExpr());
-    Args.push_back(make_unique<List<std::string>>(std::move(InTypes_)));
+    Args.push_back(make_unique<List<std::string>>(std::move(InTypeSExprs)));
     Args.push_back(name(OutType)->toSExpr());
     return make_unique<Apply<std::string>>("declare-fun", std::move(Args));
 }
@@ -213,10 +213,10 @@ SMTRef GetModel::compressLets(
 }
 
 SMTRef Let::compressLets(
-    std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs_)
+    std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> PassedDefs)
     const {
-    Defs_.insert(Defs_.end(), Defs.begin(), Defs.end());
-    return Expr->compressLets(Defs_);
+    PassedDefs.insert(PassedDefs.end(), Defs.begin(), Defs.end());
+    return Expr->compressLets(PassedDefs);
 }
 
 SMTRef Op::compressLets(

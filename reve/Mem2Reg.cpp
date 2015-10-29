@@ -18,7 +18,7 @@ llvm::PreservedAnalyses PromotePass::run(llvm::Function &F,
     llvm::DominatorTree &DT = AM->getResult<llvm::DominatorTreeAnalysis>(F);
     llvm::AssumptionCache &AC = AM->getResult<llvm::AssumptionAnalysis>(F);
 
-    while (1) {
+    while (true) {
         Allocas.clear();
 
         // Find allocas that are safe to promote, by looking at all instructions

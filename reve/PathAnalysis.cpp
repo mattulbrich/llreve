@@ -61,8 +61,8 @@ findPaths(llvm::BasicBlock *BB,
 }
 
 Paths_ traverse(llvm::BasicBlock *BB,
-               std::map<int, llvm::BasicBlock *> MarkedBlocks, bool first) {
-    if (!first && isTerminator(BB, MarkedBlocks)) {
+               std::map<int, llvm::BasicBlock *> MarkedBlocks, bool First) {
+    if (!First && isTerminator(BB, MarkedBlocks)) {
         Paths_ MyPaths;
         MyPaths.push_back(Path_());
         return MyPaths;
@@ -77,26 +77,26 @@ Paths_ traverse(llvm::BasicBlock *BB,
             }
             return TraversedPaths;
         }
-        auto TraversedPaths_0 =
+        auto TraversedPaths0 =
             traverse(BranchInst->getSuccessor(0), MarkedBlocks, false);
-        auto TraversedPaths_1 =
+        auto TraversedPaths1 =
             traverse(BranchInst->getSuccessor(1), MarkedBlocks, false);
-        for (auto &P : TraversedPaths_0) {
+        for (auto &P : TraversedPaths0) {
             P.insert(P.begin(),
                      Edge(name(BranchInst->getCondition()->getName()),
                           BranchInst->getSuccessor(0)));
         }
-        for (auto &P : TraversedPaths_1) {
+        for (auto &P : TraversedPaths1) {
             P.insert(
                 P.begin(),
                 Edge(makeUnaryOp("not",
                                  name(BranchInst->getCondition()->getName())),
                      BranchInst->getSuccessor(1)));
         }
-        for (auto &Path : TraversedPaths_1) {
-            TraversedPaths_0.push_back(Path);
+        for (auto &Path : TraversedPaths1) {
+            TraversedPaths0.push_back(Path);
         }
-        return TraversedPaths_0;
+        return TraversedPaths0;
     }
     llvm::errs() << "Unknown terminator\n";
     TermInst->print(llvm::errs());

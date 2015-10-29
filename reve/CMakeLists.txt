@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.8)
 project(llvm-reve)
 set(CMAKE_CXX_COMPILER "clang++")
-set(CXX_WARNINGS_FLAGS "-Weverything -Wno-c++98-compat -Wno-exit-time-destructors -Wno-global-constructors -Wno-padded -Wno-switch-enum")
+set(CXX_WARNINGS_FLAGS "-Weverything -Wno-c++98-compat -Wno-exit-time-destructors -Wno-global-constructors -Wno-padded -Wno-switch-enum -Wno-shadow")
 set(CXX_STANDARD_FLAGS "-std=c++11")
 set(CXX_OTHER_FLAGS "--system-header-prefix=llvm --system-header-prefix=clang")
 set(CMAKE_CXX_FLAGS "${CXX_WARNINGS_FLAGS} ${CXX_STANDARD_FLAGS} ${CXX_OTHER_FLAGS}")

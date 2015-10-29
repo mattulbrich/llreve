@@ -17,7 +17,7 @@ MarkAnalysis::run(llvm::Function &Fun, llvm::FunctionAnalysisManager *AM) {
     for (auto &BB : Fun) {
         for (auto &Inst : BB) {
             if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(&Inst)) {
-                if (CallInst->getCalledFunction() &&
+                if ((CallInst->getCalledFunction() != nullptr) &&
                     CallInst->getCalledFunction()->getName() == "__mark") {
                     llvm::Value *IDVal = CallInst->getArgOperand(0);
                     int ID = 0;

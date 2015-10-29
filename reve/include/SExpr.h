@@ -18,15 +18,15 @@ template <typename T> class SExpr {
 
 template <typename T> class Value : public SExpr<T> {
   public:
-    explicit Value(T Val_) : Val(Val_) {}
+    explicit Value(T Val) : Val(std::move(Val)) {}
     void serialize(std::ostream &OS, size_t /*unused*/) const override { OS << Val; }
     T Val;
 };
 
 template <typename T> class Apply : public SExpr<T> {
   public:
-    Apply(T Fun_, std::vector<std::unique_ptr<const SExpr<T>>> Args_)
-        : Fun(Fun_), Args(std::move(Args_)) {}
+    Apply(T Fun, std::vector<std::unique_ptr<const SExpr<T>>> Args)
+        : Fun(std::move(Fun)), Args(std::move(Args)) {}
     void serialize(std::ostream &OS, size_t Indent) const override {
         OS << "(" << Fun;
         std::vector<std::string> AtomicOps = {"+", "-",  "<=", "<",
@@ -58,8 +58,8 @@ template <typename T> class Apply : public SExpr<T> {
 
 template <typename T> class List : public SExpr<T> {
   public:
-    explicit List(std::vector<std::unique_ptr<const SExpr<T>>> Elements_)
-        : Elements(std::move(Elements_)) {}
+    explicit List(std::vector<std::unique_ptr<const SExpr<T>>> Elements)
+        : Elements(std::move(Elements)) {}
     void serialize(std::ostream &OS, size_t Indent) const override {
         OS << "(";
         auto It = Elements.begin();

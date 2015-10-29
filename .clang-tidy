@@ -1,5 +1,5 @@
 ---
-Checks:          '*,-clang-analyzer-alpha.core.CastToStruct'
+Checks:          '*,-clang-analyzer-alpha.core.CastToStruct,-clang-diagnostic-shadow'
 HeaderFilterRegex: '.*'
 AnalyzeTemporaryDtors: false
 CheckOptions:
@@ -300,7 +300,7 @@ CheckOptions:
   - key:             readability-identifier-naming.VariableSuffix
     value:           ''
   - key:             readability-identifier-naming.VirtualMethodCase
-    value:           CamelCase
+    value:           camelBack
   - key:             readability-identifier-naming.VirtualMethodPrefix
     value:           ''
   - key:             readability-identifier-naming.VirtualMethodSuffix

@@ -26,7 +26,7 @@ class SMTExpr {
             std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>>())
         const = 0;
     virtual ~SMTExpr();
-    SMTExpr(const SMTExpr &Expr) = default;
+    SMTExpr(const SMTExpr & /*unused*/) = default;
     SMTExpr() = default;
 };
 
@@ -34,7 +34,7 @@ using SMTRef = shared_ptr<const SMTExpr>;
 
 class SetLogic : public SMTExpr {
   public:
-    explicit SetLogic(std::string Logic_) : Logic(Logic_) {}
+    explicit SetLogic(std::string Logic) : Logic(std::move(Logic)) {}
     SExprRef toSExpr() const override;
     set<string> uses() const override;
     shared_ptr<const SMTExpr> compressLets(
@@ -45,7 +45,7 @@ class SetLogic : public SMTExpr {
 
 class Assert : public SMTExpr {
   public:
-    explicit Assert(SMTRef Expr_) : Expr(Expr_) {}
+    explicit Assert(SMTRef Expr) : Expr(std::move(Expr)) {}
     SMTRef Expr;
     SExprRef toSExpr() const override;
     set<string> uses() const override;
@@ -56,8 +56,8 @@ class Assert : public SMTExpr {
 
 class SortedVar : public SMTExpr {
   public:
-    SortedVar(std::string Name_, std::string Type_)
-        : Name(Name_), Type(Type_) {}
+    SortedVar(std::string Name, std::string Type)
+        : Name(std::move(Name)), Type(std::move(Type)) {}
     const std::string Name;
     const std::string Type;
     SExprRef toSExpr() const override;
@@ -69,8 +69,8 @@ class SortedVar : public SMTExpr {
 
 class Forall : public SMTExpr {
   public:
-    Forall(std::vector<SortedVar> Vars_, SMTRef Expr_)
-        : Vars(Vars_), Expr(Expr_) {}
+    Forall(std::vector<SortedVar> Vars, SMTRef Expr)
+        : Vars(std::move(Vars)), Expr(std::move(Expr)) {}
     SExprRef toSExpr() const override;
     std::vector<SortedVar> Vars;
     SMTRef Expr;
@@ -103,17 +103,17 @@ class Let : public SMTExpr {
     SExprRef toSExpr() const override;
     std::vector<std::tuple<std::string, SMTRef>> Defs;
     SMTRef Expr;
-    Let(std::vector<std::tuple<std::string, SMTRef>> Defs_, SMTRef Expr_)
-        : Defs(Defs_), Expr(Expr_) {}
+    Let(std::vector<std::tuple<std::string, SMTRef>> Defs, SMTRef Expr)
+        : Defs(std::move(Defs)), Expr(std::move(Expr)) {}
     set<string> uses() const override;
     shared_ptr<const SMTExpr> compressLets(
-        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> PassedDefs)
         const override;
 };
 
 template <typename T> class Primitive : public SMTExpr {
   public:
-    explicit Primitive(const T Val_) : Val(Val_) {}
+    explicit Primitive(const T Val) : Val(Val) {}
     SExprRef toSExpr() const override {
         std::stringstream SStream;
         SStream << Val;
@@ -128,8 +128,8 @@ template <typename T> class Primitive : public SMTExpr {
 
 class Op : public SMTExpr {
   public:
-    Op(std::string OpName_, std::vector<SMTRef> Args_)
-        : OpName(OpName_), Args(Args_) {}
+    Op(std::string OpName, std::vector<SMTRef> Args)
+        : OpName(std::move(OpName)), Args(std::move(Args)) {}
     std::string OpName;
     std::vector<SMTRef> Args;
     SExprRef toSExpr() const override;
@@ -139,9 +139,9 @@ class Op : public SMTExpr {
         const override;
 };
 
-auto makeBinOp(std::string OpName, std::string Arg_1, std::string Arg_2)
+auto makeBinOp(std::string OpName, std::string Arg1, std::string Arg2)
     -> std::shared_ptr<Op>;
-auto makeBinOp(std::string OpName, SMTRef Arg_1, SMTRef Arg_2)
+auto makeBinOp(std::string OpName, SMTRef Arg1, SMTRef Arg2)
     -> std::shared_ptr<Op>;
 auto makeUnaryOp(std::string OpName, std::string Arg) -> std::shared_ptr<Op>;
 auto makeUnaryOp(std::string OpName, SMTRef Arg) -> std::shared_ptr<Op>;
@@ -150,9 +150,10 @@ auto makeOp(std::string OpName, std::vector<std::string> Args) -> SMTRef;
 
 class Fun : public SMTExpr {
   public:
-    Fun(std::string FunName_, std::vector<std::string> InTypes_,
-        std::string OutType_)
-        : FunName(FunName_), InTypes(InTypes_), OutType(OutType_) {}
+    Fun(std::string FunName, std::vector<std::string> InTypes,
+        std::string OutType)
+        : FunName(std::move(FunName)), InTypes(std::move(InTypes)),
+          OutType(std::move(OutType)) {}
     std::string FunName;
     std::vector<std::string> InTypes;
     std::string OutType;

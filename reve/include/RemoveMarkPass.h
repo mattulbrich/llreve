@@ -11,7 +11,7 @@ class RemoveMarkPass {
     static llvm::StringRef name() {
         return "RemoveMarkPass";
     }
-    llvm::PreservedAnalyses run(llvm::Function &F, llvm::FunctionAnalysisManager *AM);
+    llvm::PreservedAnalyses run(llvm::Function &Fun, llvm::FunctionAnalysisManager *AM);
 };
 
 void removeAnd(llvm::Instruction *Instr, llvm::BinaryOperator *BinOp);
