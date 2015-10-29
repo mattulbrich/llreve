@@ -2,8 +2,7 @@
 
 llvm::PreservedAnalyses RemoveMarkPass::run(llvm::Function &Fun,
                                             llvm::FunctionAnalysisManager *AM) {
-    auto MarkedBlocks =
-        AM->getResult<MarkAnalysis>(Fun);
+    auto MarkedBlocks = AM->getResult<MarkAnalysis>(Fun);
     std::vector<llvm::Instruction *> ToDelete;
     for (auto BBTuple : MarkedBlocks) {
         if (BBTuple.first >= 0) {
@@ -62,9 +61,11 @@ void removeAnd(llvm::Instruction *Instr, llvm::BinaryOperator *BinOp) {
     }
     for (auto User : ZExt->users()) {
         if (auto UserInstr = llvm::dyn_cast<llvm::Instruction>(User)) {
-            for (auto &Use__ : User->uses()) {
-                if (auto Used__ = llvm::dyn_cast<llvm::User>(Use__.getUser())) {
-                    Used__->replaceUsesOfWith(User, ZExt->getOperand(0));
+            for (auto UserOfUser : User->users()) {
+                if (auto UserOfUserInstr =
+                        llvm::dyn_cast<llvm::User>(UserOfUser)) {
+                    UserOfUserInstr->replaceUsesOfWith(User,
+                                                       ZExt->getOperand(0));
                 }
             }
             UserInstr->eraseFromParent();

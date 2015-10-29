@@ -31,7 +31,7 @@ auto getModule(const char *ExeName, std::string Input1, std::string Input2)
 auto getCodeGenAction(const llvm::opt::ArgStringList &CCArgs,
                       clang::DiagnosticsEngine &Diags)
     -> std::unique_ptr<clang::CodeGenAction>;
-auto convertToSMT(llvm::Function &Fun_1, llvm::Function &Fun_2,
+auto convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
                   std::unique_ptr<llvm::FunctionAnalysisManager> Fam1,
                   std::unique_ptr<llvm::FunctionAnalysisManager> Fam2) -> void;
 auto toDef(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB)

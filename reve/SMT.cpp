@@ -222,11 +222,11 @@ SMTRef Let::compressLets(
 SMTRef Op::compressLets(
     std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
     const {
-    std::vector<SMTRef> Args_;
+    std::vector<SMTRef> CompressedArgs;
     for (auto Arg : Args) {
-        Args_.push_back(Arg->compressLets());
+        CompressedArgs.push_back(Arg->compressLets());
     }
-    return nestLets(make_shared<Op>(OpName, Args_), Defs);
+    return nestLets(make_shared<Op>(OpName, CompressedArgs), Defs);
 }
 
 SMTRef Fun::compressLets(

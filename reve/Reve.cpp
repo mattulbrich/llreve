@@ -451,9 +451,9 @@ SMTRef getInstrNameOrValue(const llvm::Value *Val, const llvm::Type *Ty) {
     return name(Val->getName());
 }
 
-int swapIndex(int i) {
-    assert(i == 1 || i == 2);
-    return i == 1 ? 2 : 1;
+int swapIndex(int I) {
+    assert(I == 1 || I == 2);
+    return I == 1 ? 2 : 1;
 }
 
 std::vector<std::tuple<string, SMTRef>>

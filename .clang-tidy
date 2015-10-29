@@ -1,5 +1,5 @@
 ---
-Checks:          '*,-clang-analyzer-alpha.core.CastToStruct,-clang-diagnostic-shadow'
+Checks:          '*,-clang-analyzer-alpha.core.CastToStruct,-clang-diagnostic-shadow,-google-global-names-in-headers,-llvm-include-order,-clang-analyzer-alpha.deadcode.UnreachableCode,-llvm-header-guard,-clang-analyzer-alpha.security.ReturnPtrRange'
 HeaderFilterRegex: '.*'
 AnalyzeTemporaryDtors: false
 CheckOptions:
