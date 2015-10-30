@@ -2,14 +2,14 @@
 
 #include "AnnotStackPass.h"
 #include "CFGPrinter.h"
-#include "llvm/IR/PassManager.h"
-#include "llvm/IR/PassManager.h"
 #include "PathAnalysis.h"
 #include "RemoveMarkPass.h"
 #include "SExpr.h"
 #include "SMT.h"
 #include "UnifyFunctionExitNodes.h"
 #include "UniqueNamePass.h"
+#include "llvm/IR/PassManager.h"
+#include "llvm/IR/PassManager.h"
 
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/Driver.h"
@@ -290,9 +290,9 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
                     auto Smt2 = pathToSMT(
                         Path2, invariant(EndIndex, FreeVarsMap.at(EndIndex)),
                         2);
-                    PathExprs.push_back(std::make_shared<Assert>(
-                        wrapForall(pathToSMT(Path1, Smt2, 1), StartIndex,
-                                   FreeVarsMap.at(StartIndex))));
+                    PathExprs.push_back(wrapForall(pathToSMT(Path1, Smt2, 1),
+                                                   StartIndex,
+                                                   FreeVarsMap.at(StartIndex)));
                 }
             }
         }
@@ -308,10 +308,9 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
                     for (auto &Path1 : InnerPathMapIt1.second) {
                         for (auto &Path2 : InnerPathMapIt2.second) {
                             auto Smt2 = pathToSMT(Path2, name("false"), 2);
-                            PathExprs.push_back(std::make_shared<Assert>(
-                                wrapForall(pathToSMT(Path1, Smt2, 1),
-                                           StartIndex,
-                                           FreeVarsMap.at(StartIndex))));
+                            PathExprs.push_back(wrapForall(
+                                pathToSMT(Path1, Smt2, 1), StartIndex,
+                                FreeVarsMap.at(StartIndex)));
                         }
                     }
                 }
@@ -319,7 +318,8 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
         }
     }
 
-    SMTExprs.insert(SMTExprs.end(), PathExprs.begin(), PathExprs.end());
+    auto AndClause = std::make_shared<Op>("and", PathExprs);
+    SMTExprs.push_back(std::make_shared<Assert>(AndClause));
     SMTExprs.push_back(make_shared<CheckSat>());
     SMTExprs.push_back(make_shared<GetModel>());
 
