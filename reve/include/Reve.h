@@ -37,7 +37,8 @@ auto convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
 auto toDef(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB)
     -> std::tuple<std::string, SMTRef>;
 auto getPredName(const llvm::CmpInst::Predicate Pred) -> std::string;
-auto getInstrNameOrValue(const llvm::Value *Val, const llvm::Type *Ty) -> SMTRef;
+auto getInstrNameOrValue(const llvm::Value *Val, const llvm::Type *Ty)
+    -> SMTRef;
 auto invariant(int BlockIndex, std::set<std::string> Args) -> SMTRef;
 auto getOpName(const llvm::BinaryOperator &Op) -> std::string;
 auto swapIndex(int I) -> int;
@@ -46,9 +47,14 @@ auto instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB,
     -> std::vector<std::tuple<std::string, SMTRef>>;
 auto pathToSMT(Path Path, SMTRef EndClause, int Program) -> SMTRef;
 auto invName(int Index) -> std::string;
-auto wrapForall(SMTRef Clause, int BlockIndex, std::set<std::string> FreeVars)
-    -> SMTRef;
+auto wrapForall(SMTRef Clause, int BlockIndex, std::set<std::string> FreeVars,
+                std::set<std::string> FunArgs) -> SMTRef;
 auto invariantDef(int BlockIndex, std::set<std::string> FreeVars) -> SMTRef;
-auto freeVars(std::map<int, Paths> PathMap) -> std::pair<std::set<std::string>, std::set<std::string>>;
-auto freeVarsMap(PathMap Map1, PathMap Map2) -> std::map<int, std::set<std::string>>;
+auto freeVars(std::map<int, Paths> PathMap)
+    -> std::pair<std::set<std::string>, std::set<std::string>>;
+auto freeVarsMap(PathMap Map1, PathMap Map2)
+    -> std::map<int, std::set<std::string>>;
+auto functionArgs(llvm::Function &Fun1, llvm::Function &Fun2)
+    -> std::set<std::string>;
+auto wrapToplevelForall(SMTRef Clause, std::set<std::string> Args) -> SMTRef;
 #endif // REVE_H

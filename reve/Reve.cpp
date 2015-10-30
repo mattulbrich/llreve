@@ -261,6 +261,20 @@ ErrorOr<llvm::Function &> getFunction(llvm::Module &Mod) {
     return ErrorOr<llvm::Function &>(Fun);
 }
 
+std::set<std::string> functionArgs(llvm::Function &Fun1, llvm::Function &Fun2) {
+    set<string> Args;
+    for (auto &Arg : Fun1.args()) {
+        Args.insert(Arg.getName());
+    }
+    for (auto &Arg : Fun2.args()) {
+        auto CheckPair = Args.insert(Arg.getName());
+        if (CheckPair.second) {
+            llvm::errs() << "New argument in function 2\n";
+        }
+    }
+    return Args;
+}
+
 void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
                   unique_ptr<llvm::FunctionAnalysisManager> Fam1,
                   unique_ptr<llvm::FunctionAnalysisManager> Fam2) {
@@ -270,6 +284,7 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
     auto Marked1 = Fam1->getResult<MarkAnalysis>(Fun1);
     auto Marked2 = Fam2->getResult<MarkAnalysis>(Fun2);
     std::map<int, set<string>> FreeVarsMap = freeVarsMap(PathMap1, PathMap2);
+    set<string> FunArgs = functionArgs(Fun1, Fun2);
     std::vector<SMTRef> SMTExprs;
     std::vector<SMTRef> PathExprs;
 
@@ -290,9 +305,9 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
                     auto Smt2 = pathToSMT(
                         Path2, invariant(EndIndex, FreeVarsMap.at(EndIndex)),
                         2);
-                    PathExprs.push_back(wrapForall(pathToSMT(Path1, Smt2, 1),
-                                                   StartIndex,
-                                                   FreeVarsMap.at(StartIndex)));
+                    PathExprs.push_back(
+                        wrapForall(pathToSMT(Path1, Smt2, 1), StartIndex,
+                                   FreeVarsMap.at(StartIndex), FunArgs));
                 }
             }
         }
@@ -310,7 +325,7 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
                             auto Smt2 = pathToSMT(Path2, name("false"), 2);
                             PathExprs.push_back(wrapForall(
                                 pathToSMT(Path1, Smt2, 1), StartIndex,
-                                FreeVarsMap.at(StartIndex)));
+                                FreeVarsMap.at(StartIndex), FunArgs));
                         }
                     }
                 }
@@ -319,7 +334,8 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
     }
 
     auto AndClause = std::make_shared<Op>("and", PathExprs);
-    SMTExprs.push_back(std::make_shared<Assert>(AndClause));
+    SMTExprs.push_back(
+        std::make_shared<Assert>(wrapToplevelForall(AndClause, FunArgs)));
     SMTExprs.push_back(make_shared<CheckSat>());
     SMTExprs.push_back(make_shared<GetModel>());
 
@@ -343,6 +359,15 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
     if (!OutputFileName.empty()) {
         OFStream.close();
     }
+}
+
+SMTRef wrapToplevelForall(SMTRef Clause, set<string> Args) {
+    std::vector<SortedVar> VecArgs;
+    for (auto Arg : Args) {
+        // TODO(moritz): don't hardcode type
+        VecArgs.push_back(SortedVar(Arg, "Int"));
+    }
+    return make_shared<Forall>(VecArgs, Clause);
 }
 
 SMTRef pathToSMT(Path Path, SMTRef EndClause, int Program) {
@@ -501,15 +526,21 @@ string invName(int Index) {
     return "INV_" + std::to_string(Index);
 }
 
-SMTRef wrapForall(SMTRef Clause, int BlockIndex, set<string> FreeVars) {
+SMTRef wrapForall(SMTRef Clause, int BlockIndex, set<string> FreeVars,
+                  set<string> FunArgs) {
     std::vector<SortedVar> Vars;
     for (auto &Arg : FreeVars) {
         // TODO(moritz): detect type
-        Vars.push_back(SortedVar(Arg, "Int"));
+        if (FunArgs.find(Arg) == FunArgs.end()) {
+            Vars.push_back(SortedVar(Arg, "Int"));
+        }
     }
     // no entry invariant
     if (BlockIndex != -1) {
         Clause = makeBinOp("=>", invariant(BlockIndex, FreeVars), Clause);
+    }
+    if (Vars.empty()) {
+        return Clause;
     }
     return llvm::make_unique<Forall>(Vars, Clause);
 }
@@ -584,6 +615,8 @@ std::map<int, set<string>> freeVarsMap(PathMap Map1, PathMap Map2) {
             FreeVars1.first.insert(Var);
         }
         FreeVarsMap.insert(make_pair(Index, FreeVars1.first));
+
+        // constructed variables
         for (auto Var : FreeVars2.second) {
             FreeVars1.second.insert(Var);
         }
