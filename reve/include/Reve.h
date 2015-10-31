@@ -52,12 +52,19 @@ auto wrapForall(SMTRef Clause, int BlockIndex, std::set<std::string> FreeVars,
 auto invariantDef(int BlockIndex, std::set<std::string> FreeVars) -> SMTRef;
 auto freeVars(std::map<int, Paths> PathMap)
     -> std::pair<std::set<std::string>, std::set<std::string>>;
-auto freeVarsMap(PathMap Map1, PathMap Map2)
+auto freeVarsMap(PathMap Map1, PathMap Map2, set<string> FunArgs)
     -> std::map<int, std::set<std::string>>;
 auto functionArgs(llvm::Function &Fun1, llvm::Function &Fun2)
     -> std::pair<std::set<std::string>, std::set<std::string>>;
 auto wrapToplevelForall(SMTRef Clause, std::set<std::string> Args) -> SMTRef;
 auto makeFunArgsEqual(SMTRef Clause, std::set<std::string> Args1,
                       std::set<std::string> Args2) -> SMTRef;
+auto forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
+                    std::map<int, set<string>> FreeVarsMap,
+                    std::set<std::string> FunArgs) -> std::vector<SMTRef>;
+auto synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
+                       std::map<int, set<string>> FreeVarsMap,
+                       std::set<std::string> FunArgs)
+    -> std::pair<std::vector<SMTRef>, std::vector<SMTRef>>;
 
 #endif // REVE_H

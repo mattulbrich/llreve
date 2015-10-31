@@ -298,7 +298,6 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
     auto PathMap2 = Fam2->getResult<PathAnalysis>(Fun2);
     auto Marked1 = Fam1->getResult<MarkAnalysis>(Fun1);
     auto Marked2 = Fam2->getResult<MarkAnalysis>(Fun2);
-    std::map<int, set<string>> FreeVarsMap = freeVarsMap(PathMap1, PathMap2);
     std::pair<set<string>, set<string>> FunArgsPair = functionArgs(Fun1, Fun2);
     set<string> FunArgs;
     for (auto Arg : FunArgsPair.first) {
@@ -307,55 +306,31 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
     for (auto Arg : FunArgsPair.second) {
         FunArgs.insert(Arg);
     }
+    std::map<int, set<string>> FreeVarsMap =
+        freeVarsMap(PathMap1, PathMap2, FunArgs);
     std::vector<SMTRef> SMTExprs;
     std::vector<SMTRef> PathExprs;
 
     SMTExprs.push_back(std::make_shared<SetLogic>("HORN"));
 
-    SMTExprs.push_back(invariantDef(-3, FunArgs));
+    SMTExprs.push_back(invariantDef(-2, FunArgs));
 
-    for (auto &PathMapIt : PathMap1) {
-        int StartIndex = PathMapIt.first;
-        if (StartIndex != -1) {
-            // ignore entry node
-            SMTExprs.push_back(
-                invariantDef(StartIndex, FreeVarsMap.at(StartIndex)));
-        }
-        for (auto &InnerPathMapIt : PathMapIt.second) {
-            int EndIndex = InnerPathMapIt.first;
-            auto Paths = PathMap2.at(StartIndex).at(EndIndex);
-            for (auto &Path1 : InnerPathMapIt.second) {
-                for (auto &Path2 : Paths) {
-                    auto Smt2 = pathToSMT(
-                        Path2, invariant(EndIndex, FreeVarsMap.at(EndIndex)),
-                        2);
-                    PathExprs.push_back(
-                        wrapForall(pathToSMT(Path1, Smt2, 1), StartIndex,
-                                   FreeVarsMap.at(StartIndex), FunArgs));
-                }
-            }
-        }
-    }
+    auto SynchronizedPaths =
+        synchronizedPaths(PathMap1, PathMap2, FreeVarsMap, FunArgs);
+
+    // add invariant defs
+    SMTExprs.insert(SMTExprs.end(), SynchronizedPaths.first.begin(),
+                    SynchronizedPaths.first.end());
+
+    // add actual path smts
+    PathExprs.insert(PathExprs.end(), SynchronizedPaths.second.begin(),
+                     SynchronizedPaths.second.end());
 
     // generate forbidden paths
-    for (auto &PathMapIt : PathMap1) {
-        int StartIndex = PathMapIt.first;
-        for (auto &InnerPathMapIt1 : PathMapIt.second) {
-            int EndIndex = InnerPathMapIt1.first;
-            for (auto &InnerPathMapIt2 : PathMap2.at(StartIndex)) {
-                if (EndIndex != InnerPathMapIt2.first) {
-                    for (auto &Path1 : InnerPathMapIt1.second) {
-                        for (auto &Path2 : InnerPathMapIt2.second) {
-                            auto Smt2 = pathToSMT(Path2, name("false"), 2);
-                            PathExprs.push_back(wrapForall(
-                                pathToSMT(Path1, Smt2, 1), StartIndex,
-                                FreeVarsMap.at(StartIndex), FunArgs));
-                        }
-                    }
-                }
-            }
-        }
-    }
+    auto ForbiddenPaths =
+        forbiddenPaths(PathMap1, PathMap2, FreeVarsMap, FunArgs);
+    PathExprs.insert(PathExprs.end(), ForbiddenPaths.begin(),
+                     ForbiddenPaths.end());
 
     auto AndClause = std::make_shared<Op>("and", PathExprs);
     SMTExprs.push_back(std::make_shared<Assert>(wrapToplevelForall(
@@ -384,6 +359,61 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
     if (!OutputFileName.empty()) {
         OFStream.close();
     }
+}
+
+std::pair<std::vector<SMTRef>, std::vector<SMTRef>>
+synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
+                  std::map<int, set<string>> FreeVarsMap, set<string> FunArgs) {
+    std::vector<SMTRef> InvariantDefs;
+    std::vector<SMTRef> PathExprs;
+    for (auto &PathMapIt : PathMap1) {
+        int StartIndex = PathMapIt.first;
+        if (StartIndex != -1) {
+            // ignore entry node
+            InvariantDefs.push_back(
+                invariantDef(StartIndex, FreeVarsMap.at(StartIndex)));
+        }
+        for (auto &InnerPathMapIt : PathMapIt.second) {
+            int EndIndex = InnerPathMapIt.first;
+            auto Paths = PathMap2.at(StartIndex).at(EndIndex);
+            for (auto &Path1 : InnerPathMapIt.second) {
+                for (auto &Path2 : Paths) {
+                    auto Smt2 = pathToSMT(
+                        Path2, invariant(EndIndex, FreeVarsMap.at(EndIndex)),
+                        2);
+                    PathExprs.push_back(
+                        wrapForall(pathToSMT(Path1, Smt2, 1), StartIndex,
+                                   FreeVarsMap.at(StartIndex), FunArgs));
+                }
+            }
+        }
+    }
+    return make_pair(InvariantDefs, PathExprs);
+}
+
+std::vector<SMTRef> forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
+                                   std::map<int, set<string>> FreeVarsMap,
+                                   set<string> FunArgs) {
+    std::vector<SMTRef> PathExprs;
+    for (auto &PathMapIt : PathMap1) {
+        int StartIndex = PathMapIt.first;
+        for (auto &InnerPathMapIt1 : PathMapIt.second) {
+            int EndIndex = InnerPathMapIt1.first;
+            for (auto &InnerPathMapIt2 : PathMap2.at(StartIndex)) {
+                if (EndIndex != InnerPathMapIt2.first) {
+                    for (auto &Path1 : InnerPathMapIt1.second) {
+                        for (auto &Path2 : InnerPathMapIt2.second) {
+                            auto Smt2 = pathToSMT(Path2, name("false"), 2);
+                            PathExprs.push_back(wrapForall(
+                                pathToSMT(Path1, Smt2, 1), StartIndex,
+                                FreeVarsMap.at(StartIndex), FunArgs));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return PathExprs;
 }
 
 SMTRef wrapToplevelForall(SMTRef Clause, set<string> Args) {
@@ -539,13 +569,16 @@ SMTRef invariant(int BlockIndex, set<string> Args) {
 }
 
 SMTRef invariantDef(int BlockIndex, set<string> FreeVars) {
-    std::vector<string> Args(FreeVars.size() + (BlockIndex == -3 ? 2 : 0), "Int");
+    // Add two arguments for the result args if we are establishing the
+    // recursive invariant
+    auto NumArgs = FreeVars.size() + (BlockIndex == -2 ? 2 : 0);
+    std::vector<string> Args(NumArgs, "Int");
 
     return std::make_shared<class Fun>(invName(BlockIndex), Args, "Bool");
 }
 
 string invName(int Index) {
-    if (Index == -3) {
+    if (Index == -2) {
         return "INV_REC";
     }
     return "INV_" + std::to_string(Index);
@@ -629,7 +662,8 @@ std::pair<set<string>, set<string>> freeVars(std::map<int, Paths> PathMap) {
     return std::make_pair(FreeVars, ConstructedIntersection);
 }
 
-std::map<int, set<string>> freeVarsMap(PathMap Map1, PathMap Map2) {
+std::map<int, set<string>> freeVarsMap(PathMap Map1, PathMap Map2,
+                                       set<string> FunArgs) {
     std::map<int, set<string>> FreeVarsMap;
     std::map<int, set<string>> Constructed;
     for (auto &It : Map1) {
@@ -647,7 +681,7 @@ std::map<int, set<string>> freeVarsMap(PathMap Map1, PathMap Map2) {
         }
         Constructed.insert(make_pair(Index, FreeVars1.second));
     }
-    FreeVarsMap.insert(make_pair(-2, set<string>()));
+    FreeVarsMap.insert(make_pair(-2, FunArgs));
 
     // search for a least fixpoint
     // don't tell anyone I wrote that
