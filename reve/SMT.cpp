@@ -262,3 +262,15 @@ SMTRef nestLets(SMTRef Clause, std::vector<std::tuple<string, SMTRef>> Defs) {
     }
     return Lets;
 }
+
+SMTRef Comment::compressLets(std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs) const {
+    return nestLets(make_shared<Comment>(Val), Defs);
+}
+
+SExprRef Comment::toSExpr() const {
+    return llvm::make_unique<class sexpr::Comment<std::string>>(Val);
+}
+
+std::set<std::string> Comment::uses() const {
+    return std::set<std::string>();
+}

@@ -327,6 +327,7 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
                      SynchronizedPaths.second.end());
 
     // generate forbidden paths
+    PathExprs.push_back(make_shared<Comment>("FORBIDDEN PATHS"));
     auto ForbiddenPaths =
         forbiddenPaths(PathMap1, PathMap2, FreeVarsMap, FunArgs);
     PathExprs.insert(PathExprs.end(), ForbiddenPaths.begin(),
@@ -494,6 +495,8 @@ string getOpName(const llvm::BinaryOperator &Op) {
         return "-";
     case Instruction::Mul:
         return "*";
+    case Instruction::SDiv:
+        return "div";
     default:
         return Op.getOpcodeName();
     }
@@ -611,6 +614,7 @@ std::pair<set<string>, set<string>> freeVars(std::map<int, Paths> PathMap) {
     bool First = true;
     for (auto &Paths : PathMap) {
         for (auto &Path : Paths.second) {
+            llvm::BasicBlock *Prev = Path.Start;
             set<string> Constructed;
 
             // the first block is special since we can't resolve phi
@@ -629,11 +633,17 @@ std::pair<set<string>, set<string>> freeVars(std::map<int, Paths> PathMap) {
                 }
             }
 
-            // now deal with the rest and ignore phi nodes
+            // now deal with the rest
             for (auto &Edge : Path.Edges) {
                 for (auto &Instr : *Edge.Block) {
                     Constructed.insert(Instr.getName());
-                    if (llvm::isa<llvm::PHINode>(Instr)) {
+                    if (auto PhiInst = llvm::dyn_cast<llvm::PHINode>(&Instr)) {
+                        auto Incoming = PhiInst->getIncomingValueForBlock(Prev);
+                        if (Constructed.find(Incoming->getName()) ==
+                                Constructed.end() &&
+                            !Incoming->getName().empty()) {
+                            FreeVars.insert(Incoming->getName());
+                        }
                         continue;
                     }
                     for (auto Op : Instr.operand_values()) {
@@ -644,6 +654,7 @@ std::pair<set<string>, set<string>> freeVars(std::map<int, Paths> PathMap) {
                         }
                     }
                 }
+                Prev = Edge.Block;
             }
 
             set<string> NewConstructedIntersection;

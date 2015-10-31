@@ -19,7 +19,9 @@ template <typename T> class SExpr {
 template <typename T> class Value : public SExpr<T> {
   public:
     explicit Value(T Val) : Val(std::move(Val)) {}
-    void serialize(std::ostream &OS, size_t /*unused*/) const override { OS << Val; }
+    void serialize(std::ostream &OS, size_t /*unused*/) const override {
+        OS << Val;
+    }
     T Val;
 };
 
@@ -29,8 +31,8 @@ template <typename T> class Apply : public SExpr<T> {
         : Fun(std::move(Fun)), Args(std::move(Args)) {}
     void serialize(std::ostream &OS, size_t Indent) const override {
         OS << "(" << Fun;
-        std::vector<std::string> AtomicOps = {"+", "-",  "*", "<=", "<",
-                                              ">", ">=", "=",  "not", "distinct"};
+        std::vector<std::string> AtomicOps = {
+            "+", "-", "*", "<=", "<", ">", ">=", "=", "not", "distinct"};
         std::vector<std::string> ForceIndentOps = {"assert"};
         bool AtomicOp = std::find(AtomicOps.begin(), AtomicOps.end(), Fun) !=
                         AtomicOps.end();
@@ -79,12 +81,21 @@ template <typename T> class List : public SExpr<T> {
     std::vector<std::unique_ptr<const SExpr<T>>> Elements;
 };
 
+template <typename T> class Comment : public SExpr<T> {
+public:
+    explicit Comment(std::string Val) : Val(std::move(Val)) {}
+    void serialize(std::ostream &OS, size_t /*unused*/) const override {
+        OS << "; " << Val;
+    }
+    std::string Val;
+};
+
 template <typename T>
 std::ostream &operator<<(std::ostream &OS, const SExpr<T> &Val) {
     Val.serialize(OS, 0);
     return OS;
 }
 
-}  // namespace sexpr
+} // namespace sexpr
 
 #endif // SEXPR_H

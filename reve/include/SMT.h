@@ -106,9 +106,9 @@ class Let : public SMTExpr {
     Let(std::vector<std::tuple<std::string, SMTRef>> Defs, SMTRef Expr)
         : Defs(std::move(Defs)), Expr(std::move(Expr)) {}
     set<string> uses() const override;
-    shared_ptr<const SMTExpr> compressLets(
-        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> PassedDefs)
-        const override;
+    shared_ptr<const SMTExpr>
+    compressLets(std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>>
+                     PassedDefs) const override;
 };
 
 template <typename T> class Primitive : public SMTExpr {
@@ -157,6 +157,17 @@ class Fun : public SMTExpr {
     std::string FunName;
     std::vector<std::string> InTypes;
     std::string OutType;
+    SExprRef toSExpr() const override;
+    set<string> uses() const override;
+    shared_ptr<const SMTExpr> compressLets(
+        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        const override;
+};
+
+class Comment : public SMTExpr {
+  public:
+    Comment(std::string Val) : Val(std::move(Val)) {}
+    std::string Val;
     SExprRef toSExpr() const override;
     set<string> uses() const override;
     shared_ptr<const SMTExpr> compressLets(
