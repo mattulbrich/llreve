@@ -261,18 +261,33 @@ ErrorOr<llvm::Function &> getFunction(llvm::Module &Mod) {
     return ErrorOr<llvm::Function &>(Fun);
 }
 
-std::set<std::string> functionArgs(llvm::Function &Fun1, llvm::Function &Fun2) {
-    set<string> Args;
+std::pair<set<string>, set<string>> functionArgs(llvm::Function &Fun1,
+                                                 llvm::Function &Fun2) {
+    set<string> Args1;
     for (auto &Arg : Fun1.args()) {
-        Args.insert(Arg.getName());
+        Args1.insert(Arg.getName());
     }
+    set<string> Args2;
     for (auto &Arg : Fun2.args()) {
-        auto CheckPair = Args.insert(Arg.getName());
-        if (CheckPair.second) {
-            llvm::errs() << "New argument in function 2\n";
-        }
+        Args2.insert(Arg.getName());
     }
-    return Args;
+    return std::make_pair(Args1, Args2);
+}
+
+SMTRef makeFunArgsEqual(SMTRef Clause, set<string> Args1, set<string> Args2) {
+    std::vector<SMTRef> Args;
+    if (Args1.size() != Args2.size()) {
+        llvm::errs() << "Warning: different number of arguments\n";
+    }
+    auto It = Args2.begin();
+    for (auto Arg : Args1) {
+        Args.push_back(makeBinOp("=", Arg, *It));
+        ++It;
+    }
+
+    auto And = make_shared<Op>("and", Args);
+
+    return makeBinOp("=>", And, Clause);
 }
 
 void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
@@ -284,7 +299,14 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
     auto Marked1 = Fam1->getResult<MarkAnalysis>(Fun1);
     auto Marked2 = Fam2->getResult<MarkAnalysis>(Fun2);
     std::map<int, set<string>> FreeVarsMap = freeVarsMap(PathMap1, PathMap2);
-    set<string> FunArgs = functionArgs(Fun1, Fun2);
+    std::pair<set<string>, set<string>> FunArgsPair = functionArgs(Fun1, Fun2);
+    set<string> FunArgs;
+    for (auto Arg : FunArgsPair.first) {
+        FunArgs.insert(Arg);
+    }
+    for (auto Arg : FunArgsPair.second) {
+        FunArgs.insert(Arg);
+    }
     std::vector<SMTRef> SMTExprs;
     std::vector<SMTRef> PathExprs;
 
@@ -334,8 +356,9 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
     }
 
     auto AndClause = std::make_shared<Op>("and", PathExprs);
-    SMTExprs.push_back(
-        std::make_shared<Assert>(wrapToplevelForall(AndClause, FunArgs)));
+    SMTExprs.push_back(std::make_shared<Assert>(wrapToplevelForall(
+        makeFunArgsEqual(AndClause, FunArgsPair.first, FunArgsPair.second),
+        FunArgs)));
     SMTExprs.push_back(make_shared<CheckSat>());
     SMTExprs.push_back(make_shared<GetModel>());
 

@@ -55,6 +55,9 @@ auto freeVars(std::map<int, Paths> PathMap)
 auto freeVarsMap(PathMap Map1, PathMap Map2)
     -> std::map<int, std::set<std::string>>;
 auto functionArgs(llvm::Function &Fun1, llvm::Function &Fun2)
-    -> std::set<std::string>;
+    -> std::pair<std::set<std::string>, std::set<std::string>>;
 auto wrapToplevelForall(SMTRef Clause, std::set<std::string> Args) -> SMTRef;
+auto makeFunArgsEqual(SMTRef Clause, std::set<std::string> Args1,
+                      std::set<std::string> Args2) -> SMTRef;
+
 #endif // REVE_H
