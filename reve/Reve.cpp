@@ -316,7 +316,10 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
     SMTExprs.push_back(invariantDef(-2, FunArgs));
 
     auto SynchronizedPaths =
-        synchronizedPaths(PathMap1, PathMap2, FreeVarsMap, FunArgs);
+        synchronizedPaths(PathMap1, PathMap2, FreeVarsMap, FunArgs,
+                          makeBinOp("=", "result$1", "result$2"));
+    auto SynchronizedPathsRec = synchronizedPaths(
+        PathMap1, PathMap2, FreeVarsMap, FunArgs, termInv(FunArgs));
 
     // add invariant defs
     SMTExprs.insert(SMTExprs.end(), SynchronizedPaths.first.begin(),
@@ -333,13 +336,21 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
     PathExprs.insert(PathExprs.end(), ForbiddenPaths.begin(),
                      ForbiddenPaths.end());
 
+    // main clause enforcing equality of results given equal inputs
     auto AndClause = std::make_shared<Op>("and", PathExprs);
     SMTExprs.push_back(std::make_shared<Assert>(wrapToplevelForall(
         makeFunArgsEqual(AndClause, FunArgsPair.first, FunArgsPair.second),
         FunArgs)));
+
+    // establish recursive invariant
+    auto AndClauseRec =
+        std::make_shared<Op>("and", SynchronizedPathsRec.second);
+    // SMTExprs.push_back(
+    //     std::make_shared<Assert>(wrapToplevelForall(AndClauseRec, FunArgs)));
     SMTExprs.push_back(make_shared<CheckSat>());
     SMTExprs.push_back(make_shared<GetModel>());
 
+    // write to file or to stdout
     std::streambuf *Buf;
     std::ofstream OFStream;
 
@@ -364,7 +375,8 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
 
 std::pair<std::vector<SMTRef>, std::vector<SMTRef>>
 synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
-                  std::map<int, set<string>> FreeVarsMap, set<string> FunArgs) {
+                  std::map<int, set<string>> FreeVarsMap, set<string> FunArgs,
+                  SMTRef TermClause) {
     std::vector<SMTRef> InvariantDefs;
     std::vector<SMTRef> PathExprs;
     for (auto &PathMapIt : PathMap1) {
@@ -380,7 +392,8 @@ synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
             for (auto &Path1 : InnerPathMapIt.second) {
                 for (auto &Path2 : Paths) {
                     auto Smt2 = pathToSMT(
-                        Path2, invariant(EndIndex, FreeVarsMap.at(EndIndex)),
+                        Path2, invariant(EndIndex, FreeVarsMap.at(EndIndex),
+                                         TermClause),
                         2);
                     PathExprs.push_back(
                         wrapForall(pathToSMT(Path1, Smt2, 1), StartIndex,
@@ -564,9 +577,9 @@ instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB,
     return Defs;
 }
 
-SMTRef invariant(int BlockIndex, set<string> Args) {
+SMTRef invariant(int BlockIndex, set<string> Args, SMTRef TermClause) {
     if (BlockIndex == -2) {
-        return makeBinOp("=", "result$1", "result$2");
+        return TermClause;
     }
     std::vector<string> ArgsVect;
     ArgsVect.insert(ArgsVect.begin(), Args.begin(), Args.end());
@@ -580,6 +593,14 @@ SMTRef invariantDef(int BlockIndex, set<string> FreeVars) {
     std::vector<string> Args(NumArgs, "Int");
 
     return std::make_shared<class Fun>(invName(BlockIndex), Args, "Bool");
+}
+
+SMTRef termInv(set<string> FunArgs) {
+    std::vector<string> Args;
+    Args.insert(Args.begin(), FunArgs.begin(), FunArgs.end());
+    Args.push_back("result$1");
+    Args.push_back("result$2");
+    return makeOp(invName(-2), Args);
 }
 
 string invName(int Index) {
@@ -600,7 +621,10 @@ SMTRef wrapForall(SMTRef Clause, int BlockIndex, set<string> FreeVars,
     }
     // no entry invariant
     if (BlockIndex != -1) {
-        Clause = makeBinOp("=>", invariant(BlockIndex, FreeVars), Clause);
+        Clause = makeBinOp(
+            "=>", invariant(BlockIndex, FreeVars,
+                            name("terminating_instruction_at_the_beginning")),
+            Clause);
     }
     if (Vars.empty()) {
         return Clause;

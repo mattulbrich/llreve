@@ -39,7 +39,7 @@ auto toDef(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB)
 auto getPredName(const llvm::CmpInst::Predicate Pred) -> std::string;
 auto getInstrNameOrValue(const llvm::Value *Val, const llvm::Type *Ty)
     -> SMTRef;
-auto invariant(int BlockIndex, std::set<std::string> Args) -> SMTRef;
+auto invariant(int BlockIndex, std::set<std::string> Args, SMTRef TermClause) -> SMTRef;
 auto getOpName(const llvm::BinaryOperator &Op) -> std::string;
 auto swapIndex(int I) -> int;
 auto instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB,
@@ -64,7 +64,8 @@ auto forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
                     std::set<std::string> FunArgs) -> std::vector<SMTRef>;
 auto synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                        std::map<int, set<string>> FreeVarsMap,
-                       std::set<std::string> FunArgs)
+                       std::set<std::string> FunArgs, SMTRef TermClause)
     -> std::pair<std::vector<SMTRef>, std::vector<SMTRef>>;
+auto termInv(std::set<std::string> FunArgs) -> SMTRef;
 
 #endif // REVE_H
