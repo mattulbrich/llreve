@@ -312,6 +312,8 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
 
     SMTExprs.push_back(std::make_shared<SetLogic>("HORN"));
 
+    SMTExprs.push_back(invariantDef(-3, FunArgs));
+
     for (auto &PathMapIt : PathMap1) {
         int StartIndex = PathMapIt.first;
         if (StartIndex != -1) {
@@ -537,14 +539,14 @@ SMTRef invariant(int BlockIndex, set<string> Args) {
 }
 
 SMTRef invariantDef(int BlockIndex, set<string> FreeVars) {
-    std::vector<string> Args(FreeVars.size(), "Int");
+    std::vector<string> Args(FreeVars.size() + (BlockIndex == -3 ? 2 : 0), "Int");
 
     return std::make_shared<class Fun>(invName(BlockIndex), Args, "Bool");
 }
 
 string invName(int Index) {
-    if (Index == -1) {
-        return "INV_ENTRY";
+    if (Index == -3) {
+        return "INV_REC";
     }
     return "INV_" + std::to_string(Index);
 }
