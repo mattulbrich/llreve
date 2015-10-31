@@ -492,6 +492,8 @@ string getOpName(const llvm::BinaryOperator &Op) {
         return "+";
     case Instruction::Sub:
         return "-";
+    case Instruction::Mul:
+        return "*";
     default:
         return Op.getOpcodeName();
     }
