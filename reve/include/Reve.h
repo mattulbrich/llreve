@@ -11,6 +11,9 @@
 #include "llvm/IR/PassManager.h"
 #include "llvm/Option/Option.h"
 
+using Assignment = std::tuple<std::string, SMTRef>;
+using Assignments = std::pair<std::vector<Assignment>, SMTRef>;
+
 auto main(int Argc, const char **Argv) -> int;
 auto getFunction(llvm::Module &Mod) -> llvm::ErrorOr<llvm::Function &>;
 template <int N>
@@ -46,8 +49,8 @@ auto swapIndex(int I) -> int;
 auto instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB,
                  bool IgnorePhis, int Program, set<string> &Constructed)
     -> std::vector<std::tuple<std::string, SMTRef>>;
-auto pathToSMT(Path Path, SMTRef EndClause, int Program,
-               std::set<std::string> FreeVars) -> SMTRef;
+auto pathToSMT(Path Path, int Program, std::set<std::string> FreeVars)
+    -> std::vector<std::vector<Assignments>>;
 auto invName(int Index) -> std::string;
 auto wrapForall(SMTRef Clause, std::set<std::string> FreeVars) -> SMTRef;
 auto invariantDef(int BlockIndex, std::set<std::string> FreeVars) -> SMTRef;
@@ -71,5 +74,9 @@ auto equalInputsEqualOutputs(set<string> FunArgs, set<string> FunArgs1,
                              set<string> FunArgs2) -> SMTRef;
 auto filterVars(int Program, std::set<std::string> Vars)
     -> std::set<std::string>;
+auto interleaveSMT(SMTRef EndClause,
+                   std::vector<std::vector<Assignments>> Assignments1,
+                   std::vector<std::vector<Assignments>> Assignments2)
+    -> SMTRef;
 
 #endif // REVE_H

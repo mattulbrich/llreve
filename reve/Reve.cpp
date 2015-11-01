@@ -315,8 +315,7 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
 
     SMTExprs.push_back(invariantDef(-1, FunArgs));
 
-    auto SynchronizedPaths =
-        synchronizedPaths(PathMap1, PathMap2, FreeVarsMap);
+    auto SynchronizedPaths = synchronizedPaths(PathMap1, PathMap2, FreeVarsMap);
 
     // add invariant defs
     SMTExprs.insert(SMTExprs.end(), SynchronizedPaths.first.begin(),
@@ -331,6 +330,7 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
                      SynchronizedPaths.second.end());
 
     // TODO (moritz): Figure out what to do about that
+
     // generate forbidden paths
     // PathExprs.push_back(make_shared<Comment>("FORBIDDEN PATHS"));
     // auto ForbiddenPaths =
@@ -384,14 +384,15 @@ synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
             auto Paths = PathMap2.at(StartIndex).at(EndIndex);
             for (auto &Path1 : InnerPathMapIt.second) {
                 for (auto &Path2 : Paths) {
-                    auto Smt2 =
-                        pathToSMT(Path2, invariant(StartIndex, EndIndex,
-                                                   FreeVarsMap.at(StartIndex),
-                                                   FreeVarsMap.at(EndIndex)),
-                                  2, FreeVarsMap.at(EndIndex));
-                    PathExprs.push_back(std::make_shared<Assert>(wrapForall(
-                        pathToSMT(Path1, Smt2, 1, FreeVarsMap.at(EndIndex)),
-                        FreeVarsMap.at(StartIndex))));
+                    auto EndInvariant = invariant(StartIndex, EndIndex,
+                                                  FreeVarsMap.at(StartIndex),
+                                                  FreeVarsMap.at(EndIndex));
+                    auto Defs1 = pathToSMT(Path1, 1, FreeVarsMap.at(EndIndex));
+                    auto Defs2 = pathToSMT(Path2, 2, FreeVarsMap.at(EndIndex));
+                    PathExprs.push_back(std::make_shared<Assert>(
+                        wrapForall(interleaveSMT(EndInvariant, Defs1, Defs2),
+                                   FreeVarsMap.at(StartIndex))));
+                    ;
                 }
             }
         }
@@ -399,31 +400,31 @@ synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
     return make_pair(InvariantDefs, PathExprs);
 }
 
-std::vector<SMTRef> forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
-                                   std::map<int, set<string>> FreeVarsMap) {
-    std::vector<SMTRef> PathExprs;
-    for (auto &PathMapIt : PathMap1) {
-        int StartIndex = PathMapIt.first;
-        for (auto &InnerPathMapIt1 : PathMapIt.second) {
-            int EndIndex = InnerPathMapIt1.first;
-            for (auto &InnerPathMapIt2 : PathMap2.at(StartIndex)) {
-                if (EndIndex != InnerPathMapIt2.first) {
-                    for (auto &Path1 : InnerPathMapIt1.second) {
-                        for (auto &Path2 : InnerPathMapIt2.second) {
-                            auto Smt2 = pathToSMT(Path2, name("false"), 2,
-                                                  FreeVarsMap.at(EndIndex));
-                            PathExprs.push_back(std::make_shared<Assert>(
-                                wrapForall(pathToSMT(Path1, Smt2, 1,
-                                                     FreeVarsMap.at(EndIndex)),
-                                           FreeVarsMap.at(StartIndex))));
-                        }
-                    }
-                }
-            }
-        }
-    }
-    return PathExprs;
-}
+// std::vector<SMTRef> forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
+//                                    std::map<int, set<string>> FreeVarsMap) {
+//     std::vector<SMTRef> PathExprs;
+//     for (auto &PathMapIt : PathMap1) {
+//         int StartIndex = PathMapIt.first;
+//         for (auto &InnerPathMapIt1 : PathMapIt.second) {
+//             int EndIndex = InnerPathMapIt1.first;
+//             for (auto &InnerPathMapIt2 : PathMap2.at(StartIndex)) {
+//                 if (EndIndex != InnerPathMapIt2.first) {
+//                     for (auto &Path1 : InnerPathMapIt1.second) {
+//                         for (auto &Path2 : InnerPathMapIt2.second) {
+//                             auto Smt2 = pathToSMT(Path2, name("false"), 2,
+//                                                   FreeVarsMap.at(EndIndex));
+//                             PathExprs.push_back(std::make_shared<Assert>(
+//                                 wrapForall(pathToSMT(Path1, Smt2, 1,
+//                                                      FreeVarsMap.at(EndIndex)),
+//                                            FreeVarsMap.at(StartIndex))));
+//                         }
+//                     }
+//                 }
+//             }
+//         }
+//     }
+//     return PathExprs;
+// }
 
 SMTRef wrapToplevelForall(SMTRef Clause, set<string> Args) {
     std::vector<SortedVar> VecArgs;
@@ -434,16 +435,43 @@ SMTRef wrapToplevelForall(SMTRef Clause, set<string> Args) {
     return make_shared<Forall>(VecArgs, Clause);
 }
 
-SMTRef pathToSMT(Path Path, SMTRef EndClause, int Program,
-                 std::set<std::string> FreeVars) {
-    auto FilteredFreeVars = filterVars(Program, FreeVars);
+SMTRef interleaveSMT(SMTRef EndClause,
+                     std::vector<std::vector<Assignments>> Assignments1,
+                     std::vector<std::vector<Assignments>> Assignments2) {
+    if (Assignments1.size() != Assignments2.size()) {
+        llvm::errs() << "Error: Number of recursive calls is not equal\n";
+        return EndClause;
+    }
     SMTRef Clause = EndClause;
-    std::vector<std::pair<std::vector<std::tuple<std::string, SMTRef>>, SMTRef>>
-        AllDefs;
+    for (int i = Assignments1.size() - 1; i >= 0; i--) {
+        for (int j = Assignments2.at(i).size() - 1; j >= 0; j--) {
+            auto Assgns = Assignments2.at(i).at(j);
+            Clause = nestLets(Clause, Assgns.first);
+            if (Assgns.second) {
+                Clause = makeBinOp("=>", Assgns.second, Clause);
+            }
+        }
+        for (int j = Assignments1.at(i).size() - 1; j >= 0; j--) {
+            auto Assgns = Assignments1.at(i).at(j);
+            Clause = nestLets(Clause, Assgns.first);
+            if (Assgns.second) {
+                Clause = makeBinOp("=>", Assgns.second, Clause);
+            }
+        }
+    }
+    return Clause;
+}
+
+std::vector<std::vector<Assignments>>
+pathToSMT(Path Path, int Program, std::set<std::string> FreeVars) {
+    auto FilteredFreeVars = filterVars(Program, FreeVars);
+
+    std::vector<Assignments> AllDefs;
     set<string> Constructed;
 
     auto StartDefs =
         instrToDefs(Path.Start, nullptr, true, Program, Constructed);
+    AllDefs.push_back(make_pair(StartDefs, nullptr));
 
     auto Prev = Path.Start;
     for (auto Edge : Path.Edges) {
@@ -459,18 +487,13 @@ SMTRef pathToSMT(Path Path, SMTRef EndClause, int Program,
             OldDefs.push_back(make_tuple(Var, name(Var + "_old")));
         }
     }
-    Clause = nestLets(Clause, OldDefs);
+    AllDefs.push_back(make_pair(OldDefs, nullptr));
 
-    for (auto It = AllDefs.rbegin(), E = AllDefs.rend(); It != E; ++It) {
-        Clause = nestLets(Clause, It->first);
-        if (It->second) {
-            Clause = makeBinOp("=>", It->second, Clause);
-        }
-    }
+    std::vector<std::vector<std::pair<
+        std::vector<std::tuple<std::string, SMTRef>>, SMTRef>>> Return;
+    Return.push_back(AllDefs);
 
-    Clause = nestLets(Clause, StartDefs);
-
-    return Clause;
+    return Return;
 }
 
 /// Filter vars to only include the ones from Program
