@@ -1,4 +1,4 @@
-extern void __mark(int);
+extern int __mark(int);
 
 int f(int n) {
     int r;
@@ -7,8 +7,7 @@ int f(int n) {
         r = n;
     } else {
         i = 0;
-        while (i < n - 1) {
-            __mark(42);
+        while (__mark(42) & (i < n - 1)) {
             i = i + 1;
         }
         r = f(i);
