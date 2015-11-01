@@ -239,10 +239,10 @@ unique_ptr<llvm::FunctionAnalysisManager> preprocessModule(llvm::Function &Fun,
     FPM.addPass(PromotePass());    // mem2reg
     // FPM.addPass(llvm::SimplifyCFGPass());
     FPM.addPass(UniqueNamePass(Prefix)); // prefix register names
+    // FPM.addPass(CFGViewerPass());                 // show cfg
     FPM.addPass(RemoveMarkPass());
     FPM.addPass(llvm::VerifierPass());
     FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
-    // FPM.addPass(CFGViewerPass());                 // show cfg
     FPM.run(Fun, FAM.get());
 
     return FAM;

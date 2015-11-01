@@ -9,16 +9,20 @@ llvm::PreservedAnalyses RemoveMarkPass::run(llvm::Function &Fun,
             auto BB = BBTuple.second;
             for (auto &Inst : *BB) {
                 if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(&Inst)) {
-                    ToDelete.push_back(CallInst);
+                    if ((CallInst->getCalledFunction() != nullptr) &&
+                        CallInst->getCalledFunction()->getName() == "__mark") {
+                        ToDelete.push_back(CallInst);
+                    }
                 }
             }
         }
     }
     for (auto Instr : ToDelete) {
-        for (auto &Use : Instr->uses()) {
-            if (auto Used = llvm::dyn_cast<llvm::Instruction>(Use.getUser())) {
+        for (auto User : Instr->users()) {
+            if (auto UserInstr = llvm::dyn_cast<llvm::Instruction>(User)) {
                 // handle and
-                if (auto BinOp = llvm::dyn_cast<llvm::BinaryOperator>(Used)) {
+                if (auto BinOp =
+                        llvm::dyn_cast<llvm::BinaryOperator>(UserInstr)) {
                     if (BinOp->getOpcode() == llvm::Instruction::And) {
                         removeAnd(Instr, BinOp);
                     }
