@@ -95,7 +95,7 @@ auto invName(int Index) -> std::string;
 auto wrapForall(SMTRef Clause, std::set<std::string> FreeVars) -> SMTRef;
 auto invariantDef(int BlockIndex, std::set<std::string> FreeVars) -> SMTRef;
 auto freeVars(std::map<int, Paths> PathMap)
-    -> std::pair<std::set<std::string>, std::set<std::string>>;
+    -> std::pair<std::set<std::string>, std::map<int, std::set<std::string>>>;
 auto freeVarsMap(PathMap Map1, PathMap Map2, set<string> FunArgs)
     -> std::map<int, std::set<std::string>>;
 auto functionArgs(llvm::Function &Fun1, llvm::Function &Fun2)

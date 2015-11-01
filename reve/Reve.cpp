@@ -480,16 +480,14 @@ SMTRef interleaveSMT(SMTRef EndClause, std::vector<Assignments> Assignments1,
     for (auto It1 = CleanAssignments1.rbegin(), E1 = CleanAssignments1.rend(),
               It2 = CleanAssignments2.rbegin();
          It1 != E1; ++It1, ++It2) {
-            if (first) {
-                first = false;
-            } else {
-                Clause = recursiveForall(Clause, CallIt1->Args,
-                CallIt2->Args,
-                                         CallIt1->AssignedTo,
-                                         CallIt2->AssignedTo);
-                ++CallIt1;
-                ++CallIt2;
-            }
+        if (first) {
+            first = false;
+        } else {
+            Clause = recursiveForall(Clause, CallIt1->Args, CallIt2->Args,
+                                     CallIt1->AssignedTo, CallIt2->AssignedTo);
+            ++CallIt1;
+            ++CallIt2;
+        }
         for (auto InnerIt2 = It2->rbegin(), InnerE2 = It2->rend();
              InnerIt2 != InnerE2; ++InnerIt2) {
             auto Assgns = *InnerIt2;
@@ -690,8 +688,9 @@ int swapIndex(int I) {
 
 /// Convert a basic block to a list of assignments
 std::vector<DefOrCallInfo> instrToDefs(const llvm::BasicBlock *BB,
-                        const llvm::BasicBlock *PrevBB, bool IgnorePhis,
-                        int Program, set<string> &Constructed) {
+                                       const llvm::BasicBlock *PrevBB,
+                                       bool IgnorePhis, int Program,
+                                       set<string> &Constructed) {
     std::vector<DefOrCallInfo> Definitions;
     assert(BB->size() >=
            1); // There should be at least a terminator instruction
@@ -808,10 +807,11 @@ SMTRef wrapForall(SMTRef Clause, set<string> FreeVars) {
 
 /// Collect the free variables for the entry block of the PathMap
 /// A variable is free if we use it but didn't create it
-std::pair<set<string>, set<string>> freeVars(std::map<int, Paths> PathMap) {
+std::pair<set<string>, std::map<int, set<string>>>
+freeVars(std::map<int, Paths> PathMap) {
     set<string> FreeVars;
-    set<string> ConstructedIntersection;
-    bool First = true;
+    std::map<int, set<string>> ConstructedIntersection;
+    // set<string> ConstructedIntersection;
     for (auto &Paths : PathMap) {
         for (auto &Path : Paths.second) {
             llvm::BasicBlock *Prev = Path.Start;
@@ -883,18 +883,21 @@ std::pair<set<string>, set<string>> freeVars(std::map<int, Paths> PathMap) {
             }
 
             set<string> NewConstructedIntersection;
-            if (First) {
-                ConstructedIntersection = Constructed;
+            if (ConstructedIntersection.find(Paths.first) ==
+                ConstructedIntersection.end()) {
+                ConstructedIntersection.insert(
+                    make_pair(Paths.first, Constructed));
+                ;
             } else {
                 std::set_intersection(
                     Constructed.begin(), Constructed.end(),
-                    ConstructedIntersection.begin(),
-                    ConstructedIntersection.end(),
+                    ConstructedIntersection.at(Paths.first).begin(),
+                    ConstructedIntersection.at(Paths.first).end(),
                     inserter(NewConstructedIntersection,
                              NewConstructedIntersection.begin()));
-                ConstructedIntersection = NewConstructedIntersection;
+                ConstructedIntersection.insert(
+                    make_pair(Paths.first, NewConstructedIntersection));
             }
-            First = false;
         }
     }
     return std::make_pair(FreeVars, ConstructedIntersection);
@@ -903,7 +906,7 @@ std::pair<set<string>, set<string>> freeVars(std::map<int, Paths> PathMap) {
 std::map<int, set<string>> freeVarsMap(PathMap Map1, PathMap Map2,
                                        set<string> FunArgs) {
     std::map<int, set<string>> FreeVarsMap;
-    std::map<int, set<string>> Constructed;
+    std::map<int, std::map<int, set<string>>> Constructed;
     for (auto &It : Map1) {
         int Index = It.first;
         auto FreeVars1 = freeVars(Map1.at(Index));
@@ -914,12 +917,15 @@ std::map<int, set<string>> freeVarsMap(PathMap Map1, PathMap Map2,
         FreeVarsMap.insert(make_pair(Index, FreeVars1.first));
 
         // constructed variables
-        for (auto Var : FreeVars2.second) {
-            FreeVars1.second.insert(Var);
+        for (auto MapIt : FreeVars2.second) {
+            for (auto Var : MapIt.second) {
+                FreeVars1.second.at(MapIt.first).insert(Var);
+            }
         }
+
         Constructed.insert(make_pair(Index, FreeVars1.second));
     }
-    // FreeVarsMap.insert(make_pair(-2, FunArgs));
+
     for (auto Arg : FunArgs) {
         FreeVarsMap.at(-1).insert(Arg);
     }
@@ -935,8 +941,8 @@ std::map<int, set<string>> freeVarsMap(PathMap Map1, PathMap Map2,
             for (auto &ItInner : It.second) {
                 int EndIndex = ItInner.first;
                 for (auto Var : FreeVarsMap.at(EndIndex)) {
-                    if (Constructed.at(StartIndex).find(Var) ==
-                        Constructed.at(StartIndex).end()) {
+                    if (Constructed.at(StartIndex).at(EndIndex).find(Var) ==
+                        Constructed.at(StartIndex).at(EndIndex).end()) {
                         auto Inserted = FreeVarsMap.at(StartIndex).insert(Var);
                         Changed = Inserted.second;
                     }
