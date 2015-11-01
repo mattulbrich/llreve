@@ -317,9 +317,10 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
 
     auto SynchronizedPaths =
         synchronizedPaths(PathMap1, PathMap2, FreeVarsMap, FunArgs,
-                          makeBinOp("=", "result$1", "result$2"));
-    auto SynchronizedPathsRec = synchronizedPaths(
-        PathMap1, PathMap2, FreeVarsMap, FunArgs, termInv(FunArgs));
+                          makeBinOp("=", "result$1", "result$2"),
+                          FunArgsPair.first, FunArgsPair.second);
+    // auto SynchronizedPathsRec = synchronizedPaths(
+    //     PathMap1, PathMap2, FreeVarsMap, FunArgs, termInv(FunArgs));
 
     // add invariant defs
     SMTExprs.insert(SMTExprs.end(), SynchronizedPaths.first.begin(),
@@ -331,20 +332,21 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
 
     // generate forbidden paths
     PathExprs.push_back(make_shared<Comment>("FORBIDDEN PATHS"));
-    auto ForbiddenPaths =
-        forbiddenPaths(PathMap1, PathMap2, FreeVarsMap, FunArgs);
+    auto ForbiddenPaths = forbiddenPaths(PathMap1, PathMap2, FreeVarsMap,
+                                         FunArgs, FunArgsPair.first, FunArgsPair.second);
     PathExprs.insert(PathExprs.end(), ForbiddenPaths.begin(),
                      ForbiddenPaths.end());
 
     // main clause enforcing equality of results given equal inputs
-    auto AndClause = std::make_shared<Op>("and", PathExprs);
-    SMTExprs.push_back(std::make_shared<Assert>(wrapToplevelForall(
-        makeFunArgsEqual(AndClause, FunArgsPair.first, FunArgsPair.second),
-        FunArgs)));
+    // auto AndClause = std::make_shared<Op>("and", PathExprs);
+    // SMTExprs.push_back(std::make_shared<Assert>(wrapToplevelForall(
+    //     makeFunArgsEqual(AndClause, FunArgsPair.first, FunArgsPair.second),
+    //     FunArgs)));
+    SMTExprs.insert(SMTExprs.end(), PathExprs.begin(), PathExprs.end());
 
     // establish recursive invariant
-    auto AndClauseRec =
-        std::make_shared<Op>("and", SynchronizedPathsRec.second);
+    // auto AndClauseRec =
+    //     std::make_shared<Op>("and", SynchronizedPathsRec.second);
     // SMTExprs.push_back(
     //     std::make_shared<Assert>(wrapToplevelForall(AndClauseRec, FunArgs)));
     SMTExprs.push_back(make_shared<CheckSat>());
@@ -376,7 +378,8 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
 std::pair<std::vector<SMTRef>, std::vector<SMTRef>>
 synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                   std::map<int, set<string>> FreeVarsMap, set<string> FunArgs,
-                  SMTRef TermClause) {
+                  SMTRef TermClause, set<string> FunArgs1,
+                  set<string> FunArgs2) {
     std::vector<SMTRef> InvariantDefs;
     std::vector<SMTRef> PathExprs;
     for (auto &PathMapIt : PathMap1) {
@@ -395,9 +398,10 @@ synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                         Path2, invariant(EndIndex, FreeVarsMap.at(EndIndex),
                                          TermClause),
                         2);
-                    PathExprs.push_back(
+                    PathExprs.push_back(std::make_shared<Assert>(
                         wrapForall(pathToSMT(Path1, Smt2, 1), StartIndex,
-                                   FreeVarsMap.at(StartIndex), FunArgs));
+                                   FreeVarsMap.at(StartIndex), FunArgs,
+                                   FunArgs1, FunArgs2)));
                 }
             }
         }
@@ -407,7 +411,8 @@ synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
 
 std::vector<SMTRef> forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
                                    std::map<int, set<string>> FreeVarsMap,
-                                   set<string> FunArgs) {
+                                   set<string> FunArgs, set<string> FunArgs1,
+                                   set<string> FunArgs2) {
     std::vector<SMTRef> PathExprs;
     for (auto &PathMapIt : PathMap1) {
         int StartIndex = PathMapIt.first;
@@ -418,9 +423,11 @@ std::vector<SMTRef> forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
                     for (auto &Path1 : InnerPathMapIt1.second) {
                         for (auto &Path2 : InnerPathMapIt2.second) {
                             auto Smt2 = pathToSMT(Path2, name("false"), 2);
-                            PathExprs.push_back(wrapForall(
-                                pathToSMT(Path1, Smt2, 1), StartIndex,
-                                FreeVarsMap.at(StartIndex), FunArgs));
+                            PathExprs.push_back(std::make_shared<Assert>(
+                                wrapForall(pathToSMT(Path1, Smt2, 1),
+                                           StartIndex,
+                                           FreeVarsMap.at(StartIndex), FunArgs,
+                                           FunArgs1, FunArgs2)));
                         }
                     }
                 }
@@ -611,13 +618,14 @@ string invName(int Index) {
 }
 
 SMTRef wrapForall(SMTRef Clause, int BlockIndex, set<string> FreeVars,
-                  set<string> FunArgs) {
+                  set<string> FunArgs, set<string> FunArgs1,
+                  set<string> FunArgs2) {
     std::vector<SortedVar> Vars;
     for (auto &Arg : FreeVars) {
         // TODO(moritz): detect type
-        if (FunArgs.find(Arg) == FunArgs.end()) {
-            Vars.push_back(SortedVar(Arg, "Int"));
-        }
+        // if (FunArgs.find(Arg) == FunArgs.end()) {
+        Vars.push_back(SortedVar(Arg, "Int"));
+        // }
     }
     // no entry invariant
     if (BlockIndex != -1) {
@@ -625,6 +633,8 @@ SMTRef wrapForall(SMTRef Clause, int BlockIndex, set<string> FreeVars,
             "=>", invariant(BlockIndex, FreeVars,
                             name("terminating_instruction_at_the_beginning")),
             Clause);
+    } else {
+        Clause = makeFunArgsEqual(Clause, FunArgs1, FunArgs2);
     }
     if (Vars.empty()) {
         return Clause;
@@ -718,7 +728,11 @@ std::map<int, set<string>> freeVarsMap(PathMap Map1, PathMap Map2,
         }
         Constructed.insert(make_pair(Index, FreeVars1.second));
     }
-    FreeVarsMap.insert(make_pair(-2, FunArgs));
+    // FreeVarsMap.insert(make_pair(-2, FunArgs));
+    for (auto Arg : FunArgs) {
+        FreeVarsMap.at(-1).insert(Arg);
+    }
+    FreeVarsMap.insert(make_pair(-2, set<string>()));
 
     // search for a least fixpoint
     // don't tell anyone I wrote that
