@@ -735,8 +735,8 @@ std::vector<DefOrCallInfo> instrToDefs(const llvm::BasicBlock *BB,
         }
         if (!OnlyPhis && !llvm::isa<llvm::PHINode>(Instr)) {
             if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(Instr)) {
-                Definitions.push_back(
-                    DefOrCallInfo(toCallInfo(CallInst->getName(), CallInst)));
+                Definitions.push_back(DefOrCallInfo(
+                    toCallInfo(CallInst->getName(), CallInst, Constructed)));
             } else {
                 Definitions.push_back(
                     DefOrCallInfo(toDef(*Instr, PrevBB, Constructed)));
@@ -995,9 +995,8 @@ std::map<int, set<string>> freeVarsMap(PathMap Map1, PathMap Map2,
 }
 
 std::shared_ptr<CallInfo> toCallInfo(string AssignedTo,
-                                     const llvm::CallInst *CallInst) {
+                                     const llvm::CallInst *CallInst, set<string> &Constructed) {
     std::vector<SMTRef> Args;
-    set<string> Constructed;
     unsigned int i = 0;
     auto FunTy = CallInst->getFunctionType();
     for (auto &Arg : CallInst->arg_operands()) {

@@ -51,7 +51,7 @@ struct CleanAssignments {
 auto splitAssignments(std::vector<Assignments>)
     -> std::pair<std::vector<std::vector<CleanAssignments>>,
                  std::vector<CallInfo>>;
-auto toCallInfo(std::string AssignedTo, const llvm::CallInst *CallInst)
+auto toCallInfo(std::string AssignedTo, const llvm::CallInst *CallInst, set<string> &Constructed)
     -> std::shared_ptr<CallInfo>;
 auto main(int Argc, const char **Argv) -> int;
 auto getFunction(llvm::Module &Mod) -> llvm::ErrorOr<llvm::Function &>;
