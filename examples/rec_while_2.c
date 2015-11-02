@@ -1,6 +1,6 @@
 extern int __mark(int);
 
-int f(int n) {
+int f(int n, int z) {
     int r;
     int i;
     if (n <= 0) {
@@ -12,7 +12,7 @@ int f(int n) {
             i = i + 1;
         }
         __mark(23);
-        r = f(i);
+        r = f(i, 0);
     }
     return r;
 }

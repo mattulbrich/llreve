@@ -87,10 +87,10 @@ auto invariant(int StartIndex, int EndIndex, std::set<std::string> InputArgs,
 auto getOpName(const llvm::BinaryOperator &Op) -> std::string;
 auto swapIndex(int I) -> int;
 auto instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB,
-                 bool IgnorePhis, bool OnlyPhis, int Program, set<string> &Constructed)
-    -> std::vector<DefOrCallInfo>;
-auto pathToSMT(Path Path, int Program, std::set<std::string> FreeVars, bool ToEnd)
-    -> std::vector<Assignments>;
+                 bool IgnorePhis, bool OnlyPhis, int Program,
+                 set<string> &Constructed) -> std::vector<DefOrCallInfo>;
+auto pathToSMT(Path Path, int Program, std::set<std::string> FreeVars,
+               bool ToEnd) -> std::vector<Assignments>;
 auto invName(int Index) -> std::string;
 auto wrapForall(SMTRef Clause, std::set<std::string> FreeVars) -> SMTRef;
 auto invariantDef(int BlockIndex, std::set<std::string> FreeVars) -> SMTRef;
@@ -99,7 +99,7 @@ auto freeVars(std::map<int, Paths> PathMap)
 auto freeVarsMap(PathMap Map1, PathMap Map2, set<string> FunArgs)
     -> std::map<int, std::set<std::string>>;
 auto functionArgs(llvm::Function &Fun1, llvm::Function &Fun2)
-    -> std::pair<std::set<std::string>, std::set<std::string>>;
+    -> std::pair<std::vector<std::string>, std::vector<std::string>>;
 auto wrapToplevelForall(SMTRef Clause, std::set<std::string> Args) -> SMTRef;
 auto makeFunArgsEqual(SMTRef Clause, std::set<std::string> Args1,
                       std::set<std::string> Args2) -> SMTRef;
@@ -107,17 +107,22 @@ auto forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
                     std::map<int, set<string>> FreeVarsMap)
     -> std::vector<SMTRef>;
 auto synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
-                       std::map<int, set<string>> FreeVarsMap)
+                       std::map<int, set<string>> FreeVarsMap,
+                       std::vector<string> FunArgs1,
+                       std::vector<string> FunArgs2)
     -> std::pair<std::vector<SMTRef>, std::vector<SMTRef>>;
 auto termInv(std::set<std::string> FunArgs) -> SMTRef;
-auto equalInputsEqualOutputs(set<string> FunArgs, set<string> FunArgs1,
-                             set<string> FunArgs2) -> SMTRef;
+auto equalInputsEqualOutputs(set<string> FunArgs, std::vector<string> FunArgs1,
+                             std::vector<string> FunArgs2) -> SMTRef;
 auto filterVars(int Program, std::set<std::string> Vars)
     -> std::set<std::string>;
 auto interleaveSMT(SMTRef EndClause, std::vector<Assignments> Assignments1,
-                   std::vector<Assignments> Assignments2) -> SMTRef;
+                   std::vector<Assignments> Assignments2,
+                   std::vector<string> FunArgs1, std::vector<string> FunArgs2)
+    -> SMTRef;
 auto recursiveForall(SMTRef Clause, std::vector<SMTRef> Args1,
                      std::vector<SMTRef> Args2, std::string Ret1,
-                     std::string Ret2) -> SMTRef;
+                     std::string Ret2, std::vector<string> FunArgs1,
+                     std::vector<string> FunArgs2) -> SMTRef;
 
 #endif // REVE_H

@@ -242,7 +242,7 @@ unique_ptr<llvm::FunctionAnalysisManager> preprocessModule(llvm::Function &Fun,
     FPM.addPass(UniqueNamePass(Prefix)); // prefix register names
     FPM.addPass(RemoveMarkPass());
     if (ShowCFG) {
-        FPM.addPass(CFGViewerPass());                 // show cfg
+        FPM.addPass(CFGViewerPass()); // show cfg
     }
     FPM.addPass(llvm::VerifierPass());
     FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
@@ -264,15 +264,15 @@ ErrorOr<llvm::Function &> getFunction(llvm::Module &Mod) {
     return ErrorOr<llvm::Function &>(Fun);
 }
 
-std::pair<set<string>, set<string>> functionArgs(llvm::Function &Fun1,
-                                                 llvm::Function &Fun2) {
-    set<string> Args1;
+std::pair<std::vector<string>, std::vector<string>>
+functionArgs(llvm::Function &Fun1, llvm::Function &Fun2) {
+    std::vector<string> Args1;
     for (auto &Arg : Fun1.args()) {
-        Args1.insert(Arg.getName());
+        Args1.push_back(Arg.getName());
     }
-    set<string> Args2;
+    std::vector<string> Args2;
     for (auto &Arg : Fun2.args()) {
-        Args2.insert(Arg.getName());
+        Args2.push_back(Arg.getName());
     }
     return std::make_pair(Args1, Args2);
 }
@@ -301,7 +301,8 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
     auto PathMap2 = Fam2->getResult<PathAnalysis>(Fun2);
     auto Marked1 = Fam1->getResult<MarkAnalysis>(Fun1);
     auto Marked2 = Fam2->getResult<MarkAnalysis>(Fun2);
-    std::pair<set<string>, set<string>> FunArgsPair = functionArgs(Fun1, Fun2);
+    std::pair<std::vector<string>, std::vector<string>> FunArgsPair =
+        functionArgs(Fun1, Fun2);
     set<string> FunArgs;
     for (auto Arg : FunArgsPair.first) {
         FunArgs.insert(Arg);
@@ -318,7 +319,8 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
 
     SMTExprs.push_back(invariantDef(-1, FunArgs));
 
-    auto SynchronizedPaths = synchronizedPaths(PathMap1, PathMap2, FreeVarsMap);
+    auto SynchronizedPaths = synchronizedPaths(
+        PathMap1, PathMap2, FreeVarsMap, FunArgsPair.first, FunArgsPair.second);
 
     // add invariant defs
     SMTExprs.insert(SMTExprs.end(), SynchronizedPaths.first.begin(),
@@ -372,7 +374,8 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
 
 std::pair<std::vector<SMTRef>, std::vector<SMTRef>>
 synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
-                  std::map<int, set<string>> FreeVarsMap) {
+                  std::map<int, set<string>> FreeVarsMap,
+                  std::vector<string> FunArgs1, std::vector<string> FunArgs2) {
     std::vector<SMTRef> InvariantDefs;
     std::vector<SMTRef> PathExprs;
     for (auto &PathMapIt : PathMap1) {
@@ -390,10 +393,13 @@ synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                     auto EndInvariant = invariant(StartIndex, EndIndex,
                                                   FreeVarsMap.at(StartIndex),
                                                   FreeVarsMap.at(EndIndex));
-                    auto Defs1 = pathToSMT(Path1, 1, FreeVarsMap.at(EndIndex), EndIndex == -2);
-                    auto Defs2 = pathToSMT(Path2, 2, FreeVarsMap.at(EndIndex), EndIndex == -2);
+                    auto Defs1 = pathToSMT(Path1, 1, FreeVarsMap.at(EndIndex),
+                                           EndIndex == -2);
+                    auto Defs2 = pathToSMT(Path2, 2, FreeVarsMap.at(EndIndex),
+                                           EndIndex == -2);
                     PathExprs.push_back(std::make_shared<Assert>(
-                        wrapForall(interleaveSMT(EndInvariant, Defs1, Defs2),
+                        wrapForall(interleaveSMT(EndInvariant, Defs1, Defs2,
+                                                 FunArgs1, FunArgs2),
                                    FreeVarsMap.at(StartIndex))));
                     ;
                 }
@@ -465,7 +471,9 @@ splitAssignments(std::vector<Assignments> AssignmentsList) {
     return make_pair(CleanAssignmentsReturn, CallInfos);
 }
 SMTRef interleaveSMT(SMTRef EndClause, std::vector<Assignments> Assignments1,
-                     std::vector<Assignments> Assignments2) {
+                     std::vector<Assignments> Assignments2,
+                     std::vector<string> FunArgs1,
+                     std::vector<string> FunArgs2) {
     SMTRef Clause = EndClause;
     auto SplitAssignments1 = splitAssignments(Assignments1);
     auto SplitAssignments2 = splitAssignments(Assignments2);
@@ -487,7 +495,8 @@ SMTRef interleaveSMT(SMTRef EndClause, std::vector<Assignments> Assignments1,
             first = false;
         } else {
             Clause = recursiveForall(Clause, CallIt1->Args, CallIt2->Args,
-                                     CallIt1->AssignedTo, CallIt2->AssignedTo);
+                                     CallIt1->AssignedTo, CallIt2->AssignedTo,
+                                     FunArgs1, FunArgs2);
             ++CallIt1;
             ++CallIt2;
         }
@@ -513,17 +522,29 @@ SMTRef interleaveSMT(SMTRef EndClause, std::vector<Assignments> Assignments1,
 
 SMTRef recursiveForall(SMTRef Clause, std::vector<SMTRef> Args1,
                        std::vector<SMTRef> Args2, std::string Ret1,
-                       std::string Ret2) {
-    // TODO: fix order
+                       std::string Ret2, std::vector<string> FunArgs1,
+                       std::vector<string> FunArgs2) {
+    assert(Args1.size() == Args2.size());
+    assert(FunArgs1.size() == FunArgs2.size());
+    assert(Args1.size() == FunArgs1.size());
+    // we sort the arguments alphabetically by the corresponding function
+    // argument name
     std::vector<SortedVar> Args;
     Args.push_back(SortedVar(Ret1, "Int"));
     Args.push_back(SortedVar(Ret2, "Int"));
+    std::vector<std::pair<string, SMTRef>> ToSort;
     std::vector<SMTRef> ImplArgs;
-    for (auto Arg : Args1) {
-        ImplArgs.push_back(Arg);
+    for (size_t i = 0; i < Args1.size(); i++) {
+        ToSort.push_back(make_pair(FunArgs1.at(i), Args1.at(i)));
     }
-    for (auto Arg : Args2) {
-        ImplArgs.push_back(Arg);
+    for (size_t i = 0; i < Args2.size(); i++) {
+        ToSort.push_back(make_pair(FunArgs2.at(i), Args2.at(i)));
+    }
+
+    std::sort(ToSort.begin(), ToSort.end());
+
+    for (auto Pair : ToSort) {
+        ImplArgs.push_back(Pair.second);
     }
     ImplArgs.push_back(name(Ret1));
     ImplArgs.push_back(name(Ret2));
@@ -550,8 +571,8 @@ std::vector<Assignments> pathToSMT(Path Path, int Program,
     for (auto Edge : Path.Edges) {
         i++;
         bool last = i == Path.Edges.size();
-        auto Defs =
-            instrToDefs(Edge.Block, Prev, false, last && !ToEnd, Program, Constructed);
+        auto Defs = instrToDefs(Edge.Block, Prev, false, last && !ToEnd,
+                                Program, Constructed);
         AllDefs.push_back(Assignments(Defs, Edge.Condition));
         Prev = Edge.Block;
     }
@@ -777,8 +798,9 @@ SMTRef invariantDef(int BlockIndex, set<string> FreeVars) {
 
 /// Create an assertion to require that if the recursive invariant holds and the
 /// arguments are equal the outputs are equal
-SMTRef equalInputsEqualOutputs(set<string> FunArgs, set<string> FunArgs1,
-                               set<string> FunArgs2) {
+SMTRef equalInputsEqualOutputs(set<string> FunArgs,
+                               std::vector<string> FunArgs1,
+                               std::vector<string> FunArgs2) {
     std::vector<SortedVar> ForallArgs;
     std::vector<string> Args;
     Args.insert(Args.end(), FunArgs.begin(), FunArgs.end());
@@ -791,7 +813,12 @@ SMTRef equalInputsEqualOutputs(set<string> FunArgs, set<string> FunArgs1,
     Args.push_back("result$2");
     auto EqualResults = makeBinOp("=>", makeOp(invName(-1), Args),
                                   makeBinOp("=", "result$1", "result$2"));
-    auto EqualArgs = makeFunArgsEqual(EqualResults, FunArgs1, FunArgs2);
+    set<string> FunArgs1Set, FunArgs2Set;
+    std::copy(FunArgs1.begin(), FunArgs1.end(),
+              std::inserter(FunArgs1Set, FunArgs1Set.end()));
+    std::copy(FunArgs2.begin(), FunArgs2.end(),
+              std::inserter(FunArgs2Set, FunArgs2Set.end()));
+    auto EqualArgs = makeFunArgsEqual(EqualResults, FunArgs1Set, FunArgs2Set);
     auto ForallInputs = make_shared<Forall>(ForallArgs, EqualArgs);
     return make_shared<Assert>(ForallInputs);
 }
