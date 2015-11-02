@@ -72,6 +72,7 @@ static llvm::cl::opt<string> FileName2(llvm::cl::Positional,
 static llvm::cl::opt<string>
     OutputFileName("o", llvm::cl::desc("SMT output filename"),
                    llvm::cl::value_desc("filename"));
+static llvm::cl::opt<bool> ShowCFG("show-cfg", llvm::cl::desc("Show cfg"));
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
@@ -240,7 +241,9 @@ unique_ptr<llvm::FunctionAnalysisManager> preprocessModule(llvm::Function &Fun,
     // FPM.addPass(llvm::SimplifyCFGPass());
     FPM.addPass(UniqueNamePass(Prefix)); // prefix register names
     FPM.addPass(RemoveMarkPass());
-    FPM.addPass(CFGViewerPass());                 // show cfg
+    if (ShowCFG) {
+        FPM.addPass(CFGViewerPass());                 // show cfg
+    }
     FPM.addPass(llvm::VerifierPass());
     FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
     FPM.run(Fun, FAM.get());
