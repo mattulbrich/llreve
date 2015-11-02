@@ -240,7 +240,7 @@ unique_ptr<llvm::FunctionAnalysisManager> preprocessModule(llvm::Function &Fun,
     // FPM.addPass(llvm::SimplifyCFGPass());
     FPM.addPass(UniqueNamePass(Prefix)); // prefix register names
     FPM.addPass(RemoveMarkPass());
-    // FPM.addPass(CFGViewerPass());                 // show cfg
+    FPM.addPass(CFGViewerPass());                 // show cfg
     FPM.addPass(llvm::VerifierPass());
     FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
     FPM.run(Fun, FAM.get());
@@ -387,8 +387,8 @@ synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                     auto EndInvariant = invariant(StartIndex, EndIndex,
                                                   FreeVarsMap.at(StartIndex),
                                                   FreeVarsMap.at(EndIndex));
-                    auto Defs1 = pathToSMT(Path1, 1, FreeVarsMap.at(EndIndex));
-                    auto Defs2 = pathToSMT(Path2, 2, FreeVarsMap.at(EndIndex));
+                    auto Defs1 = pathToSMT(Path1, 1, FreeVarsMap.at(EndIndex), EndIndex == -2);
+                    auto Defs2 = pathToSMT(Path2, 2, FreeVarsMap.at(EndIndex), EndIndex == -2);
                     PathExprs.push_back(std::make_shared<Assert>(
                         wrapForall(interleaveSMT(EndInvariant, Defs1, Defs2),
                                    FreeVarsMap.at(StartIndex))));
@@ -530,7 +530,7 @@ SMTRef recursiveForall(SMTRef Clause, std::vector<SMTRef> Args1,
 }
 
 std::vector<Assignments> pathToSMT(Path Path, int Program,
-                                   std::set<std::string> FreeVars) {
+                                   std::set<std::string> FreeVars, bool ToEnd) {
     auto FilteredFreeVars = filterVars(Program, FreeVars);
 
     std::vector<Assignments> AllDefs;
@@ -538,12 +538,17 @@ std::vector<Assignments> pathToSMT(Path Path, int Program,
     std::vector<CallInfo> CallInfos;
 
     auto StartDefs =
-        instrToDefs(Path.Start, nullptr, true, Program, Constructed);
+        instrToDefs(Path.Start, nullptr, true, false, Program, Constructed);
     AllDefs.push_back(Assignments(StartDefs, nullptr));
 
     auto Prev = Path.Start;
+
+    unsigned int i = 0;
     for (auto Edge : Path.Edges) {
-        auto Defs = instrToDefs(Edge.Block, Prev, false, Program, Constructed);
+        i++;
+        bool last = i == Path.Edges.size();
+        auto Defs =
+            instrToDefs(Edge.Block, Prev, false, last && !ToEnd, Program, Constructed);
         AllDefs.push_back(Assignments(Defs, Edge.Condition));
         Prev = Edge.Block;
     }
@@ -689,8 +694,8 @@ int swapIndex(int I) {
 /// Convert a basic block to a list of assignments
 std::vector<DefOrCallInfo> instrToDefs(const llvm::BasicBlock *BB,
                                        const llvm::BasicBlock *PrevBB,
-                                       bool IgnorePhis, int Program,
-                                       set<string> &Constructed) {
+                                       bool IgnorePhis, bool OnlyPhis,
+                                       int Program, set<string> &Constructed) {
     std::vector<DefOrCallInfo> Definitions;
     assert(BB->size() >=
            1); // There should be at least a terminator instruction
@@ -699,7 +704,12 @@ std::vector<DefOrCallInfo> instrToDefs(const llvm::BasicBlock *BB,
         assert(!Instr->getType()->isVoidTy());
         // Ignore phi nodes if we are in a loop as they're bound in a
         // forall quantifier
-        if (!IgnorePhis || !llvm::isa<llvm::PHINode>(Instr)) {
+        if (!IgnorePhis && llvm::isa<llvm::PHINode>(Instr)) {
+            Definitions.push_back(
+                DefOrCallInfo(toDef(*Instr, PrevBB, Constructed)));
+            Constructed.insert(Instr->getName());
+        }
+        if (!OnlyPhis && !llvm::isa<llvm::PHINode>(Instr)) {
             if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(Instr)) {
                 Definitions.push_back(
                     DefOrCallInfo(toCallInfo(CallInst->getName(), CallInst)));

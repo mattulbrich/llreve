@@ -87,9 +87,9 @@ auto invariant(int StartIndex, int EndIndex, std::set<std::string> InputArgs,
 auto getOpName(const llvm::BinaryOperator &Op) -> std::string;
 auto swapIndex(int I) -> int;
 auto instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB,
-                 bool IgnorePhis, int Program, set<string> &Constructed)
+                 bool IgnorePhis, bool OnlyPhis, int Program, set<string> &Constructed)
     -> std::vector<DefOrCallInfo>;
-auto pathToSMT(Path Path, int Program, std::set<std::string> FreeVars)
+auto pathToSMT(Path Path, int Program, std::set<std::string> FreeVars, bool ToEnd)
     -> std::vector<Assignments>;
 auto invName(int Index) -> std::string;
 auto wrapForall(SMTRef Clause, std::set<std::string> FreeVars) -> SMTRef;
