@@ -48,11 +48,13 @@ struct CleanAssignments {
         : Definitions(Definitions), Condition(Condition) {}
 };
 
+enum SMTFor { First, Second, Both };
+
 auto splitAssignments(std::vector<Assignments>)
     -> std::pair<std::vector<std::vector<CleanAssignments>>,
                  std::vector<CallInfo>>;
-auto toCallInfo(std::string AssignedTo, const llvm::CallInst *CallInst, set<string> &Constructed)
-    -> std::shared_ptr<CallInfo>;
+auto toCallInfo(std::string AssignedTo, const llvm::CallInst *CallInst,
+                set<string> &Constructed) -> std::shared_ptr<CallInfo>;
 auto main(int Argc, const char **Argv) -> int;
 auto getFunction(llvm::Module &Mod) -> llvm::ErrorOr<llvm::Function &>;
 template <int N>
@@ -83,7 +85,7 @@ auto getPredName(const llvm::CmpInst::Predicate Pred) -> std::string;
 auto getInstrNameOrValue(const llvm::Value *Val, const llvm::Type *Ty,
                          std::set<std::string> &Constructed) -> SMTRef;
 auto invariant(int StartIndex, int EndIndex, std::set<std::string> InputArgs,
-               std::set<std::string> EndArgs) -> SMTRef;
+               std::set<std::string> EndArgs, SMTFor SMTFor) -> SMTRef;
 auto getOpName(const llvm::BinaryOperator &Op) -> std::string;
 auto swapIndex(int I) -> int;
 auto instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB,
@@ -91,9 +93,10 @@ auto instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB,
                  set<string> &Constructed) -> std::vector<DefOrCallInfo>;
 auto pathToSMT(Path Path, int Program, std::set<std::string> FreeVars,
                bool ToEnd) -> std::vector<Assignments>;
-auto invName(int Index) -> std::string;
+auto invName(int Index, SMTFor For) -> std::string;
 auto wrapForall(SMTRef Clause, std::set<std::string> FreeVars) -> SMTRef;
-auto invariantDef(int BlockIndex, std::set<std::string> FreeVars) -> SMTRef;
+auto invariantDef(int BlockIndex, std::set<std::string> FreeVars, SMTFor For)
+    -> SMTRef;
 auto freeVars(std::map<int, Paths> PathMap)
     -> std::pair<std::set<std::string>, std::map<int, std::set<std::string>>>;
 auto freeVarsMap(PathMap Map1, PathMap Map2, set<string> FunArgs)
@@ -120,9 +123,17 @@ auto interleaveSMT(SMTRef EndClause, std::vector<Assignments> Assignments1,
                    std::vector<Assignments> Assignments2,
                    std::vector<string> FunArgs1, std::vector<string> FunArgs2)
     -> SMTRef;
-auto recursiveForall(SMTRef Clause, std::vector<SMTRef> Args1,
-                     std::vector<SMTRef> Args2, std::string Ret1,
-                     std::string Ret2, std::vector<string> FunArgs1,
-                     std::vector<string> FunArgs2) -> SMTRef;
+auto standaloneSMT(SMTRef EndClause, std::vector<Assignments> Assignments,
+                   std::vector<string> FunArgs, SMTFor For) -> SMTRef;
+auto smtForPaths(PathMap PathMap, std::vector<SMTRef> &PathExprs,
+                 std::vector<SMTRef> &InvariantDefs,
+                 std::map<int, set<string>> FreeVarsMap,
+                 std::vector<string> FunArgs, SMTFor For) -> void;
+auto mutualRecursiveForall(SMTRef Clause, std::vector<SMTRef> Args1,
+                           std::vector<SMTRef> Args2, std::string Ret1,
+                           std::string Ret2, std::vector<string> FunArgs1,
+                           std::vector<string> FunArgs2) -> SMTRef;
+auto recursiveForall(SMTRef Clause, std::vector<SMTRef> Args, std::string Ret,
+                     std::vector<string> FunArgs, SMTFor For) -> SMTRef;
 
 #endif // REVE_H
