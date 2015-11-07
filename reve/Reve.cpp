@@ -499,8 +499,8 @@ std::vector<SMTRef> forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
                             auto Smt1 = pathToSMT(Path1, 1, set<string>(),
                                                   EndIndex1 == -2);
                             auto SMT =
-                                forbiddenToSMT(Smt2, name("false"), Second);
-                            SMT = forbiddenToSMT(Smt1, SMT, First);
+                                standaloneSMT(name("false"), Smt2, FunArgs2, Second);
+                            SMT = standaloneSMT(SMT, Smt1, FunArgs1, First);
                             PathExprs.push_back(std::make_shared<Assert>(
                                 wrapForall(SMT, FreeVarsMap.at(StartIndex),
                                            StartIndex, Both)));
@@ -595,37 +595,6 @@ SMTRef interleaveSMT(SMTRef EndClause, std::vector<Assignments> Assignments1,
             }
         }
     }
-    return Clause;
-}
-
-SMTRef forbiddenToSMT(std::vector<Assignments> Assignments, SMTRef EndClause,
-                      SMTFor For) {
-    auto Clause = EndClause;
-    auto SplitAssignments = splitAssignments(Assignments);
-    auto CleanAssignments = SplitAssignments.first;
-    auto CallInfo = SplitAssignments.second;
-    assert(CleanAssignments.size() == CallInfo.size() + 1);
-    auto CallIt = CallInfo.rbegin();
-    bool First = true;
-    for (auto It = CleanAssignments.rbegin(), E = CleanAssignments.rend();
-         It != E; ++It) {
-        if (First) {
-            First = false;
-        } else {
-            // TODO: add non mutual call here
-            ++CallIt;
-        }
-        for (auto InnerIt = It->rbegin(), InnerE = It->rend();
-             InnerIt != InnerE; ++InnerIt) {
-            auto Assgns = *InnerIt;
-            Clause = nestLets(Clause, Assgns.Definitions);
-            if (Assgns.Condition) {
-                Clause = makeBinOp("=>", Assgns.Condition, Clause);
-            }
-        }
-    }
-    // for (auto Assignment : Assignments) {
-    // }
     return Clause;
 }
 

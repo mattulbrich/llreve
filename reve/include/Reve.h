@@ -138,7 +138,5 @@ auto mutualRecursiveForall(SMTRef Clause, std::vector<SMTRef> Args1,
                            std::vector<string> FunArgs2) -> SMTRef;
 auto recursiveForall(SMTRef Clause, std::vector<SMTRef> Args, std::string Ret,
                      std::vector<string> FunArgs, SMTFor For) -> SMTRef;
-auto forbiddenToSMT(std::vector<Assignments> Assignments, SMTRef EndClause,
-                    SMTFor For) -> SMTRef;
 
 #endif // REVE_H
