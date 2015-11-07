@@ -94,9 +94,10 @@ auto instrToDefs(const llvm::BasicBlock *BB, const llvm::BasicBlock *PrevBB,
 auto pathToSMT(Path Path, int Program, std::set<std::string> FreeVars,
                bool ToEnd) -> std::vector<Assignments>;
 auto invName(int Index, SMTFor For) -> std::string;
-auto wrapForall(SMTRef Clause, std::set<std::string> FreeVars) -> SMTRef;
+auto wrapForall(SMTRef Clause, std::set<std::string> FreeVars, int BlockIndex,
+                SMTFor For) -> SMTRef;
 auto invariantDef(int BlockIndex, std::set<std::string> FreeVars, SMTFor For)
-    -> SMTRef;
+    -> std::pair<SMTRef, SMTRef>;
 auto freeVars(std::map<int, Paths> PathMap)
     -> std::pair<std::set<std::string>, std::map<int, std::set<std::string>>>;
 auto freeVarsMap(PathMap Map1, PathMap Map2, set<string> FunArgs)
@@ -104,8 +105,9 @@ auto freeVarsMap(PathMap Map1, PathMap Map2, set<string> FunArgs)
 auto functionArgs(llvm::Function &Fun1, llvm::Function &Fun2)
     -> std::pair<std::vector<std::string>, std::vector<std::string>>;
 auto wrapToplevelForall(SMTRef Clause, std::set<std::string> Args) -> SMTRef;
-auto makeFunArgsEqual(SMTRef Clause, std::set<std::string> Args1,
-                      std::set<std::string> Args2) -> SMTRef;
+auto makeFunArgsEqual(SMTRef Clause, SMTRef PreClause,
+                      std::set<std::string> Args1, std::set<std::string> Args2)
+    -> SMTRef;
 auto forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
                     std::map<int, set<string>> FreeVarsMap)
     -> std::vector<SMTRef>;
