@@ -341,12 +341,11 @@ void convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
     // TODO (moritz): Figure out what to do about that
 
     // generate forbidden paths
-    // PathExprs.push_back(make_shared<Comment>("FORBIDDEN PATHS"));
-    // auto ForbiddenPaths =
-    //     forbiddenPaths(PathMap1, PathMap2, FreeVarsMap, FunArgs,
-    //                    FunArgsPair.first, FunArgsPair.second);
-    // PathExprs.insert(PathExprs.end(), ForbiddenPaths.begin(),
-    //                  ForbiddenPaths.end());
+    PathExprs.push_back(make_shared<Comment>("FORBIDDEN PATHS"));
+    auto ForbiddenPaths = forbiddenPaths(PathMap1, PathMap2, FreeVarsMap,
+                                         FunArgsPair.first, FunArgsPair.second);
+    PathExprs.insert(PathExprs.end(), ForbiddenPaths.begin(),
+                     ForbiddenPaths.end());
 
     SMTExprs.insert(SMTExprs.end(), PathExprs.begin(), PathExprs.end());
 
@@ -481,31 +480,38 @@ SMTRef standaloneSMT(SMTRef EndClause, std::vector<Assignments> Assignments,
     }
     return Clause;
 }
-// std::vector<SMTRef> forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
-//                                    std::map<int, set<string>> FreeVarsMap) {
-//     std::vector<SMTRef> PathExprs;
-//     for (auto &PathMapIt : PathMap1) {
-//         int StartIndex = PathMapIt.first;
-//         for (auto &InnerPathMapIt1 : PathMapIt.second) {
-//             int EndIndex = InnerPathMapIt1.first;
-//             for (auto &InnerPathMapIt2 : PathMap2.at(StartIndex)) {
-//                 if (EndIndex != InnerPathMapIt2.first) {
-//                     for (auto &Path1 : InnerPathMapIt1.second) {
-//                         for (auto &Path2 : InnerPathMapIt2.second) {
-//                             auto Smt2 = pathToSMT(Path2, name("false"), 2,
-//                                                   FreeVarsMap.at(EndIndex));
-//                             PathExprs.push_back(std::make_shared<Assert>(
-//                                 wrapForall(pathToSMT(Path1, Smt2, 1,
-//                                                      FreeVarsMap.at(EndIndex)),
-//                                            FreeVarsMap.at(StartIndex))));
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//     }
-//     return PathExprs;
-// }
+std::vector<SMTRef> forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
+                                   std::map<int, set<string>> FreeVarsMap,
+                                   std::vector<string> FunArgs1,
+                                   std::vector<string> FunArgs2) {
+    std::vector<SMTRef> PathExprs;
+    for (auto &PathMapIt : PathMap1) {
+        int StartIndex = PathMapIt.first;
+        for (auto &InnerPathMapIt1 : PathMapIt.second) {
+            int EndIndex1 = InnerPathMapIt1.first;
+            for (auto &InnerPathMapIt2 : PathMap2.at(StartIndex)) {
+                auto EndIndex2 = InnerPathMapIt2.first;
+                if (EndIndex1 != EndIndex2) {
+                    for (auto &Path1 : InnerPathMapIt1.second) {
+                        for (auto &Path2 : InnerPathMapIt2.second) {
+                            auto Smt2 = pathToSMT(Path2, 2, set<string>(),
+                                                  EndIndex2 == -2);
+                            auto Smt1 = pathToSMT(Path1, 1, set<string>(),
+                                                  EndIndex1 == -2);
+                            auto SMT =
+                                forbiddenToSMT(Smt2, name("false"), Second);
+                            SMT = forbiddenToSMT(Smt1, SMT, First);
+                            PathExprs.push_back(std::make_shared<Assert>(
+                                wrapForall(SMT, FreeVarsMap.at(StartIndex),
+                                           StartIndex, Both)));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return PathExprs;
+}
 
 SMTRef wrapToplevelForall(SMTRef Clause, set<string> Args) {
     std::vector<SortedVar> VecArgs;
@@ -589,6 +595,37 @@ SMTRef interleaveSMT(SMTRef EndClause, std::vector<Assignments> Assignments1,
             }
         }
     }
+    return Clause;
+}
+
+SMTRef forbiddenToSMT(std::vector<Assignments> Assignments, SMTRef EndClause,
+                      SMTFor For) {
+    auto Clause = EndClause;
+    auto SplitAssignments = splitAssignments(Assignments);
+    auto CleanAssignments = SplitAssignments.first;
+    auto CallInfo = SplitAssignments.second;
+    assert(CleanAssignments.size() == CallInfo.size() + 1);
+    auto CallIt = CallInfo.rbegin();
+    bool First = true;
+    for (auto It = CleanAssignments.rbegin(), E = CleanAssignments.rend();
+         It != E; ++It) {
+        if (First) {
+            First = false;
+        } else {
+            // TODO: add non mutual call here
+            ++CallIt;
+        }
+        for (auto InnerIt = It->rbegin(), InnerE = It->rend();
+             InnerIt != InnerE; ++InnerIt) {
+            auto Assgns = *InnerIt;
+            Clause = nestLets(Clause, Assgns.Definitions);
+            if (Assgns.Condition) {
+                Clause = makeBinOp("=>", Assgns.Condition, Clause);
+            }
+        }
+    }
+    // for (auto Assignment : Assignments) {
+    // }
     return Clause;
 }
 
