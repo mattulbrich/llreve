@@ -1,6 +1,7 @@
 #include "SMTGeneration.h"
 
 #include "MarkAnalysis.h"
+#include "Compat.h"
 
 #include "llvm/IR/Constants.h"
 
@@ -205,8 +206,8 @@ assignmentsOnPath(Path Path, int Program, std::set<std::string> FreeVars,
     unsigned int i = 0;
     for (auto Edge : Path.Edges) {
         i++;
-        bool last = i == Path.Edges.size();
-        auto Defs = blockAssignments(Edge.Block, Prev, false, last && !ToEnd,
+        bool Last = i == Path.Edges.size();
+        auto Defs = blockAssignments(Edge.Block, Prev, false, Last && !ToEnd,
                                 Program, Constructed);
         AllDefs.push_back(AssignmentCallBlock(Defs, Edge.Condition));
         Prev = Edge.Block;
@@ -254,17 +255,13 @@ SMTRef interleaveAssignments(
             ++CallIt1;
             ++CallIt2;
         }
-        for (auto InnerIt2 = It2->rbegin(), InnerE2 = It2->rend();
-             InnerIt2 != InnerE2; ++InnerIt2) {
-            auto Assgns = *InnerIt2;
+        for (auto Assgns : makeReverse(*It2)) {
             Clause = nestLets(Clause, Assgns.Definitions);
             if (Assgns.Condition) {
                 Clause = makeBinOp("=>", Assgns.Condition, Clause);
             }
         }
-        for (auto InnerIt1 = It1->rbegin(), InnerE1 = It1->rend();
-             InnerIt1 != InnerE1; ++InnerIt1) {
-            auto Assgns = *InnerIt1;
+        for (auto Assgns : makeReverse(*It1)) {
             Clause = nestLets(Clause, Assgns.Definitions);
             if (Assgns.Condition) {
                 Clause = makeBinOp("=>", Assgns.Condition, Clause);
@@ -284,8 +281,7 @@ SMTRef nonmutualSMT(SMTRef EndClause,
     assert(AssignmentBlocks.size() == CallInfos.size() + 1);
     bool first = true;
     auto CallIt = CallInfos.rbegin();
-    for (auto I = AssignmentBlocks.rbegin(), E = AssignmentBlocks.rend();
-         I != E; ++I) {
+    for (auto AssgnsVec : makeReverse(AssignmentBlocks)) {
         if (first) {
             first = false;
         } else {
@@ -293,9 +289,7 @@ SMTRef nonmutualSMT(SMTRef EndClause,
                                               CallIt->AssignedTo, FunArgs, For);
             ++CallIt;
         }
-        for (auto InnerI = I->rbegin(), InnerE = I->rend(); InnerI != InnerE;
-             ++InnerI) {
-            auto Assgns = *InnerI;
+        for (auto Assgns : makeReverse(AssgnsVec)) {
             Clause = nestLets(Clause, Assgns.Definitions);
             if (Assgns.Condition) {
                 Clause = makeBinOp("=>", Assgns.Condition, Clause);
