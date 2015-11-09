@@ -1,7 +1,7 @@
 #include "SMTGeneration.h"
 
-#include "MarkAnalysis.h"
 #include "Compat.h"
+#include "MarkAnalysis.h"
 
 #include "llvm/IR/Constants.h"
 
@@ -197,8 +197,8 @@ assignmentsOnPath(Path Path, int Program, std::set<std::string> FreeVars,
     set<string> Constructed;
     std::vector<CallInfo> CallInfos;
 
-    auto StartDefs =
-        blockAssignments(Path.Start, nullptr, true, false, Program, Constructed);
+    auto StartDefs = blockAssignments(Path.Start, nullptr, true, false, Program,
+                                      Constructed);
     AllDefs.push_back(AssignmentCallBlock(StartDefs, nullptr));
 
     auto Prev = Path.Start;
@@ -208,7 +208,7 @@ assignmentsOnPath(Path Path, int Program, std::set<std::string> FreeVars,
         i++;
         bool Last = i == Path.Edges.size();
         auto Defs = blockAssignments(Edge.Block, Prev, false, Last && !ToEnd,
-                                Program, Constructed);
+                                     Program, Constructed);
         AllDefs.push_back(AssignmentCallBlock(Defs, Edge.Condition));
         Prev = Edge.Block;
     }
@@ -243,9 +243,8 @@ SMTRef interleaveAssignments(
     bool first = true;
     auto CallIt1 = CallInfo1.rbegin();
     auto CallIt2 = CallInfo2.rbegin();
-    for (auto It1 = AssignmentBlocks1.rbegin(), E1 = AssignmentBlocks1.rend(),
-              It2 = AssignmentBlocks2.rbegin();
-         It1 != E1; ++It1, ++It2) {
+    for (auto It : makeZip(makeReverse(AssignmentBlocks1),
+                           makeReverse(AssignmentBlocks2))) {
         if (first) {
             first = false;
         } else {
@@ -255,13 +254,13 @@ SMTRef interleaveAssignments(
             ++CallIt1;
             ++CallIt2;
         }
-        for (auto Assgns : makeReverse(*It2)) {
+        for (auto Assgns : makeReverse(It.second)) {
             Clause = nestLets(Clause, Assgns.Definitions);
             if (Assgns.Condition) {
                 Clause = makeBinOp("=>", Assgns.Condition, Clause);
             }
         }
-        for (auto Assgns : makeReverse(*It1)) {
+        for (auto Assgns : makeReverse(It.first)) {
             Clause = nestLets(Clause, Assgns.Definitions);
             if (Assgns.Condition) {
                 Clause = makeBinOp("=>", Assgns.Condition, Clause);
@@ -482,13 +481,9 @@ SMTRef assertForall(SMTRef Clause, set<string> FreeVars, int BlockIndex,
 SMTRef makeFunArgsEqual(SMTRef Clause, SMTRef PreClause, set<string> Args1,
                         set<string> Args2) {
     std::vector<SMTRef> Args;
-    if (Args1.size() != Args2.size()) {
-        llvm::errs() << "Warning: different number of arguments\n";
-    }
-    auto It = Args2.begin();
-    for (auto Arg : Args1) {
-        Args.push_back(makeBinOp("=", Arg, *It));
-        ++It;
+    assert(Args1.size() == Args2.size());
+    for (auto ArgPair : makeZip(Args1, Args2)) {
+        Args.push_back(makeBinOp("=", ArgPair.first, ArgPair.second));
     }
 
     auto And = make_shared<Op>("and", Args);
@@ -537,9 +532,10 @@ SMTRef equalInputsEqualOutputs(set<string> FunArgs,
 
 /// Convert a basic block to a list of assignments
 std::vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock *BB,
-                                       const llvm::BasicBlock *PrevBB,
-                                       bool IgnorePhis, bool OnlyPhis,
-                                       int Program, set<string> &Constructed) {
+                                            const llvm::BasicBlock *PrevBB,
+                                            bool IgnorePhis, bool OnlyPhis,
+                                            int Program,
+                                            set<string> &Constructed) {
     std::vector<DefOrCallInfo> Definitions;
     assert(BB->size() >=
            1); // There should be at least a terminator instruction
@@ -579,7 +575,7 @@ std::vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock *BB,
 /// Convert a single instruction to an assignment
 std::shared_ptr<std::tuple<string, SMTRef>>
 instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
-                 set<string> &Constructed) {
+                set<string> &Constructed) {
     if (auto BinOp = llvm::dyn_cast<llvm::BinaryOperator>(&Instr)) {
         return make_shared<std::tuple<string, SMTRef>>(
             BinOp->getName(),
@@ -783,7 +779,7 @@ freeVarsForBlock(std::map<int, Paths> PathMap) {
 }
 
 std::map<int, set<string>> freeVars(PathMap Map1, PathMap Map2,
-                                       set<string> FunArgs) {
+                                    set<string> FunArgs) {
     std::map<int, set<string>> FreeVarsMap;
     std::map<int, std::map<int, set<string>>> Constructed;
     for (auto &It : Map1) {
