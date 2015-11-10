@@ -7,6 +7,8 @@
 
 using llvm::CmpInst;
 
+#include <iostream>
+
 std::vector<SMTRef>
 convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
              unique_ptr<llvm::FunctionAnalysisManager> Fam1,
@@ -236,17 +238,79 @@ SMTRef interleaveAssignments(
     auto AssignmentBlocks2 = SplitAssignments2.first;
     auto CallInfo1 = SplitAssignments1.second;
     auto CallInfo2 = SplitAssignments2.second;
-    assert(AssignmentBlocks1.size() == AssignmentBlocks2.size());
-    assert(CallInfo1.size() == CallInfo2.size());
+
     assert(AssignmentBlocks1.size() == CallInfo1.size() + 1);
+    assert(AssignmentBlocks2.size() == CallInfo2.size() + 1);
     assert(AssignmentCallBlocks1.size() >= 1);
-    bool first = true;
-    auto CallIt1 = CallInfo1.rbegin();
-    auto CallIt2 = CallInfo2.rbegin();
-    for (auto It : makeZip(makeReverse(AssignmentBlocks1),
-                           makeReverse(AssignmentBlocks2))) {
-        if (first) {
-            first = false;
+    assert(AssignmentCallBlocks2.size() >= 1);
+
+    std::vector<std::vector<AssignmentBlock>> MutualBlocks1;
+    std::vector<std::vector<AssignmentBlock>> MutualBlocks2;
+    int MutualSize = std::min(static_cast<int>(AssignmentBlocks1.size()),
+                              static_cast<int>(AssignmentBlocks2.size()));
+    MutualBlocks1.insert(MutualBlocks1.end(), AssignmentBlocks1.begin(),
+                         std::next(AssignmentBlocks1.begin(), MutualSize));
+    MutualBlocks2.insert(MutualBlocks2.end(), AssignmentBlocks2.begin(),
+                         std::next(AssignmentBlocks2.begin(), MutualSize));
+    std::vector<CallInfo> MutualCallInfo1;
+    std::vector<CallInfo> MutualCallInfo2;
+    MutualCallInfo1.insert(
+        MutualCallInfo1.end(), CallInfo1.begin(),
+        std::next(CallInfo1.begin(), std::max(MutualSize - 1, 0)));
+    MutualCallInfo2.insert(
+        MutualCallInfo2.end(), CallInfo2.begin(),
+        std::next(CallInfo2.begin(), std::max(MutualSize - 1, 0)));
+
+    auto CallIt1 = MutualCallInfo1.rbegin();
+    auto CallIt2 = MutualCallInfo2.rbegin();
+    std::vector<std::vector<AssignmentBlock>> NonMutualBlocks;
+    std::vector<CallInfo> NonMutualCallInfo;
+    auto NonMutual = SMTFor::Both;
+    std::vector<string> NonMutualFunArgs;
+
+    if (AssignmentBlocks1.size() > AssignmentBlocks2.size()) {
+        NonMutual = SMTFor::First;
+        NonMutualBlocks.insert(NonMutualBlocks.end(),
+                               std::next(AssignmentBlocks1.begin(), MutualSize),
+                               AssignmentBlocks1.end());
+        NonMutualCallInfo.insert(NonMutualCallInfo.end(),
+                                 std::next(CallInfo1.begin(), MutualSize - 1),
+                                 CallInfo1.end());
+        NonMutualFunArgs = FunArgs1;
+    } else if (AssignmentBlocks2.size() > AssignmentBlocks1.size()) {
+        NonMutual = SMTFor::Second;
+        NonMutualBlocks.insert(NonMutualBlocks.end(),
+                               std::next(AssignmentBlocks2.begin(), MutualSize),
+                               AssignmentBlocks2.end());
+        NonMutualCallInfo.insert(NonMutualCallInfo.end(),
+                                 std::next(CallInfo2.begin(), MutualSize - 1),
+                                 CallInfo2.end());
+        NonMutualFunArgs = FunArgs2;
+    }
+
+    if (NonMutual != Both) {
+        auto CallIt = NonMutualCallInfo.rbegin();
+        for (auto AssgnsVec : makeReverse(NonMutualBlocks)) {
+            for (auto Assgns : makeReverse(AssgnsVec)) {
+                Clause = nestLets(Clause, Assgns.Definitions);
+                if (Assgns.Condition) {
+                    Clause = makeBinOp("=>", Assgns.Condition, Clause);
+                }
+            }
+            if (CallIt != NonMutualCallInfo.rend()) {
+                Clause = nonmutualRecursiveForall(Clause, CallIt->Args,
+                                                  CallIt->AssignedTo,
+                                                  NonMutualFunArgs, NonMutual);
+                ++CallIt;
+            }
+        }
+    }
+
+    bool First = true;
+    for (auto It :
+         makeZip(makeReverse(MutualBlocks1), makeReverse(MutualBlocks2))) {
+        if (First) {
+            First = false;
         } else {
             Clause = mutualRecursiveForall(
                 Clause, CallIt1->Args, CallIt2->Args, CallIt1->AssignedTo,
