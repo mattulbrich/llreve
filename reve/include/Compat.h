@@ -23,10 +23,9 @@ template <typename A, typename B> class Zip {
         : std::iterator<
               std::forward_iterator_tag,
               std::pair<typename A::value_type, typename B::value_type>> {
-      private:
-        std::pair<typename A::iterator, typename B::iterator> Cur;
 
       public:
+        std::pair<typename A::iterator, typename B::iterator> Cur;
         iterator(typename A::iterator a, typename B::iterator b)
             : Cur(std::make_pair(a, b)) {}
         iterator(const iterator &rhs) : Cur(rhs.Cur) {}
