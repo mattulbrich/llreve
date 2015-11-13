@@ -55,8 +55,8 @@ enum SMTFor { First, Second, Both };
 
 auto convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
                   std::unique_ptr<llvm::FunctionAnalysisManager> Fam1,
-                  std::unique_ptr<llvm::FunctionAnalysisManager> Fam2)
-    -> std::vector<SMTRef>;
+                  std::unique_ptr<llvm::FunctionAnalysisManager> Fam2,
+                  bool OffByN) -> std::vector<SMTRef>;
 
 /* -------------------------------------------------------------------------- */
 // Generate SMT for all paths
@@ -68,8 +68,8 @@ auto synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
     -> std::pair<std::vector<SMTRef>, std::vector<SMTRef>>;
 auto forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
                     std::map<int, set<string>> FreeVarsMap,
-                    std::vector<string> FunArgs1, std::vector<string> FunArgs2)
-    -> std::vector<SMTRef>;
+                    std::vector<string> FunArgs1, std::vector<string> FunArgs2,
+                    bool OffByN) -> std::vector<SMTRef>;
 auto nonmutualPaths(PathMap PathMap, std::vector<SMTRef> &PathExprs,
                     std::vector<SMTRef> &InvariantDefs,
                     std::map<int, set<string>> FreeVarsMap,

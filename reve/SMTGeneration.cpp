@@ -9,10 +9,10 @@ using llvm::CmpInst;
 
 #include <iostream>
 
-std::vector<SMTRef>
-convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
-             unique_ptr<llvm::FunctionAnalysisManager> Fam1,
-             unique_ptr<llvm::FunctionAnalysisManager> Fam2) {
+std::vector<SMTRef> convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
+                                 unique_ptr<llvm::FunctionAnalysisManager> Fam1,
+                                 unique_ptr<llvm::FunctionAnalysisManager> Fam2,
+                                 bool OffByN) {
     // TODO(moritz): check that the marks are the same
     auto PathMap1 = Fam1->getResult<PathAnalysis>(Fun1);
     auto PathMap2 = Fam2->getResult<PathAnalysis>(Fun2);
@@ -58,12 +58,11 @@ convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
     PathExprs.insert(PathExprs.end(), SynchronizedPaths.second.begin(),
                      SynchronizedPaths.second.end());
 
-    // TODO (moritz): Figure out what to do about that
-
     // generate forbidden paths
     PathExprs.push_back(make_shared<Comment>("FORBIDDEN PATHS"));
-    auto ForbiddenPaths = forbiddenPaths(PathMap1, PathMap2, FreeVarsMap,
-                                         FunArgsPair.first, FunArgsPair.second);
+    auto ForbiddenPaths =
+        forbiddenPaths(PathMap1, PathMap2, FreeVarsMap, FunArgsPair.first,
+                       FunArgsPair.second, OffByN);
     PathExprs.insert(PathExprs.end(), ForbiddenPaths.begin(),
                      ForbiddenPaths.end());
 
@@ -124,7 +123,7 @@ synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
 std::vector<SMTRef> forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
                                    std::map<int, set<string>> FreeVarsMap,
                                    std::vector<string> FunArgs1,
-                                   std::vector<string> FunArgs2) {
+                                   std::vector<string> FunArgs2, bool OffByN) {
     std::vector<SMTRef> PathExprs;
     for (auto &PathMapIt : PathMap1) {
         int StartIndex = PathMapIt.first;
@@ -135,16 +134,20 @@ std::vector<SMTRef> forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
                 if (EndIndex1 != EndIndex2) {
                     for (auto &Path1 : InnerPathMapIt1.second) {
                         for (auto &Path2 : InnerPathMapIt2.second) {
-                            auto Smt2 = assignmentsOnPath(
-                                Path2, 2, set<string>(), EndIndex2 == -2);
-                            auto Smt1 = assignmentsOnPath(
-                                Path1, 1, set<string>(), EndIndex1 == -2);
-                            auto SMT = nonmutualSMT(name("false"), Smt2,
-                                                    FunArgs2, Second);
-                            SMT = nonmutualSMT(SMT, Smt1, FunArgs1, First);
-                            PathExprs.push_back(
-                                assertForall(SMT, FreeVarsMap.at(StartIndex),
-                                             StartIndex, Both));
+                            if (!OffByN ||
+                                !(StartIndex == EndIndex1 ||
+                                  StartIndex == EndIndex2)) {
+                                auto Smt2 = assignmentsOnPath(
+                                    Path2, 2, set<string>(), EndIndex2 == -2);
+                                auto Smt1 = assignmentsOnPath(
+                                    Path1, 1, set<string>(), EndIndex1 == -2);
+                                auto SMT = nonmutualSMT(name("false"), Smt2,
+                                                        FunArgs2, Second);
+                                SMT = nonmutualSMT(SMT, Smt1, FunArgs1, First);
+                                PathExprs.push_back(assertForall(
+                                    SMT, FreeVarsMap.at(StartIndex), StartIndex,
+                                    Both));
+                            }
                         }
                     }
                 }

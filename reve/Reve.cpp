@@ -68,6 +68,7 @@ static llvm::cl::opt<string>
     OutputFileName("o", llvm::cl::desc("SMT output filename"),
                    llvm::cl::value_desc("filename"));
 static llvm::cl::opt<bool> ShowCFG("show-cfg", llvm::cl::desc("Show cfg"));
+static llvm::cl::opt<bool> OffByN("off-by-n", llvm::cl::desc("Allow loops to be off by n iterations"));
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
@@ -212,7 +213,7 @@ int main(int Argc, const char **Argv) {
     auto Fam2 = preprocessModule(FunOrError2.get(), "2");
 
     auto SMTExprs = convertToSMT(FunOrError1.get(), FunOrError2.get(), std::move(Fam1),
-                 std::move(Fam2));
+                                 std::move(Fam2), OffByN);
     // write to file or to stdout
     std::streambuf *Buf;
     std::ofstream OFStream;
