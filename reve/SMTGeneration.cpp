@@ -66,6 +66,15 @@ std::vector<SMTRef> convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
     PathExprs.insert(PathExprs.end(), ForbiddenPaths.begin(),
                      ForbiddenPaths.end());
 
+    if (OffByN) {
+        // generate off by n paths
+        PathExprs.push_back(make_shared<Comment>("OFF BY N"));
+        auto OffByNPaths = offByNPaths(PathMap1, PathMap2, FreeVarsMap,
+                                       FunArgsPair.first, FunArgsPair.second);
+        PathExprs.insert(PathExprs.end(), OffByNPaths.begin(),
+                         OffByNPaths.end());
+    }
+
     SMTExprs.insert(SMTExprs.end(), PathExprs.begin(), PathExprs.end());
 
     SMTExprs.push_back(make_shared<CheckSat>());
@@ -188,6 +197,54 @@ void nonmutualPaths(PathMap PathMap, std::vector<SMTRef> &PathExprs,
             }
         }
     }
+}
+
+std::vector<SMTRef> offByNPaths(PathMap PathMap1, PathMap PathMap2,
+                                std::map<int, set<string>> FreeVarsMap,
+                                std::vector<string> FunArgs1,
+                                std::vector<string> FunArgs2) {
+    std::vector<SMTRef> Paths;
+    auto FirstPaths = offByNPathsOneDir(PathMap1, PathMap2, FreeVarsMap, FunArgs1, FunArgs2, 1, First);
+    auto SecondPaths =
+        offByNPathsOneDir(PathMap2, PathMap1, FreeVarsMap, FunArgs2, FunArgs1, 2, Second);
+    Paths.insert(Paths.end(), FirstPaths.begin(), FirstPaths.end());
+    Paths.insert(Paths.end(), SecondPaths.begin(), SecondPaths.end());
+    return Paths;
+}
+
+std::vector<SMTRef> offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
+                                      std::map<int, set<string>> FreeVarsMap,
+                                      std::vector<string> FunArgs,
+                                      std::vector<string> OtherFunArgs, int Program, SMTFor For) {
+    std::vector<SMTRef> Paths;
+    for (auto &PathMapIt : PathMap_) {
+        int StartIndex = PathMapIt.first;
+        for (auto &InnerPathMapIt : PathMapIt.second) {
+            int EndIndex = InnerPathMapIt.first;
+            if (StartIndex == EndIndex) {
+                // we found a loop
+                for (auto &Path : InnerPathMapIt.second) {
+                    auto EndArgs2 = filterVars(swapIndex(Program), FreeVarsMap.at(StartIndex));
+                    auto EndArgs = filterVars(Program, FreeVarsMap.at(StartIndex));
+                    for (auto Arg : EndArgs2) {
+                        EndArgs.insert(Arg + "_old");
+                    }
+                    auto EndInvariant =
+                        invariant(StartIndex, StartIndex,
+                                  FreeVarsMap.at(StartIndex), EndArgs, Both);
+                    auto DontLoopInvariant = dontLoopInvariant(
+                        EndInvariant, StartIndex, OtherPathMap, FreeVarsMap,
+                        OtherFunArgs, swapIndex(Program), For == First ? Second : First);
+                    auto Defs = assignmentsOnPath(
+                        Path, Program, FreeVarsMap.at(EndIndex), EndIndex == -2);
+                    Paths.push_back(assertForall(
+                        nonmutualSMT(DontLoopInvariant, Defs, FunArgs, For),
+                        FreeVarsMap.at(StartIndex), StartIndex, Both));
+                }
+            }
+        }
+    }
+    return Paths;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -460,6 +517,32 @@ string invariantName(int Index, SMTFor For) {
         return Name + "__2";
     }
     return Name;
+}
+
+SMTRef dontLoopInvariant(SMTRef EndClause, int StartIndex, PathMap PathMap,
+                         std::map<int, set<string>> FreeVars,
+                         std::vector<string> FunArgs, int Program, SMTFor For) {
+    auto Clause = EndClause;
+    std::vector<Path> DontLoopPaths;
+    for (auto PathMapIt : PathMap.at(StartIndex)) {
+        if (PathMapIt.first == StartIndex) {
+            for (auto Path : PathMapIt.second) {
+                DontLoopPaths.push_back(Path);
+            }
+        }
+    }
+    std::vector<SMTRef> DontLoopExprs;
+    for (auto Path : DontLoopPaths) {
+        auto Defs =
+            assignmentsOnPath(Path, Program, FreeVars.at(StartIndex), false);
+        auto SMT = nonmutualSMT(name("false"), Defs, FunArgs, For);
+        DontLoopExprs.push_back(SMT);
+    }
+    if (!DontLoopExprs.empty()) {
+        auto AndExpr = make_shared<Op>("and", DontLoopExprs);
+        Clause = makeBinOp("=>", AndExpr, Clause);
+    }
+    return Clause;
 }
 
 /* -------------------------------------------------------------------------- */

@@ -74,6 +74,15 @@ auto nonmutualPaths(PathMap PathMap, std::vector<SMTRef> &PathExprs,
                     std::vector<SMTRef> &InvariantDefs,
                     std::map<int, set<string>> FreeVarsMap,
                     std::vector<string> FunArgs, SMTFor For) -> void;
+auto offByNPaths(PathMap PathMap1, PathMap PathMap2,
+                 std::map<int, set<string>> FreeVarsMap,
+                 std::vector<string> FunArgs1, std::vector<string> FunArgs2)
+    -> std::vector<SMTRef>;
+auto offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
+                       std::map<int, set<string>> FreeVarsMap,
+                       std::vector<string> FunArgs,
+                       std::vector<string> OtherFunArgs, int Program,
+                       SMTFor For) -> std::vector<SMTRef>;
 
 /* -------------------------------------------------------------------------- */
 // Functions for generating SMT for a single/mutual path
@@ -97,6 +106,10 @@ auto invariant(int StartIndex, int EndIndex, std::set<std::string> InputArgs,
 auto invariantDeclaration(int BlockIndex, std::set<std::string> FreeVars,
                           SMTFor For) -> std::pair<SMTRef, SMTRef>;
 auto invariantName(int Index, SMTFor For) -> std::string;
+auto dontLoopInvariant(SMTRef EndClause, int StartIndex, PathMap PathMap,
+                       std::map<int, set<string>> FreeVarsMap,
+                       std::vector<string> FunArgs, int Program, SMTFor For)
+    -> SMTRef;
 
 /* -------------------------------------------------------------------------- */
 // Functions to generate various foralls
