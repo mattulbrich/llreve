@@ -68,7 +68,8 @@ static llvm::cl::opt<string>
     OutputFileName("o", llvm::cl::desc("SMT output filename"),
                    llvm::cl::value_desc("filename"));
 static llvm::cl::opt<bool> ShowCFG("show-cfg", llvm::cl::desc("Show cfg"));
-static llvm::cl::opt<bool> OffByN("off-by-n", llvm::cl::desc("Allow loops to be off by n iterations"));
+static llvm::cl::opt<bool>
+    OffByN("off-by-n", llvm::cl::desc("Allow loops to be off by n iterations"));
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
@@ -201,19 +202,24 @@ int main(int Argc, const char **Argv) {
         return 1;
     }
 
-    ErrorOr<llvm::Function &> FunOrError1 = getFunction(*Mod1);
-    ErrorOr<llvm::Function &> FunOrError2 = getFunction(*Mod2);
+    ErrorOr<std::vector<std::pair<llvm::Function *, llvm::Function *>>> Funs =
+        zipFunctions(*Mod1, *Mod2);
 
-    if (!FunOrError1 || !FunOrError2) {
-        errs() << "Couldn't find a function\n";
+    if (!Funs) {
+        errs() << "Couldn't find matching functions\n";
         return 1;
     }
 
-    auto Fam1 = preprocessModule(FunOrError1.get(), "1");
-    auto Fam2 = preprocessModule(FunOrError2.get(), "2");
+    std::vector<SMTRef> SMTExprs;
+    for (auto FunPair : Funs.get()) {
+        auto Fam1 = preprocessModule(*FunPair.first, "1");
+        auto Fam2 = preprocessModule(*FunPair.second, "2");
+        auto NewSMTExprs =
+            convertToSMT(*FunPair.first, *FunPair.second, std::move(Fam1),
+                         std::move(Fam2), OffByN);
+        SMTExprs.insert(SMTExprs.end(), NewSMTExprs.begin(), NewSMTExprs.end());
+    }
 
-    auto SMTExprs = convertToSMT(FunOrError1.get(), FunOrError2.get(), std::move(Fam1),
-                                 std::move(Fam2), OffByN);
     // write to file or to stdout
     std::streambuf *Buf;
     std::ofstream OFStream;
@@ -268,15 +274,24 @@ unique_ptr<llvm::FunctionAnalysisManager> preprocessModule(llvm::Function &Fun,
     return FAM;
 }
 
-ErrorOr<llvm::Function &> getFunction(llvm::Module &Mod) {
-    if (Mod.getFunctionList().size() == 0) {
-        return ErrorOr<llvm::Function &>(std::error_code());
+ErrorOr<std::vector<std::pair<llvm::Function *, llvm::Function *>>>
+zipFunctions(llvm::Module &Mod1, llvm::Module &Mod2) {
+    std::vector<std::pair<llvm::Function *, llvm::Function *>> Funs;
+    if (Mod1.size() != Mod2.size()) {
+        llvm::errs() << "Error: unequal number of functions\n";
+        return ErrorOr<std::vector<std::pair<llvm::Function *, llvm::Function *>>>(std::error_code());
     }
-    llvm::Function &Fun = Mod.getFunctionList().front();
-    if (Mod.getFunctionList().size() > 1) {
-        llvm::errs() << "Warning: There is more than one function in the "
-                        "module, choosing “"
-                     << Fun.getName() << "”\n";
+    for (auto &Fun1 : Mod1) {
+        if (Fun1.isDeclaration()) {
+            continue;
+        }
+        auto Fun2 = Mod2.getFunction(Fun1.getName());
+        if (!Fun2) {
+            llvm::errs() << "Error: no corresponding function for " << Fun1.getName() << "\n";
+            return ErrorOr<std::vector<std::pair<llvm::Function *, llvm::Function *>>>(std::error_code());
+        }
+        Funs.push_back(std::make_pair(&Fun1,Fun2));
     }
-    return ErrorOr<llvm::Function &>(Fun);
+    return ErrorOr<std::vector<std::pair<llvm::Function *, llvm::Function *>>>(
+        Funs);
 }

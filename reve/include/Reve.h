@@ -12,7 +12,8 @@
 #include "llvm/Option/Option.h"
 
 auto main(int Argc, const char **Argv) -> int;
-auto getFunction(llvm::Module &Mod) -> llvm::ErrorOr<llvm::Function &>;
+auto zipFunctions(llvm::Module &Mod1, llvm::Module &Mod2)
+    -> llvm::ErrorOr<std::vector<std::pair<llvm::Function *, llvm::Function *>>>;
 template <int N>
 auto initializeArgs(const char *ExeName, std::string Input1, std::string Input2)
     -> llvm::SmallVector<const char *, N>;
