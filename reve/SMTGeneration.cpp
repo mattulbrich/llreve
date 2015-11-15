@@ -8,65 +8,61 @@
 using llvm::CmpInst;
 
 #include <iostream>
+using std::vector;
 
-std::vector<SMTRef> convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
-                                 unique_ptr<llvm::FunctionAnalysisManager> Fam1,
-                                 unique_ptr<llvm::FunctionAnalysisManager> Fam2,
-                                 bool OffByN) {
+vector<SMTRef> convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
+                            unique_ptr<llvm::FunctionAnalysisManager> Fam1,
+                            unique_ptr<llvm::FunctionAnalysisManager> Fam2,
+                            bool OffByN, bool Main,
+                            vector<SMTRef> &Declarations) {
     // TODO(moritz): check that the marks are the same
     auto PathMap1 = Fam1->getResult<PathAnalysis>(Fun1);
     auto PathMap2 = Fam2->getResult<PathAnalysis>(Fun2);
     auto Marked1 = Fam1->getResult<MarkAnalysis>(Fun1);
     auto Marked2 = Fam2->getResult<MarkAnalysis>(Fun2);
     std::string FunName = Fun1.getName();
-    std::pair<std::vector<string>, std::vector<string>> FunArgsPair =
+    std::pair<vector<string>, vector<string>> FunArgsPair =
         functionArgs(Fun1, Fun2);
-    set<string> FunArgs;
+    vector<string> FunArgs;
     for (auto Arg : FunArgsPair.first) {
-        FunArgs.insert(Arg);
+        FunArgs.push_back(Arg);
     }
     for (auto Arg : FunArgsPair.second) {
-        FunArgs.insert(Arg);
+        FunArgs.push_back(Arg);
     }
-    std::map<int, set<string>> FreeVarsMap =
+    std::map<int, vector<string>> FreeVarsMap =
         freeVars(PathMap1, PathMap2, FunArgs);
-    std::vector<SMTRef> SMTExprs;
-    std::vector<SMTRef> PathExprs;
-
-    SMTExprs.push_back(std::make_shared<SetLogic>("HORN"));
+    vector<SMTRef> SMTExprs;
+    vector<SMTRef> PathExprs;
 
     // we only need pre invariants for mutual invariants
     auto Invariants = invariantDeclaration(-1, FunArgs, Both, FunName);
-    SMTExprs.push_back(Invariants.first);
-    SMTExprs.push_back(Invariants.second);
-    SMTExprs.push_back(
-        invariantDeclaration(-1, filterVars(1, FunArgs), First, FunName)
-            .first);
-    SMTExprs.push_back(
+    Declarations.push_back(Invariants.first);
+    Declarations.push_back(Invariants.second);
+    Declarations.push_back(
+        invariantDeclaration(-1, filterVars(1, FunArgs), First, FunName).first);
+    Declarations.push_back(
         invariantDeclaration(-1, filterVars(2, FunArgs), Second, FunName)
             .first);
 
     auto SynchronizedPaths =
         synchronizedPaths(PathMap1, PathMap2, FreeVarsMap, FunArgsPair.first,
-                          FunArgsPair.second, FunName);
+                          FunArgsPair.second, FunName, Declarations);
 
-    // add invariant defs
-    SMTExprs.insert(SMTExprs.end(), SynchronizedPaths.first.begin(),
-                    SynchronizedPaths.first.end());
-
-    // assert equal outputs for equal inputs
-    SMTExprs.push_back(equalInputsEqualOutputs(FunArgs, FunArgsPair.first,
-                                               FunArgsPair.second, FunName));
+    if (Main) {
+        // assert equal outputs for equal inputs
+        SMTExprs.push_back(equalInputsEqualOutputs(
+            FunArgs, FunArgsPair.first, FunArgsPair.second, FunName));
+    }
 
     // add actual path smts
-    PathExprs.insert(PathExprs.end(), SynchronizedPaths.second.begin(),
-                     SynchronizedPaths.second.end());
+    PathExprs.insert(PathExprs.end(), SynchronizedPaths.begin(),
+                     SynchronizedPaths.end());
 
     // generate forbidden paths
     PathExprs.push_back(make_shared<Comment>("FORBIDDEN PATHS"));
     auto ForbiddenPaths =
-        forbiddenPaths(PathMap1, PathMap2, FreeVarsMap, FunArgsPair.first,
-                       FunArgsPair.second, OffByN, FunName);
+        forbiddenPaths(PathMap1, PathMap2, FreeVarsMap, OffByN, FunName);
     PathExprs.insert(PathExprs.end(), ForbiddenPaths.begin(),
                      ForbiddenPaths.end());
 
@@ -74,16 +70,12 @@ std::vector<SMTRef> convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
         // generate off by n paths
         PathExprs.push_back(make_shared<Comment>("OFF BY N"));
         auto OffByNPaths =
-            offByNPaths(PathMap1, PathMap2, FreeVarsMap, FunArgsPair.first,
-                        FunArgsPair.second, FunName);
+            offByNPaths(PathMap1, PathMap2, FreeVarsMap, FunName);
         PathExprs.insert(PathExprs.end(), OffByNPaths.begin(),
                          OffByNPaths.end());
     }
 
     SMTExprs.insert(SMTExprs.end(), PathExprs.begin(), PathExprs.end());
-
-    SMTExprs.push_back(make_shared<CheckSat>());
-    SMTExprs.push_back(make_shared<GetModel>());
 
     return SMTExprs;
 }
@@ -91,21 +83,20 @@ std::vector<SMTRef> convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
 /* -------------------------------------------------------------------------- */
 // Generate SMT for all paths
 
-std::pair<std::vector<SMTRef>, std::vector<SMTRef>>
-synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
-                  std::map<int, set<string>> FreeVarsMap,
-                  std::vector<string> FunArgs1, std::vector<string> FunArgs2,
-                  std::string FunName) {
-    std::vector<SMTRef> InvariantDefs;
-    std::vector<SMTRef> PathExprs;
+vector<SMTRef> synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
+                                 std::map<int, vector<string>> FreeVarsMap,
+                                 vector<string> FunArgs1,
+                                 vector<string> FunArgs2, std::string FunName,
+                                 vector<SMTRef> &Declarations) {
+    vector<SMTRef> PathExprs;
     for (auto &PathMapIt : PathMap1) {
         int StartIndex = PathMapIt.first;
         if (StartIndex != -1) {
             // ignore entry node
             auto Invariants = invariantDeclaration(
                 StartIndex, FreeVarsMap.at(StartIndex), Both, FunName);
-            InvariantDefs.push_back(Invariants.first);
-            InvariantDefs.push_back(Invariants.second);
+            Declarations.push_back(Invariants.first);
+            Declarations.push_back(Invariants.second);
         }
         for (auto &InnerPathMapIt : PathMapIt.second) {
             int EndIndex = InnerPathMapIt.first;
@@ -121,26 +112,24 @@ synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                         Path2, 2, FreeVarsMap.at(EndIndex), EndIndex == -2);
                     PathExprs.push_back(assertForall(
                         interleaveAssignments(EndInvariant, Defs1, Defs2,
-                                              FunArgs1, FunArgs2, FunName),
+                                              FunArgs1, FunArgs2),
                         FreeVarsMap.at(StartIndex), StartIndex, Both, FunName));
                 }
             }
         }
     }
-    nonmutualPaths(PathMap1, PathExprs, InvariantDefs, FreeVarsMap, FunArgs1,
-                   First, FunName);
-    nonmutualPaths(PathMap2, PathExprs, InvariantDefs, FreeVarsMap, FunArgs2,
-                   Second, FunName);
+    nonmutualPaths(PathMap1, PathExprs, FreeVarsMap, First, FunName,
+                   Declarations);
+    nonmutualPaths(PathMap2, PathExprs, FreeVarsMap, Second, FunName,
+                   Declarations);
 
-    return make_pair(InvariantDefs, PathExprs);
+    return PathExprs;
 }
 
-std::vector<SMTRef> forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
-                                   std::map<int, set<string>> FreeVarsMap,
-                                   std::vector<string> FunArgs1,
-                                   std::vector<string> FunArgs2, bool OffByN,
-                                   std::string FunName) {
-    std::vector<SMTRef> PathExprs;
+vector<SMTRef> forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
+                              std::map<int, vector<string>> FreeVarsMap,
+                              bool OffByN, std::string FunName) {
+    vector<SMTRef> PathExprs;
     for (auto &PathMapIt : PathMap1) {
         int StartIndex = PathMapIt.first;
         for (auto &InnerPathMapIt1 : PathMapIt.second) {
@@ -153,15 +142,15 @@ std::vector<SMTRef> forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
                             if (!OffByN ||
                                 !(StartIndex == EndIndex1 ||
                                   StartIndex == EndIndex2)) {
-                                auto Smt2 = assignmentsOnPath(
-                                    Path2, 2, set<string>(), EndIndex2 == -2);
-                                auto Smt1 = assignmentsOnPath(
-                                    Path1, 1, set<string>(), EndIndex1 == -2);
+                                auto Smt2 = assignmentsOnPath(Path2, 2,
+                                                              vector<string>(),
+                                                              EndIndex2 == -2);
+                                auto Smt1 = assignmentsOnPath(Path1, 1,
+                                                              vector<string>(),
+                                                              EndIndex1 == -2);
                                 auto SMT =
-                                    nonmutualSMT(name("false"), Smt2, FunArgs2,
-                                                 Second, FunName);
-                                SMT = nonmutualSMT(SMT, Smt1, FunArgs1, First,
-                                                   FunName);
+                                    nonmutualSMT(name("false"), Smt2, Second);
+                                SMT = nonmutualSMT(SMT, Smt1, First);
                                 PathExprs.push_back(assertForall(
                                     SMT, FreeVarsMap.at(StartIndex), StartIndex,
                                     Both, FunName));
@@ -175,11 +164,9 @@ std::vector<SMTRef> forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
     return PathExprs;
 }
 
-void nonmutualPaths(PathMap PathMap, std::vector<SMTRef> &PathExprs,
-                    std::vector<SMTRef> &InvariantDefs,
-                    std::map<int, set<string>> FreeVarsMap,
-                    std::vector<string> FunArgs, SMTFor For,
-                    std::string FunName) {
+void nonmutualPaths(PathMap PathMap, vector<SMTRef> &PathExprs,
+                    std::map<int, vector<string>> FreeVarsMap, SMTFor For,
+                    std::string FunName, vector<SMTRef> &Declarations) {
     int Program = For == First ? 1 : 2;
     for (auto &PathMapIt : PathMap) {
         int StartIndex = PathMapIt.first;
@@ -187,9 +174,9 @@ void nonmutualPaths(PathMap PathMap, std::vector<SMTRef> &PathExprs,
             auto Invariants = invariantDeclaration(
                 StartIndex, filterVars(Program, FreeVarsMap.at(StartIndex)),
                 For, FunName);
-            InvariantDefs.push_back(Invariants.first);
+            Declarations.push_back(Invariants.first);
             if (For == Both) {
-                InvariantDefs.push_back(Invariants.second);
+                Declarations.push_back(Invariants.second);
             }
         }
         for (auto &InnerPathMapIt : PathMapIt.second) {
@@ -201,7 +188,7 @@ void nonmutualPaths(PathMap PathMap, std::vector<SMTRef> &PathExprs,
                 auto Defs = assignmentsOnPath(
                     Path, Program, FreeVarsMap.at(EndIndex), EndIndex == -2);
                 PathExprs.push_back(assertForall(
-                    nonmutualSMT(EndInvariant1, Defs, FunArgs, For, FunName),
+                    nonmutualSMT(EndInvariant1, Defs, For),
                     filterVars(Program, FreeVarsMap.at(StartIndex)), StartIndex,
                     For, FunName));
             }
@@ -209,29 +196,23 @@ void nonmutualPaths(PathMap PathMap, std::vector<SMTRef> &PathExprs,
     }
 }
 
-std::vector<SMTRef> offByNPaths(PathMap PathMap1, PathMap PathMap2,
-                                std::map<int, set<string>> FreeVarsMap,
-                                std::vector<string> FunArgs1,
-                                std::vector<string> FunArgs2,
-                                std::string FunName) {
-    std::vector<SMTRef> Paths;
-    auto FirstPaths = offByNPathsOneDir(PathMap1, PathMap2, FreeVarsMap,
-                                        FunArgs1, FunArgs2, 1, First, FunName);
+vector<SMTRef> offByNPaths(PathMap PathMap1, PathMap PathMap2,
+                           std::map<int, vector<string>> FreeVarsMap,
+                           std::string FunName) {
+    vector<SMTRef> Paths;
+    auto FirstPaths =
+        offByNPathsOneDir(PathMap1, PathMap2, FreeVarsMap, 1, First, FunName);
     auto SecondPaths =
-        offByNPathsOneDir(PathMap2, PathMap1, FreeVarsMap, FunArgs2, FunArgs1,
-                          2, Second, FunName);
+        offByNPathsOneDir(PathMap2, PathMap1, FreeVarsMap, 2, Second, FunName);
     Paths.insert(Paths.end(), FirstPaths.begin(), FirstPaths.end());
     Paths.insert(Paths.end(), SecondPaths.begin(), SecondPaths.end());
     return Paths;
 }
 
-std::vector<SMTRef> offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
-                                      std::map<int, set<string>> FreeVarsMap,
-                                      std::vector<string> FunArgs,
-                                      std::vector<string> OtherFunArgs,
-                                      int Program, SMTFor For,
-                                      std::string FunName) {
-    std::vector<SMTRef> Paths;
+vector<SMTRef> offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
+                                 std::map<int, vector<string>> FreeVarsMap,
+                                 int Program, SMTFor For, std::string FunName) {
+    vector<SMTRef> Paths;
     for (auto &PathMapIt : PathMap_) {
         int StartIndex = PathMapIt.first;
         for (auto &InnerPathMapIt : PathMapIt.second) {
@@ -243,22 +224,34 @@ std::vector<SMTRef> offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
                                                FreeVarsMap.at(StartIndex));
                     auto EndArgs =
                         filterVars(Program, FreeVarsMap.at(StartIndex));
-                    for (auto Arg : EndArgs2) {
-                        EndArgs.insert(Arg + "_old");
+                    vector<string> Args;
+                    if (For == First) {
+                        for (auto Arg : EndArgs) {
+                            Args.push_back(Arg);
+                        }
+                        for (auto Arg : EndArgs2) {
+                            Args.push_back(Arg + "_old");
+                        }
+
+                    } else {
+                        for (auto Arg : EndArgs2) {
+                            Args.push_back(Arg + "_old");
+                        }
+                        for (auto Arg : EndArgs) {
+                            Args.push_back(Arg);
+                        }
                     }
                     auto EndInvariant = invariant(StartIndex, StartIndex,
                                                   FreeVarsMap.at(StartIndex),
-                                                  EndArgs, Both, FunName);
+                                                  Args, Both, FunName);
                     auto DontLoopInvariant = dontLoopInvariant(
                         EndInvariant, StartIndex, OtherPathMap, FreeVarsMap,
-                        OtherFunArgs, swapIndex(Program),
-                        For == First ? Second : First, FunName);
+                        swapIndex(Program), For == First ? Second : First);
                     auto Defs = assignmentsOnPath(Path, Program,
                                                   FreeVarsMap.at(EndIndex),
                                                   EndIndex == -2);
                     Paths.push_back(assertForall(
-                        nonmutualSMT(DontLoopInvariant, Defs, FunArgs, For,
-                                     FunName),
+                        nonmutualSMT(DontLoopInvariant, Defs, For),
                         FreeVarsMap.at(StartIndex), StartIndex, Both, FunName));
                 }
             }
@@ -270,14 +263,14 @@ std::vector<SMTRef> offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
 /* -------------------------------------------------------------------------- */
 // Functions for generating SMT for a single/mutual path
 
-std::vector<AssignmentCallBlock>
-assignmentsOnPath(Path Path, int Program, std::set<std::string> FreeVars,
-                  bool ToEnd) {
+vector<AssignmentCallBlock> assignmentsOnPath(Path Path, int Program,
+                                              vector<std::string> FreeVars,
+                                              bool ToEnd) {
     auto FilteredFreeVars = filterVars(Program, FreeVars);
 
-    std::vector<AssignmentCallBlock> AllDefs;
+    vector<AssignmentCallBlock> AllDefs;
     set<string> Constructed;
-    std::vector<CallInfo> CallInfos;
+    vector<CallInfo> CallInfos;
 
     auto StartDefs = blockAssignments(Path.Start, nullptr, true, false, Program,
                                       Constructed);
@@ -295,7 +288,7 @@ assignmentsOnPath(Path Path, int Program, std::set<std::string> FreeVars,
         Prev = Edge.Block;
     }
 
-    std::vector<DefOrCallInfo> OldDefs;
+    vector<DefOrCallInfo> OldDefs;
     for (auto Var : FilteredFreeVars) {
         if (Constructed.find(Var) == Constructed.end()) {
             // Set the new value to the old value, if it hasn't already been set
@@ -307,12 +300,10 @@ assignmentsOnPath(Path Path, int Program, std::set<std::string> FreeVars,
     return AllDefs;
 }
 
-SMTRef
-interleaveAssignments(SMTRef EndClause,
-                      std::vector<AssignmentCallBlock> AssignmentCallBlocks1,
-                      std::vector<AssignmentCallBlock> AssignmentCallBlocks2,
-                      std::vector<string> FunArgs1,
-                      std::vector<string> FunArgs2, std::string FunName) {
+SMTRef interleaveAssignments(SMTRef EndClause,
+                             vector<AssignmentCallBlock> AssignmentCallBlocks1,
+                             vector<AssignmentCallBlock> AssignmentCallBlocks2,
+                             vector<string> FunArgs1, vector<string> FunArgs2) {
     SMTRef Clause = EndClause;
     auto SplitAssignments1 = splitAssignments(AssignmentCallBlocks1);
     auto SplitAssignments2 = splitAssignments(AssignmentCallBlocks2);
@@ -326,16 +317,16 @@ interleaveAssignments(SMTRef EndClause,
     assert(AssignmentCallBlocks1.size() >= 1);
     assert(AssignmentCallBlocks2.size() >= 1);
 
-    std::vector<std::vector<AssignmentBlock>> MutualBlocks1;
-    std::vector<std::vector<AssignmentBlock>> MutualBlocks2;
+    vector<vector<AssignmentBlock>> MutualBlocks1;
+    vector<vector<AssignmentBlock>> MutualBlocks2;
     int MutualSize = std::min(static_cast<int>(AssignmentBlocks1.size()),
                               static_cast<int>(AssignmentBlocks2.size()));
     MutualBlocks1.insert(MutualBlocks1.end(), AssignmentBlocks1.begin(),
                          std::next(AssignmentBlocks1.begin(), MutualSize));
     MutualBlocks2.insert(MutualBlocks2.end(), AssignmentBlocks2.begin(),
                          std::next(AssignmentBlocks2.begin(), MutualSize));
-    std::vector<CallInfo> MutualCallInfo1;
-    std::vector<CallInfo> MutualCallInfo2;
+    vector<CallInfo> MutualCallInfo1;
+    vector<CallInfo> MutualCallInfo2;
     MutualCallInfo1.insert(
         MutualCallInfo1.end(), CallInfo1.begin(),
         std::next(CallInfo1.begin(), std::max(MutualSize - 1, 0)));
@@ -345,10 +336,10 @@ interleaveAssignments(SMTRef EndClause,
 
     auto CallIt1 = MutualCallInfo1.rbegin();
     auto CallIt2 = MutualCallInfo2.rbegin();
-    std::vector<std::vector<AssignmentBlock>> NonMutualBlocks;
-    std::vector<CallInfo> NonMutualCallInfo;
+    vector<vector<AssignmentBlock>> NonMutualBlocks;
+    vector<CallInfo> NonMutualCallInfo;
     auto NonMutual = SMTFor::Both;
-    std::vector<string> NonMutualFunArgs;
+    vector<string> NonMutualFunArgs;
 
     if (AssignmentBlocks1.size() > AssignmentBlocks2.size()) {
         NonMutual = SMTFor::First;
@@ -380,9 +371,9 @@ interleaveAssignments(SMTRef EndClause,
                 }
             }
             if (CallIt != NonMutualCallInfo.rend()) {
-                Clause = nonmutualRecursiveForall(
-                    Clause, CallIt->Args, CallIt->AssignedTo, NonMutualFunArgs,
-                    NonMutual, FunName);
+                Clause = nonmutualRecursiveForall(Clause, CallIt->Args,
+                                                  CallIt->AssignedTo, NonMutual,
+                                                  CallIt->CallName);
                 ++CallIt;
             }
         }
@@ -394,9 +385,10 @@ interleaveAssignments(SMTRef EndClause,
         if (First) {
             First = false;
         } else {
+            assert(CallIt1->CallName == CallIt2->CallName);
             Clause = mutualRecursiveForall(
                 Clause, CallIt1->Args, CallIt2->Args, CallIt1->AssignedTo,
-                CallIt2->AssignedTo, FunArgs1, FunArgs2, FunName);
+                CallIt2->AssignedTo, CallIt1->CallName);
             ++CallIt1;
             ++CallIt2;
         }
@@ -417,9 +409,8 @@ interleaveAssignments(SMTRef EndClause,
 }
 
 SMTRef nonmutualSMT(SMTRef EndClause,
-                    std::vector<AssignmentCallBlock> AssignmentCallBlocks,
-                    std::vector<string> FunArgs, SMTFor For,
-                    std::string FunName) {
+                    vector<AssignmentCallBlock> AssignmentCallBlocks,
+                    SMTFor For) {
     SMTRef Clause = EndClause;
     auto SplitAssignments = splitAssignments(AssignmentCallBlocks);
     auto AssignmentBlocks = SplitAssignments.first;
@@ -432,8 +423,8 @@ SMTRef nonmutualSMT(SMTRef EndClause,
             first = false;
         } else {
             Clause = nonmutualRecursiveForall(Clause, CallIt->Args,
-                                              CallIt->AssignedTo, FunArgs, For,
-                                              FunName);
+                                              CallIt->AssignedTo, For,
+                                              CallIt->CallName);
             ++CallIt;
         }
         for (auto Assgns : makeReverse(AssgnsVec)) {
@@ -449,8 +440,8 @@ SMTRef nonmutualSMT(SMTRef EndClause,
 /* -------------------------------------------------------------------------- */
 // Functions related to generating invariants
 
-SMTRef invariant(int StartIndex, int EndIndex, set<string> InputArgs,
-                 set<string> EndArgs, SMTFor SMTFor, std::string FunName) {
+SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
+                 vector<string> EndArgs, SMTFor SMTFor, std::string FunName) {
     // This is the actual invariant we want to establish
     auto FilteredArgs = InputArgs;
     auto FilteredEndArgs = EndArgs;
@@ -462,7 +453,7 @@ SMTRef invariant(int StartIndex, int EndIndex, set<string> InputArgs,
         FilteredArgs = filterVars(2, FilteredArgs);
         FilteredEndArgs = filterVars(2, FilteredEndArgs);
     }
-    std::vector<string> ResultArgs;
+    vector<string> ResultArgs;
     switch (SMTFor) {
     case First:
         ResultArgs.push_back("result$1");
@@ -475,7 +466,7 @@ SMTRef invariant(int StartIndex, int EndIndex, set<string> InputArgs,
         ResultArgs.push_back("result$2");
         break;
     }
-    std::vector<string> EndArgsVect;
+    vector<string> EndArgsVect;
     for (auto Arg : FilteredArgs) {
         EndArgsVect.push_back(Arg + "_old");
     }
@@ -489,12 +480,12 @@ SMTRef invariant(int StartIndex, int EndIndex, set<string> InputArgs,
         // We require the result of another call to establish our invariant so
         // make sure that it satisfies the invariant of the other call and then
         // assert our own invariant
-        std::vector<SortedVar> ForallArgs;
+        vector<SortedVar> ForallArgs;
         for (auto ResultArg : ResultArgs) {
             ForallArgs.push_back(SortedVar(ResultArg, "Int"));
         }
 
-        std::vector<string> UsingArgsVect;
+        vector<string> UsingArgsVect;
         UsingArgsVect.insert(UsingArgsVect.begin(), FilteredEndArgs.begin(),
                              FilteredEndArgs.end());
         auto PreInv = makeOp(invariantName(EndIndex, SMTFor, FunName) + "_PRE",
@@ -515,12 +506,13 @@ SMTRef invariant(int StartIndex, int EndIndex, set<string> InputArgs,
 
 /// Declare an invariant
 std::pair<SMTRef, SMTRef> invariantDeclaration(int BlockIndex,
-                                               set<string> FreeVars, SMTFor For,
+                                               vector<string> FreeVars,
+                                               SMTFor For,
                                                std::string FunName) {
     // Add two arguments for the result args
     auto NumArgs = FreeVars.size() + 1 + (For == Both ? 1 : 0);
-    std::vector<string> Args(NumArgs, "Int");
-    std::vector<string> PreArgs(FreeVars.size(), "Int");
+    vector<string> Args(NumArgs, "Int");
+    vector<string> PreArgs(FreeVars.size(), "Int");
 
     return std::make_pair(
         std::make_shared<class Fun>(invariantName(BlockIndex, For, FunName),
@@ -547,10 +539,10 @@ string invariantName(int Index, SMTFor For, std::string FunName) {
 }
 
 SMTRef dontLoopInvariant(SMTRef EndClause, int StartIndex, PathMap PathMap,
-                         std::map<int, set<string>> FreeVars,
-                         std::vector<string> FunArgs, int Program, SMTFor For, std::string FunName) {
+                         std::map<int, vector<string>> FreeVars, int Program,
+                         SMTFor For) {
     auto Clause = EndClause;
-    std::vector<Path> DontLoopPaths;
+    vector<Path> DontLoopPaths;
     for (auto PathMapIt : PathMap.at(StartIndex)) {
         if (PathMapIt.first == StartIndex) {
             for (auto Path : PathMapIt.second) {
@@ -558,11 +550,11 @@ SMTRef dontLoopInvariant(SMTRef EndClause, int StartIndex, PathMap PathMap,
             }
         }
     }
-    std::vector<SMTRef> DontLoopExprs;
+    vector<SMTRef> DontLoopExprs;
     for (auto Path : DontLoopPaths) {
         auto Defs =
             assignmentsOnPath(Path, Program, FreeVars.at(StartIndex), false);
-        auto SMT = nonmutualSMT(name("false"), Defs, FunArgs, For, FunName);
+        auto SMT = nonmutualSMT(name("false"), Defs, For);
         DontLoopExprs.push_back(SMT);
     }
     if (!DontLoopExprs.empty()) {
@@ -575,56 +567,41 @@ SMTRef dontLoopInvariant(SMTRef EndClause, int StartIndex, PathMap PathMap,
 /* -------------------------------------------------------------------------- */
 // Functions to generate various foralls
 
-SMTRef mutualRecursiveForall(SMTRef Clause, std::vector<SMTRef> Args1,
-                             std::vector<SMTRef> Args2, std::string Ret1,
-                             std::string Ret2, std::vector<string> FunArgs1,
-                             std::vector<string> FunArgs2,
-                             std::string FunName) {
-    assert(Args1.size() == Args2.size());
-    assert(FunArgs1.size() == FunArgs2.size());
-    assert(Args1.size() == FunArgs1.size());
-    // we sort the arguments alphabetically by the corresponding function
-    // argument name
-    std::vector<SortedVar> Args;
+SMTRef mutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args1,
+                             vector<SMTRef> Args2, std::string Ret1,
+                             std::string Ret2, std::string FunName) {
+    vector<SortedVar> Args;
     Args.push_back(SortedVar(Ret1, "Int"));
     Args.push_back(SortedVar(Ret2, "Int"));
-    std::vector<std::pair<string, SMTRef>> ToSort;
-    std::vector<SMTRef> ImplArgs;
-    for (size_t i = 0; i < Args1.size(); i++) {
-        ToSort.push_back(make_pair(FunArgs1.at(i), Args1.at(i)));
-    }
-    for (size_t i = 0; i < Args2.size(); i++) {
-        ToSort.push_back(make_pair(FunArgs2.at(i), Args2.at(i)));
-    }
+    vector<SMTRef> ImplArgs;
+    vector<SMTRef> PreArgs;
 
-    std::sort(ToSort.begin(), ToSort.end());
-
-    for (auto Pair : ToSort) {
-        ImplArgs.push_back(Pair.second);
+    for (auto Arg : Args1) {
+        ImplArgs.push_back(Arg);
     }
+    for (auto Arg : Args2) {
+        ImplArgs.push_back(Arg);
+    }
+    PreArgs.insert(PreArgs.end(), ImplArgs.begin(), ImplArgs.end());
+
     ImplArgs.push_back(name(Ret1));
     ImplArgs.push_back(name(Ret2));
     Clause = makeBinOp(
         "=>", std::make_shared<Op>(invariantName(-1, Both, FunName), ImplArgs),
         Clause);
-    return make_shared<Forall>(Args, Clause);
+    Clause = make_shared<Forall>(Args, Clause);
+    auto PreInv = std::make_shared<Op>(
+        invariantName(-1, Both, FunName) + "_PRE", PreArgs);
+    return makeBinOp("and", PreInv, Clause);
 }
 
-SMTRef nonmutualRecursiveForall(SMTRef Clause, std::vector<SMTRef> Args,
-                                std::string Ret, std::vector<string> FunArgs,
-                                SMTFor For, std::string FunName) {
-    assert(Args.size() == FunArgs.size());
-    std::vector<SortedVar> ForallArgs;
-    std::vector<SMTRef> ImplArgs;
+SMTRef nonmutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args,
+                                std::string Ret, SMTFor For,
+                                std::string FunName) {
+    vector<SortedVar> ForallArgs;
+    vector<SMTRef> ImplArgs;
     ForallArgs.push_back(SortedVar(Ret, "Int"));
-    std::vector<std::pair<string, SMTRef>> ToSort;
-    for (size_t i = 0; i < Args.size(); i++) {
-        ToSort.push_back(make_pair(FunArgs.at(i), Args.at(i)));
-    }
-    std::sort(ToSort.begin(), ToSort.end());
-    for (auto Pair : ToSort) {
-        ImplArgs.push_back(Pair.second);
-    }
+    ImplArgs.insert(ImplArgs.begin(), Args.begin(), Args.end());
     ImplArgs.push_back(name(Ret));
     // TODO(moritz): Pass in the name
     Clause = makeBinOp(
@@ -634,10 +611,10 @@ SMTRef nonmutualRecursiveForall(SMTRef Clause, std::vector<SMTRef> Args,
 }
 
 /// Wrap the clause in a forall
-SMTRef assertForall(SMTRef Clause, set<string> FreeVars, int BlockIndex,
+SMTRef assertForall(SMTRef Clause, vector<string> FreeVars, int BlockIndex,
                     SMTFor For, std::string FunName) {
-    std::vector<SortedVar> Vars;
-    std::vector<string> PreVars;
+    vector<SortedVar> Vars;
+    vector<string> PreVars;
     for (auto &Arg : FreeVars) {
         // TODO(moritz): detect type
         Vars.push_back(SortedVar(Arg + "_old", "Int"));
@@ -645,11 +622,14 @@ SMTRef assertForall(SMTRef Clause, set<string> FreeVars, int BlockIndex,
     }
 
     if (Vars.empty()) {
+        llvm::errs() << "Vars empty: " << BlockIndex << "\n";
+
         return Clause;
     }
 
     if (For == Both) {
-        auto PreInv = makeOp(invariantName(BlockIndex, For, FunName) + "_PRE", PreVars);
+        auto PreInv =
+            makeOp(invariantName(BlockIndex, For, FunName) + "_PRE", PreVars);
         Clause = makeBinOp("=>", PreInv, Clause);
     }
     return make_shared<Assert>(make_shared<Forall>(Vars, Clause));
@@ -660,7 +640,7 @@ SMTRef assertForall(SMTRef Clause, set<string> FreeVars, int BlockIndex,
 
 SMTRef makeFunArgsEqual(SMTRef Clause, SMTRef PreClause, set<string> Args1,
                         set<string> Args2) {
-    std::vector<SMTRef> Args;
+    vector<SMTRef> Args;
     assert(Args1.size() == Args2.size());
     for (auto ArgPair : makeZip(Args1, Args2)) {
         Args.push_back(makeBinOp("=", ArgPair.first, ArgPair.second));
@@ -673,12 +653,11 @@ SMTRef makeFunArgsEqual(SMTRef Clause, SMTRef PreClause, set<string> Args1,
 
 /// Create an assertion to require that if the recursive invariant holds and the
 /// arguments are equal the outputs are equal
-SMTRef equalInputsEqualOutputs(set<string> FunArgs,
-                               std::vector<string> FunArgs1,
-                               std::vector<string> FunArgs2, std::string FunName) {
-    std::vector<SortedVar> ForallArgs;
-    std::vector<string> Args;
-    std::vector<string> PreInvArgs;
+SMTRef equalInputsEqualOutputs(vector<string> FunArgs, vector<string> FunArgs1,
+                               vector<string> FunArgs2, std::string FunName) {
+    vector<SortedVar> ForallArgs;
+    vector<string> Args;
+    vector<string> PreInvArgs;
     Args.insert(Args.end(), FunArgs.begin(), FunArgs.end());
     PreInvArgs = Args;
 
@@ -690,8 +669,9 @@ SMTRef equalInputsEqualOutputs(set<string> FunArgs,
     Args.push_back("result$1");
     Args.push_back("result$2");
 
-    auto EqualResults = makeBinOp("=>", makeOp(invariantName(-1, Both, FunName), Args),
-                                  makeBinOp("=", "result$1", "result$2"));
+    auto EqualResults =
+        makeBinOp("=>", makeOp(invariantName(-1, Both, FunName), Args),
+                  makeBinOp("=", "result$1", "result$2"));
     auto PreInv = makeOp(invariantName(-1, Both, FunName) + "_PRE", PreInvArgs);
 
     set<string> FunArgs1Set, FunArgs2Set;
@@ -711,12 +691,11 @@ SMTRef equalInputsEqualOutputs(set<string> FunArgs,
 // SMT assignments
 
 /// Convert a basic block to a list of assignments
-std::vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock *BB,
-                                            const llvm::BasicBlock *PrevBB,
-                                            bool IgnorePhis, bool OnlyPhis,
-                                            int Program,
-                                            set<string> &Constructed) {
-    std::vector<DefOrCallInfo> Definitions;
+vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock *BB,
+                                       const llvm::BasicBlock *PrevBB,
+                                       bool IgnorePhis, bool OnlyPhis,
+                                       int Program, set<string> &Constructed) {
+    vector<DefOrCallInfo> Definitions;
     assert(BB->size() >=
            1); // There should be at least a terminator instruction
     for (auto Instr = BB->begin(), E = std::prev(BB->end(), 1); Instr != E;
@@ -786,7 +765,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
         auto Cond = SelectInst->getCondition();
         auto TrueVal = SelectInst->getTrueValue();
         auto FalseVal = SelectInst->getFalseValue();
-        std::vector<SMTRef> Args = {
+        vector<SMTRef> Args = {
             instrNameOrVal(Cond, Cond->getType(), Constructed),
             instrNameOrVal(TrueVal, TrueVal->getType(), Constructed),
             instrNameOrVal(FalseVal, FalseVal->getType(), Constructed)};
@@ -958,9 +937,10 @@ freeVarsForBlock(std::map<int, Paths> PathMap) {
     return std::make_pair(FreeVars, ConstructedIntersection);
 }
 
-std::map<int, set<string>> freeVars(PathMap Map1, PathMap Map2,
-                                    set<string> FunArgs) {
+std::map<int, vector<string>> freeVars(PathMap Map1, PathMap Map2,
+                                       vector<string> FunArgs) {
     std::map<int, set<string>> FreeVarsMap;
+    std::map<int, vector<string>> FreeVarsMapVect;
     std::map<int, std::map<int, set<string>>> Constructed;
     for (auto &It : Map1) {
         int Index = It.first;
@@ -981,11 +961,7 @@ std::map<int, set<string>> freeVars(PathMap Map1, PathMap Map2,
         Constructed.insert(make_pair(Index, FreeVars1.second));
     }
 
-    for (auto Arg : FunArgs) {
-        FreeVarsMap.at(-1).insert(Arg);
-    }
-    FreeVarsMap.insert(make_pair(-2, set<string>()));
-
+    FreeVarsMap[-2] = set<string>();
     // search for a least fixpoint
     // don't tell anyone I wrote that
     bool Changed = true;
@@ -1006,19 +982,34 @@ std::map<int, set<string>> freeVars(PathMap Map1, PathMap Map2,
         }
     }
 
-    return FreeVarsMap;
+    for (auto It : FreeVarsMap) {
+        int Index = It.first;
+        vector<string> VarsVect;
+        for (auto Var : It.second) {
+            VarsVect.push_back(Var);
+        }
+        vector<string> Vars1 = filterVars(1, VarsVect);
+        vector<string> Vars2 = filterVars(2, VarsVect);
+        vector<string> Vars;
+        Vars.insert(Vars.end(), Vars1.begin(), Vars1.end());
+        Vars.insert(Vars.end(), Vars2.begin(), Vars2.end());
+        FreeVarsMapVect[Index] = Vars;
+    }
+    FreeVarsMapVect[-1] = FunArgs;
+
+    return FreeVarsMapVect;
 }
 
 /* -------------------------------------------------------------------------- */
 // Miscellanous helper functions that don't really belong anywhere
 
-std::pair<std::vector<string>, std::vector<string>>
-functionArgs(llvm::Function &Fun1, llvm::Function &Fun2) {
-    std::vector<string> Args1;
+std::pair<vector<string>, vector<string>> functionArgs(llvm::Function &Fun1,
+                                                       llvm::Function &Fun2) {
+    vector<string> Args1;
     for (auto &Arg : Fun1.args()) {
         Args1.push_back(Arg.getName());
     }
-    std::vector<string> Args2;
+    vector<string> Args2;
     for (auto &Arg : Fun2.args()) {
         Args2.push_back(Arg.getName());
     }
@@ -1026,13 +1017,13 @@ functionArgs(llvm::Function &Fun1, llvm::Function &Fun2) {
 }
 
 /// Filter vars to only include the ones from Program
-set<string> filterVars(int Program, set<string> Vars) {
-    set<string> FilteredVars;
+vector<string> filterVars(int Program, vector<string> Vars) {
+    vector<string> FilteredVars;
     string ProgramName = std::to_string(Program);
     for (auto Var : Vars) {
         auto Pos = Var.rfind("$");
         if (Var.substr(Pos + 1, ProgramName.length()) == ProgramName) {
-            FilteredVars.insert(Var);
+            FilteredVars.push_back(Var);
         }
     }
     return FilteredVars;
@@ -1045,14 +1036,14 @@ int swapIndex(int I) {
 }
 
 /// Split the assignment blocks on each call
-std::pair<std::vector<std::vector<AssignmentBlock>>, std::vector<CallInfo>>
-splitAssignments(std::vector<AssignmentCallBlock> AssignmentCallBlocks) {
-    std::vector<std::vector<AssignmentBlock>> AssignmentBlocks;
-    std::vector<CallInfo> CallInfos;
-    std::vector<struct AssignmentBlock> CurrentAssignmentsList;
+std::pair<vector<vector<AssignmentBlock>>, vector<CallInfo>>
+splitAssignments(vector<AssignmentCallBlock> AssignmentCallBlocks) {
+    vector<vector<AssignmentBlock>> AssignmentBlocks;
+    vector<CallInfo> CallInfos;
+    vector<struct AssignmentBlock> CurrentAssignmentsList;
     for (auto Assignments : AssignmentCallBlocks) {
         SMTRef Condition = Assignments.Condition;
-        std::vector<Assignment> CurrentDefinitions;
+        vector<Assignment> CurrentDefinitions;
         for (auto DefOrCall : Assignments.Definitions) {
             if (DefOrCall.Tag == Def) {
                 CurrentDefinitions.push_back(*DefOrCall.Definition);
@@ -1075,7 +1066,7 @@ splitAssignments(std::vector<AssignmentCallBlock> AssignmentCallBlocks) {
 std::shared_ptr<CallInfo> toCallInfo(string AssignedTo,
                                      const llvm::CallInst *CallInst,
                                      set<string> &Constructed) {
-    std::vector<SMTRef> Args;
+    vector<SMTRef> Args;
     unsigned int i = 0;
     auto FunTy = CallInst->getFunctionType();
     for (auto &Arg : CallInst->arg_operands()) {
@@ -1084,5 +1075,6 @@ std::shared_ptr<CallInfo> toCallInfo(string AssignedTo,
             instrNameOrVal(Arg, FunTy->getParamType(i), Constructed));
         ++i;
     }
-    return make_shared<CallInfo>(AssignedTo, "unknown function", Args);
+    return make_shared<CallInfo>(
+        AssignedTo, CallInst->getCalledFunction()->getName(), Args);
 }

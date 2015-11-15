@@ -210,15 +210,24 @@ int main(int Argc, const char **Argv) {
         return 1;
     }
 
+    std::vector<SMTRef> Declarations;
+    std::vector<SMTRef> Assertions;
     std::vector<SMTRef> SMTExprs;
+    SMTExprs.push_back(std::make_shared<SetLogic>("HORN"));
+    bool Main = true;
     for (auto FunPair : Funs.get()) {
         auto Fam1 = preprocessModule(*FunPair.first, "1");
         auto Fam2 = preprocessModule(*FunPair.second, "2");
         auto NewSMTExprs =
             convertToSMT(*FunPair.first, *FunPair.second, std::move(Fam1),
-                         std::move(Fam2), OffByN);
-        SMTExprs.insert(SMTExprs.end(), NewSMTExprs.begin(), NewSMTExprs.end());
+                         std::move(Fam2), OffByN, Main, Declarations);
+        Assertions.insert(Assertions.end(), NewSMTExprs.begin(), NewSMTExprs.end());
+        Main = false;
     }
+    SMTExprs.insert(SMTExprs.end(), Declarations.begin(), Declarations.end());
+    SMTExprs.insert(SMTExprs.end(), Assertions.begin(), Assertions.end());
+    SMTExprs.push_back(make_shared<CheckSat>());
+    SMTExprs.push_back(make_shared<GetModel>());
 
     // write to file or to stdout
     std::streambuf *Buf;

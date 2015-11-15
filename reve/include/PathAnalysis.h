@@ -56,4 +56,6 @@ reverseLookup(T Val, std::map<Key, T> Map) {
         [=](const std::pair<Key, T> &P) { return P.second == Val; });
 }
 
+auto isReturn(llvm::BasicBlock *BB, std::map<int, llvm::BasicBlock *> MarkedBlocks) -> bool;
+
 #endif // PATHANALYSIS_H

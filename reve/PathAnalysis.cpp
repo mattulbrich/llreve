@@ -49,11 +49,11 @@ findPaths(llvm::BasicBlock *BB,
     std::map<int, Paths> FoundPaths;
     auto MyPaths = traverse(BB, MarkedBlocks, true);
     for (auto &PathIt : MyPaths) {
-        auto Index = reverseLookup(PathIt.back().Block, MarkedBlocks);
-        auto It = FoundPaths.find(Index->first);
+        auto Index = PathIt.empty() ? -2 : reverseLookup(PathIt.back().Block, MarkedBlocks)->first;
+        auto It = FoundPaths.find(Index);
         if (It == FoundPaths.end()) {
-            FoundPaths.insert(std::make_pair(Index->first, Paths()));
-            It = FoundPaths.find(Index->first);
+            FoundPaths.insert(std::make_pair(Index, Paths()));
+            It = FoundPaths.find(Index);
         }
         It->second.push_back(Path(BB, PathIt));
     }
@@ -62,7 +62,7 @@ findPaths(llvm::BasicBlock *BB,
 
 Paths_ traverse(llvm::BasicBlock *BB,
                std::map<int, llvm::BasicBlock *> MarkedBlocks, bool First) {
-    if (!First && isTerminator(BB, MarkedBlocks)) {
+    if ((!First && isTerminator(BB, MarkedBlocks)) || isReturn(BB, MarkedBlocks)) {
         Paths_ MyPaths;
         MyPaths.push_back(Path_());
         return MyPaths;
@@ -112,4 +112,8 @@ bool isTerminator(llvm::BasicBlock *BB,
         }
     }
     return false;
+}
+
+bool isReturn(llvm::BasicBlock *BB, std::map<int, llvm::BasicBlock *> MarkedBlocks) {
+    return MarkedBlocks.at(-2) == BB;
 }
