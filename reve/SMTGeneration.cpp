@@ -39,11 +39,14 @@ vector<SMTRef> convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
     auto Invariants = invariantDeclaration(-1, FunArgs, Both, FunName);
     Declarations.push_back(Invariants.first);
     Declarations.push_back(Invariants.second);
-    Declarations.push_back(
-        invariantDeclaration(-1, filterVars(1, FunArgs), First, FunName).first);
-    Declarations.push_back(
-        invariantDeclaration(-1, filterVars(2, FunArgs), Second, FunName)
-            .first);
+    auto Invariants_1 =
+        invariantDeclaration(-1, filterVars(1, FunArgs), First, FunName);
+    Declarations.push_back(Invariants_1.first);
+    Declarations.push_back(Invariants_1.second);
+    auto Invariants_2 =
+        invariantDeclaration(-1, filterVars(2, FunArgs), Second, FunName);
+    Declarations.push_back(Invariants_2.first);
+    Declarations.push_back(Invariants_2.second);
 
     auto SynchronizedPaths =
         synchronizedPaths(PathMap1, PathMap2, FreeVarsMap, FunArgsPair.first,
@@ -175,9 +178,7 @@ void nonmutualPaths(PathMap PathMap, vector<SMTRef> &PathExprs,
                 StartIndex, filterVars(Program, FreeVarsMap.at(StartIndex)),
                 For, FunName);
             Declarations.push_back(Invariants.first);
-            if (For == Both) {
-                Declarations.push_back(Invariants.second);
-            }
+            Declarations.push_back(Invariants.second);
         }
         for (auto &InnerPathMapIt : PathMapIt.second) {
             int EndIndex = InnerPathMapIt.first;
@@ -600,14 +601,22 @@ SMTRef nonmutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args,
                                 std::string FunName) {
     vector<SortedVar> ForallArgs;
     vector<SMTRef> ImplArgs;
+    vector<SMTRef> PreArgs;
+
     ForallArgs.push_back(SortedVar(Ret, "Int"));
-    ImplArgs.insert(ImplArgs.begin(), Args.begin(), Args.end());
+
+    ImplArgs.insert(ImplArgs.end(), Args.begin(), Args.end());
+    PreArgs.insert(PreArgs.end(), Args.begin(), Args.end());
+
     ImplArgs.push_back(name(Ret));
-    // TODO(moritz): Pass in the name
+
     Clause = makeBinOp(
         "=>", make_shared<Op>(invariantName(-1, For, FunName), ImplArgs),
         Clause);
-    return make_shared<Forall>(ForallArgs, Clause);
+    Clause = make_shared<Forall>(ForallArgs, Clause);
+    auto PreInv =
+        std::make_shared<Op>(invariantName(-1, For, FunName) + "_PRE", PreArgs);
+    return makeBinOp("and", PreInv, Clause);
 }
 
 /// Wrap the clause in a forall
@@ -627,11 +636,10 @@ SMTRef assertForall(SMTRef Clause, vector<string> FreeVars, int BlockIndex,
         return Clause;
     }
 
-    if (For == Both) {
-        auto PreInv =
-            makeOp(invariantName(BlockIndex, For, FunName) + "_PRE", PreVars);
-        Clause = makeBinOp("=>", PreInv, Clause);
-    }
+    auto PreInv =
+        makeOp(invariantName(BlockIndex, For, FunName) + "_PRE", PreVars);
+    Clause = makeBinOp("=>", PreInv, Clause);
+
     return make_shared<Assert>(make_shared<Forall>(Vars, Clause));
 }
 
