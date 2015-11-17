@@ -21,7 +21,7 @@ auto initializeDiagnostics(void) -> std::unique_ptr<clang::DiagnosticsEngine>;
 auto initializeDriver(clang::DiagnosticsEngine &Diags)
     -> std::unique_ptr<clang::driver::Driver>;
 auto preprocessModule(llvm::Function &Fun, std::string Prefix)
-    -> std::unique_ptr<llvm::FunctionAnalysisManager>;
+    -> std::shared_ptr<llvm::FunctionAnalysisManager>;
 auto getCmd(clang::driver::Compilation &Comp, clang::DiagnosticsEngine &Diags)
     -> llvm::ErrorOr<
         std::tuple<llvm::opt::ArgStringList, llvm::opt::ArgStringList>>;

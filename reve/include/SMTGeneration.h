@@ -54,9 +54,14 @@ struct AssignmentBlock {
 enum SMTFor { First, Second, Both };
 
 auto convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
-                  std::unique_ptr<llvm::FunctionAnalysisManager> Fam1,
-                  std::unique_ptr<llvm::FunctionAnalysisManager> Fam2,
-                  bool OffByN, bool Main, std::vector<SMTRef> &Declarations)
+                  std::shared_ptr<llvm::FunctionAnalysisManager> Fam1,
+                  std::shared_ptr<llvm::FunctionAnalysisManager> Fam2,
+                  bool OffByN, std::vector<SMTRef> &Declarations)
+    -> std::vector<SMTRef>;
+auto mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
+                   std::shared_ptr<llvm::FunctionAnalysisManager> Fam1,
+                   std::shared_ptr<llvm::FunctionAnalysisManager> Fam2,
+                   bool OffByN, std::vector<SMTRef> &Declarations)
     -> std::vector<SMTRef>;
 
 /* -------------------------------------------------------------------------- */
@@ -65,7 +70,8 @@ auto convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
 auto synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                        std::map<int, std::vector<string>> FreeVarsMap,
                        std::vector<string> FunArgs1,
-                       std::vector<string> FunArgs2, std::string FunName, std::vector<SMTRef> &Declarations)
+                       std::vector<string> FunArgs2, std::string FunName,
+                       std::vector<SMTRef> &Declarations)
     -> std::vector<SMTRef>;
 auto forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
                     std::map<int, std::vector<string>> FreeVarsMap, bool OffByN,

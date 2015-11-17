@@ -214,14 +214,23 @@ int main(int Argc, const char **Argv) {
     std::vector<SMTRef> Assertions;
     std::vector<SMTRef> SMTExprs;
     SMTExprs.push_back(std::make_shared<SetLogic>("HORN"));
+
     bool Main = true;
     for (auto FunPair : Funs.get()) {
         auto Fam1 = preprocessModule(*FunPair.first, "1");
         auto Fam2 = preprocessModule(*FunPair.second, "2");
+        if (Main) {
+            auto NewSMTExprs =
+                mainAssertion(*FunPair.first, *FunPair.second, Fam1,
+                              Fam2, OffByN, Declarations);
+            Assertions.insert(Assertions.end(), NewSMTExprs.begin(),
+                              NewSMTExprs.end());
+        }
         auto NewSMTExprs =
-            convertToSMT(*FunPair.first, *FunPair.second, std::move(Fam1),
-                         std::move(Fam2), OffByN, Main, Declarations);
-        Assertions.insert(Assertions.end(), NewSMTExprs.begin(), NewSMTExprs.end());
+            convertToSMT(*FunPair.first, *FunPair.second, Fam1,
+                         Fam2, OffByN, Declarations);
+        Assertions.insert(Assertions.end(), NewSMTExprs.begin(),
+                          NewSMTExprs.end());
         Main = false;
     }
     SMTExprs.insert(SMTExprs.end(), Declarations.begin(), Declarations.end());
@@ -256,10 +265,10 @@ int main(int Argc, const char **Argv) {
     return 0;
 }
 
-unique_ptr<llvm::FunctionAnalysisManager> preprocessModule(llvm::Function &Fun,
+shared_ptr<llvm::FunctionAnalysisManager> preprocessModule(llvm::Function &Fun,
                                                            string Prefix) {
     llvm::PassBuilder PB;
-    auto FAM = llvm::make_unique<llvm::FunctionAnalysisManager>(
+    auto FAM = make_shared<llvm::FunctionAnalysisManager>(
         true);                         // enable debug log
     PB.registerFunctionAnalyses(*FAM); // register basic analyses
     FAM->registerPass(MarkAnalysis());
@@ -288,7 +297,9 @@ zipFunctions(llvm::Module &Mod1, llvm::Module &Mod2) {
     std::vector<std::pair<llvm::Function *, llvm::Function *>> Funs;
     if (Mod1.size() != Mod2.size()) {
         llvm::errs() << "Error: unequal number of functions\n";
-        return ErrorOr<std::vector<std::pair<llvm::Function *, llvm::Function *>>>(std::error_code());
+        return ErrorOr<
+            std::vector<std::pair<llvm::Function *, llvm::Function *>>>(
+            std::error_code());
     }
     for (auto &Fun1 : Mod1) {
         if (Fun1.isDeclaration()) {
@@ -296,10 +307,13 @@ zipFunctions(llvm::Module &Mod1, llvm::Module &Mod2) {
         }
         auto Fun2 = Mod2.getFunction(Fun1.getName());
         if (!Fun2) {
-            llvm::errs() << "Error: no corresponding function for " << Fun1.getName() << "\n";
-            return ErrorOr<std::vector<std::pair<llvm::Function *, llvm::Function *>>>(std::error_code());
+            llvm::errs() << "Error: no corresponding function for "
+                         << Fun1.getName() << "\n";
+            return ErrorOr<
+                std::vector<std::pair<llvm::Function *, llvm::Function *>>>(
+                std::error_code());
         }
-        Funs.push_back(std::make_pair(&Fun1,Fun2));
+        Funs.push_back(std::make_pair(&Fun1, Fun2));
     }
     return ErrorOr<std::vector<std::pair<llvm::Function *, llvm::Function *>>>(
         Funs);

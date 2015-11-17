@@ -11,10 +11,9 @@ using llvm::CmpInst;
 using std::vector;
 
 vector<SMTRef> convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
-                            unique_ptr<llvm::FunctionAnalysisManager> Fam1,
-                            unique_ptr<llvm::FunctionAnalysisManager> Fam2,
-                            bool OffByN, bool Main,
-                            vector<SMTRef> &Declarations) {
+                            shared_ptr<llvm::FunctionAnalysisManager> Fam1,
+                            shared_ptr<llvm::FunctionAnalysisManager> Fam2,
+                            bool OffByN, vector<SMTRef> &Declarations) {
     // TODO(moritz): check that the marks are the same
     auto PathMap1 = Fam1->getResult<PathAnalysis>(Fun1);
     auto PathMap2 = Fam2->getResult<PathAnalysis>(Fun2);
@@ -52,12 +51,6 @@ vector<SMTRef> convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
         synchronizedPaths(PathMap1, PathMap2, FreeVarsMap, FunArgsPair.first,
                           FunArgsPair.second, FunName, Declarations);
 
-    if (Main) {
-        // assert equal outputs for equal inputs
-        SMTExprs.push_back(equalInputsEqualOutputs(
-            FunArgs, FunArgsPair.first, FunArgsPair.second, FunName));
-    }
-
     // add actual path smts
     PathExprs.insert(PathExprs.end(), SynchronizedPaths.begin(),
                      SynchronizedPaths.end());
@@ -80,6 +73,27 @@ vector<SMTRef> convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
 
     SMTExprs.insert(SMTExprs.end(), PathExprs.begin(), PathExprs.end());
 
+    return SMTExprs;
+}
+
+vector<SMTRef>
+mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
+              shared_ptr<llvm::FunctionAnalysisManager> /* unused */,
+              shared_ptr<llvm::FunctionAnalysisManager> /* unused */,
+              bool /* unused */, vector<SMTRef> & /* unused */) {
+    std::vector<SMTRef> SMTExprs;
+    std::string FunName = Fun1.getName();
+    std::pair<vector<string>, vector<string>> FunArgsPair =
+        functionArgs(Fun1, Fun2);
+    vector<string> FunArgs;
+    for (auto Arg : FunArgsPair.first) {
+        FunArgs.push_back(Arg);
+    }
+    for (auto Arg : FunArgsPair.second) {
+        FunArgs.push_back(Arg);
+    }
+    SMTExprs.push_back(equalInputsEqualOutputs(FunArgs, FunArgsPair.first,
+                                               FunArgsPair.second, FunName));
     return SMTExprs;
 }
 
