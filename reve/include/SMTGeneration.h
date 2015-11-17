@@ -61,7 +61,7 @@ auto convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
 auto mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
                    std::shared_ptr<llvm::FunctionAnalysisManager> Fam1,
                    std::shared_ptr<llvm::FunctionAnalysisManager> Fam2,
-                   bool OffByN, std::vector<SMTRef> &Declarations)
+                   bool OffByN, std::vector<SMTRef> &Declarations, bool OnlyRec)
     -> std::vector<SMTRef>;
 
 /* -------------------------------------------------------------------------- */
@@ -73,19 +73,25 @@ auto synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                        std::vector<string> FunArgs2, std::string FunName,
                        std::vector<SMTRef> &Declarations)
     -> std::vector<SMTRef>;
+auto mainSynchronizedPaths(PathMap PathMap1, PathMap PathMap2,
+                           std::map<int, std::vector<string>> FreeVarsMap,
+                           std::vector<string> FunArgs1,
+                           std::vector<string> FunArgs2, std::string FunName,
+                           std::vector<SMTRef> &Declarations)
+    -> std::vector<SMTRef>;
 auto forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
                     std::map<int, std::vector<string>> FreeVarsMap, bool OffByN,
-                    std::string FunName) -> std::vector<SMTRef>;
+                    std::string FunName, bool Main) -> std::vector<SMTRef>;
 auto nonmutualPaths(PathMap PathMap, std::vector<SMTRef> &PathExprs,
                     std::map<int, std::vector<string>> FreeVarsMap, SMTFor For,
                     std::string FunName, std::vector<SMTRef> &Declarations)
     -> void;
 auto offByNPaths(PathMap PathMap1, PathMap PathMap2,
                  std::map<int, std::vector<string>> FreeVarsMap,
-                 std::string FunName) -> std::vector<SMTRef>;
+                 std::string FunName, bool Main) -> std::vector<SMTRef>;
 auto offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
                        std::map<int, std::vector<string>> FreeVarsMap,
-                       int Program, SMTFor For, std::string FunName)
+                       int Program, SMTFor For, std::string FunName, bool Main)
     -> std::vector<SMTRef>;
 
 /* -------------------------------------------------------------------------- */
@@ -109,9 +115,12 @@ auto nonmutualSMT(SMTRef EndClause,
 auto invariant(int StartIndex, int EndIndex, std::vector<std::string> InputArgs,
                std::vector<std::string> EndArgs, SMTFor SMTFor,
                std::string FunName) -> SMTRef;
+auto mainInvariant(int EndIndex, std::vector<string> FreeVars, string FunName) -> SMTRef;
 auto invariantDeclaration(int BlockIndex, std::vector<std::string> FreeVars,
                           SMTFor For, std::string FunName)
     -> std::pair<SMTRef, SMTRef>;
+auto mainInvariantDeclaration(int BlockIndex, std::vector<string> FreeVars,
+                              SMTFor For, std::string FunName) -> SMTRef;
 auto invariantName(int Index, SMTFor For, std::string FunName) -> std::string;
 auto dontLoopInvariant(SMTRef EndClause, int StartIndex, PathMap PathMap,
                        std::map<int, std::vector<string>> FreeVarsMap,
@@ -127,7 +136,7 @@ auto nonmutualRecursiveForall(SMTRef Clause, std::vector<SMTRef> Args,
                               std::string Ret, SMTFor For, std::string FunName)
     -> SMTRef;
 auto assertForall(SMTRef Clause, std::vector<std::string> FreeVars,
-                  int BlockIndex, SMTFor For, std::string FunName) -> SMTRef;
+                  int BlockIndex, SMTFor For, std::string FunName, bool Main) -> SMTRef;
 
 /* -------------------------------------------------------------------------- */
 // Functions forcing arguments to be equal

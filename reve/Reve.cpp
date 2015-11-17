@@ -70,6 +70,8 @@ static llvm::cl::opt<string>
 static llvm::cl::opt<bool> ShowCFG("show-cfg", llvm::cl::desc("Show cfg"));
 static llvm::cl::opt<bool>
     OffByN("off-by-n", llvm::cl::desc("Allow loops to be off by n iterations"));
+static llvm::cl::opt<bool>
+    OnlyRec("only-rec", llvm::cl::desc("Only generate recursive invariants"));
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
@@ -222,7 +224,7 @@ int main(int Argc, const char **Argv) {
         if (Main) {
             auto NewSMTExprs =
                 mainAssertion(*FunPair.first, *FunPair.second, Fam1,
-                              Fam2, OffByN, Declarations);
+                              Fam2, OffByN, Declarations, OnlyRec);
             Assertions.insert(Assertions.end(), NewSMTExprs.begin(),
                               NewSMTExprs.end());
         }
