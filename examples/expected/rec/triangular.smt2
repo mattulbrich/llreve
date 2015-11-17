@@ -65,18 +65,25 @@
    Bool)
 (assert
    (forall
-      ((n$1_0 Int)
-       (n$2_0 Int)
-       (result$1 Int)
-       (result$2 Int))
+      ((n$1_0_old Int)
+       (n$2_0_old Int))
       (=>
          (and
-            (= n$1_0 n$2_0))
+            (= n$1_0_old n$2_0_old))
          (and
-            (=>
-               (INV_REC_triangle n$1_0 n$2_0 result$1 result$2)
-               (= result$1 result$2))
-            (INV_REC_triangle_PRE n$1_0 n$2_0)))))
+            (INV_REC_g_PRE n$1_0_old n$2_0_old 0)
+            (forall
+               ((_$1_0 Int)
+                (_$2_0 Int))
+               (=>
+                  (INV_REC_g n$1_0_old n$2_0_old 0 _$1_0 _$2_0)
+                  (let
+                     ((result$1 _$1_0)
+                      (result$2 _$2_0))
+                     (= result$1 result$2))))))))
+; forbidden main
+; offbyn main
+; end
 (assert
    (forall
       ((n$1_0_old Int)

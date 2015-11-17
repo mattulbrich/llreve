@@ -99,18 +99,230 @@
    Bool)
 (assert
    (forall
-      ((m$1_0 Int)
-       (m$2_0 Int)
-       (result$1 Int)
-       (result$2 Int))
+      ((m$1_0_old Int)
+       (m$2_0_old Int))
       (=>
          (and
-            (= m$1_0 m$2_0))
-         (and
+            (= m$1_0_old m$2_0_old))
+         (let
+            ((_$1_0 (> m$1_0_old 0)))
             (=>
-               (INV_REC_f m$1_0 m$2_0 result$1 result$2)
-               (= result$1 result$2))
-            (INV_REC_f_PRE m$1_0 m$2_0)))))
+               _$1_0
+               (let
+                  ((_$1_1 (- m$1_0_old 1))
+                   (_$2_0 (> m$2_0_old 0)))
+                  (=>
+                     _$2_0
+                     (let
+                        ((_$2_1 (- m$2_0_old 1)))
+                        (and
+                           (INV_REC_tr_PRE _$1_1 _$2_1)
+                           (forall
+                              ((_$1_2 Int)
+                               (_$2_2 Int))
+                              (=>
+                                 (INV_REC_tr _$1_1 _$2_1 _$1_2 _$2_2)
+                                 (let
+                                    ((_$1_1 (- m$1_0_old 1))
+                                     (_$1_3 (+ _$1_2 m$1_0_old)))
+                                    (let
+                                       ((result.0$1_0 _$1_3))
+                                       (let
+                                          ((result$1 result.0$1_0)
+                                           (_$2_1 (- m$2_0_old 1))
+                                           (_$2_3 (>= _$2_2 0)))
+                                          (=>
+                                             _$2_3
+                                             (let
+                                                ((_$2_4 (+ _$2_2 m$2_0_old)))
+                                                (let
+                                                   ((result.0$2_0 _$2_4))
+                                                   (let
+                                                      ((result.1$2_0 result.0$2_0))
+                                                      (let
+                                                         ((result$2 result.1$2_0))
+                                                         (= result$1 result$2))))))))))))))))))))
+(assert
+   (forall
+      ((m$1_0_old Int)
+       (m$2_0_old Int))
+      (=>
+         (and
+            (= m$1_0_old m$2_0_old))
+         (let
+            ((_$1_0 (> m$1_0_old 0)))
+            (=>
+               _$1_0
+               (let
+                  ((_$1_1 (- m$1_0_old 1))
+                   (_$2_0 (> m$2_0_old 0)))
+                  (=>
+                     _$2_0
+                     (let
+                        ((_$2_1 (- m$2_0_old 1)))
+                        (and
+                           (INV_REC_tr_PRE _$1_1 _$2_1)
+                           (forall
+                              ((_$1_2 Int)
+                               (_$2_2 Int))
+                              (=>
+                                 (INV_REC_tr _$1_1 _$2_1 _$1_2 _$2_2)
+                                 (let
+                                    ((_$1_1 (- m$1_0_old 1))
+                                     (_$1_3 (+ _$1_2 m$1_0_old)))
+                                    (let
+                                       ((result.0$1_0 _$1_3))
+                                       (let
+                                          ((result$1 result.0$1_0)
+                                           (_$2_1 (- m$2_0_old 1))
+                                           (_$2_3 (>= _$2_2 0)))
+                                          (=>
+                                             (not _$2_3)
+                                             (let
+                                                ((result.0$2_0 _$2_2))
+                                                (let
+                                                   ((result.1$2_0 result.0$2_0))
+                                                   (let
+                                                      ((result$2 result.1$2_0))
+                                                      (= result$1 result$2)))))))))))))))))))
+(assert
+   (forall
+      ((m$1_0_old Int)
+       (m$2_0_old Int))
+      (=>
+         (and
+            (= m$1_0_old m$2_0_old))
+         (let
+            ((_$1_0 (> m$1_0_old 0)))
+            (=>
+               _$1_0
+               (let
+                  ((_$1_1 (- m$1_0_old 1))
+                   (_$2_0 (> m$2_0_old 0)))
+                  (=>
+                     (not _$2_0)
+                     (let
+                        ((result.1$2_0 0))
+                        (let
+                           ((result$2 result.1$2_0))
+                           (and
+                              (INV_REC_tr__1_PRE _$1_1)
+                              (forall
+                                 ((_$1_2 Int))
+                                 (=>
+                                    (INV_REC_tr__1 _$1_1 _$1_2)
+                                    (let
+                                       ((_$1_1 (- m$1_0_old 1))
+                                        (_$1_3 (+ _$1_2 m$1_0_old)))
+                                       (let
+                                          ((result.0$1_0 _$1_3))
+                                          (let
+                                             ((result$1 result.0$1_0))
+                                             (= result$1 result$2))))))))))))))))
+(assert
+   (forall
+      ((m$1_0_old Int)
+       (m$2_0_old Int))
+      (=>
+         (and
+            (= m$1_0_old m$2_0_old))
+         (let
+            ((_$1_0 (> m$1_0_old 0)))
+            (=>
+               (not _$1_0)
+               (let
+                  ((result.0$1_0 0))
+                  (let
+                     ((result$1 result.0$1_0)
+                      (_$2_0 (> m$2_0_old 0)))
+                     (=>
+                        _$2_0
+                        (let
+                           ((_$2_1 (- m$2_0_old 1)))
+                           (and
+                              (INV_REC_tr__2_PRE _$2_1)
+                              (forall
+                                 ((_$2_2 Int))
+                                 (=>
+                                    (INV_REC_tr__2 _$2_1 _$2_2)
+                                    (let
+                                       ((_$2_1 (- m$2_0_old 1))
+                                        (_$2_3 (>= _$2_2 0)))
+                                       (=>
+                                          _$2_3
+                                          (let
+                                             ((_$2_4 (+ _$2_2 m$2_0_old)))
+                                             (let
+                                                ((result.0$2_0 _$2_4))
+                                                (let
+                                                   ((result.1$2_0 result.0$2_0))
+                                                   (let
+                                                      ((result$2 result.1$2_0))
+                                                      (= result$1 result$2)))))))))))))))))))
+(assert
+   (forall
+      ((m$1_0_old Int)
+       (m$2_0_old Int))
+      (=>
+         (and
+            (= m$1_0_old m$2_0_old))
+         (let
+            ((_$1_0 (> m$1_0_old 0)))
+            (=>
+               (not _$1_0)
+               (let
+                  ((result.0$1_0 0))
+                  (let
+                     ((result$1 result.0$1_0)
+                      (_$2_0 (> m$2_0_old 0)))
+                     (=>
+                        _$2_0
+                        (let
+                           ((_$2_1 (- m$2_0_old 1)))
+                           (and
+                              (INV_REC_tr__2_PRE _$2_1)
+                              (forall
+                                 ((_$2_2 Int))
+                                 (=>
+                                    (INV_REC_tr__2 _$2_1 _$2_2)
+                                    (let
+                                       ((_$2_1 (- m$2_0_old 1))
+                                        (_$2_3 (>= _$2_2 0)))
+                                       (=>
+                                          (not _$2_3)
+                                          (let
+                                             ((result.0$2_0 _$2_2))
+                                             (let
+                                                ((result.1$2_0 result.0$2_0))
+                                                (let
+                                                   ((result$2 result.1$2_0))
+                                                   (= result$1 result$2))))))))))))))))))
+(assert
+   (forall
+      ((m$1_0_old Int)
+       (m$2_0_old Int))
+      (=>
+         (and
+            (= m$1_0_old m$2_0_old))
+         (let
+            ((_$1_0 (> m$1_0_old 0)))
+            (=>
+               (not _$1_0)
+               (let
+                  ((result.0$1_0 0))
+                  (let
+                     ((result$1 result.0$1_0)
+                      (_$2_0 (> m$2_0_old 0)))
+                     (=>
+                        (not _$2_0)
+                        (let
+                           ((result.1$2_0 0))
+                           (let
+                              ((result$2 result.1$2_0))
+                              (= result$1 result$2)))))))))))
+; forbidden main
+; offbyn main
+; end
 (assert
    (forall
       ((m$1_0_old Int)

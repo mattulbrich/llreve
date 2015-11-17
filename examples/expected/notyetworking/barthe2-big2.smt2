@@ -1,5 +1,32 @@
 (set-logic HORN)
 (declare-fun
+   INV_1_MAIN
+   (Int
+    Int
+    Int
+    Int
+    Int
+    Int)
+   Bool)
+(declare-fun
+   INV_2_MAIN
+   (Int
+    Int
+    Int
+    Int
+    Int
+    Int)
+   Bool)
+(declare-fun
+   INV_3_MAIN
+   (Int
+    Int
+    Int
+    Int
+    Int
+    Int)
+   Bool)
+(declare-fun
    INV_REC_f
    (Int
     Int
@@ -169,18 +196,408 @@
    Bool)
 (assert
    (forall
-      ((n$1_0 Int)
-       (n$2_0 Int)
-       (result$1 Int)
-       (result$2 Int))
+      ((n$1_0_old Int)
+       (n$2_0_old Int))
       (=>
          (and
-            (= n$1_0 n$2_0))
-         (and
+            (= n$1_0_old n$2_0_old))
+         (let
+            ((i.0$1_0 1)
+             (x.0$1_0 1)
+             (n$1_0 n$1_0_old)
+             (i.0$2_0 1)
+             (x.0$2_0 1)
+             (n$2_0 n$2_0_old))
+            (INV_1_MAIN i.0$1_0 n$1_0 x.0$1_0 i.0$2_0 n$2_0 x.0$2_0)))))
+(assert
+   (forall
+      ((i.0$1_0_old Int)
+       (n$1_0_old Int)
+       (x.0$1_0_old Int)
+       (i.0$2_0_old Int)
+       (n$2_0_old Int)
+       (x.0$2_0_old Int))
+      (=>
+         (INV_1_MAIN i.0$1_0_old n$1_0_old x.0$1_0_old i.0$2_0_old n$2_0_old x.0$2_0_old)
+         (let
+            ((_$1_1 (<= i.0$1_0_old n$1_0_old)))
             (=>
-               (INV_REC_f n$1_0 n$2_0 result$1 result$2)
-               (= result$1 result$2))
-            (INV_REC_f_PRE n$1_0 n$2_0)))))
+               _$1_1
+               (let
+                  ((_$1_5 (* x.0$1_0_old 1))
+                   (_$1_6 (+ i.0$1_0_old 1)))
+                  (let
+                     ((i.0$1_0 _$1_6)
+                      (x.0$1_0 _$1_5)
+                      (n$1_0 n$1_0_old)
+                      (_$2_1 (<= i.0$2_0_old n$2_0_old)))
+                     (=>
+                        _$2_1
+                        (let
+                           ((_$2_5 (* x.0$2_0_old 1))
+                            (_$2_6 (+ i.0$2_0_old 1)))
+                           (let
+                              ((i.0$2_0 _$2_6)
+                               (x.0$2_0 _$2_5)
+                               (n$2_0 n$2_0_old))
+                              (INV_1_MAIN i.0$1_0 n$1_0 x.0$1_0 i.0$2_0 n$2_0 x.0$2_0)))))))))))
+(assert
+   (forall
+      ((i.0$1_0_old Int)
+       (n$1_0_old Int)
+       (x.0$1_0_old Int)
+       (i.0$2_0_old Int)
+       (n$2_0_old Int)
+       (x.0$2_0_old Int))
+      (=>
+         (INV_1_MAIN i.0$1_0_old n$1_0_old x.0$1_0_old i.0$2_0_old n$2_0_old x.0$2_0_old)
+         (let
+            ((_$1_1 (<= i.0$1_0_old n$1_0_old)))
+            (=>
+               (not _$1_1)
+               (let
+                  ((i.1$1_0 0)
+                   (x.1$1_0 x.0$1_0_old)
+                   (n$1_0 n$1_0_old)
+                   (_$2_1 (<= i.0$2_0_old n$2_0_old)))
+                  (=>
+                     (not _$2_1)
+                     (let
+                        ((i.1$2_0 1)
+                         (x.1$2_0 x.0$2_0_old)
+                         (n$2_0 n$2_0_old))
+                        (INV_2_MAIN i.1$1_0 n$1_0 x.1$1_0 i.1$2_0 n$2_0 x.1$2_0)))))))))
+(assert
+   (forall
+      ((i.1$1_0_old Int)
+       (n$1_0_old Int)
+       (x.1$1_0_old Int)
+       (i.1$2_0_old Int)
+       (n$2_0_old Int)
+       (x.1$2_0_old Int))
+      (=>
+         (INV_2_MAIN i.1$1_0_old n$1_0_old x.1$1_0_old i.1$2_0_old n$2_0_old x.1$2_0_old)
+         (let
+            ((_$1_8 (<= i.1$1_0_old n$1_0_old)))
+            (=>
+               _$1_8
+               (let
+                  ((_$1_12 (+ x.1$1_0_old i.1$1_0_old))
+                   (_$1_13 (+ i.1$1_0_old 1)))
+                  (let
+                     ((i.1$1_0 _$1_13)
+                      (x.1$1_0 _$1_12)
+                      (n$1_0 n$1_0_old)
+                      (_$2_8 (<= i.1$2_0_old n$2_0_old)))
+                     (=>
+                        _$2_8
+                        (let
+                           ((_$2_12 (+ x.1$2_0_old i.1$2_0_old))
+                            (_$2_13 (+ i.1$2_0_old 1)))
+                           (let
+                              ((i.1$2_0 _$2_13)
+                               (x.1$2_0 _$2_12)
+                               (n$2_0 n$2_0_old))
+                              (INV_2_MAIN i.1$1_0 n$1_0 x.1$1_0 i.1$2_0 n$2_0 x.1$2_0)))))))))))
+(assert
+   (forall
+      ((i.1$1_0_old Int)
+       (n$1_0_old Int)
+       (x.1$1_0_old Int)
+       (i.1$2_0_old Int)
+       (n$2_0_old Int)
+       (x.1$2_0_old Int))
+      (=>
+         (INV_2_MAIN i.1$1_0_old n$1_0_old x.1$1_0_old i.1$2_0_old n$2_0_old x.1$2_0_old)
+         (let
+            ((_$1_8 (<= i.1$1_0_old n$1_0_old)))
+            (=>
+               (not _$1_8)
+               (let
+                  ((i.2$1_0 1)
+                   (x.2$1_0 x.1$1_0_old)
+                   (n$1_0 n$1_0_old)
+                   (_$2_8 (<= i.1$2_0_old n$2_0_old)))
+                  (=>
+                     (not _$2_8)
+                     (let
+                        ((i.2$2_0 1)
+                         (x.2$2_0 x.1$2_0_old)
+                         (n$2_0 n$2_0_old))
+                        (INV_3_MAIN i.2$1_0 n$1_0 x.2$1_0 i.2$2_0 n$2_0 x.2$2_0)))))))))
+(assert
+   (forall
+      ((i.2$1_0_old Int)
+       (n$1_0_old Int)
+       (x.2$1_0_old Int)
+       (i.2$2_0_old Int)
+       (n$2_0_old Int)
+       (x.2$2_0_old Int))
+      (=>
+         (INV_3_MAIN i.2$1_0_old n$1_0_old x.2$1_0_old i.2$2_0_old n$2_0_old x.2$2_0_old)
+         (let
+            ((_$1_15 (<= i.2$1_0_old n$1_0_old)))
+            (=>
+               (not _$1_15)
+               (let
+                  ((result$1 x.2$1_0_old)
+                   (_$2_15 (<= i.2$2_0_old n$2_0_old)))
+                  (=>
+                     (not _$2_15)
+                     (let
+                        ((result$2 x.2$2_0_old))
+                        (= result$1 result$2)))))))))
+(assert
+   (forall
+      ((i.2$1_0_old Int)
+       (n$1_0_old Int)
+       (x.2$1_0_old Int)
+       (i.2$2_0_old Int)
+       (n$2_0_old Int)
+       (x.2$2_0_old Int))
+      (=>
+         (INV_3_MAIN i.2$1_0_old n$1_0_old x.2$1_0_old i.2$2_0_old n$2_0_old x.2$2_0_old)
+         (let
+            ((_$1_15 (<= i.2$1_0_old n$1_0_old)))
+            (=>
+               _$1_15
+               (let
+                  ((_$1_19 (* x.2$1_0_old 2))
+                   (_$1_20 (+ i.2$1_0_old 1)))
+                  (let
+                     ((i.2$1_0 _$1_20)
+                      (x.2$1_0 _$1_19)
+                      (n$1_0 n$1_0_old)
+                      (_$2_15 (<= i.2$2_0_old n$2_0_old)))
+                     (=>
+                        _$2_15
+                        (let
+                           ((_$2_19 (* x.2$2_0_old 2))
+                            (_$2_20 (+ i.2$2_0_old 1)))
+                           (let
+                              ((i.2$2_0 _$2_20)
+                               (x.2$2_0 _$2_19)
+                               (n$2_0 n$2_0_old))
+                              (INV_3_MAIN i.2$1_0 n$1_0 x.2$1_0 i.2$2_0 n$2_0 x.2$2_0)))))))))))
+; forbidden main
+; offbyn main
+(assert
+   (forall
+      ((i.0$1_0_old Int)
+       (n$1_0_old Int)
+       (x.0$1_0_old Int)
+       (i.0$2_0_old Int)
+       (n$2_0_old Int)
+       (x.0$2_0_old Int))
+      (=>
+         (INV_1_MAIN i.0$1_0_old n$1_0_old x.0$1_0_old i.0$2_0_old n$2_0_old x.0$2_0_old)
+         (let
+            ((_$1_1 (<= i.0$1_0_old n$1_0_old)))
+            (=>
+               _$1_1
+               (let
+                  ((_$1_5 (* x.0$1_0_old 1))
+                   (_$1_6 (+ i.0$1_0_old 1)))
+                  (let
+                     ((i.0$1_0 _$1_6)
+                      (x.0$1_0 _$1_5)
+                      (n$1_0 n$1_0_old))
+                     (=>
+                        (and
+                           (let
+                              ((_$2_1 (<= i.0$2_0_old n$2_0_old)))
+                              (=>
+                                 _$2_1
+                                 (let
+                                    ((_$2_5 (* x.0$2_0_old 1))
+                                     (_$2_6 (+ i.0$2_0_old 1)))
+                                    (let
+                                       ((i.0$2_0 _$2_6)
+                                        (x.0$2_0 _$2_5)
+                                        (n$2_0 n$2_0_old))
+                                       false)))))
+                        (INV_1_MAIN i.0$1_0 n$1_0 x.0$1_0 i.0$2_0_old n$2_0_old x.0$2_0_old)))))))))
+(assert
+   (forall
+      ((i.1$1_0_old Int)
+       (n$1_0_old Int)
+       (x.1$1_0_old Int)
+       (i.1$2_0_old Int)
+       (n$2_0_old Int)
+       (x.1$2_0_old Int))
+      (=>
+         (INV_2_MAIN i.1$1_0_old n$1_0_old x.1$1_0_old i.1$2_0_old n$2_0_old x.1$2_0_old)
+         (let
+            ((_$1_8 (<= i.1$1_0_old n$1_0_old)))
+            (=>
+               _$1_8
+               (let
+                  ((_$1_12 (+ x.1$1_0_old i.1$1_0_old))
+                   (_$1_13 (+ i.1$1_0_old 1)))
+                  (let
+                     ((i.1$1_0 _$1_13)
+                      (x.1$1_0 _$1_12)
+                      (n$1_0 n$1_0_old))
+                     (=>
+                        (and
+                           (let
+                              ((_$2_8 (<= i.1$2_0_old n$2_0_old)))
+                              (=>
+                                 _$2_8
+                                 (let
+                                    ((_$2_12 (+ x.1$2_0_old i.1$2_0_old))
+                                     (_$2_13 (+ i.1$2_0_old 1)))
+                                    (let
+                                       ((i.1$2_0 _$2_13)
+                                        (x.1$2_0 _$2_12)
+                                        (n$2_0 n$2_0_old))
+                                       false)))))
+                        (INV_2_MAIN i.1$1_0 n$1_0 x.1$1_0 i.1$2_0_old n$2_0_old x.1$2_0_old)))))))))
+(assert
+   (forall
+      ((i.2$1_0_old Int)
+       (n$1_0_old Int)
+       (x.2$1_0_old Int)
+       (i.2$2_0_old Int)
+       (n$2_0_old Int)
+       (x.2$2_0_old Int))
+      (=>
+         (INV_3_MAIN i.2$1_0_old n$1_0_old x.2$1_0_old i.2$2_0_old n$2_0_old x.2$2_0_old)
+         (let
+            ((_$1_15 (<= i.2$1_0_old n$1_0_old)))
+            (=>
+               _$1_15
+               (let
+                  ((_$1_19 (* x.2$1_0_old 2))
+                   (_$1_20 (+ i.2$1_0_old 1)))
+                  (let
+                     ((i.2$1_0 _$1_20)
+                      (x.2$1_0 _$1_19)
+                      (n$1_0 n$1_0_old))
+                     (=>
+                        (and
+                           (let
+                              ((_$2_15 (<= i.2$2_0_old n$2_0_old)))
+                              (=>
+                                 _$2_15
+                                 (let
+                                    ((_$2_19 (* x.2$2_0_old 2))
+                                     (_$2_20 (+ i.2$2_0_old 1)))
+                                    (let
+                                       ((i.2$2_0 _$2_20)
+                                        (x.2$2_0 _$2_19)
+                                        (n$2_0 n$2_0_old))
+                                       false)))))
+                        (INV_3_MAIN i.2$1_0 n$1_0 x.2$1_0 i.2$2_0_old n$2_0_old x.2$2_0_old)))))))))
+(assert
+   (forall
+      ((i.0$1_0_old Int)
+       (n$1_0_old Int)
+       (x.0$1_0_old Int)
+       (i.0$2_0_old Int)
+       (n$2_0_old Int)
+       (x.0$2_0_old Int))
+      (=>
+         (INV_1_MAIN i.0$1_0_old n$1_0_old x.0$1_0_old i.0$2_0_old n$2_0_old x.0$2_0_old)
+         (let
+            ((_$2_1 (<= i.0$2_0_old n$2_0_old)))
+            (=>
+               _$2_1
+               (let
+                  ((_$2_5 (* x.0$2_0_old 1))
+                   (_$2_6 (+ i.0$2_0_old 1)))
+                  (let
+                     ((i.0$2_0 _$2_6)
+                      (x.0$2_0 _$2_5)
+                      (n$2_0 n$2_0_old))
+                     (=>
+                        (and
+                           (let
+                              ((_$1_1 (<= i.0$1_0_old n$1_0_old)))
+                              (=>
+                                 _$1_1
+                                 (let
+                                    ((_$1_5 (* x.0$1_0_old 1))
+                                     (_$1_6 (+ i.0$1_0_old 1)))
+                                    (let
+                                       ((i.0$1_0 _$1_6)
+                                        (x.0$1_0 _$1_5)
+                                        (n$1_0 n$1_0_old))
+                                       false)))))
+                        (INV_1_MAIN i.0$1_0_old n$1_0_old x.0$1_0_old i.0$2_0 n$2_0 x.0$2_0)))))))))
+(assert
+   (forall
+      ((i.1$1_0_old Int)
+       (n$1_0_old Int)
+       (x.1$1_0_old Int)
+       (i.1$2_0_old Int)
+       (n$2_0_old Int)
+       (x.1$2_0_old Int))
+      (=>
+         (INV_2_MAIN i.1$1_0_old n$1_0_old x.1$1_0_old i.1$2_0_old n$2_0_old x.1$2_0_old)
+         (let
+            ((_$2_8 (<= i.1$2_0_old n$2_0_old)))
+            (=>
+               _$2_8
+               (let
+                  ((_$2_12 (+ x.1$2_0_old i.1$2_0_old))
+                   (_$2_13 (+ i.1$2_0_old 1)))
+                  (let
+                     ((i.1$2_0 _$2_13)
+                      (x.1$2_0 _$2_12)
+                      (n$2_0 n$2_0_old))
+                     (=>
+                        (and
+                           (let
+                              ((_$1_8 (<= i.1$1_0_old n$1_0_old)))
+                              (=>
+                                 _$1_8
+                                 (let
+                                    ((_$1_12 (+ x.1$1_0_old i.1$1_0_old))
+                                     (_$1_13 (+ i.1$1_0_old 1)))
+                                    (let
+                                       ((i.1$1_0 _$1_13)
+                                        (x.1$1_0 _$1_12)
+                                        (n$1_0 n$1_0_old))
+                                       false)))))
+                        (INV_2_MAIN i.1$1_0_old n$1_0_old x.1$1_0_old i.1$2_0 n$2_0 x.1$2_0)))))))))
+(assert
+   (forall
+      ((i.2$1_0_old Int)
+       (n$1_0_old Int)
+       (x.2$1_0_old Int)
+       (i.2$2_0_old Int)
+       (n$2_0_old Int)
+       (x.2$2_0_old Int))
+      (=>
+         (INV_3_MAIN i.2$1_0_old n$1_0_old x.2$1_0_old i.2$2_0_old n$2_0_old x.2$2_0_old)
+         (let
+            ((_$2_15 (<= i.2$2_0_old n$2_0_old)))
+            (=>
+               _$2_15
+               (let
+                  ((_$2_19 (* x.2$2_0_old 2))
+                   (_$2_20 (+ i.2$2_0_old 1)))
+                  (let
+                     ((i.2$2_0 _$2_20)
+                      (x.2$2_0 _$2_19)
+                      (n$2_0 n$2_0_old))
+                     (=>
+                        (and
+                           (let
+                              ((_$1_15 (<= i.2$1_0_old n$1_0_old)))
+                              (=>
+                                 _$1_15
+                                 (let
+                                    ((_$1_19 (* x.2$1_0_old 2))
+                                     (_$1_20 (+ i.2$1_0_old 1)))
+                                    (let
+                                       ((i.2$1_0 _$1_20)
+                                        (x.2$1_0 _$1_19)
+                                        (n$1_0 n$1_0_old))
+                                       false)))))
+                        (INV_3_MAIN i.2$1_0_old n$1_0_old x.2$1_0_old i.2$2_0 n$2_0 x.2$2_0)))))))))
+; end
 (assert
    (forall
       ((n$1_0_old Int)
