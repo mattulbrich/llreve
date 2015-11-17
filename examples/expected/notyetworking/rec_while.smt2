@@ -22,9 +22,19 @@
     Int)
    Bool)
 (declare-fun
+   INV_REC_f__1_PRE
+   (Int
+    Int)
+   Bool)
+(declare-fun
    INV_REC_f__2
    (Int
     Int
+    Int)
+   Bool)
+(declare-fun
+   INV_REC_f__2_PRE
+   (Int
     Int)
    Bool)
 (declare-fun
@@ -61,9 +71,18 @@
     Int)
    Bool)
 (declare-fun
+   INV_23__1_PRE
+   (Int)
+   Bool)
+(declare-fun
    INV_42__1
    (Int
     Int
+    Int)
+   Bool)
+(declare-fun
+   INV_42__1_PRE
+   (Int
     Int)
    Bool)
 (declare-fun
@@ -72,9 +91,18 @@
     Int)
    Bool)
 (declare-fun
+   INV_23__2_PRE
+   (Int)
+   Bool)
+(declare-fun
    INV_42__2
    (Int
     Int
+    Int)
+   Bool)
+(declare-fun
+   INV_42__2_PRE
+   (Int
     Int)
    Bool)
 (assert
@@ -293,25 +321,89 @@
    (forall
       ((n$1_0_old Int)
        (z$1_0_old Int))
-      (let
-         ((_$1_0 (<= n$1_0_old 0)))
-         (=>
-            _$1_0
-            (let
-               ((r.0$1_0 n$1_0_old))
+      (=>
+         (INV_REC_f__1_PRE n$1_0_old z$1_0_old)
+         (let
+            ((_$1_0 (<= n$1_0_old 0)))
+            (=>
+               _$1_0
                (let
-                  ((result$1 r.0$1_0))
-                  (INV_REC_f__1 n$1_0_old z$1_0_old result$1)))))))
+                  ((r.0$1_0 n$1_0_old))
+                  (let
+                     ((result$1 r.0$1_0))
+                     (INV_REC_f__1 n$1_0_old z$1_0_old result$1))))))))
 (assert
    (forall
       ((n$1_0_old Int)
        (z$1_0_old Int))
-      (let
-         ((_$1_0 (<= n$1_0_old 0)))
-         (=>
-            (not _$1_0)
+      (=>
+         (INV_REC_f__1_PRE n$1_0_old z$1_0_old)
+         (let
+            ((_$1_0 (<= n$1_0_old 0)))
+            (=>
+               (not _$1_0)
+               (let
+                  ((i.0$1_0 0)
+                   (_$1_1 (- n$1_0_old 1)))
+                  (let
+                     ((_$1_2 (< i.0$1_0 _$1_1)))
+                     (=>
+                        (not _$1_2)
+                        (forall
+                           ((result$1 Int))
+                           (=>
+                              (INV_23__1 i.0$1_0 result$1)
+                              (INV_REC_f__1 n$1_0_old z$1_0_old result$1)))))))))))
+(assert
+   (forall
+      ((n$1_0_old Int)
+       (z$1_0_old Int))
+      (=>
+         (INV_REC_f__1_PRE n$1_0_old z$1_0_old)
+         (let
+            ((_$1_0 (<= n$1_0_old 0)))
+            (=>
+               (not _$1_0)
+               (let
+                  ((i.0$1_0 0)
+                   (_$1_1 (- n$1_0_old 1)))
+                  (let
+                     ((_$1_2 (< i.0$1_0 _$1_1)))
+                     (=>
+                        _$1_2
+                        (let
+                           ((n$1_0 n$1_0_old))
+                           (forall
+                              ((result$1 Int))
+                              (=>
+                                 (INV_42__1 i.0$1_0 n$1_0 result$1)
+                                 (INV_REC_f__1 n$1_0_old z$1_0_old result$1))))))))))))
+(assert
+   (forall
+      ((i.0$1_0_old Int))
+      (=>
+         (INV_23__1_PRE i.0$1_0_old)
+         (and
+            (INV_REC_f__1_PRE i.0$1_0_old 0)
+            (forall
+               ((_$1_6 Int))
+               (=>
+                  (INV_REC_f__1 i.0$1_0_old 0 _$1_6)
+                  (let
+                     ((r.0$1_0 _$1_6))
+                     (let
+                        ((result$1 r.0$1_0))
+                        (INV_23__1 i.0$1_0_old result$1)))))))))
+(assert
+   (forall
+      ((i.0$1_0_old Int)
+       (n$1_0_old Int))
+      (=>
+         (INV_42__1_PRE i.0$1_0_old n$1_0_old)
+         (let
+            ((_$1_4 (+ i.0$1_0_old 1)))
             (let
-               ((i.0$1_0 0)
+               ((i.0$1_0 _$1_4)
                 (_$1_1 (- n$1_0_old 1)))
                (let
                   ((_$1_2 (< i.0$1_0 _$1_1)))
@@ -321,17 +413,17 @@
                         ((result$1 Int))
                         (=>
                            (INV_23__1 i.0$1_0 result$1)
-                           (INV_REC_f__1 n$1_0_old z$1_0_old result$1))))))))))
+                           (INV_42__1 i.0$1_0_old n$1_0_old result$1))))))))))
 (assert
    (forall
-      ((n$1_0_old Int)
-       (z$1_0_old Int))
-      (let
-         ((_$1_0 (<= n$1_0_old 0)))
-         (=>
-            (not _$1_0)
+      ((i.0$1_0_old Int)
+       (n$1_0_old Int))
+      (=>
+         (INV_42__1_PRE i.0$1_0_old n$1_0_old)
+         (let
+            ((_$1_4 (+ i.0$1_0_old 1)))
             (let
-               ((i.0$1_0 0)
+               ((i.0$1_0 _$1_4)
                 (_$1_1 (- n$1_0_old 1)))
                (let
                   ((_$1_2 (< i.0$1_0 _$1_1)))
@@ -343,80 +435,94 @@
                            ((result$1 Int))
                            (=>
                               (INV_42__1 i.0$1_0 n$1_0 result$1)
-                              (INV_REC_f__1 n$1_0_old z$1_0_old result$1)))))))))))
+                              (INV_42__1 i.0$1_0_old n$1_0_old result$1)))))))))))
 (assert
    (forall
-      ((i.0$1_0_old Int))
-      (forall
-         ((_$1_6 Int))
-         (=>
-            (INV_REC_f__1 i.0$1_0_old 0 _$1_6)
-            (let
-               ((r.0$1_0 _$1_6))
+      ((n$2_0_old Int)
+       (z$2_0_old Int))
+      (=>
+         (INV_REC_f__2_PRE n$2_0_old z$2_0_old)
+         (let
+            ((_$2_0 (<= n$2_0_old 0)))
+            (=>
+               _$2_0
                (let
-                  ((result$1 r.0$1_0))
-                  (INV_23__1 i.0$1_0_old result$1)))))))
-(assert
-   (forall
-      ((i.0$1_0_old Int)
-       (n$1_0_old Int))
-      (let
-         ((_$1_4 (+ i.0$1_0_old 1)))
-         (let
-            ((i.0$1_0 _$1_4)
-             (_$1_1 (- n$1_0_old 1)))
-            (let
-               ((_$1_2 (< i.0$1_0 _$1_1)))
-               (=>
-                  (not _$1_2)
-                  (forall
-                     ((result$1 Int))
-                     (=>
-                        (INV_23__1 i.0$1_0 result$1)
-                        (INV_42__1 i.0$1_0_old n$1_0_old result$1)))))))))
-(assert
-   (forall
-      ((i.0$1_0_old Int)
-       (n$1_0_old Int))
-      (let
-         ((_$1_4 (+ i.0$1_0_old 1)))
-         (let
-            ((i.0$1_0 _$1_4)
-             (_$1_1 (- n$1_0_old 1)))
-            (let
-               ((_$1_2 (< i.0$1_0 _$1_1)))
-               (=>
-                  _$1_2
+                  ((r.0$2_0 n$2_0_old))
                   (let
-                     ((n$1_0 n$1_0_old))
-                     (forall
-                        ((result$1 Int))
-                        (=>
-                           (INV_42__1 i.0$1_0 n$1_0 result$1)
-                           (INV_42__1 i.0$1_0_old n$1_0_old result$1))))))))))
+                     ((result$2 r.0$2_0))
+                     (INV_REC_f__2 n$2_0_old z$2_0_old result$2))))))))
 (assert
    (forall
       ((n$2_0_old Int)
        (z$2_0_old Int))
-      (let
-         ((_$2_0 (<= n$2_0_old 0)))
-         (=>
-            _$2_0
-            (let
-               ((r.0$2_0 n$2_0_old))
+      (=>
+         (INV_REC_f__2_PRE n$2_0_old z$2_0_old)
+         (let
+            ((_$2_0 (<= n$2_0_old 0)))
+            (=>
+               (not _$2_0)
                (let
-                  ((result$2 r.0$2_0))
-                  (INV_REC_f__2 n$2_0_old z$2_0_old result$2)))))))
+                  ((i.0$2_0 0)
+                   (_$2_1 (- n$2_0_old 1)))
+                  (let
+                     ((_$2_2 (< i.0$2_0 _$2_1)))
+                     (=>
+                        (not _$2_2)
+                        (forall
+                           ((result$2 Int))
+                           (=>
+                              (INV_23__2 i.0$2_0 result$2)
+                              (INV_REC_f__2 n$2_0_old z$2_0_old result$2)))))))))))
 (assert
    (forall
       ((n$2_0_old Int)
        (z$2_0_old Int))
-      (let
-         ((_$2_0 (<= n$2_0_old 0)))
-         (=>
-            (not _$2_0)
+      (=>
+         (INV_REC_f__2_PRE n$2_0_old z$2_0_old)
+         (let
+            ((_$2_0 (<= n$2_0_old 0)))
+            (=>
+               (not _$2_0)
+               (let
+                  ((i.0$2_0 0)
+                   (_$2_1 (- n$2_0_old 1)))
+                  (let
+                     ((_$2_2 (< i.0$2_0 _$2_1)))
+                     (=>
+                        _$2_2
+                        (let
+                           ((n$2_0 n$2_0_old))
+                           (forall
+                              ((result$2 Int))
+                              (=>
+                                 (INV_42__2 i.0$2_0 n$2_0 result$2)
+                                 (INV_REC_f__2 n$2_0_old z$2_0_old result$2))))))))))))
+(assert
+   (forall
+      ((i.0$2_0_old Int))
+      (=>
+         (INV_23__2_PRE i.0$2_0_old)
+         (and
+            (INV_REC_f__2_PRE i.0$2_0_old 0)
+            (forall
+               ((_$2_6 Int))
+               (=>
+                  (INV_REC_f__2 i.0$2_0_old 0 _$2_6)
+                  (let
+                     ((r.0$2_0 _$2_6))
+                     (let
+                        ((result$2 r.0$2_0))
+                        (INV_23__2 i.0$2_0_old result$2)))))))))
+(assert
+   (forall
+      ((i.0$2_0_old Int)
+       (n$2_0_old Int))
+      (=>
+         (INV_42__2_PRE i.0$2_0_old n$2_0_old)
+         (let
+            ((_$2_4 (+ i.0$2_0_old 1)))
             (let
-               ((i.0$2_0 0)
+               ((i.0$2_0 _$2_4)
                 (_$2_1 (- n$2_0_old 1)))
                (let
                   ((_$2_2 (< i.0$2_0 _$2_1)))
@@ -426,17 +532,17 @@
                         ((result$2 Int))
                         (=>
                            (INV_23__2 i.0$2_0 result$2)
-                           (INV_REC_f__2 n$2_0_old z$2_0_old result$2))))))))))
+                           (INV_42__2 i.0$2_0_old n$2_0_old result$2))))))))))
 (assert
    (forall
-      ((n$2_0_old Int)
-       (z$2_0_old Int))
-      (let
-         ((_$2_0 (<= n$2_0_old 0)))
-         (=>
-            (not _$2_0)
+      ((i.0$2_0_old Int)
+       (n$2_0_old Int))
+      (=>
+         (INV_42__2_PRE i.0$2_0_old n$2_0_old)
+         (let
+            ((_$2_4 (+ i.0$2_0_old 1)))
             (let
-               ((i.0$2_0 0)
+               ((i.0$2_0 _$2_4)
                 (_$2_1 (- n$2_0_old 1)))
                (let
                   ((_$2_2 (< i.0$2_0 _$2_1)))
@@ -448,57 +554,7 @@
                            ((result$2 Int))
                            (=>
                               (INV_42__2 i.0$2_0 n$2_0 result$2)
-                              (INV_REC_f__2 n$2_0_old z$2_0_old result$2)))))))))))
-(assert
-   (forall
-      ((i.0$2_0_old Int))
-      (forall
-         ((_$2_6 Int))
-         (=>
-            (INV_REC_f__2 i.0$2_0_old 0 _$2_6)
-            (let
-               ((r.0$2_0 _$2_6))
-               (let
-                  ((result$2 r.0$2_0))
-                  (INV_23__2 i.0$2_0_old result$2)))))))
-(assert
-   (forall
-      ((i.0$2_0_old Int)
-       (n$2_0_old Int))
-      (let
-         ((_$2_4 (+ i.0$2_0_old 1)))
-         (let
-            ((i.0$2_0 _$2_4)
-             (_$2_1 (- n$2_0_old 1)))
-            (let
-               ((_$2_2 (< i.0$2_0 _$2_1)))
-               (=>
-                  (not _$2_2)
-                  (forall
-                     ((result$2 Int))
-                     (=>
-                        (INV_23__2 i.0$2_0 result$2)
-                        (INV_42__2 i.0$2_0_old n$2_0_old result$2)))))))))
-(assert
-   (forall
-      ((i.0$2_0_old Int)
-       (n$2_0_old Int))
-      (let
-         ((_$2_4 (+ i.0$2_0_old 1)))
-         (let
-            ((i.0$2_0 _$2_4)
-             (_$2_1 (- n$2_0_old 1)))
-            (let
-               ((_$2_2 (< i.0$2_0 _$2_1)))
-               (=>
-                  _$2_2
-                  (let
-                     ((n$2_0 n$2_0_old))
-                     (forall
-                        ((result$2 Int))
-                        (=>
-                           (INV_42__2 i.0$2_0 n$2_0 result$2)
-                           (INV_42__2 i.0$2_0_old n$2_0_old result$2))))))))))
+                              (INV_42__2 i.0$2_0_old n$2_0_old result$2)))))))))))
 ; FORBIDDEN PATHS
 (assert
    (forall
