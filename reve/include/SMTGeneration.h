@@ -80,6 +80,7 @@ auto mainSynchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                            std::vector<SMTRef> &Declarations)
     -> std::vector<SMTRef>;
 auto forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
+                    BidirBlockMarkMap Marked1, BidirBlockMarkMap Marked2,
                     std::map<int, std::vector<string>> FreeVarsMap, bool OffByN,
                     std::string FunName, bool Main) -> std::vector<SMTRef>;
 auto nonmutualPaths(PathMap PathMap, std::vector<SMTRef> &PathExprs,
@@ -115,7 +116,8 @@ auto nonmutualSMT(SMTRef EndClause,
 auto invariant(int StartIndex, int EndIndex, std::vector<std::string> InputArgs,
                std::vector<std::string> EndArgs, SMTFor SMTFor,
                std::string FunName) -> SMTRef;
-auto mainInvariant(int EndIndex, std::vector<string> FreeVars, string FunName) -> SMTRef;
+auto mainInvariant(int EndIndex, std::vector<string> FreeVars, string FunName)
+    -> SMTRef;
 auto invariantDeclaration(int BlockIndex, std::vector<std::string> FreeVars,
                           SMTFor For, std::string FunName)
     -> std::pair<SMTRef, SMTRef>;
@@ -136,7 +138,8 @@ auto nonmutualRecursiveForall(SMTRef Clause, std::vector<SMTRef> Args,
                               std::string Ret, SMTFor For, std::string FunName)
     -> SMTRef;
 auto assertForall(SMTRef Clause, std::vector<std::string> FreeVars,
-                  int BlockIndex, SMTFor For, std::string FunName, bool Main) -> SMTRef;
+                  int BlockIndex, SMTFor For, std::string FunName, bool Main)
+    -> SMTRef;
 
 /* -------------------------------------------------------------------------- */
 // Functions forcing arguments to be equal

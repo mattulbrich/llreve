@@ -2,6 +2,8 @@
 #define COMPAT_H
 
 #include <iterator>
+#include <algorithm>
+#include <set>
 
 template <class T> class Reverse {
   private:
@@ -52,6 +54,14 @@ template <typename A, typename B> class Zip {
 
 template <typename A, typename B> Zip<A, B> makeZip(A a, B b) {
     return Zip<A, B>(a, b);
+}
+
+template <typename A>
+std::set<A> intersection(std::set<A> SetA, std::set<A> SetB) {
+    std::set<A> Ret;
+    std::set_intersection(SetA.begin(), SetA.end(), SetB.begin(), SetB.end(),
+                          std::inserter(Ret, Ret.begin()));
+    return Ret;
 }
 
 #endif // COMPAT_H

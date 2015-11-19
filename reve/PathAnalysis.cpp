@@ -16,7 +16,7 @@ PathMap PathAnalysis::run(llvm::Function &F,
         if (BBTuple.first != EXIT_MARK) {
             for (auto BB : BBTuple.second) {
                 std::map<int, Paths> NewPaths =
-                    findPaths(BB, BidirMarkBlockMap);
+                    findPaths(BBTuple.first, BB, BidirMarkBlockMap);
                 for (auto NewPathTuple : NewPaths) {
                     MyPaths[BBTuple.first][NewPathTuple.first].insert(
                         MyPaths[BBTuple.first][NewPathTuple.first].end(),
@@ -27,6 +27,7 @@ PathMap PathAnalysis::run(llvm::Function &F,
     }
 
     // for (auto &MappedPaths : MyPaths) {
+    //     llvm::errs() << "----------------\n";
     //     llvm::errs() << "Paths for: " << MappedPaths.first << "\n";
     //     llvm::errs() << "\n";
     //     for (auto &Paths : MappedPaths.second) {
@@ -49,7 +50,7 @@ PathMap PathAnalysis::run(llvm::Function &F,
     return MyPaths;
 }
 
-std::map<int, Paths> findPaths(llvm::BasicBlock *BB,
+std::map<int, Paths> findPaths(int For, llvm::BasicBlock *BB,
                                BidirBlockMarkMap BidirBlockMarkMap) {
     std::map<int, Paths> FoundPaths;
     auto MyPaths = traverse(BB, BidirBlockMarkMap, true);
@@ -61,7 +62,10 @@ std::map<int, Paths> findPaths(llvm::BasicBlock *BB,
             Indices = BidirBlockMarkMap.BlockToMarksMap.at(PathIt.back().Block);
         }
         for (auto Index : Indices) {
+            // don't allow paths to the same node but with a different mark
+            if (PathIt.empty() || !(PathIt.back().Block == BB && Index != For)) {
             FoundPaths[Index].push_back(Path(BB, PathIt));
+            }
         }
     }
     return FoundPaths;
@@ -125,4 +129,11 @@ bool isReturn(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks) {
         return Marks->second.find(EXIT_MARK) != Marks->second.end();
     }
     return false;
+}
+
+llvm::BasicBlock* lastBlock(Path Path) {
+    if (Path.Edges.empty()) {
+        return Path.Start;
+    }
+    return Path.Edges.back().Block;
 }

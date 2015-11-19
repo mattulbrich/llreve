@@ -3,7 +3,7 @@
 llvm::PreservedAnalyses RemoveMarkPass::run(llvm::Function &Fun,
                                             llvm::FunctionAnalysisManager *AM) {
     auto BidirMarkBlockMap = AM->getResult<MarkAnalysis>(Fun);
-    std::vector<llvm::Instruction *> ToDelete;
+    std::set<llvm::Instruction *> ToDelete;
     for (auto BBTuple : BidirMarkBlockMap.MarkToBlocksMap) {
         // no need to remove anything in exit and entry nodes
         if (BBTuple.first >= 0) {
@@ -13,7 +13,7 @@ llvm::PreservedAnalyses RemoveMarkPass::run(llvm::Function &Fun,
                         if ((CallInst->getCalledFunction() != nullptr) &&
                             CallInst->getCalledFunction()->getName() ==
                                 "__mark") {
-                            ToDelete.push_back(CallInst);
+                            ToDelete.insert(CallInst);
                         }
                     }
                 }

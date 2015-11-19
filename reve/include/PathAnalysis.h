@@ -38,7 +38,9 @@ class PathAnalysis {
     static char PassID;
 };
 
-auto findPaths(llvm::BasicBlock *BB,
+auto lastBlock(Path Path) -> llvm::BasicBlock*;
+
+auto findPaths(int For, llvm::BasicBlock *BB,
                BidirBlockMarkMap MarkedBlocks)
     -> std::map<int, Paths>;
 
