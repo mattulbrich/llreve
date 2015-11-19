@@ -13,11 +13,10 @@ BidirBlockMarkMap
 MarkAnalysis::run(llvm::Function &Fun, llvm::FunctionAnalysisManager *AM) {
     std::map<int, set<llvm::BasicBlock *>> MarkedBlocks;
     std::map<llvm::BasicBlock *, set<int>> BlockedMarks;
-    // insert entry block
-    MarkedBlocks[-1].insert(&Fun.getEntryBlock());
-    BlockedMarks[&Fun.getEntryBlock()].insert(-1);
-    MarkedBlocks[-2].insert(AM->getResult<UnifyFunctionExitNodes>(Fun));
-    BlockedMarks[AM->getResult<UnifyFunctionExitNodes>(Fun)].insert(-2);
+    MarkedBlocks[ENTRY_MARK].insert(&Fun.getEntryBlock());
+    BlockedMarks[&Fun.getEntryBlock()].insert(ENTRY_MARK);
+    MarkedBlocks[EXIT_MARK].insert(AM->getResult<UnifyFunctionExitNodes>(Fun));
+    BlockedMarks[AM->getResult<UnifyFunctionExitNodes>(Fun)].insert(EXIT_MARK);
     for (auto &BB : Fun) {
         for (auto &Inst : BB) {
             if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(&Inst)) {

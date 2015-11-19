@@ -35,15 +35,15 @@ vector<SMTRef> convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
     vector<SMTRef> PathExprs;
 
     // we only need pre invariants for mutual invariants
-    auto Invariants = invariantDeclaration(-1, FunArgs, Both, FunName);
+    auto Invariants = invariantDeclaration(ENTRY_MARK, FunArgs, Both, FunName);
     Declarations.push_back(Invariants.first);
     Declarations.push_back(Invariants.second);
     auto Invariants_1 =
-        invariantDeclaration(-1, filterVars(1, FunArgs), First, FunName);
+        invariantDeclaration(ENTRY_MARK, filterVars(1, FunArgs), First, FunName);
     Declarations.push_back(Invariants_1.first);
     Declarations.push_back(Invariants_1.second);
     auto Invariants_2 =
-        invariantDeclaration(-1, filterVars(2, FunArgs), Second, FunName);
+        invariantDeclaration(ENTRY_MARK, filterVars(2, FunArgs), Second, FunName);
     Declarations.push_back(Invariants_2.first);
     Declarations.push_back(Invariants_2.second);
 
@@ -131,7 +131,7 @@ vector<SMTRef> synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
     vector<SMTRef> PathExprs;
     for (auto &PathMapIt : PathMap1) {
         int StartIndex = PathMapIt.first;
-        if (StartIndex != -1) {
+        if (StartIndex != ENTRY_MARK) {
             // ignore entry node
             auto Invariants = invariantDeclaration(
                 StartIndex, FreeVarsMap.at(StartIndex), Both, FunName);
@@ -147,9 +147,9 @@ vector<SMTRef> synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                         StartIndex, EndIndex, FreeVarsMap.at(StartIndex),
                         FreeVarsMap.at(EndIndex), Both, FunName);
                     auto Defs1 = assignmentsOnPath(
-                        Path1, 1, FreeVarsMap.at(EndIndex), EndIndex == -2);
+                        Path1, 1, FreeVarsMap.at(EndIndex), EndIndex == EXIT_MARK);
                     auto Defs2 = assignmentsOnPath(
-                        Path2, 2, FreeVarsMap.at(EndIndex), EndIndex == -2);
+                        Path2, 2, FreeVarsMap.at(EndIndex), EndIndex == EXIT_MARK);
                     PathExprs.push_back(assertForall(
                         interleaveAssignments(EndInvariant, Defs1, Defs2,
                                               FunArgs1, FunArgs2),
@@ -176,7 +176,7 @@ vector<SMTRef> mainSynchronizedPaths(PathMap PathMap1, PathMap PathMap2,
     vector<SMTRef> PathExprs;
     for (auto &PathMapIt : PathMap1) {
         int StartIndex = PathMapIt.first;
-        if (StartIndex != -1) {
+        if (StartIndex != ENTRY_MARK) {
             // ignore entry node
             auto Invariant = mainInvariantDeclaration(
                 StartIndex, FreeVarsMap.at(StartIndex), Both, FunName);
@@ -190,9 +190,9 @@ vector<SMTRef> mainSynchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                     auto EndInvariant = mainInvariant(
                         EndIndex, FreeVarsMap.at(EndIndex), FunName);
                     auto Defs1 = assignmentsOnPath(
-                        Path1, 1, FreeVarsMap.at(EndIndex), EndIndex == -2);
+                        Path1, 1, FreeVarsMap.at(EndIndex), EndIndex == EXIT_MARK);
                     auto Defs2 = assignmentsOnPath(
-                        Path2, 2, FreeVarsMap.at(EndIndex), EndIndex == -2);
+                        Path2, 2, FreeVarsMap.at(EndIndex), EndIndex == EXIT_MARK);
                     PathExprs.push_back(assertForall(
                         interleaveAssignments(EndInvariant, Defs1, Defs2,
                                               FunArgs1, FunArgs2),
@@ -224,10 +224,10 @@ vector<SMTRef> forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
                                   StartIndex == EndIndex2)) {
                                 auto Smt2 = assignmentsOnPath(Path2, 2,
                                                               vector<string>(),
-                                                              EndIndex2 == -2);
+                                                              EndIndex2 == EXIT_MARK);
                                 auto Smt1 = assignmentsOnPath(Path1, 1,
                                                               vector<string>(),
-                                                              EndIndex1 == -2);
+                                                              EndIndex1 == EXIT_MARK);
                                 auto SMT =
                                     nonmutualSMT(name("false"), Smt2, Second);
                                 SMT = nonmutualSMT(SMT, Smt1, First);
@@ -250,7 +250,7 @@ void nonmutualPaths(PathMap PathMap, vector<SMTRef> &PathExprs,
     int Program = For == First ? 1 : 2;
     for (auto &PathMapIt : PathMap) {
         int StartIndex = PathMapIt.first;
-        if (StartIndex != -1) {
+        if (StartIndex != ENTRY_MARK) {
             auto Invariants = invariantDeclaration(
                 StartIndex, filterVars(Program, FreeVarsMap.at(StartIndex)),
                 For, FunName);
@@ -264,7 +264,7 @@ void nonmutualPaths(PathMap PathMap, vector<SMTRef> &PathExprs,
                     invariant(StartIndex, EndIndex, FreeVarsMap.at(StartIndex),
                               FreeVarsMap.at(EndIndex), For, FunName);
                 auto Defs = assignmentsOnPath(
-                    Path, Program, FreeVarsMap.at(EndIndex), EndIndex == -2);
+                    Path, Program, FreeVarsMap.at(EndIndex), EndIndex == EXIT_MARK);
                 PathExprs.push_back(assertForall(
                     nonmutualSMT(EndInvariant1, Defs, For),
                     filterVars(Program, FreeVarsMap.at(StartIndex)), StartIndex,
@@ -334,7 +334,7 @@ vector<SMTRef> offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
                         swapIndex(Program), For == First ? Second : First);
                     auto Defs = assignmentsOnPath(Path, Program,
                                                   FreeVarsMap.at(EndIndex),
-                                                  EndIndex == -2);
+                                                  EndIndex == EXIT_MARK);
                     Paths.push_back(
                         assertForall(nonmutualSMT(DontLoopInvariant, Defs, For),
                                      FreeVarsMap.at(StartIndex), StartIndex,
@@ -562,7 +562,7 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
         makeOp(invariantName(StartIndex, SMTFor, FunName), EndArgsVect);
     auto Clause = EndInvariant;
 
-    if (EndIndex != -2) {
+    if (EndIndex != EXIT_MARK) {
         // We require the result of another call to establish our invariant so
         // make sure that it satisfies the invariant of the other call and then
         // assert our own invariant
@@ -591,7 +591,7 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
 }
 
 SMTRef mainInvariant(int EndIndex, vector<string> FreeVars, string FunName) {
-    if (EndIndex == -2) {
+    if (EndIndex == EXIT_MARK) {
         return makeBinOp("=", "result$1", "result$2");
     }
     return makeOp(invariantName(EndIndex, Both, FunName) + "_MAIN", FreeVars);
@@ -625,7 +625,7 @@ SMTRef mainInvariantDeclaration(int BlockIndex, vector<string> FreeVars,
 /// Return the invariant name, special casing the entry block
 string invariantName(int Index, SMTFor For, std::string FunName) {
     string Name;
-    if (Index == -1) {
+    if (Index == ENTRY_MARK) {
         Name = "INV_REC_" + FunName;
     } else {
         Name = "INV_" + std::to_string(Index);
@@ -688,11 +688,11 @@ SMTRef mutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args1,
     ImplArgs.push_back(name(Ret1));
     ImplArgs.push_back(name(Ret2));
     Clause = makeBinOp(
-        "=>", std::make_shared<Op>(invariantName(-1, Both, FunName), ImplArgs),
+        "=>", std::make_shared<Op>(invariantName(ENTRY_MARK, Both, FunName), ImplArgs),
         Clause);
     Clause = make_shared<Forall>(Args, Clause);
     auto PreInv = std::make_shared<Op>(
-        invariantName(-1, Both, FunName) + "_PRE", PreArgs);
+        invariantName(ENTRY_MARK, Both, FunName) + "_PRE", PreArgs);
     return makeBinOp("and", PreInv, Clause);
 }
 
@@ -711,11 +711,11 @@ SMTRef nonmutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args,
     ImplArgs.push_back(name(Ret));
 
     Clause = makeBinOp(
-        "=>", make_shared<Op>(invariantName(-1, For, FunName), ImplArgs),
+        "=>", make_shared<Op>(invariantName(ENTRY_MARK, For, FunName), ImplArgs),
         Clause);
     Clause = make_shared<Forall>(ForallArgs, Clause);
     auto PreInv =
-        std::make_shared<Op>(invariantName(-1, For, FunName) + "_PRE", PreArgs);
+        std::make_shared<Op>(invariantName(ENTRY_MARK, For, FunName) + "_PRE", PreArgs);
     return makeBinOp("and", PreInv, Clause);
 }
 
@@ -736,7 +736,7 @@ SMTRef assertForall(SMTRef Clause, vector<string> FreeVars, int BlockIndex,
     }
 
     SMTRef PreInv;
-    if (Main && BlockIndex == -1) {
+    if (Main && BlockIndex == ENTRY_MARK) {
         vector<SMTRef> Assgns;
         assert(FreeVars.size() % 2 == 0);
         size_t mid = FreeVars.size() / 2;
@@ -791,9 +791,9 @@ SMTRef equalInputsEqualOutputs(vector<string> FunArgs, vector<string> FunArgs1,
     Args.push_back("result$2");
 
     auto EqualResults =
-        makeBinOp("=>", makeOp(invariantName(-1, Both, FunName), Args),
+        makeBinOp("=>", makeOp(invariantName(ENTRY_MARK, Both, FunName), Args),
                   makeBinOp("=", "result$1", "result$2"));
-    auto PreInv = makeOp(invariantName(-1, Both, FunName) + "_PRE", PreInvArgs);
+    auto PreInv = makeOp(invariantName(ENTRY_MARK, Both, FunName) + "_PRE", PreInvArgs);
 
     set<string> FunArgs1Set, FunArgs2Set;
     std::copy(FunArgs1.begin(), FunArgs1.end(),
@@ -1082,7 +1082,7 @@ std::map<int, vector<string>> freeVars(PathMap Map1, PathMap Map2,
         Constructed.insert(make_pair(Index, FreeVars1.second));
     }
 
-    FreeVarsMap[-2] = set<string>();
+    FreeVarsMap[EXIT_MARK] = set<string>();
     // search for a least fixpoint
     // don't tell anyone I wrote that
     bool Changed = true;
@@ -1116,7 +1116,7 @@ std::map<int, vector<string>> freeVars(PathMap Map1, PathMap Map2,
         Vars.insert(Vars.end(), Vars2.begin(), Vars2.end());
         FreeVarsMapVect[Index] = Vars;
     }
-    FreeVarsMapVect[-1] = FunArgs;
+    FreeVarsMapVect[ENTRY_MARK] = FunArgs;
 
     return FreeVarsMapVect;
 }

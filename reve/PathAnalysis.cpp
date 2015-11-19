@@ -13,7 +13,7 @@ PathMap PathAnalysis::run(llvm::Function &F,
     auto BidirMarkBlockMap = AM->getResult<MarkAnalysis>(F);
     for (auto BBTuple : BidirMarkBlockMap.MarkToBlocksMap) {
         // don't start at return instructions
-        if (BBTuple.first != -2) {
+        if (BBTuple.first != EXIT_MARK) {
             for (auto BB : BBTuple.second) {
                 std::map<int, Paths> NewPaths =
                     findPaths(BB, BidirMarkBlockMap);
@@ -56,7 +56,7 @@ std::map<int, Paths> findPaths(llvm::BasicBlock *BB,
     for (auto &PathIt : MyPaths) {
         set<int> Indices;
         if (PathIt.empty()) {
-            Indices.insert(-2);
+            Indices.insert(EXIT_MARK);
         } else {
             Indices = BidirBlockMarkMap.BlockToMarksMap.at(PathIt.back().Block);
         }
@@ -122,7 +122,7 @@ bool isMarked(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks) {
 bool isReturn(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks) {
     auto Marks = MarkedBlocks.BlockToMarksMap.find(BB);
     if (Marks != MarkedBlocks.BlockToMarksMap.end()) {
-        return Marks->second.find(-2) != Marks->second.end();
+        return Marks->second.find(EXIT_MARK) != Marks->second.end();
     }
     return false;
 }

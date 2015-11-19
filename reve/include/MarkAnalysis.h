@@ -5,6 +5,9 @@
 
 #include <set>
 
+const int EXIT_MARK = -2;
+const int ENTRY_MARK = -1;
+
 struct BidirBlockMarkMap {
     std::map<llvm::BasicBlock *, std::set<int>> BlockToMarksMap;
     std::map<int, std::set<llvm::BasicBlock *>> MarkToBlocksMap;
