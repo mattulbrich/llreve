@@ -2,6 +2,7 @@
 #define PATHANALYSIS_H
 
 #include "SMT.h"
+#include "MarkAnalysis.h"
 
 #include "llvm/IR/PassManager.h"
 
@@ -38,24 +39,16 @@ class PathAnalysis {
 };
 
 auto findPaths(llvm::BasicBlock *BB,
-               std::map<int, llvm::BasicBlock *> MarkedBlocks)
+               BidirBlockMarkMap MarkedBlocks)
     -> std::map<int, Paths>;
 
 auto traverse(llvm::BasicBlock *BB,
-              std::map<int, llvm::BasicBlock *> MarkedBlocks, bool First)
+              BidirBlockMarkMap MarkedBlocks, bool First)
     -> Paths_;
 
-auto isTerminator(llvm::BasicBlock *BB,
-                  std::map<int, llvm::BasicBlock *> MarkedBlocks) -> bool;
+auto isMarked(llvm::BasicBlock *BB,
+              BidirBlockMarkMap MarkedBlocks) -> bool;
 
-template <class Key, class T>
-std::_Rb_tree_iterator<std::pair<const Key, T>>
-reverseLookup(T Val, std::map<Key, T> Map) {
-    return std::find_if(
-        Map.begin(), Map.end(),
-        [=](const std::pair<Key, T> &P) { return P.second == Val; });
-}
-
-auto isReturn(llvm::BasicBlock *BB, std::map<int, llvm::BasicBlock *> MarkedBlocks) -> bool;
+auto isReturn(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks) -> bool;
 
 #endif // PATHANALYSIS_H

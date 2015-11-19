@@ -1,6 +1,5 @@
 #include "PathAnalysis.h"
 
-#include "MarkAnalysis.h"
 #include "SExpr.h"
 #include <iostream>
 
@@ -11,12 +10,19 @@ char PathAnalysis::PassID;
 PathMap PathAnalysis::run(llvm::Function &F,
                           llvm::FunctionAnalysisManager *AM) {
     PathMap MyPaths;
-    auto MarkedBlocks = AM->getResult<MarkAnalysis>(F);
-    for (auto BB : MarkedBlocks) {
+    auto BidirMarkBlockMap = AM->getResult<MarkAnalysis>(F);
+    for (auto BBTuple : BidirMarkBlockMap.MarkToBlocksMap) {
         // don't start at return instructions
-        if (BB.first != -2) {
-            std::map<int, Paths> NewPaths = findPaths(BB.second, MarkedBlocks);
-            MyPaths.insert(make_pair(BB.first, NewPaths));
+        if (BBTuple.first != -2) {
+            for (auto BB : BBTuple.second) {
+                std::map<int, Paths> NewPaths =
+                    findPaths(BB, BidirMarkBlockMap);
+                for (auto NewPathTuple : NewPaths) {
+                    MyPaths[BBTuple.first][NewPathTuple.first].insert(
+                        MyPaths[BBTuple.first][NewPathTuple.first].end(),
+                        NewPathTuple.second.begin(), NewPathTuple.second.end());
+                }
+            }
         }
     }
 
@@ -43,26 +49,27 @@ PathMap PathAnalysis::run(llvm::Function &F,
     return MyPaths;
 }
 
-std::map<int, Paths>
-findPaths(llvm::BasicBlock *BB,
-          std::map<int, llvm::BasicBlock *> MarkedBlocks) {
+std::map<int, Paths> findPaths(llvm::BasicBlock *BB,
+                               BidirBlockMarkMap BidirBlockMarkMap) {
     std::map<int, Paths> FoundPaths;
-    auto MyPaths = traverse(BB, MarkedBlocks, true);
+    auto MyPaths = traverse(BB, BidirBlockMarkMap, true);
     for (auto &PathIt : MyPaths) {
-        auto Index = PathIt.empty() ? -2 : reverseLookup(PathIt.back().Block, MarkedBlocks)->first;
-        auto It = FoundPaths.find(Index);
-        if (It == FoundPaths.end()) {
-            FoundPaths.insert(std::make_pair(Index, Paths()));
-            It = FoundPaths.find(Index);
+        set<int> Indices;
+        if (PathIt.empty()) {
+            Indices.insert(-2);
+        } else {
+            Indices = BidirBlockMarkMap.BlockToMarksMap.at(PathIt.back().Block);
         }
-        It->second.push_back(Path(BB, PathIt));
+        for (auto Index : Indices) {
+            FoundPaths[Index].push_back(Path(BB, PathIt));
+        }
     }
     return FoundPaths;
 }
 
-Paths_ traverse(llvm::BasicBlock *BB,
-               std::map<int, llvm::BasicBlock *> MarkedBlocks, bool First) {
-    if ((!First && isTerminator(BB, MarkedBlocks)) || isReturn(BB, MarkedBlocks)) {
+Paths_ traverse(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks,
+                bool First) {
+    if ((!First && isMarked(BB, MarkedBlocks)) || isReturn(BB, MarkedBlocks)) {
         Paths_ MyPaths;
         MyPaths.push_back(Path_());
         return MyPaths;
@@ -104,16 +111,18 @@ Paths_ traverse(llvm::BasicBlock *BB,
     return Paths_();
 }
 
-bool isTerminator(llvm::BasicBlock *BB,
-                  std::map<int, llvm::BasicBlock *> MarkedBlocks) {
-    for (auto Pair : MarkedBlocks) {
-        if (Pair.second == BB) {
-            return true;
-        }
+bool isMarked(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks) {
+    auto Marks = MarkedBlocks.BlockToMarksMap.find(BB);
+    if (Marks != MarkedBlocks.BlockToMarksMap.end()) {
+        return !(Marks->second.empty());
     }
     return false;
 }
 
-bool isReturn(llvm::BasicBlock *BB, std::map<int, llvm::BasicBlock *> MarkedBlocks) {
-    return MarkedBlocks.at(-2) == BB;
+bool isReturn(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks) {
+    auto Marks = MarkedBlocks.BlockToMarksMap.find(BB);
+    if (Marks != MarkedBlocks.BlockToMarksMap.end()) {
+        return Marks->second.find(-2) != Marks->second.end();
+    }
+    return false;
 }

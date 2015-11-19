@@ -5,15 +5,19 @@
 #include "llvm/IR/Instructions.h"
 
 using std::make_pair;
+using std::set;
 
 char MarkAnalysis::PassID;
 
-std::map<int, llvm::BasicBlock *>
+BidirBlockMarkMap
 MarkAnalysis::run(llvm::Function &Fun, llvm::FunctionAnalysisManager *AM) {
-    std::map<int, llvm::BasicBlock *> MarkedBlocks;
+    std::map<int, set<llvm::BasicBlock *>> MarkedBlocks;
+    std::map<llvm::BasicBlock *, set<int>> BlockedMarks;
     // insert entry block
-    MarkedBlocks.insert(make_pair(-1, &Fun.getEntryBlock()));
-    MarkedBlocks.insert(make_pair(-2, AM->getResult<UnifyFunctionExitNodes>(Fun)));
+    MarkedBlocks[-1].insert(&Fun.getEntryBlock());
+    BlockedMarks[&Fun.getEntryBlock()].insert(-1);
+    MarkedBlocks[-2].insert(AM->getResult<UnifyFunctionExitNodes>(Fun));
+    BlockedMarks[AM->getResult<UnifyFunctionExitNodes>(Fun)].insert(-2);
     for (auto &BB : Fun) {
         for (auto &Inst : BB) {
             if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(&Inst)) {
@@ -26,11 +30,14 @@ MarkAnalysis::run(llvm::Function &Fun, llvm::FunctionAnalysisManager *AM) {
                         ID = static_cast<int>(
                             ConstInt->getValue().getSExtValue());
                     }
-                    MarkedBlocks.insert(make_pair(ID, &BB));
-                    continue;
+                    // the [] operator constructs an element using the default
+                    // constructor if it doesn't exist, so we don't need to
+                    // check for that here
+                    MarkedBlocks[ID].insert(&BB);
+                    BlockedMarks[&BB].insert(ID);
                 }
             }
         }
     }
-    return MarkedBlocks;
+    return BidirBlockMarkMap(BlockedMarks, MarkedBlocks);
 }

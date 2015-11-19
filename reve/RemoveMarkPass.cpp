@@ -2,16 +2,19 @@
 
 llvm::PreservedAnalyses RemoveMarkPass::run(llvm::Function &Fun,
                                             llvm::FunctionAnalysisManager *AM) {
-    auto MarkedBlocks = AM->getResult<MarkAnalysis>(Fun);
+    auto BidirMarkBlockMap = AM->getResult<MarkAnalysis>(Fun);
     std::vector<llvm::Instruction *> ToDelete;
-    for (auto BBTuple : MarkedBlocks) {
+    for (auto BBTuple : BidirMarkBlockMap.MarkToBlocksMap) {
+        // no need to remove anything in exit and entry nodes
         if (BBTuple.first >= 0) {
-            auto BB = BBTuple.second;
-            for (auto &Inst : *BB) {
-                if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(&Inst)) {
-                    if ((CallInst->getCalledFunction() != nullptr) &&
-                        CallInst->getCalledFunction()->getName() == "__mark") {
-                        ToDelete.push_back(CallInst);
+            for (auto BB : BBTuple.second) {
+                for (auto &Inst : *BB) {
+                    if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(&Inst)) {
+                        if ((CallInst->getCalledFunction() != nullptr) &&
+                            CallInst->getCalledFunction()->getName() ==
+                                "__mark") {
+                            ToDelete.push_back(CallInst);
+                        }
                     }
                 }
             }
