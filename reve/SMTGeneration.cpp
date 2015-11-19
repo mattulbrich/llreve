@@ -747,7 +747,6 @@ SMTRef assertForall(SMTRef Clause, vector<string> FreeVars, int BlockIndex,
     }
 
     if (Vars.empty()) {
-        llvm::errs() << "Vars empty: " << BlockIndex << "\n";
         return make_shared<Assert>(Clause);
     }
 
