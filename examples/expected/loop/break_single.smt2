@@ -1,4 +1,17 @@
 (set-logic HORN)
+(define-fun
+   IN_INV
+   ((x$1_0 Int)
+    (x$2_0 Int))
+   Bool
+   (and
+      (= x$1_0 x$2_0)))
+(define-fun
+   OUT_INV
+   ((result$1 Int)
+    (result$2 Int))
+   Bool
+   (= result$1 result$2))
 (declare-fun
    INV_42_MAIN
    (Int
@@ -79,8 +92,9 @@
       ((x$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= x$1_0_old x$2_0_old))
+         (IN_INV
+            x$1_0_old
+            x$2_0_old)
          (let
             ((i.0$1_0 0)
              (x$1_0 x$1_0_old)
@@ -116,7 +130,9 @@
                                     (not _$2_3)
                                     (let
                                        ((result$2 i.0$2_0_old))
-                                       (= result$1 result$2))))))))))))))
+                                       (OUT_INV
+                                          result$1
+                                          result$2))))))))))))))
 (assert
    (forall
       ((i.0$1_0_old Int)
@@ -144,7 +160,9 @@
                                  (not _$2_3)
                                  (let
                                     ((result$2 i.0$2_0_old))
-                                    (= result$1 result$2)))))))))))))
+                                    (OUT_INV
+                                       result$1
+                                       result$2)))))))))))))
 (assert
    (forall
       ((i.0$1_0_old Int)
@@ -170,7 +188,9 @@
                               (not _$2_3)
                               (let
                                  ((result$2 i.0$2_0_old))
-                                 (= result$1 result$2))))))))))))
+                                 (OUT_INV
+                                    result$1
+                                    result$2))))))))))))
 (assert
    (forall
       ((i.0$1_0_old Int)
@@ -194,7 +214,9 @@
                            (not _$2_3)
                            (let
                               ((result$2 i.0$2_0_old))
-                              (= result$1 result$2)))))))))))
+                              (OUT_INV
+                                 result$1
+                                 result$2)))))))))))
 (assert
    (forall
       ((i.0$1_0_old Int)

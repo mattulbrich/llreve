@@ -98,11 +98,13 @@ vector<SMTRef> mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
     }
     std::map<int, vector<string>> FreeVarsMap =
         freeVars(PathMap1, PathMap2, FunArgs);
+
     if (OnlyRec) {
         SMTExprs.push_back(equalInputsEqualOutputs(
             FunArgs, FunArgsPair.first, FunArgsPair.second, FunName));
         return SMTExprs;
     }
+
     auto SynchronizedPaths = mainSynchronizedPaths(
         PathMap1, PathMap2, FreeVarsMap, FunArgsPair.first, FunArgsPair.second,
         FunName, Declarations);
@@ -230,12 +232,15 @@ vector<SMTRef> forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
                         for (auto &Path2 : InnerPathMapIt2.second) {
                             auto EndBlock1 = lastBlock(Path1);
                             auto EndBlock2 = lastBlock(Path2);
-                            auto EndIndices1 = Marked1.BlockToMarksMap[EndBlock1];
-                            auto EndIndices2 = Marked2.BlockToMarksMap[EndBlock2];
+                            auto EndIndices1 =
+                                Marked1.BlockToMarksMap[EndBlock1];
+                            auto EndIndices2 =
+                                Marked2.BlockToMarksMap[EndBlock2];
                             if (!OffByN ||
                                 ((StartIndex != EndIndex1 && // no circles
                                   StartIndex != EndIndex2) &&
-                                 intersection(EndIndices1, EndIndices2).empty())) {
+                                 intersection(EndIndices1, EndIndices2)
+                                     .empty())) {
                                 auto Smt2 = assignmentsOnPath(
                                     Path2, 2, vector<string>(),
                                     EndIndex2 == EXIT_MARK);
@@ -606,7 +611,7 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
 
 SMTRef mainInvariant(int EndIndex, vector<string> FreeVars, string FunName) {
     if (EndIndex == EXIT_MARK) {
-        return makeBinOp("=", "result$1", "result$2");
+        return makeBinOp("OUT_INV", "result$1", "result$2");
     }
     return makeOp(invariantName(EndIndex, Both, FunName) + "_MAIN", FreeVars);
 }
@@ -621,9 +626,9 @@ std::pair<SMTRef, SMTRef> invariantDeclaration(int BlockIndex,
     vector<string> PreArgs(FreeVars.size(), "Int");
 
     return std::make_pair(
-        std::make_shared<class Fun>(invariantName(BlockIndex, For, FunName),
-                                    Args, "Bool"),
-        std::make_shared<class Fun>(
+        std::make_shared<class FunDecl>(invariantName(BlockIndex, For, FunName),
+                                        Args, "Bool"),
+        std::make_shared<class FunDecl>(
             invariantName(BlockIndex, For, FunName) + "_PRE", PreArgs, "Bool"));
 }
 
@@ -632,7 +637,7 @@ SMTRef mainInvariantDeclaration(int BlockIndex, vector<string> FreeVars,
     auto NumArgs = FreeVars.size();
     vector<string> Args(NumArgs, "Int");
 
-    return std::make_shared<class Fun>(
+    return std::make_shared<class FunDecl>(
         invariantName(BlockIndex, For, FunName) + "_MAIN", Args, "Bool");
 }
 
@@ -752,14 +757,11 @@ SMTRef assertForall(SMTRef Clause, vector<string> FreeVars, int BlockIndex,
 
     SMTRef PreInv;
     if (Main && BlockIndex == ENTRY_MARK) {
-        vector<SMTRef> Assgns;
-        assert(FreeVars.size() % 2 == 0);
-        size_t mid = FreeVars.size() / 2;
-        for (size_t i = 0; i < mid; i++) {
-            Assgns.push_back(makeBinOp("=", FreeVars.at(i) + "_old",
-                                       FreeVars.at(mid + i) + "_old"));
+        vector<string> Args;
+        for (auto Arg : FreeVars) {
+            Args.push_back(Arg + "_old");
         }
-        Clause = makeBinOp("=>", make_shared<Op>("and", Assgns), Clause);
+        Clause = makeBinOp("=>", makeOp("IN_INV", Args), Clause);
     } else {
         auto PreInv = makeOp(invariantName(BlockIndex, For, FunName) +
                                  (Main ? "_MAIN" : "_PRE"),
@@ -774,17 +776,50 @@ SMTRef assertForall(SMTRef Clause, vector<string> FreeVars, int BlockIndex,
 /* -------------------------------------------------------------------------- */
 // Functions forcing arguments to be equal
 
-SMTRef makeFunArgsEqual(SMTRef Clause, SMTRef PreClause, set<string> Args1,
-                        set<string> Args2) {
-    vector<SMTRef> Args;
+SMTRef makeFunArgsEqual(SMTRef Clause, SMTRef PreClause, vector<string> Args1,
+                        vector<string> Args2) {
+    vector<string> Args;
+    Args.insert(Args.end(), Args1.begin(), Args1.end());
+    Args.insert(Args.end(), Args2.begin(), Args2.end());
     assert(Args1.size() == Args2.size());
+
+    auto InInv = makeOp("IN_INV", Args);
+
+    return makeBinOp("=>", InInv, makeBinOp("and", Clause, PreClause));
+}
+
+SMTRef inInvariant(llvm::Function &Fun1, llvm::Function &Fun2, SMTRef Body) {
+    vector<SMTRef> Args;
+    std::pair<vector<string>, vector<string>> FunArgsPair =
+        functionArgs(Fun1, Fun2);
+    vector<string> Args1 = FunArgsPair.first;
+    vector<string> Args2 = FunArgsPair.second;
+    assert(Args1.size() == Args2.size());
+    vector<SortedVar> FunArgs;
+    for (auto Arg : Args1) {
+        FunArgs.push_back(SortedVar(Arg, "Int"));
+    }
+    for (auto Arg : Args2) {
+        FunArgs.push_back(SortedVar(Arg, "Int"));
+    }
     for (auto ArgPair : makeZip(Args1, Args2)) {
         Args.push_back(makeBinOp("=", ArgPair.first, ArgPair.second));
     }
+    if (Body == nullptr) {
+        Body = make_shared<Op>("and", Args);
+    }
 
-    auto And = make_shared<Op>("and", Args);
+    return make_shared<FunDef>("IN_INV", FunArgs, "Bool", Body);
+}
 
-    return makeBinOp("=>", And, makeBinOp("and", Clause, PreClause));
+SMTRef outInvariant(SMTRef Body) {
+    vector<SortedVar> FunArgs = {SortedVar("result$1", "Int"),
+                                 SortedVar("result$2", "Int")};
+    if (Body == nullptr) {
+        Body = makeBinOp("=", "result$1", "result$2");
+    }
+
+    return make_shared<FunDef>("OUT_INV", FunArgs, "Bool", Body);
 }
 
 /// Create an assertion to require that if the recursive invariant holds and the
@@ -807,18 +842,11 @@ SMTRef equalInputsEqualOutputs(vector<string> FunArgs, vector<string> FunArgs1,
 
     auto EqualResults =
         makeBinOp("=>", makeOp(invariantName(ENTRY_MARK, Both, FunName), Args),
-                  makeBinOp("=", "result$1", "result$2"));
+                  makeBinOp("OUT_INV", "result$1", "result$2"));
     auto PreInv =
         makeOp(invariantName(ENTRY_MARK, Both, FunName) + "_PRE", PreInvArgs);
 
-    set<string> FunArgs1Set, FunArgs2Set;
-    std::copy(FunArgs1.begin(), FunArgs1.end(),
-              std::inserter(FunArgs1Set, FunArgs1Set.end()));
-    std::copy(FunArgs2.begin(), FunArgs2.end(),
-              std::inserter(FunArgs2Set, FunArgs2Set.end()));
-
-    auto EqualArgs =
-        makeFunArgsEqual(EqualResults, PreInv, FunArgs1Set, FunArgs2Set);
+    auto EqualArgs = makeFunArgsEqual(EqualResults, PreInv, FunArgs1, FunArgs2);
     auto ForallInputs = make_shared<Forall>(ForallArgs, EqualArgs);
     return make_shared<Assert>(ForallInputs);
 }

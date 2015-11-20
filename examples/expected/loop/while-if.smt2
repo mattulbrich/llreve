@@ -1,4 +1,20 @@
 (set-logic HORN)
+(define-fun
+   IN_INV
+   ((t$1_0 Int)
+    (c$1_0 Int)
+    (t$2_0 Int)
+    (c$2_0 Int))
+   Bool
+   (and
+      (= t$1_0 t$2_0)
+      (= c$1_0 c$2_0)))
+(define-fun
+   OUT_INV
+   ((result$1 Int)
+    (result$2 Int))
+   Bool
+   (= result$1 result$2))
 (declare-fun
    INV_23_MAIN
    (Int
@@ -135,9 +151,11 @@
        (t$2_0_old Int)
        (c$2_0_old Int))
       (=>
-         (and
-            (= t$1_0_old t$2_0_old)
-            (= c$1_0_old c$2_0_old))
+         (IN_INV
+            t$1_0_old
+            c$1_0_old
+            t$2_0_old
+            c$2_0_old)
          (let
             ((_$1_0 (< 0 t$1_0_old)))
             (=>
@@ -154,9 +172,11 @@
        (t$2_0_old Int)
        (c$2_0_old Int))
       (=>
-         (and
-            (= t$1_0_old t$2_0_old)
-            (= c$1_0_old c$2_0_old))
+         (IN_INV
+            t$1_0_old
+            c$1_0_old
+            t$2_0_old
+            c$2_0_old)
          (let
             ((_$1_0 (< 0 t$1_0_old)))
             (=>
@@ -184,7 +204,9 @@
                   (not _$2_3)
                   (let
                      ((result$2 x.0$2_0_old))
-                     (= result$1 result$2))))))))
+                     (OUT_INV
+                        result$1
+                        result$2))))))))
 (assert
    (forall
       ((.0$1_0_old Int)
@@ -207,7 +229,9 @@
                         (not _$2_3)
                         (let
                            ((result$2 x.0$2_0_old))
-                           (= result$1 result$2))))))))))
+                           (OUT_INV
+                              result$1
+                              result$2))))))))))
 (assert
    (forall
       ((.0$1_0_old Int)

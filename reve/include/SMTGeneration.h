@@ -145,8 +145,11 @@ auto assertForall(SMTRef Clause, std::vector<std::string> FreeVars,
 // Functions forcing arguments to be equal
 
 auto makeFunArgsEqual(SMTRef Clause, SMTRef PreClause,
-                      std::set<std::string> Args1, std::set<std::string> Args2)
+                      std::vector<std::string> Args1,
+                      std::vector<std::string> Args2) -> SMTRef;
+auto inInvariant(llvm::Function &Fun1, llvm::Function &Fun2, SMTRef Body)
     -> SMTRef;
+auto outInvariant(SMTRef Body) -> SMTRef;
 auto equalInputsEqualOutputs(std::vector<string> FunArgs,
                              std::vector<string> FunArgs1,
                              std::vector<string> FunArgs2, std::string FunName)

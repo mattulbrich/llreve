@@ -1,4 +1,17 @@
 (set-logic HORN)
+(define-fun
+   IN_INV
+   ((n$1_0 Int)
+    (n$2_0 Int))
+   Bool
+   (and
+      (= n$1_0 n$2_0)))
+(define-fun
+   OUT_INV
+   ((result$1 Int)
+    (result$2 Int))
+   Bool
+   (= result$1 result$2))
 (declare-fun
    INV_1_MAIN
    (Int
@@ -144,8 +157,9 @@
       ((n$1_0_old Int)
        (n$2_0_old Int))
       (=>
-         (and
-            (= n$1_0_old n$2_0_old))
+         (IN_INV
+            n$1_0_old
+            n$2_0_old)
          (let
             ((i.0$1_0 1)
              (x.0$1_0 1)
@@ -233,7 +247,9 @@
                      (not _$2_8)
                      (let
                         ((result$2 x.1$2_0_old))
-                        (= result$1 result$2)))))))))
+                        (OUT_INV
+                           result$1
+                           result$2)))))))))
 (assert
    (forall
       ((i.1$1_0_old Int)

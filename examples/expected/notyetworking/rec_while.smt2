@@ -1,4 +1,20 @@
 (set-logic HORN)
+(define-fun
+   IN_INV
+   ((n$1_0 Int)
+    (z$1_0 Int)
+    (n$2_0 Int)
+    (z$2_0 Int))
+   Bool
+   (and
+      (= n$1_0 n$2_0)
+      (= z$1_0 z$2_0)))
+(define-fun
+   OUT_INV
+   ((result$1 Int)
+    (result$2 Int))
+   Bool
+   (= result$1 result$2))
 (declare-fun
    INV_23_MAIN
    (Int
@@ -124,9 +140,11 @@
        (n$2_0_old Int)
        (z$2_0_old Int))
       (=>
-         (and
-            (= n$1_0_old n$2_0_old)
-            (= z$1_0_old z$2_0_old))
+         (IN_INV
+            n$1_0_old
+            z$1_0_old
+            n$2_0_old
+            z$2_0_old)
          (let
             ((_$1_0 (<= n$1_0_old 0)))
             (=>
@@ -142,7 +160,9 @@
                            ((r.0$2_0 n$2_0_old))
                            (let
                               ((result$2 r.0$2_0))
-                              (= result$1 result$2)))))))))))
+                              (OUT_INV
+                                 result$1
+                                 result$2)))))))))))
 (assert
    (forall
       ((n$1_0_old Int)
@@ -150,9 +170,11 @@
        (n$2_0_old Int)
        (z$2_0_old Int))
       (=>
-         (and
-            (= n$1_0_old n$2_0_old)
-            (= z$1_0_old z$2_0_old))
+         (IN_INV
+            n$1_0_old
+            z$1_0_old
+            n$2_0_old
+            z$2_0_old)
          (let
             ((_$1_0 (<= n$1_0_old 0)))
             (=>
@@ -183,9 +205,11 @@
        (n$2_0_old Int)
        (z$2_0_old Int))
       (=>
-         (and
-            (= n$1_0_old n$2_0_old)
-            (= z$1_0_old z$2_0_old))
+         (IN_INV
+            n$1_0_old
+            z$1_0_old
+            n$2_0_old
+            z$2_0_old)
          (let
             ((_$1_0 (<= n$1_0_old 0)))
             (=>
@@ -232,7 +256,9 @@
                          (r.0$2_0 _$2_6))
                         (let
                            ((result$2 r.0$2_0))
-                           (= result$1 result$2))))))))))
+                           (OUT_INV
+                              result$1
+                              result$2))))))))))
 (assert
    (forall
       ((i.0$1_0_old Int)
@@ -298,9 +324,11 @@
        (n$2_0_old Int)
        (z$2_0_old Int))
       (=>
-         (and
-            (= n$1_0_old n$2_0_old)
-            (= z$1_0_old z$2_0_old))
+         (IN_INV
+            n$1_0_old
+            z$1_0_old
+            n$2_0_old
+            z$2_0_old)
          (let
             ((_$1_0 (<= n$1_0_old 0)))
             (=>
@@ -327,9 +355,11 @@
        (n$2_0_old Int)
        (z$2_0_old Int))
       (=>
-         (and
-            (= n$1_0_old n$2_0_old)
-            (= z$1_0_old z$2_0_old))
+         (IN_INV
+            n$1_0_old
+            z$1_0_old
+            n$2_0_old
+            z$2_0_old)
          (let
             ((_$1_0 (<= n$1_0_old 0)))
             (=>
@@ -356,9 +386,11 @@
        (n$2_0_old Int)
        (z$2_0_old Int))
       (=>
-         (and
-            (= n$1_0_old n$2_0_old)
-            (= z$1_0_old z$2_0_old))
+         (IN_INV
+            n$1_0_old
+            z$1_0_old
+            n$2_0_old
+            z$2_0_old)
          (let
             ((_$1_0 (<= n$1_0_old 0)))
             (=>
@@ -386,9 +418,11 @@
        (n$2_0_old Int)
        (z$2_0_old Int))
       (=>
-         (and
-            (= n$1_0_old n$2_0_old)
-            (= z$1_0_old z$2_0_old))
+         (IN_INV
+            n$1_0_old
+            z$1_0_old
+            n$2_0_old
+            z$2_0_old)
          (let
             ((_$1_0 (<= n$1_0_old 0)))
             (=>
@@ -419,9 +453,11 @@
        (n$2_0_old Int)
        (z$2_0_old Int))
       (=>
-         (and
-            (= n$1_0_old n$2_0_old)
-            (= z$1_0_old z$2_0_old))
+         (IN_INV
+            n$1_0_old
+            z$1_0_old
+            n$2_0_old
+            z$2_0_old)
          (let
             ((_$1_0 (<= n$1_0_old 0)))
             (=>
@@ -449,9 +485,11 @@
        (n$2_0_old Int)
        (z$2_0_old Int))
       (=>
-         (and
-            (= n$1_0_old n$2_0_old)
-            (= z$1_0_old z$2_0_old))
+         (IN_INV
+            n$1_0_old
+            z$1_0_old
+            n$2_0_old
+            z$2_0_old)
          (let
             ((_$1_0 (<= n$1_0_old 0)))
             (=>

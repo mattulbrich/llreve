@@ -1,4 +1,17 @@
 (set-logic HORN)
+(define-fun
+   IN_INV
+   ((a$1_0 Int)
+    (x$2_0 Int))
+   Bool
+   (and
+      (= a$1_0 x$2_0)))
+(define-fun
+   OUT_INV
+   ((result$1 Int)
+    (result$2 Int))
+   Bool
+   (= result$1 result$2))
 (declare-fun
    INV_REC_f
    (Int
@@ -34,8 +47,9 @@
       ((a$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= a$1_0_old x$2_0_old))
+         (IN_INV
+            a$1_0_old
+            x$2_0_old)
          (let
             ((_$1_0 (> a$1_0_old 100)))
             (=>
@@ -70,14 +84,17 @@
                                                        (r.0$2_0 _$2_3))
                                                       (let
                                                          ((result$2 r.0$2_0))
-                                                         (= result$1 result$2))))))))))))))))))))
+                                                         (OUT_INV
+                                                            result$1
+                                                            result$2))))))))))))))))))))
 (assert
    (forall
       ((a$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= a$1_0_old x$2_0_old))
+         (IN_INV
+            a$1_0_old
+            x$2_0_old)
          (let
             ((_$1_0 (> a$1_0_old 100)))
             (=>
@@ -97,14 +114,17 @@
                                  ((r.0$2_0 _$2_4))
                                  (let
                                     ((result$2 r.0$2_0))
-                                    (= result$1 result$2)))))))))))))
+                                    (OUT_INV
+                                       result$1
+                                       result$2)))))))))))))
 (assert
    (forall
       ((a$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= a$1_0_old x$2_0_old))
+         (IN_INV
+            a$1_0_old
+            x$2_0_old)
          (let
             ((_$1_0 (> a$1_0_old 100)))
             (=>
@@ -142,14 +162,17 @@
                                                     (r.0$2_0 _$2_3))
                                                    (let
                                                       ((result$2 r.0$2_0))
-                                                      (= result$1 result$2)))))))))))))))))))
+                                                      (OUT_INV
+                                                         result$1
+                                                         result$2)))))))))))))))))))
 (assert
    (forall
       ((a$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= a$1_0_old x$2_0_old))
+         (IN_INV
+            a$1_0_old
+            x$2_0_old)
          (let
             ((_$1_0 (> a$1_0_old 100)))
             (=>
@@ -184,7 +207,9 @@
                                                        (r.0$1_0 _$1_4))
                                                       (let
                                                          ((result$1 r.0$1_0))
-                                                         (= result$1 result$2))))))))))))))))))))
+                                                         (OUT_INV
+                                                            result$1
+                                                            result$2))))))))))))))))))))
 ; forbidden main
 ; offbyn main
 ; end

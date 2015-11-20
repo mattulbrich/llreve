@@ -156,7 +156,7 @@ SMTRef makeOp(std::string OpName, std::vector<std::string> Args) {
     return make_unique<Op>(OpName, SMTArgs);
 }
 
-SExprRef Fun::toSExpr() const {
+SExprRef FunDecl::toSExpr() const {
     std::vector<SExprRef> InTypeSExprs;
     for (auto InType : InTypes) {
         InTypeSExprs.push_back(name(InType)->toSExpr());
@@ -168,7 +168,22 @@ SExprRef Fun::toSExpr() const {
     return make_unique<Apply<std::string>>("declare-fun", std::move(Args));
 }
 
-set<string> Fun::uses() const { return set<string>(); }
+SExprRef FunDef::toSExpr() const {
+    std::vector<SExprRef> ArgSExprs;
+    for (auto Arg : Args) {
+        ArgSExprs.push_back(Arg.toSExpr());
+    }
+    std::vector<SExprRef> Args;
+    Args.push_back(name(FunName)->toSExpr());
+    Args.push_back(make_unique<List<std::string>>(std::move(ArgSExprs)));
+    Args.push_back(name(OutType)->toSExpr());
+    Args.push_back(Body->toSExpr());
+    return make_unique<Apply<std::string>>("define-fun", std::move(Args));
+}
+
+set<string> FunDecl::uses() const { return set<string>(); }
+
+set<string> FunDef::uses() const { return set<string>(); }
 
 template <> set<string> Primitive<string>::uses() const {
     set<string> Uses;
@@ -229,10 +244,16 @@ SMTRef Op::compressLets(
     return nestLets(make_shared<Op>(OpName, CompressedArgs), Defs);
 }
 
-SMTRef Fun::compressLets(
+SMTRef FunDecl::compressLets(
     std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
     const {
-    return nestLets(make_shared<Fun>(FunName, InTypes, OutType), Defs);
+    return nestLets(make_shared<FunDecl>(FunName, InTypes, OutType), Defs);
+}
+
+SMTRef FunDef::compressLets(
+    std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+    const {
+    return nestLets(make_shared<FunDef>(FunName, Args, OutType, Body), Defs);
 }
 
 template <typename T>

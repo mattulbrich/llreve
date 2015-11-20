@@ -1,4 +1,17 @@
 (set-logic HORN)
+(define-fun
+   IN_INV
+   ((z$1_0 Int)
+    (z$2_0 Int))
+   Bool
+   (and
+      (= z$1_0 z$2_0)))
+(define-fun
+   OUT_INV
+   ((result$1 Int)
+    (result$2 Int))
+   Bool
+   (= result$1 result$2))
 (declare-fun
    INV_42_MAIN
    (Int
@@ -69,8 +82,9 @@
       ((z$1_0_old Int)
        (z$2_0_old Int))
       (=>
-         (and
-            (= z$1_0_old z$2_0_old))
+         (IN_INV
+            z$1_0_old
+            z$2_0_old)
          (let
             ((x.0$1_0 1))
             (let
@@ -90,14 +104,17 @@
                                  ((_$2_3 (* x.0$2_0 2)))
                                  (let
                                     ((result$2 _$2_3))
-                                    (= result$1 result$2)))))))))))))
+                                    (OUT_INV
+                                       result$1
+                                       result$2)))))))))))))
 (assert
    (forall
       ((z$1_0_old Int)
        (z$2_0_old Int))
       (=>
-         (and
-            (= z$1_0_old z$2_0_old))
+         (IN_INV
+            z$1_0_old
+            z$2_0_old)
          (let
             ((x.0$1_0 1))
             (let
@@ -144,7 +161,9 @@
                                              ((_$2_3 (* x.0$2_0 2)))
                                              (let
                                                 ((result$2 _$2_3))
-                                                (= result$1 result$2)))))))))))))))))
+                                                (OUT_INV
+                                                   result$1
+                                                   result$2)))))))))))))))))
 (assert
    (forall
       ((x.0$1_0_old Int)
@@ -178,8 +197,9 @@
       ((z$1_0_old Int)
        (z$2_0_old Int))
       (=>
-         (and
-            (= z$1_0_old z$2_0_old))
+         (IN_INV
+            z$1_0_old
+            z$2_0_old)
          (let
             ((x.0$1_0 1))
             (let
@@ -201,8 +221,9 @@
       ((z$1_0_old Int)
        (z$2_0_old Int))
       (=>
-         (and
-            (= z$1_0_old z$2_0_old))
+         (IN_INV
+            z$1_0_old
+            z$2_0_old)
          (let
             ((x.0$1_0 1))
             (let

@@ -1,4 +1,17 @@
 (set-logic HORN)
+(define-fun
+   IN_INV
+   ((n$1_0 Int)
+    (n$2_0 Int))
+   Bool
+   (and
+      (= n$1_0 n$2_0)))
+(define-fun
+   OUT_INV
+   ((result$1 Int)
+    (result$2 Int))
+   Bool
+   (= result$1 result$2))
 (declare-fun
    INV_REC_triangle
    (Int
@@ -68,8 +81,9 @@
       ((n$1_0_old Int)
        (n$2_0_old Int))
       (=>
-         (and
-            (= n$1_0_old n$2_0_old))
+         (IN_INV
+            n$1_0_old
+            n$2_0_old)
          (and
             (INV_REC_g_PRE n$1_0_old n$2_0_old 0)
             (forall
@@ -80,7 +94,9 @@
                   (let
                      ((result$1 _$1_0)
                       (result$2 _$2_0))
-                     (= result$1 result$2))))))))
+                     (OUT_INV
+                        result$1
+                        result$2))))))))
 ; forbidden main
 ; offbyn main
 ; end

@@ -1,4 +1,17 @@
 (set-logic HORN)
+(define-fun
+   IN_INV
+   ((x$1_0 Int)
+    (x$2_0 Int))
+   Bool
+   (and
+      (= x$1_0 x$2_0)))
+(define-fun
+   OUT_INV
+   ((result$1 Int)
+    (result$2 Int))
+   Bool
+   (= result$1 result$2))
 (declare-fun
    INV_REC_f
    (Int
@@ -34,8 +47,9 @@
       ((x$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= x$1_0_old x$2_0_old))
+         (IN_INV
+            x$1_0_old
+            x$2_0_old)
          (let
             ((_$1_0 (> x$1_0_old 0)))
             (=>
@@ -79,14 +93,17 @@
                                                                ((.1$2_0 0))
                                                                (let
                                                                   ((result$2 .1$2_0))
-                                                                  (= result$1 result$2)))))))))))))))))))))))
+                                                                  (OUT_INV
+                                                                     result$1
+                                                                     result$2)))))))))))))))))))))))
 (assert
    (forall
       ((x$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= x$1_0_old x$2_0_old))
+         (IN_INV
+            x$1_0_old
+            x$2_0_old)
          (let
             ((_$1_0 (> x$1_0_old 0)))
             (=>
@@ -130,14 +147,17 @@
                                                                ((.1$2_0 .0$2_0))
                                                                (let
                                                                   ((result$2 .1$2_0))
-                                                                  (= result$1 result$2)))))))))))))))))))))))
+                                                                  (OUT_INV
+                                                                     result$1
+                                                                     result$2)))))))))))))))))))))))
 (assert
    (forall
       ((x$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= x$1_0_old x$2_0_old))
+         (IN_INV
+            x$1_0_old
+            x$2_0_old)
          (let
             ((_$1_0 (> x$1_0_old 0)))
             (=>
@@ -176,14 +196,17 @@
                                                             ((.1$1_0 0))
                                                             (let
                                                                ((result$1 .1$1_0))
-                                                               (= result$1 result$2))))))))))))))))))))))
+                                                               (OUT_INV
+                                                                  result$1
+                                                                  result$2))))))))))))))))))))))
 (assert
    (forall
       ((x$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= x$1_0_old x$2_0_old))
+         (IN_INV
+            x$1_0_old
+            x$2_0_old)
          (let
             ((_$1_0 (> x$1_0_old 0)))
             (=>
@@ -222,14 +245,17 @@
                                                             ((.1$1_0 0))
                                                             (let
                                                                ((result$1 .1$1_0))
-                                                               (= result$1 result$2))))))))))))))))))))))
+                                                               (OUT_INV
+                                                                  result$1
+                                                                  result$2))))))))))))))))))))))
 (assert
    (forall
       ((x$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= x$1_0_old x$2_0_old))
+         (IN_INV
+            x$1_0_old
+            x$2_0_old)
          (let
             ((_$1_0 (> x$1_0_old 0)))
             (=>
@@ -273,14 +299,17 @@
                                                                ((.1$2_0 0))
                                                                (let
                                                                   ((result$2 .1$2_0))
-                                                                  (= result$1 result$2)))))))))))))))))))))))
+                                                                  (OUT_INV
+                                                                     result$1
+                                                                     result$2)))))))))))))))))))))))
 (assert
    (forall
       ((x$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= x$1_0_old x$2_0_old))
+         (IN_INV
+            x$1_0_old
+            x$2_0_old)
          (let
             ((_$1_0 (> x$1_0_old 0)))
             (=>
@@ -324,14 +353,17 @@
                                                                ((.1$2_0 .0$2_0))
                                                                (let
                                                                   ((result$2 .1$2_0))
-                                                                  (= result$1 result$2)))))))))))))))))))))))
+                                                                  (OUT_INV
+                                                                     result$1
+                                                                     result$2)))))))))))))))))))))))
 (assert
    (forall
       ((x$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= x$1_0_old x$2_0_old))
+         (IN_INV
+            x$1_0_old
+            x$2_0_old)
          (let
             ((_$1_0 (> x$1_0_old 0)))
             (=>
@@ -370,14 +402,17 @@
                                                             ((.1$1_0 .0$1_0))
                                                             (let
                                                                ((result$1 .1$1_0))
-                                                               (= result$1 result$2))))))))))))))))))))))
+                                                               (OUT_INV
+                                                                  result$1
+                                                                  result$2))))))))))))))))))))))
 (assert
    (forall
       ((x$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= x$1_0_old x$2_0_old))
+         (IN_INV
+            x$1_0_old
+            x$2_0_old)
          (let
             ((_$1_0 (> x$1_0_old 0)))
             (=>
@@ -416,14 +451,17 @@
                                                             ((.1$1_0 .0$1_0))
                                                             (let
                                                                ((result$1 .1$1_0))
-                                                               (= result$1 result$2))))))))))))))))))))))
+                                                               (OUT_INV
+                                                                  result$1
+                                                                  result$2))))))))))))))))))))))
 (assert
    (forall
       ((x$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= x$1_0_old x$2_0_old))
+         (IN_INV
+            x$1_0_old
+            x$2_0_old)
          (let
             ((_$1_0 (> x$1_0_old 0)))
             (=>
@@ -462,14 +500,17 @@
                                                             ((.1$2_0 0))
                                                             (let
                                                                ((result$2 .1$2_0))
-                                                               (= result$1 result$2))))))))))))))))))))))
+                                                               (OUT_INV
+                                                                  result$1
+                                                                  result$2))))))))))))))))))))))
 (assert
    (forall
       ((x$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= x$1_0_old x$2_0_old))
+         (IN_INV
+            x$1_0_old
+            x$2_0_old)
          (let
             ((_$1_0 (> x$1_0_old 0)))
             (=>
@@ -508,14 +549,17 @@
                                                             ((.1$2_0 .0$2_0))
                                                             (let
                                                                ((result$2 .1$2_0))
-                                                               (= result$1 result$2))))))))))))))))))))))
+                                                               (OUT_INV
+                                                                  result$1
+                                                                  result$2))))))))))))))))))))))
 (assert
    (forall
       ((x$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= x$1_0_old x$2_0_old))
+         (IN_INV
+            x$1_0_old
+            x$2_0_old)
          (let
             ((_$1_0 (> x$1_0_old 0)))
             (=>
@@ -543,14 +587,17 @@
                                              ((.1$2_0 0))
                                              (let
                                                 ((result$2 .1$2_0))
-                                                (= result$1 result$2)))))))))))))))))
+                                                (OUT_INV
+                                                   result$1
+                                                   result$2)))))))))))))))))
 (assert
    (forall
       ((x$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= x$1_0_old x$2_0_old))
+         (IN_INV
+            x$1_0_old
+            x$2_0_old)
          (let
             ((_$1_0 (> x$1_0_old 0)))
             (=>
@@ -578,14 +625,17 @@
                                              ((.1$2_0 .0$2_0))
                                              (let
                                                 ((result$2 .1$2_0))
-                                                (= result$1 result$2)))))))))))))))))
+                                                (OUT_INV
+                                                   result$1
+                                                   result$2)))))))))))))))))
 (assert
    (forall
       ((x$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= x$1_0_old x$2_0_old))
+         (IN_INV
+            x$1_0_old
+            x$2_0_old)
          (let
             ((_$1_0 (> x$1_0_old 0)))
             (=>
@@ -624,14 +674,17 @@
                                                             ((.1$2_0 0))
                                                             (let
                                                                ((result$2 .1$2_0))
-                                                               (= result$1 result$2))))))))))))))))))))))
+                                                               (OUT_INV
+                                                                  result$1
+                                                                  result$2))))))))))))))))))))))
 (assert
    (forall
       ((x$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= x$1_0_old x$2_0_old))
+         (IN_INV
+            x$1_0_old
+            x$2_0_old)
          (let
             ((_$1_0 (> x$1_0_old 0)))
             (=>
@@ -670,14 +723,17 @@
                                                             ((.1$2_0 .0$2_0))
                                                             (let
                                                                ((result$2 .1$2_0))
-                                                               (= result$1 result$2))))))))))))))))))))))
+                                                               (OUT_INV
+                                                                  result$1
+                                                                  result$2))))))))))))))))))))))
 (assert
    (forall
       ((x$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= x$1_0_old x$2_0_old))
+         (IN_INV
+            x$1_0_old
+            x$2_0_old)
          (let
             ((_$1_0 (> x$1_0_old 0)))
             (=>
@@ -705,14 +761,17 @@
                                              ((.1$2_0 0))
                                              (let
                                                 ((result$2 .1$2_0))
-                                                (= result$1 result$2)))))))))))))))))
+                                                (OUT_INV
+                                                   result$1
+                                                   result$2)))))))))))))))))
 (assert
    (forall
       ((x$1_0_old Int)
        (x$2_0_old Int))
       (=>
-         (and
-            (= x$1_0_old x$2_0_old))
+         (IN_INV
+            x$1_0_old
+            x$2_0_old)
          (let
             ((_$1_0 (> x$1_0_old 0)))
             (=>
@@ -740,7 +799,9 @@
                                              ((.1$2_0 .0$2_0))
                                              (let
                                                 ((result$2 .1$2_0))
-                                                (= result$1 result$2)))))))))))))))))
+                                                (OUT_INV
+                                                   result$1
+                                                   result$2)))))))))))))))))
 ; forbidden main
 ; offbyn main
 ; end

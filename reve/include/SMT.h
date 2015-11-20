@@ -148,9 +148,9 @@ auto makeUnaryOp(std::string OpName, SMTRef Arg) -> std::shared_ptr<Op>;
 auto name(std::string Name) -> SMTRef;
 auto makeOp(std::string OpName, std::vector<std::string> Args) -> SMTRef;
 
-class Fun : public SMTExpr {
+class FunDecl : public SMTExpr {
   public:
-    Fun(std::string FunName, std::vector<std::string> InTypes,
+    FunDecl(std::string FunName, std::vector<std::string> InTypes,
         std::string OutType)
         : FunName(std::move(FunName)), InTypes(std::move(InTypes)),
           OutType(std::move(OutType)) {}
@@ -163,6 +163,24 @@ class Fun : public SMTExpr {
         std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
         const override;
 };
+
+class FunDef : public SMTExpr {
+  public:
+    FunDef(std::string FunName, std::vector<SortedVar> Args,
+           std::string OutType, SMTRef Body)
+        : FunName(std::move(FunName)), Args(std::move(Args)),
+          OutType(std::move(OutType)), Body(std::move(Body)) {}
+    std::string FunName;
+    std::vector<SortedVar> Args;
+    std::string OutType;
+    SMTRef Body;
+    SExprRef toSExpr() const override;
+    set<string> uses() const override;
+    shared_ptr<const SMTExpr> compressLets(
+        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        const override;
+};
+
 
 class Comment : public SMTExpr {
   public:

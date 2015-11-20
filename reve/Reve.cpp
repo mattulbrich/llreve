@@ -222,15 +222,17 @@ int main(int Argc, const char **Argv) {
         auto Fam1 = preprocessModule(*FunPair.first, "1");
         auto Fam2 = preprocessModule(*FunPair.second, "2");
         if (Main) {
+            SMTExprs.push_back(
+                inInvariant(*FunPair.first, *FunPair.second, nullptr));
+            SMTExprs.push_back(outInvariant(nullptr));
             auto NewSMTExprs =
-                mainAssertion(*FunPair.first, *FunPair.second, Fam1,
-                              Fam2, OffByN, Declarations, OnlyRec);
+                mainAssertion(*FunPair.first, *FunPair.second, Fam1, Fam2,
+                              OffByN, Declarations, OnlyRec);
             Assertions.insert(Assertions.end(), NewSMTExprs.begin(),
                               NewSMTExprs.end());
         }
-        auto NewSMTExprs =
-            convertToSMT(*FunPair.first, *FunPair.second, Fam1,
-                         Fam2, OffByN, Declarations);
+        auto NewSMTExprs = convertToSMT(*FunPair.first, *FunPair.second, Fam1,
+                                        Fam2, OffByN, Declarations);
         Assertions.insert(Assertions.end(), NewSMTExprs.begin(),
                           NewSMTExprs.end());
         Main = false;
@@ -270,8 +272,8 @@ int main(int Argc, const char **Argv) {
 shared_ptr<llvm::FunctionAnalysisManager> preprocessModule(llvm::Function &Fun,
                                                            string Prefix) {
     llvm::PassBuilder PB;
-    auto FAM = make_shared<llvm::FunctionAnalysisManager>(
-        true);                         // enable debug log
+    auto FAM =
+        make_shared<llvm::FunctionAnalysisManager>(true); // enable debug log
     PB.registerFunctionAnalyses(*FAM); // register basic analyses
     FAM->registerPass(MarkAnalysis());
     FAM->registerPass(UnifyFunctionExitNodes());
