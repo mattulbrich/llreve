@@ -12,8 +12,8 @@
 #include "llvm/Option/Option.h"
 
 auto main(int Argc, const char **Argv) -> int;
-auto zipFunctions(llvm::Module &Mod1, llvm::Module &Mod2)
-    -> llvm::ErrorOr<std::vector<std::pair<llvm::Function *, llvm::Function *>>>;
+auto zipFunctions(llvm::Module &Mod1, llvm::Module &Mod2) -> llvm::ErrorOr<
+    std::vector<std::pair<llvm::Function *, llvm::Function *>>>;
 template <int N>
 auto initializeArgs(const char *ExeName, std::string Input1, std::string Input2)
     -> llvm::SmallVector<const char *, N>;
@@ -32,5 +32,8 @@ auto getModule(const char *ExeName, std::string Input1, std::string Input2)
 auto getCodeGenAction(const llvm::opt::ArgStringList &CCArgs,
                       clang::DiagnosticsEngine &Diags)
     -> std::unique_ptr<clang::CodeGenAction>;
+auto parseInOutInvs(std::string FileName1, std::string FileName2)
+    -> std::pair<SMTRef, SMTRef>;
+auto processLine(std::string Line, SMTRef &In, SMTRef &Out) -> void;
 
 #endif // REVE_H

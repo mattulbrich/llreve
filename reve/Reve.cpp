@@ -186,6 +186,43 @@ getCodeGenAction(const ArgStringList &CCArgs, clang::DiagnosticsEngine &Diags) {
     return Act;
 }
 
+std::pair<SMTRef, SMTRef> parseInOutInvs(std::string FileName1,
+                                         std::string FileName2) {
+    SMTRef In = nullptr;
+    SMTRef Out = nullptr;
+    std::ifstream InFile1(FileName1);
+    if (InFile1.is_open()) {
+        string Line1;
+        getline(InFile1, Line1);
+        processLine(Line1, In, Out);
+        string Line2;
+        getline(InFile1, Line2);
+        processLine(Line2, In, Out);
+    }
+    std::ifstream InFile2(FileName2);
+    if (InFile2.is_open()) {
+        string Line1;
+        getline(InFile2, Line1);
+        processLine(Line1, In, Out);
+        string Line2;
+        getline(InFile2, Line2);
+        processLine(Line2, In, Out);
+    }
+
+    return std::make_pair(In, Out);
+}
+
+void processLine(std::string Line, SMTRef &In, SMTRef &Out) {
+    if (Line.length() > 4) {
+        if (Line.substr(4, 6) == "rel_in" && In == nullptr) {
+            In = name(Line.substr(11, Line.length() - 11 - 4));
+        }
+        if (Line.substr(4, 7) == "rel_out" && Out == nullptr) {
+            In = name(Line.substr(12, Line.length() - 12 - 4));
+        }
+    }
+}
+
 int main(int Argc, const char **Argv) {
     // The actual arguments are declared statically so we don't need
     // to pass those in here
@@ -217,14 +254,16 @@ int main(int Argc, const char **Argv) {
     std::vector<SMTRef> SMTExprs;
     SMTExprs.push_back(std::make_shared<SetLogic>("HORN"));
 
+    std::pair<SMTRef, SMTRef> InOutInvs = parseInOutInvs(FileName1, FileName2);
+
     bool Main = true;
     for (auto FunPair : Funs.get()) {
         auto Fam1 = preprocessModule(*FunPair.first, "1");
         auto Fam2 = preprocessModule(*FunPair.second, "2");
         if (Main) {
             SMTExprs.push_back(
-                inInvariant(*FunPair.first, *FunPair.second, nullptr));
-            SMTExprs.push_back(outInvariant(nullptr));
+                inInvariant(*FunPair.first, *FunPair.second, InOutInvs.first));
+            SMTExprs.push_back(outInvariant(InOutInvs.second));
             auto NewSMTExprs =
                 mainAssertion(*FunPair.first, *FunPair.second, Fam1, Fam2,
                               OffByN, Declarations, OnlyRec);
