@@ -32,8 +32,9 @@ template <typename T> class Apply : public SExpr<T> {
     void serialize(std::ostream &OS, size_t Indent) const override {
         OS << "(" << Fun;
         std::vector<std::string> AtomicOps = {
-            "+", "-", "*", "<=", "<", ">", ">=", "=", "not", "distinct"};
-        std::vector<std::string> ForceIndentOps = {"assert","and"};
+            "+", "-",   "*",        "<=",     "<",     ">",  ">=",
+            "=", "not", "distinct", "select", "store"};
+        std::vector<std::string> ForceIndentOps = {"assert", "and"};
         bool AtomicOp = std::find(AtomicOps.begin(), AtomicOps.end(), Fun) !=
                         AtomicOps.end();
         bool SimpleOp = Args.size() <= 1 &&
@@ -82,7 +83,7 @@ template <typename T> class List : public SExpr<T> {
 };
 
 template <typename T> class Comment : public SExpr<T> {
-public:
+  public:
     explicit Comment(std::string Val) : Val(std::move(Val)) {}
     void serialize(std::ostream &OS, size_t /*unused*/) const override {
         OS << "; " << Val;

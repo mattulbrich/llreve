@@ -72,6 +72,7 @@ static llvm::cl::opt<bool>
     OffByN("off-by-n", llvm::cl::desc("Allow loops to be off by n iterations"));
 static llvm::cl::opt<bool>
     OnlyRec("only-rec", llvm::cl::desc("Only generate recursive invariants"));
+static llvm::cl::opt<bool> Heap("heap", llvm::cl::desc("Enable heaps"));
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
@@ -261,17 +262,17 @@ int main(int Argc, const char **Argv) {
         auto Fam1 = preprocessModule(*FunPair.first, "1");
         auto Fam2 = preprocessModule(*FunPair.second, "2");
         if (Main) {
-            SMTExprs.push_back(
-                inInvariant(*FunPair.first, *FunPair.second, InOutInvs.first));
-            SMTExprs.push_back(outInvariant(InOutInvs.second));
+            SMTExprs.push_back(inInvariant(*FunPair.first, *FunPair.second,
+                                           InOutInvs.first, Heap));
+            SMTExprs.push_back(outInvariant(InOutInvs.second, Heap));
             auto NewSMTExprs =
                 mainAssertion(*FunPair.first, *FunPair.second, Fam1, Fam2,
-                              OffByN, Declarations, OnlyRec);
+                              OffByN, Declarations, OnlyRec, Heap);
             Assertions.insert(Assertions.end(), NewSMTExprs.begin(),
                               NewSMTExprs.end());
         }
         auto NewSMTExprs = convertToSMT(*FunPair.first, *FunPair.second, Fam1,
-                                        Fam2, OffByN, Declarations);
+                                        Fam2, OffByN, Declarations, Heap);
         Assertions.insert(Assertions.end(), NewSMTExprs.begin(),
                           NewSMTExprs.end());
         Main = false;

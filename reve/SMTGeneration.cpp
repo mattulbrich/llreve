@@ -13,7 +13,8 @@ using std::vector;
 vector<SMTRef> convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
                             shared_ptr<llvm::FunctionAnalysisManager> Fam1,
                             shared_ptr<llvm::FunctionAnalysisManager> Fam2,
-                            bool OffByN, vector<SMTRef> &Declarations) {
+                            bool OffByN, vector<SMTRef> &Declarations,
+                            bool Heap) {
     // TODO(moritz): check that the marks are the same
     auto PathMap1 = Fam1->getResult<PathAnalysis>(Fun1);
     auto PathMap2 = Fam2->getResult<PathAnalysis>(Fun2);
@@ -30,20 +31,21 @@ vector<SMTRef> convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
         FunArgs.push_back(Arg);
     }
     std::map<int, vector<string>> FreeVarsMap =
-        freeVars(PathMap1, PathMap2, FunArgs);
+        freeVars(PathMap1, PathMap2, FunArgs, Heap);
     vector<SMTRef> SMTExprs;
     vector<SMTRef> PathExprs;
 
     // we only need pre invariants for mutual invariants
-    auto Invariants = invariantDeclaration(ENTRY_MARK, FunArgs, Both, FunName);
+    auto Invariants = invariantDeclaration(ENTRY_MARK, FreeVarsMap[ENTRY_MARK],
+                                           Both, FunName);
     Declarations.push_back(Invariants.first);
     Declarations.push_back(Invariants.second);
-    auto Invariants_1 = invariantDeclaration(ENTRY_MARK, filterVars(1, FunArgs),
-                                             First, FunName);
+    auto Invariants_1 = invariantDeclaration(
+        ENTRY_MARK, filterVars(1, FreeVarsMap[ENTRY_MARK]), First, FunName);
     Declarations.push_back(Invariants_1.first);
     Declarations.push_back(Invariants_1.second);
-    auto Invariants_2 = invariantDeclaration(ENTRY_MARK, filterVars(2, FunArgs),
-                                             Second, FunName);
+    auto Invariants_2 = invariantDeclaration(
+        ENTRY_MARK, filterVars(2, FreeVarsMap[ENTRY_MARK]), Second, FunName);
     Declarations.push_back(Invariants_2.first);
     Declarations.push_back(Invariants_2.second);
 
@@ -66,7 +68,7 @@ vector<SMTRef> convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
         // generate off by n paths
         PathExprs.push_back(make_shared<Comment>("OFF BY N"));
         auto OffByNPaths =
-            offByNPaths(PathMap1, PathMap2, FreeVarsMap, FunName, false);
+            offByNPaths(PathMap1, PathMap2, FreeVarsMap, FunName, false, Heap);
         PathExprs.insert(PathExprs.end(), OffByNPaths.begin(),
                          OffByNPaths.end());
     }
@@ -80,7 +82,7 @@ vector<SMTRef> mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
                              shared_ptr<llvm::FunctionAnalysisManager> Fam1,
                              shared_ptr<llvm::FunctionAnalysisManager> Fam2,
                              bool OffByN, vector<SMTRef> &Declarations,
-                             bool OnlyRec) {
+                             bool OnlyRec, bool Heap) {
     auto PathMap1 = Fam1->getResult<PathAnalysis>(Fun1);
     auto PathMap2 = Fam2->getResult<PathAnalysis>(Fun2);
     auto Marked1 = Fam1->getResult<MarkAnalysis>(Fun1);
@@ -97,17 +99,18 @@ vector<SMTRef> mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
         FunArgs.push_back(Arg);
     }
     std::map<int, vector<string>> FreeVarsMap =
-        freeVars(PathMap1, PathMap2, FunArgs);
+        freeVars(PathMap1, PathMap2, FunArgs, Heap);
 
     if (OnlyRec) {
-        SMTExprs.push_back(equalInputsEqualOutputs(
-            FunArgs, FunArgsPair.first, FunArgsPair.second, FunName));
+        SMTExprs.push_back(
+            equalInputsEqualOutputs(FreeVarsMap[ENTRY_MARK], FunArgsPair.first,
+                                    FunArgsPair.second, FunName));
         return SMTExprs;
     }
 
     auto SynchronizedPaths = mainSynchronizedPaths(
         PathMap1, PathMap2, FreeVarsMap, FunArgsPair.first, FunArgsPair.second,
-        FunName, Declarations);
+        FunName, Declarations, Heap);
     auto ForbiddenPaths = forbiddenPaths(PathMap1, PathMap2, Marked1, Marked2,
                                          FreeVarsMap, OffByN, FunName, true);
     SMTExprs.insert(SMTExprs.end(), SynchronizedPaths.begin(),
@@ -118,7 +121,7 @@ vector<SMTRef> mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
     if (OffByN) {
         SMTExprs.push_back(make_shared<Comment>("offbyn main"));
         auto OffByNPaths =
-            offByNPaths(PathMap1, PathMap2, FreeVarsMap, FunName, true);
+            offByNPaths(PathMap1, PathMap2, FreeVarsMap, FunName, true, Heap);
         SMTExprs.insert(SMTExprs.end(), OffByNPaths.begin(), OffByNPaths.end());
     }
     SMTExprs.push_back(make_shared<Comment>("end"));
@@ -179,7 +182,7 @@ vector<SMTRef> mainSynchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                                      vector<string> FunArgs1,
                                      vector<string> FunArgs2,
                                      std::string FunName,
-                                     vector<SMTRef> &Declarations) {
+                                     vector<SMTRef> &Declarations, bool Heap) {
     vector<SMTRef> PathExprs;
     for (auto &PathMapIt : PathMap1) {
         int StartIndex = PathMapIt.first;
@@ -195,7 +198,7 @@ vector<SMTRef> mainSynchronizedPaths(PathMap PathMap1, PathMap PathMap2,
             for (auto &Path1 : InnerPathMapIt.second) {
                 for (auto &Path2 : Paths) {
                     auto EndInvariant = mainInvariant(
-                        EndIndex, FreeVarsMap.at(EndIndex), FunName);
+                        EndIndex, FreeVarsMap.at(EndIndex), FunName, Heap);
                     auto Defs1 =
                         assignmentsOnPath(Path1, 1, FreeVarsMap.at(EndIndex),
                                           EndIndex == EXIT_MARK);
@@ -296,12 +299,12 @@ void nonmutualPaths(PathMap PathMap, vector<SMTRef> &PathExprs,
 
 vector<SMTRef> offByNPaths(PathMap PathMap1, PathMap PathMap2,
                            std::map<int, vector<string>> FreeVarsMap,
-                           std::string FunName, bool Main) {
+                           std::string FunName, bool Main, bool Heap) {
     vector<SMTRef> Paths;
     auto FirstPaths = offByNPathsOneDir(PathMap1, PathMap2, FreeVarsMap, 1,
-                                        First, FunName, Main);
+                                        First, FunName, Main, Heap);
     auto SecondPaths = offByNPathsOneDir(PathMap2, PathMap1, FreeVarsMap, 2,
-                                         Second, FunName, Main);
+                                         Second, FunName, Main, Heap);
     Paths.insert(Paths.end(), FirstPaths.begin(), FirstPaths.end());
     Paths.insert(Paths.end(), SecondPaths.begin(), SecondPaths.end());
     return Paths;
@@ -310,7 +313,7 @@ vector<SMTRef> offByNPaths(PathMap PathMap1, PathMap PathMap2,
 vector<SMTRef> offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
                                  std::map<int, vector<string>> FreeVarsMap,
                                  int Program, SMTFor For, std::string FunName,
-                                 bool Main) {
+                                 bool Main, bool Heap) {
     vector<SMTRef> Paths;
     for (auto &PathMapIt : PathMap_) {
         int StartIndex = PathMapIt.first;
@@ -342,7 +345,8 @@ vector<SMTRef> offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
                     }
                     SMTRef EndInvariant;
                     if (Main) {
-                        EndInvariant = mainInvariant(StartIndex, Args, FunName);
+                        EndInvariant =
+                            mainInvariant(StartIndex, Args, FunName, Heap);
                     } else {
                         EndInvariant = invariant(StartIndex, StartIndex,
                                                  FreeVarsMap.at(StartIndex),
@@ -572,13 +576,13 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
         break;
     }
     vector<string> EndArgsVect;
-    for (auto Arg : FilteredArgs) {
-        EndArgsVect.push_back(Arg + "_old");
-    }
+    bool Heap = false;
+    EndArgsVect = resolveHeapReferences(FilteredArgs, "_old", Heap);
     EndArgsVect.insert(EndArgsVect.end(), ResultArgs.begin(), ResultArgs.end());
 
     auto EndInvariant =
         makeOp(invariantName(StartIndex, SMTFor, FunName), EndArgsVect);
+    EndInvariant = wrapHeap(EndInvariant, SMTFor, Heap, EndArgsVect);
     auto Clause = EndInvariant;
 
     if (EndIndex != EXIT_MARK) {
@@ -593,27 +597,40 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
         vector<string> UsingArgsVect;
         UsingArgsVect.insert(UsingArgsVect.begin(), FilteredEndArgs.begin(),
                              FilteredEndArgs.end());
+        bool Heap = false;
+        UsingArgsVect = resolveHeapReferences(UsingArgsVect, "", Heap);
         auto PreInv = makeOp(invariantName(EndIndex, SMTFor, FunName) + "_PRE",
                              UsingArgsVect);
         UsingArgsVect.insert(UsingArgsVect.end(), ResultArgs.begin(),
                              ResultArgs.end());
-        Clause =
-            makeBinOp("=>", makeOp(invariantName(EndIndex, SMTFor, FunName),
-                                   UsingArgsVect),
-                      Clause);
+        Clause = makeBinOp(
+            "=>", wrapHeap(makeOp(invariantName(EndIndex, SMTFor, FunName),
+                                  UsingArgsVect),
+                           SMTFor, Heap, UsingArgsVect),
+            Clause);
         if (SMTFor == Both) {
-            Clause = makeBinOp("and", PreInv, Clause);
+            Clause = makeBinOp(
+                "and", wrapHeap(PreInv, SMTFor, Heap, UsingArgsVect), Clause);
         }
         Clause = make_shared<Forall>(ForallArgs, Clause);
     }
     return Clause;
 }
 
-SMTRef mainInvariant(int EndIndex, vector<string> FreeVars, string FunName) {
+SMTRef mainInvariant(int EndIndex, vector<string> FreeVars, string FunName,
+                     bool Heap) {
     if (EndIndex == EXIT_MARK) {
-        return makeBinOp("OUT_INV", "result$1", "result$2");
+        vector<string> Args = {"result$1", "result$2"};
+        if (Heap) {
+            Args.push_back("HEAP$1");
+            Args.push_back("HEAP$2");
+        }
+        return makeOp("OUT_INV", Args);
     }
-    return makeOp(invariantName(EndIndex, Both, FunName) + "_MAIN", FreeVars);
+    FreeVars = resolveHeapReferences(FreeVars, "", Heap);
+    return wrapHeap(
+        makeOp(invariantName(EndIndex, Both, FunName) + "_MAIN", FreeVars),
+        Both, Heap, FreeVars);
 }
 
 /// Declare an invariant
@@ -622,8 +639,9 @@ std::pair<SMTRef, SMTRef> invariantDeclaration(int BlockIndex,
                                                SMTFor For,
                                                std::string FunName) {
     auto NumArgs = FreeVars.size() + 1 + (For == Both ? 1 : 0);
+    NumArgs = adaptSizeToHeap(NumArgs, FreeVars);
     vector<string> Args(NumArgs, "Int");
-    vector<string> PreArgs(FreeVars.size(), "Int");
+    vector<string> PreArgs(NumArgs - (For == Both ? 2 : 1), "Int");
 
     return std::make_pair(
         std::make_shared<class FunDecl>(invariantName(BlockIndex, For, FunName),
@@ -635,6 +653,7 @@ std::pair<SMTRef, SMTRef> invariantDeclaration(int BlockIndex,
 SMTRef mainInvariantDeclaration(int BlockIndex, vector<string> FreeVars,
                                 SMTFor For, std::string FunName) {
     auto NumArgs = FreeVars.size();
+    NumArgs = adaptSizeToHeap(NumArgs, FreeVars);
     vector<string> Args(NumArgs, "Int");
 
     return std::make_shared<class FunDecl>(
@@ -745,10 +764,18 @@ SMTRef assertForall(SMTRef Clause, vector<string> FreeVars, int BlockIndex,
                     SMTFor For, std::string FunName, bool Main) {
     vector<SortedVar> Vars;
     vector<string> PreVars;
+    bool Heap = false;
     for (auto &Arg : FreeVars) {
-        // TODO(moritz): detect type
-        Vars.push_back(SortedVar(Arg + "_old", "Int"));
-        PreVars.push_back(Arg + "_old");
+        if (Arg == "HEAP$1" || Arg == "HEAP$2") {
+            Vars.push_back(SortedVar(Arg + "_old", "(Array Int Int)"));
+            string index = "i" + Arg.substr(5, 6);
+            PreVars.push_back(index);
+            PreVars.push_back("(select " + Arg + "_old " + index + ")");
+            Heap = true;
+        } else {
+            Vars.push_back(SortedVar(Arg + "_old", "Int"));
+            PreVars.push_back(Arg + "_old");
+        }
     }
 
     if (Vars.empty()) {
@@ -766,7 +793,7 @@ SMTRef assertForall(SMTRef Clause, vector<string> FreeVars, int BlockIndex,
         auto PreInv = makeOp(invariantName(BlockIndex, For, FunName) +
                                  (Main ? "_MAIN" : "_PRE"),
                              PreVars);
-
+        PreInv = wrapHeap(PreInv, For, Heap, PreVars);
         Clause = makeBinOp("=>", PreInv, Clause);
     }
 
@@ -788,22 +815,42 @@ SMTRef makeFunArgsEqual(SMTRef Clause, SMTRef PreClause, vector<string> Args1,
     return makeBinOp("=>", InInv, makeBinOp("and", Clause, PreClause));
 }
 
-SMTRef inInvariant(llvm::Function &Fun1, llvm::Function &Fun2, SMTRef Body) {
+SMTRef inInvariant(llvm::Function &Fun1, llvm::Function &Fun2, SMTRef Body,
+                   bool Heap) {
     vector<SMTRef> Args;
     std::pair<vector<string>, vector<string>> FunArgsPair =
         functionArgs(Fun1, Fun2);
     vector<string> Args1 = FunArgsPair.first;
     vector<string> Args2 = FunArgsPair.second;
+    if (Heap) {
+        Args1.push_back("HEAP$1");
+        Args2.push_back("HEAP$2");
+    }
     assert(Args1.size() == Args2.size());
     vector<SortedVar> FunArgs;
     for (auto Arg : Args1) {
-        FunArgs.push_back(SortedVar(Arg, "Int"));
+        if (Arg.substr(0, 4) == "HEAP") {
+            FunArgs.push_back(SortedVar(Arg, "(Array Int Int)"));
+        } else {
+            FunArgs.push_back(SortedVar(Arg, "Int"));
+        }
     }
     for (auto Arg : Args2) {
-        FunArgs.push_back(SortedVar(Arg, "Int"));
+        if (Arg.substr(0, 4) == "HEAP") {
+            FunArgs.push_back(SortedVar(Arg, "(Array Int Int)"));
+        } else {
+            FunArgs.push_back(SortedVar(Arg, "Int"));
+        }
     }
     for (auto ArgPair : makeZip(Args1, Args2)) {
-        Args.push_back(makeBinOp("=", ArgPair.first, ArgPair.second));
+        vector<SortedVar> ForallArgs = {SortedVar("i", "Int")};
+        if (ArgPair.first == "HEAP$1") {
+            Args.push_back(make_shared<Forall>(
+                ForallArgs, makeBinOp("=", makeBinOp("select", "HEAP$1", "i"),
+                                      makeBinOp("select", "HEAP$2", "i"))));
+        } else {
+            Args.push_back(makeBinOp("=", ArgPair.first, ArgPair.second));
+        }
     }
     if (Body == nullptr) {
         Body = make_shared<Op>("and", Args);
@@ -812,11 +859,25 @@ SMTRef inInvariant(llvm::Function &Fun1, llvm::Function &Fun2, SMTRef Body) {
     return make_shared<FunDef>("IN_INV", FunArgs, "Bool", Body);
 }
 
-SMTRef outInvariant(SMTRef Body) {
+SMTRef outInvariant(SMTRef Body, bool Heap) {
     vector<SortedVar> FunArgs = {SortedVar("result$1", "Int"),
                                  SortedVar("result$2", "Int")};
+    if (Heap) {
+        FunArgs.push_back(SortedVar("HEAP$1", "(Array Int Int)"));
+        FunArgs.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
+    }
     if (Body == nullptr) {
+        vector<SortedVar> ForallArgs;
+        ForallArgs.push_back(SortedVar("i", "Int"));
         Body = makeBinOp("=", "result$1", "result$2");
+        if (Heap) {
+            Body =
+                makeBinOp("and", Body,
+                          make_shared<Forall>(
+                              ForallArgs,
+                              makeBinOp("=", makeBinOp("select", "HEAP$1", "i"),
+                                        makeBinOp("select", "HEAP$2", "i"))));
+        }
     }
 
     return make_shared<FunDef>("OUT_INV", FunArgs, "Bool", Body);
@@ -833,18 +894,27 @@ SMTRef equalInputsEqualOutputs(vector<string> FunArgs, vector<string> FunArgs1,
     PreInvArgs = Args;
 
     for (auto Arg : FunArgs) {
-        ForallArgs.push_back(SortedVar(Arg, "Int"));
+        if (Arg == "HEAP$1" || Arg == "HEAP$2") {
+            ForallArgs.push_back(SortedVar(Arg, "(Array Int Int)"));
+        } else {
+            ForallArgs.push_back(SortedVar(Arg, "Int"));
+        }
     }
     ForallArgs.push_back(SortedVar("result$1", "Int"));
     ForallArgs.push_back(SortedVar("result$2", "Int"));
     Args.push_back("result$1");
     Args.push_back("result$2");
+    bool Heap = false;
+    Args = resolveHeapReferences(Args, "", Heap);
 
-    auto EqualResults =
-        makeBinOp("=>", makeOp(invariantName(ENTRY_MARK, Both, FunName), Args),
-                  makeBinOp("OUT_INV", "result$1", "result$2"));
-    auto PreInv =
-        makeOp(invariantName(ENTRY_MARK, Both, FunName) + "_PRE", PreInvArgs);
+    auto EqualResults = makeBinOp(
+        "=>", wrapHeap(makeOp(invariantName(ENTRY_MARK, Both, FunName), Args),
+                       Both, Heap, Args),
+        makeBinOp("OUT_INV", "result$1", "result$2"));
+    PreInvArgs = resolveHeapReferences(PreInvArgs, "", Heap);
+    auto PreInv = wrapHeap(
+        makeOp(invariantName(ENTRY_MARK, Both, FunName) + "_PRE", PreInvArgs),
+        Both, Heap, PreInvArgs);
 
     auto EqualArgs = makeFunArgsEqual(EqualResults, PreInv, FunArgs1, FunArgs2);
     auto ForallInputs = make_shared<Forall>(ForallArgs, EqualArgs);
@@ -865,12 +935,11 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock *BB,
            1); // There should be at least a terminator instruction
     for (auto Instr = BB->begin(), E = std::prev(BB->end(), 1); Instr != E;
          ++Instr) {
-        assert(!Instr->getType()->isVoidTy());
         // Ignore phi nodes if we are in a loop as they're bound in a
         // forall quantifier
         if (!IgnorePhis && llvm::isa<llvm::PHINode>(Instr)) {
-            Definitions.push_back(
-                DefOrCallInfo(instrAssignment(*Instr, PrevBB, Constructed)));
+            Definitions.push_back(DefOrCallInfo(
+                instrAssignment(*Instr, PrevBB, Constructed, Program)));
             Constructed.insert(Instr->getName());
         }
         if (!OnlyPhis && !llvm::isa<llvm::PHINode>(Instr)) {
@@ -879,19 +948,17 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock *BB,
                     toCallInfo(CallInst->getName(), CallInst, Constructed)));
             } else {
                 Definitions.push_back(DefOrCallInfo(
-                    instrAssignment(*Instr, PrevBB, Constructed)));
+                    instrAssignment(*Instr, PrevBB, Constructed, Program)));
             }
             Constructed.insert(Instr->getName());
         }
     }
     if (auto RetInst = llvm::dyn_cast<llvm::ReturnInst>(BB->getTerminator())) {
-        string RetName = RetInst->getReturnValue()->getName();
-        if (Constructed.find(RetName) == Constructed.end()) {
-            RetName += "_old";
-        }
+        auto RetName = instrNameOrVal(RetInst->getReturnValue(),
+                                      RetInst->getType(), Constructed);
         Definitions.push_back(
             DefOrCallInfo(make_shared<std::tuple<string, SMTRef>>(
-                "result$" + std::to_string(Program), name(RetName))));
+                "result$" + std::to_string(Program), RetName)));
     }
     return Definitions;
 }
@@ -899,8 +966,22 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock *BB,
 /// Convert a single instruction to an assignment
 std::shared_ptr<std::tuple<string, SMTRef>>
 instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
-                set<string> &Constructed) {
+                set<string> &Constructed, int Program) {
     if (auto BinOp = llvm::dyn_cast<llvm::BinaryOperator>(&Instr)) {
+        // special case for pointer division by 4
+        if (BinOp->getOpcode() == Instruction::SDiv &&
+            BinOp->getType()->isIntegerTy(64)) {
+            if (auto ConstInt =
+                    llvm::dyn_cast<llvm::ConstantInt>(BinOp->getOperand(1))) {
+                if (ConstInt->getSExtValue() == 4) {
+                    return make_shared<std::tuple<string, SMTRef>>(
+                        BinOp->getName(),
+                        instrNameOrVal(BinOp->getOperand(0),
+                                       BinOp->getOperand(0)->getType(),
+                                       Constructed));
+                }
+            }
+        }
         return make_shared<std::tuple<string, SMTRef>>(
             BinOp->getName(),
             makeBinOp(
@@ -936,6 +1017,53 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
             instrNameOrVal(FalseVal, FalseVal->getType(), Constructed)};
         return make_shared<std::tuple<string, SMTRef>>(
             SelectInst->getName(), std::make_shared<class Op>("ite", Args));
+    }
+    if (auto PtrToIntInst = llvm::dyn_cast<llvm::PtrToIntInst>(&Instr)) {
+        return make_shared<std::tuple<string, SMTRef>>(
+            PtrToIntInst->getName(),
+            instrNameOrVal(PtrToIntInst->getPointerOperand(),
+                           PtrToIntInst->getType(), Constructed));
+    }
+    if (auto SExtInst = llvm::dyn_cast<llvm::SExtInst>(&Instr)) {
+        return make_shared<std::tuple<string, SMTRef>>(
+            SExtInst->getName(),
+            instrNameOrVal(SExtInst->getOperand(0), SExtInst->getType(),
+                           Constructed));
+    }
+    if (auto GetElementPtrInst =
+            llvm::dyn_cast<llvm::GetElementPtrInst>(&Instr)) {
+        assert(GetElementPtrInst->getNumOperands() == 2);
+        auto Op0 = GetElementPtrInst->getOperand(0);
+        auto Op1 = GetElementPtrInst->getOperand(1);
+        auto Add =
+            makeBinOp("+", instrNameOrVal(Op0, Op0->getType(), Constructed),
+                      instrNameOrVal(Op1, Op1->getType(), Constructed));
+        return make_shared<std::tuple<string, SMTRef>>(
+            GetElementPtrInst->getName(), Add);
+    }
+    if (auto LoadInst = llvm::dyn_cast<llvm::LoadInst>(&Instr)) {
+        auto Load = makeBinOp(
+            "select",
+            name(resolveName("HEAP$" + std::to_string(Program), Constructed)),
+            instrNameOrVal(LoadInst->getOperand(0),
+                           LoadInst->getOperand(0)->getType(), Constructed));
+        return make_shared<std::tuple<string, SMTRef>>(LoadInst->getName(),
+                                                       Load);
+    }
+    if (auto StoreInst = llvm::dyn_cast<llvm::StoreInst>(&Instr)) {
+        string Heap = "HEAP$" + std::to_string(Program);
+        auto Val = instrNameOrVal(StoreInst->getValueOperand(),
+                                  StoreInst->getValueOperand()->getType(),
+                                  Constructed);
+        auto Pointer = instrNameOrVal(StoreInst->getPointerOperand(),
+                                      StoreInst->getPointerOperand()->getType(),
+                                      Constructed);
+        std::vector<SMTRef> Args = {name(resolveName(Heap, Constructed)),
+                                    Pointer, Val};
+        auto Store = make_shared<Op>("store", Args);
+        Constructed.insert(Heap);
+        return make_shared<std::tuple<string, SMTRef>>(
+            "HEAP$" + std::to_string(Program), Store);
     }
     llvm::errs() << Instr << "\n";
     llvm::errs() << "Couldn't convert instruction to def\n";
@@ -994,6 +1122,7 @@ SMTRef instrNameOrVal(const llvm::Value *Val, const llvm::Type *Ty,
         }
         return name(ApInt.toString(10, true));
     }
+    resolveName(Val->getName(), Constructed);
     if (Constructed.find(Val->getName()) == Constructed.end()) {
         string Name = Val->getName();
         return name(Name + "_old");
@@ -1010,7 +1139,6 @@ std::pair<set<string>, std::map<int, set<string>>>
 freeVarsForBlock(std::map<int, Paths> PathMap) {
     set<string> FreeVars;
     std::map<int, set<string>> ConstructedIntersection;
-    // set<string> ConstructedIntersection;
     for (auto &Paths : PathMap) {
         for (auto &Path : Paths.second) {
             llvm::BasicBlock *Prev = Path.Start;
@@ -1103,7 +1231,7 @@ freeVarsForBlock(std::map<int, Paths> PathMap) {
 }
 
 std::map<int, vector<string>> freeVars(PathMap Map1, PathMap Map2,
-                                       vector<string> FunArgs) {
+                                       vector<string> FunArgs, bool Heap) {
     std::map<int, set<string>> FreeVarsMap;
     std::map<int, vector<string>> FreeVarsMapVect;
     std::map<int, std::map<int, set<string>>> Constructed;
@@ -1157,10 +1285,24 @@ std::map<int, vector<string>> freeVars(PathMap Map1, PathMap Map2,
         vector<string> Vars2 = filterVars(2, VarsVect);
         vector<string> Vars;
         Vars.insert(Vars.end(), Vars1.begin(), Vars1.end());
+        if (Heap) {
+            Vars.push_back("HEAP$1");
+        }
         Vars.insert(Vars.end(), Vars2.begin(), Vars2.end());
+        if (Heap) {
+            Vars.push_back("HEAP$2");
+        }
         FreeVarsMapVect[Index] = Vars;
     }
-    FreeVarsMapVect[ENTRY_MARK] = FunArgs;
+    auto Args1 = filterVars(1, FunArgs);
+    auto Args2 = filterVars(2, FunArgs);
+    if (Heap) {
+        Args1.push_back("HEAP$1");
+        Args2.push_back("HEAP$2");
+    }
+    Args1.insert(Args1.end(), Args2.begin(), Args2.end());
+
+    FreeVarsMapVect[ENTRY_MARK] = Args1;
 
     return FreeVarsMapVect;
 }
@@ -1242,4 +1384,65 @@ std::shared_ptr<CallInfo> toCallInfo(string AssignedTo,
     }
     return make_shared<CallInfo>(
         AssignedTo, CallInst->getCalledFunction()->getName(), Args);
+}
+
+std::vector<std::string> resolveHeapReferences(std::vector<std::string> Args,
+                                               string Suffix, bool &Heap) {
+    Heap = false;
+    vector<string> Result;
+    for (auto Arg : Args) {
+        if (Arg == "HEAP$1" || Arg == "HEAP$2" || Arg == "HEAP$1_old" ||
+            Arg == "HEAP$2_old") {
+            string Index = "i" + Arg.substr(5, 6);
+            Result.push_back(Index);
+            Result.push_back("(select " + Arg + Suffix + " " + Index + ")");
+            Heap = true;
+        } else {
+            Result.push_back(Arg + Suffix);
+        }
+    }
+    return Result;
+}
+
+SMTRef wrapHeap(SMTRef Inv, SMTFor For, bool Heap, vector<string> FreeVars) {
+    string Index1 = "i1";
+    string Index2 = "i2";
+    if (std::find(FreeVars.begin(), FreeVars.end(), "i1_old") !=
+        FreeVars.end()) {
+        Index1 = "i1_old";
+    }
+    if (std::find(FreeVars.begin(), FreeVars.end(), "i2_old") !=
+        FreeVars.end()) {
+        Index2 = "i2_old";
+    }
+    if (Heap) {
+        std::vector<SortedVar> Args;
+        if (For == First || For == Both) {
+            Args.push_back(SortedVar(Index1, "Int"));
+        }
+        if (For == Second || For == Both) {
+            Args.push_back(SortedVar(Index2, "Int"));
+        }
+        return make_shared<Forall>(Args, Inv);
+    }
+    return Inv;
+}
+
+string resolveName(string Name, set<string> &Constructed) {
+    if (Constructed.find(Name) == Constructed.end()) {
+        return Name + "_old";
+    }
+    return Name;
+}
+
+unsigned long adaptSizeToHeap(unsigned long Size, vector<string> FreeVars) {
+    if (std::find(FreeVars.begin(), FreeVars.end(), "HEAP$1") !=
+        FreeVars.end()) {
+        Size++;
+    }
+    if (std::find(FreeVars.begin(), FreeVars.end(), "HEAP$2") !=
+        FreeVars.end()) {
+        Size++;
+    }
+    return Size;
 }
