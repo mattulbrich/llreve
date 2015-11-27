@@ -270,12 +270,12 @@ int main(int Argc, const char **Argv) {
                               OffByN, Declarations, OnlyRec, Heap);
             Assertions.insert(Assertions.end(), NewSMTExprs.begin(),
                               NewSMTExprs.end());
+            Main = false;
         }
         auto NewSMTExprs = convertToSMT(*FunPair.first, *FunPair.second, Fam1,
                                         Fam2, OffByN, Declarations, Heap);
         Assertions.insert(Assertions.end(), NewSMTExprs.begin(),
                           NewSMTExprs.end());
-        Main = false;
     }
     SMTExprs.insert(SMTExprs.end(), Declarations.begin(), Declarations.end());
     SMTExprs.insert(SMTExprs.end(), Assertions.begin(), Assertions.end());
