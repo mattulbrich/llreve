@@ -6,13 +6,14 @@
 #include <iostream>
 #include <map>
 
+using std::string;
+
 using llvm::PreservedAnalyses;
-using llvm::StringRef;
 
 PreservedAnalyses UniqueNamePass::run(llvm::Function &F,
                                       llvm::FunctionAnalysisManager *AM) {
     (void)AM;
-    std::map<StringRef, int> InstructionNames;
+    std::map<string, int> InstructionNames;
 
     for (auto &Args : F.args()) {
         makePrefixed(Args, Prefix, InstructionNames);
@@ -27,7 +28,7 @@ PreservedAnalyses UniqueNamePass::run(llvm::Function &F,
 }
 
 void makePrefixed(llvm::Value &Val, std::string Prefix,
-                  std::map<StringRef, int> &InstructionNames) {
+                  std::map<string, int> &InstructionNames) {
     // Note: The identity of values is not given by their names, so a
     // lot of register are simply unnamed. The numbers you see in the
     // output are only created when converting the assembly to a
@@ -36,7 +37,7 @@ void makePrefixed(llvm::Value &Val, std::string Prefix,
 
     // It is illegal to specify names for void instructions
     if (!Val.getType()->isVoidTy()) {
-        StringRef OldName = Val.getName();
+        string OldName = Val.getName();
         if (OldName == "") {
             OldName = "_"; // Make valid name for smt solvers
         }

@@ -219,7 +219,7 @@ void processLine(std::string Line, SMTRef &In, SMTRef &Out) {
             In = name(Line.substr(11, Line.length() - 11 - 4));
         }
         if (Line.substr(4, 7) == "rel_out" && Out == nullptr) {
-            In = name(Line.substr(12, Line.length() - 12 - 4));
+            Out = name(Line.substr(12, Line.length() - 12 - 4));
         }
     }
 }

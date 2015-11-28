@@ -1059,8 +1059,12 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock *BB,
         }
     }
     if (auto RetInst = llvm::dyn_cast<llvm::ReturnInst>(BB->getTerminator())) {
-        auto RetName = instrNameOrVal(RetInst->getReturnValue(),
-                                      RetInst->getType(), Constructed);
+        // TODO: use a more clever approach for void functions
+        auto RetName = name("0");
+        if (RetInst->getReturnValue() != nullptr) {
+            RetName = instrNameOrVal(RetInst->getReturnValue(),
+                                          RetInst->getType(), Constructed);
+        }
         Definitions.push_back(
             DefOrCallInfo(make_shared<std::tuple<string, SMTRef>>(
                 "result$" + std::to_string(Program), RetName)));
@@ -1176,6 +1180,10 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
         Constructed.insert(Heap);
         return make_shared<std::tuple<string, SMTRef>>(
             "HEAP$" + std::to_string(Program), Store);
+    }
+    if (auto TruncInst = llvm::dyn_cast<llvm::TruncInst>(&Instr)) {
+        auto Val = instrNameOrVal(TruncInst->getOperand(0), TruncInst->getOperand(0)->getType(), Constructed);
+        return make_shared<std::tuple<string, SMTRef>>(TruncInst->getName(), Val);
     }
     llvm::errs() << Instr << "\n";
     llvm::errs() << "Couldn't convert instruction to def\n";

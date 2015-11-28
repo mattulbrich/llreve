@@ -5,15 +5,15 @@
 
 class UniqueNamePass {
   public:
-    explicit UniqueNamePass(const llvm::StringRef Prefix) : Prefix(Prefix) {}
+    explicit UniqueNamePass(const std::string Prefix) : Prefix(Prefix) {}
     llvm::PreservedAnalyses run(llvm::Function &F,
                                 llvm::FunctionAnalysisManager *AM);
-    static llvm::StringRef name() { return "UniqueNamePass"; }
+    static std::string name() { return "UniqueNamePass"; }
 
   private:
-    const llvm::StringRef Prefix;
+    const std::string Prefix;
 };
 
-void makePrefixed(llvm::Value& Val, std::string Prefix, std::map<llvm::StringRef, int> &InstructionNames);
+void makePrefixed(llvm::Value& Val, std::string Prefix, std::map<std::string, int> &InstructionNames);
 
 #endif // UNIQUENAMEPASS_H
