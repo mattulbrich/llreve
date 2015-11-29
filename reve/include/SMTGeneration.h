@@ -159,11 +159,11 @@ auto equalInputsEqualOutputs(std::vector<string> FunArgs,
 // Functions related to the conversion of single instructions/basic
 // blocks to SMT assignments
 
-auto blockAssignments(const llvm::BasicBlock *BB,
-                      const llvm::BasicBlock *PrevBB, bool IgnorePhis,
+auto blockAssignments(llvm::BasicBlock *BB,
+                      llvm::BasicBlock *PrevBB, bool IgnorePhis,
                       bool OnlyPhis, int Program, set<string> &Constructed, bool Heap)
     -> std::vector<DefOrCallInfo>;
-auto instrAssignment(const llvm::Instruction &Instr,
+auto instrAssignment(llvm::Instruction &Instr,
                      const llvm::BasicBlock *PrevBB, set<string> &Constructed,
                      int Program)
     -> std::shared_ptr<std::tuple<std::string, SMTRef>>;
@@ -201,5 +201,6 @@ auto resolveName(std::string Name, std::set<std::string> &Constructed)
     -> std::string;
 auto adaptSizeToHeap(unsigned long Size, std::vector<string> FreeVars)
     -> unsigned long;
+auto flagInstr(llvm::Instruction& Instr, std::string Flag) -> void;
 
 #endif // SMT_GENERATION_H

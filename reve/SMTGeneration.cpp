@@ -1016,8 +1016,8 @@ SMTRef equalInputsEqualOutputs(vector<string> FunArgs, vector<string> FunArgs1,
 // SMT assignments
 
 /// Convert a basic block to a list of assignments
-vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock *BB,
-                                       const llvm::BasicBlock *PrevBB,
+vector<DefOrCallInfo> blockAssignments(llvm::BasicBlock *BB,
+                                       llvm::BasicBlock *PrevBB,
                                        bool IgnorePhis, bool OnlyPhis,
                                        int Program, set<string> &Constructed,
                                        bool Heap) {
@@ -1081,20 +1081,34 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock *BB,
 
 /// Convert a single instruction to an assignment
 std::shared_ptr<std::tuple<string, SMTRef>>
-instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
+instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
                 set<string> &Constructed, int Program) {
     if (auto BinOp = llvm::dyn_cast<llvm::BinaryOperator>(&Instr)) {
-        // special case for pointer division by 4
-        if (BinOp->getOpcode() == Instruction::SDiv &&
-            BinOp->getType()->isIntegerTy(64)) {
-            if (auto ConstInt =
-                    llvm::dyn_cast<llvm::ConstantInt>(BinOp->getOperand(1))) {
-                if (ConstInt->getSExtValue() == 4) {
-                    return make_shared<std::tuple<string, SMTRef>>(
-                        BinOp->getName(),
-                        instrNameOrVal(BinOp->getOperand(0),
-                                       BinOp->getOperand(0)->getType(),
-                                       Constructed));
+        if (BinOp->getOpcode() == Instruction::Sub) {
+            if (auto Instr0 =
+                    llvm::dyn_cast<llvm::Instruction>(BinOp->getOperand(0))) {
+                if (auto Instr1 = llvm::dyn_cast<llvm::Instruction>(
+                        BinOp->getOperand(1))) {
+                    if (Instr0->getMetadata("reve.ptr_to_int") &&
+                        Instr1->getMetadata("reve.ptr_to_int")) {
+                        flagInstr(Instr, "reve.ptr_diff");
+                    }
+                }
+            }
+        }
+        if (BinOp->getOpcode() == Instruction::SDiv) {
+            if (auto Instr =
+                    llvm::dyn_cast<llvm::Instruction>(BinOp->getOperand(0))) {
+                if (auto ConstInt = llvm::dyn_cast<llvm::ConstantInt>(
+                        BinOp->getOperand(1))) {
+                    if (ConstInt->getSExtValue() == 4 &&
+                        Instr->getMetadata("reve.ptr_diff")) {
+                        return make_shared<std::tuple<string, SMTRef>>(
+                            BinOp->getName(),
+                            instrNameOrVal(BinOp->getOperand(0),
+                                           BinOp->getOperand(0)->getType(),
+                                           Constructed));
+                    }
                 }
             }
         }
@@ -1135,6 +1149,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
             SelectInst->getName(), std::make_shared<class Op>("ite", Args));
     }
     if (auto PtrToIntInst = llvm::dyn_cast<llvm::PtrToIntInst>(&Instr)) {
+        flagInstr(Instr, "reve.ptr_to_int");
         return make_shared<std::tuple<string, SMTRef>>(
             PtrToIntInst->getName(),
             instrNameOrVal(PtrToIntInst->getPointerOperand(),
@@ -1589,4 +1604,11 @@ unsigned long adaptSizeToHeap(unsigned long Size, vector<string> FreeVars) {
         Size++;
     }
     return Size;
+}
+
+void flagInstr(llvm::Instruction &Instr, string Flag) {
+    llvm::LLVMContext &Cxt = Instr.getContext();
+    llvm::MDTuple *Unit =
+        llvm::MDTuple::get(Cxt, llvm::ArrayRef<llvm::Metadata *>());
+    Instr.setMetadata(Flag, Unit);
 }
