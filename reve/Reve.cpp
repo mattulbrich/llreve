@@ -82,6 +82,7 @@ initializeArgs(const char *ExeName, string Input1, string Input2) {
     llvm::SmallVector<const char *, N> Args;
     Args.push_back(ExeName);        // add executable name
     Args.push_back("-xc");          // force language to C
+    Args.push_back("-std=c11");
     Args.push_back(Input1.c_str()); // add input file
     Args.push_back(Input2.c_str());
     Args.push_back("-fsyntax-only"); // don't do more work than necessary
@@ -256,7 +257,6 @@ int main(int Argc, const char **Argv) {
     SMTExprs.push_back(std::make_shared<SetLogic>("HORN"));
 
     std::pair<SMTRef, SMTRef> InOutInvs = parseInOutInvs(FileName1, FileName2);
-
     bool Main = true;
     for (auto FunPair : Funs.get()) {
         auto Fam1 = preprocessModule(*FunPair.first, "1");

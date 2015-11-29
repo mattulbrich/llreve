@@ -1063,7 +1063,7 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock *BB,
         auto RetName = name("0");
         if (RetInst->getReturnValue() != nullptr) {
             RetName = instrNameOrVal(RetInst->getReturnValue(),
-                                          RetInst->getType(), Constructed);
+                                     RetInst->getType(), Constructed);
         }
         Definitions.push_back(
             DefOrCallInfo(make_shared<std::tuple<string, SMTRef>>(
@@ -1148,12 +1148,30 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
     }
     if (auto GetElementPtrInst =
             llvm::dyn_cast<llvm::GetElementPtrInst>(&Instr)) {
-        assert(GetElementPtrInst->getNumOperands() == 2);
-        auto Op0 = GetElementPtrInst->getOperand(0);
-        auto Op1 = GetElementPtrInst->getOperand(1);
+        if (GetElementPtrInst->getNumIndices() == 2) {
+            auto Struct = llvm::dyn_cast<llvm::StructType>(
+                GetElementPtrInst->getSourceElementType());
+            assert(Struct);
+            auto Op0 = GetElementPtrInst->getPointerOperand();
+            auto Ix0 = GetElementPtrInst->getOperand(1);
+            auto Ix1 = GetElementPtrInst->getOperand(2);
+            auto Add = makeBinOp(
+                "+", instrNameOrVal(Op0, Op0->getType(), Constructed),
+                makeBinOp(
+                    "+",
+                    makeBinOp("*",
+                              name(std::to_string(Struct->getNumElements())),
+                              instrNameOrVal(Ix0, Ix0->getType(), Constructed)),
+                    instrNameOrVal(Ix1, Ix1->getType(), Constructed)));
+            return make_shared<std::tuple<string, SMTRef>>(
+                GetElementPtrInst->getName(), Add);
+        }
+        assert(GetElementPtrInst->getNumIndices() == 1);
+        auto Op0 = GetElementPtrInst->getPointerOperand();
+        auto Ix1 = GetElementPtrInst->getOperand(1);
         auto Add =
             makeBinOp("+", instrNameOrVal(Op0, Op0->getType(), Constructed),
-                      instrNameOrVal(Op1, Op1->getType(), Constructed));
+                      instrNameOrVal(Ix1, Ix1->getType(), Constructed));
         return make_shared<std::tuple<string, SMTRef>>(
             GetElementPtrInst->getName(), Add);
     }
@@ -1182,8 +1200,11 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
             "HEAP$" + std::to_string(Program), Store);
     }
     if (auto TruncInst = llvm::dyn_cast<llvm::TruncInst>(&Instr)) {
-        auto Val = instrNameOrVal(TruncInst->getOperand(0), TruncInst->getOperand(0)->getType(), Constructed);
-        return make_shared<std::tuple<string, SMTRef>>(TruncInst->getName(), Val);
+        auto Val =
+            instrNameOrVal(TruncInst->getOperand(0),
+                           TruncInst->getOperand(0)->getType(), Constructed);
+        return make_shared<std::tuple<string, SMTRef>>(TruncInst->getName(),
+                                                       Val);
     }
     llvm::errs() << Instr << "\n";
     llvm::errs() << "Couldn't convert instruction to def\n";
@@ -1241,6 +1262,9 @@ SMTRef instrNameOrVal(const llvm::Value *Val, const llvm::Type *Ty,
                 "-", name(ApInt.toString(10, true).substr(1, string::npos)));
         }
         return name(ApInt.toString(10, true));
+    }
+    if (llvm::isa<llvm::ConstantPointerNull>(Val)) {
+        return name("0");
     }
     resolveName(Val->getName(), Constructed);
     if (Constructed.find(Val->getName()) == Constructed.end()) {
