@@ -1163,32 +1163,7 @@ instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
     }
     if (auto GetElementPtrInst =
             llvm::dyn_cast<llvm::GetElementPtrInst>(&Instr)) {
-        if (GetElementPtrInst->getNumIndices() == 2) {
-            auto Struct = llvm::dyn_cast<llvm::StructType>(
-                GetElementPtrInst->getSourceElementType());
-            assert(Struct);
-            auto Op0 = GetElementPtrInst->getPointerOperand();
-            auto Ix0 = GetElementPtrInst->getOperand(1);
-            auto Ix1 = GetElementPtrInst->getOperand(2);
-            auto Add = makeBinOp(
-                "+", instrNameOrVal(Op0, Op0->getType(), Constructed),
-                makeBinOp(
-                    "+",
-                    makeBinOp("*",
-                              name(std::to_string(Struct->getNumElements())),
-                              instrNameOrVal(Ix0, Ix0->getType(), Constructed)),
-                    instrNameOrVal(Ix1, Ix1->getType(), Constructed)));
-            return make_shared<std::tuple<string, SMTRef>>(
-                GetElementPtrInst->getName(), Add);
-        }
-        assert(GetElementPtrInst->getNumIndices() == 1);
-        auto Op0 = GetElementPtrInst->getPointerOperand();
-        auto Ix1 = GetElementPtrInst->getOperand(1);
-        auto Add =
-            makeBinOp("+", instrNameOrVal(Op0, Op0->getType(), Constructed),
-                      instrNameOrVal(Ix1, Ix1->getType(), Constructed));
-        return make_shared<std::tuple<string, SMTRef>>(
-            GetElementPtrInst->getName(), Add);
+        return resolveGEP(*GetElementPtrInst, Constructed);
     }
     if (auto LoadInst = llvm::dyn_cast<llvm::LoadInst>(&Instr)) {
         auto Load = makeBinOp(
@@ -1611,4 +1586,56 @@ void flagInstr(llvm::Instruction &Instr, string Flag) {
     llvm::MDTuple *Unit =
         llvm::MDTuple::get(Cxt, llvm::ArrayRef<llvm::Metadata *>());
     Instr.setMetadata(Flag, Unit);
+}
+
+shared_ptr<std::tuple<string, SMTRef>> resolveGEP(llvm::GetElementPtrInst &GEP,
+                                                  set<string> &Constructed) {
+    std::vector<SMTRef> Args;
+    Args.push_back(instrNameOrVal(GEP.getPointerOperand(),
+                                  GEP.getPointerOperand()->getType(),
+                                  Constructed));
+    auto Type = GEP.getSourceElementType();
+    std::vector<llvm::Value *> Indices;
+    for (auto Ix = GEP.idx_begin(), E = GEP.idx_end(); Ix != E; ++Ix) {
+        Indices.push_back(*Ix);
+        auto Size = typeSize(llvm::GetElementPtrInst::getIndexedType(
+            Type, llvm::ArrayRef<llvm::Value *>(Indices)));
+        if (Size == 1) {
+            Args.push_back(instrNameOrVal(*Ix, (*Ix)->getType(), Constructed));
+        } else {
+            Args.push_back(
+                makeBinOp("*", name(std::to_string(Size)),
+                          instrNameOrVal(*Ix, (*Ix)->getType(), Constructed)));
+        }
+    }
+    return make_shared<std::tuple<string, SMTRef>>(GEP.getName(),
+                                                   make_shared<Op>("+", Args));
+}
+
+int typeSize(llvm::Type *Ty) {
+    if (auto IntTy = llvm::dyn_cast<llvm::IntegerType>(Ty)) {
+        if (IntTy->getBitWidth() == 32 || IntTy->getBitWidth() == 64) {
+            return 1;
+        }
+        llvm::errs() << "Unsupported integer bitwidth: " << IntTy->getBitWidth()
+                     << "\n";
+    }
+    if (auto StructTy = llvm::dyn_cast<llvm::StructType>(Ty)) {
+        int Size = 0;
+        for (auto ElTy : StructTy->elements()) {
+            Size += typeSize(ElTy);
+        }
+        return Size;
+    }
+    if (auto ArrayTy = llvm::dyn_cast<llvm::ArrayType>(Ty)) {
+        return static_cast<int>(ArrayTy->getNumElements()) *
+               typeSize(ArrayTy->getElementType());
+    }
+    if (llvm::isa<llvm::PointerType>(Ty)) {
+        return 1;
+    }
+    llvm::errs() << "Couldn't calculate size of type\n";
+    Ty->print(llvm::errs());
+    llvm::errs() << "\n";
+    return 0;
 }
