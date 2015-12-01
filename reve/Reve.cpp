@@ -73,6 +73,7 @@ static llvm::cl::opt<bool>
 static llvm::cl::opt<bool>
     OnlyRec("only-rec", llvm::cl::desc("Only generate recursive invariants"));
 static llvm::cl::opt<bool> Heap("heap", llvm::cl::desc("Enable heaps"));
+static llvm::cl::opt<string> Fun("fun", llvm::cl::desc("Function which should be verified"));
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
@@ -257,11 +258,14 @@ int main(int Argc, const char **Argv) {
     SMTExprs.push_back(std::make_shared<SetLogic>("HORN"));
 
     std::pair<SMTRef, SMTRef> InOutInvs = parseInOutInvs(FileName1, FileName2);
-    bool Main = true;
+    if (Fun == "" && !Funs.get().empty()) {
+        Fun = Funs.get().at(0).first->getName();
+    }
+
     for (auto FunPair : Funs.get()) {
         auto Fam1 = preprocessModule(*FunPair.first, "1");
         auto Fam2 = preprocessModule(*FunPair.second, "2");
-        if (Main) {
+        if (FunPair.first->getName() == Fun) {
             SMTExprs.push_back(inInvariant(*FunPair.first, *FunPair.second,
                                            InOutInvs.first, Heap));
             SMTExprs.push_back(outInvariant(InOutInvs.second, Heap));
@@ -270,7 +274,6 @@ int main(int Argc, const char **Argv) {
                               OffByN, Declarations, OnlyRec, Heap);
             Assertions.insert(Assertions.end(), NewSMTExprs.begin(),
                               NewSMTExprs.end());
-            Main = false;
         }
         auto NewSMTExprs = convertToSMT(*FunPair.first, *FunPair.second, Fam1,
                                         Fam2, OffByN, Declarations, Heap);
