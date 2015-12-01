@@ -1614,7 +1614,7 @@ shared_ptr<std::tuple<string, SMTRef>> resolveGEP(llvm::GetElementPtrInst &GEP,
 
 int typeSize(llvm::Type *Ty) {
     if (auto IntTy = llvm::dyn_cast<llvm::IntegerType>(Ty)) {
-        if (IntTy->getBitWidth() == 32 || IntTy->getBitWidth() == 64) {
+        if (IntTy->getBitWidth() == 32 || IntTy->getBitWidth() == 64 || IntTy->getBitWidth() == 8) {
             return 1;
         }
         llvm::errs() << "Unsupported integer bitwidth: " << IntTy->getBitWidth()
