@@ -324,7 +324,6 @@ shared_ptr<llvm::FunctionAnalysisManager> preprocessModule(llvm::Function &Fun,
 
     llvm::FunctionPassManager FPM(true); // enable debug log
 
-    FPM.addPass(AnnotStackPass()); // annotate load/store of stack variables
     FPM.addPass(PromotePass());    // mem2reg
     // FPM.addPass(llvm::SimplifyCFGPass());
     FPM.addPass(UniqueNamePass(Prefix)); // prefix register names
@@ -332,6 +331,7 @@ shared_ptr<llvm::FunctionAnalysisManager> preprocessModule(llvm::Function &Fun,
     if (ShowCFG) {
         FPM.addPass(CFGViewerPass()); // show cfg
     }
+    FPM.addPass(AnnotStackPass()); // annotate load/store of stack variables
     FPM.addPass(llvm::VerifierPass());
     FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
     FPM.run(Fun, FAM.get());

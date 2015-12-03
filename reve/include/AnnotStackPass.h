@@ -10,7 +10,8 @@ class AnnotStackPass {
     static auto name() -> llvm::StringRef { return "AnnotStackPass"; }
 };
 
-auto markStackInstruction(llvm::Instruction &Inst, std::string MetadataName)
-    -> void;
+auto markStackInstruction(llvm::Instruction &Inst, std::string MetadataName,
+                          int Pointer) -> void;
+auto typeSize(llvm::Type *Ty) -> int;
 
 #endif // ANNOTSTACKPASS_H

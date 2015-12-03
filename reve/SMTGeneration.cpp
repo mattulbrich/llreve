@@ -2,8 +2,10 @@
 
 #include "Compat.h"
 #include "MarkAnalysis.h"
+#include "AnnotStackPass.h"
 
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/Intrinsics.h"
 
 using llvm::CmpInst;
 
@@ -904,6 +906,17 @@ SMTRef inInvariant(llvm::Function &Fun1, llvm::Function &Fun2, SMTRef Body,
     }
     assert(Args1.size() == Args2.size());
     vector<SortedVar> FunArgs;
+    vector<string> Pointers;
+    for (auto &Arg : Fun1.args()) {
+        if (Arg.getType()->isPointerTy()) {
+            Pointers.push_back(Arg.getName());
+        }
+    }
+    for (auto &Arg : Fun2.args()) {
+        if (Arg.getType()->isPointerTy()) {
+            Pointers.push_back(Arg.getName());
+        }
+    }
     for (auto Arg : Args1) {
         if (Arg.substr(0, 4) == "HEAP") {
             FunArgs.push_back(SortedVar(Arg, "(Array Int Int)"));
@@ -928,6 +941,9 @@ SMTRef inInvariant(llvm::Function &Fun1, llvm::Function &Fun2, SMTRef Body,
             Args.push_back(makeBinOp("=", ArgPair.first, ArgPair.second));
         }
     }
+    for (auto Pointer : Pointers) {
+        Args.push_back(makeBinOp(">=", Pointer, "0"));
+    }
     if (Body == nullptr) {
         Body = make_shared<Op>("and", Args);
     }
@@ -947,12 +963,13 @@ SMTRef outInvariant(SMTRef Body, bool Heap) {
         ForallArgs.push_back(SortedVar("i", "Int"));
         Body = makeBinOp("=", "result$1", "result$2");
         if (Heap) {
-            Body =
-                makeBinOp("and", Body,
-                          make_shared<Forall>(
-                              ForallArgs,
+            Body = makeBinOp(
+                "and", Body,
+                make_shared<Forall>(
+                    ForallArgs,
+                    makeBinOp("=>", makeBinOp(">=", "i", "0"),
                               makeBinOp("=", makeBinOp("select", "HEAP$1", "i"),
-                                        makeBinOp("select", "HEAP$2", "i"))));
+                                        makeBinOp("select", "HEAP$2", "i")))));
         }
     }
 
@@ -1035,21 +1052,80 @@ vector<DefOrCallInfo> blockAssignments(llvm::BasicBlock *BB,
         }
         if (!OnlyPhis && !llvm::isa<llvm::PHINode>(Instr)) {
             if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(Instr)) {
-                if (Heap) {
-                    Definitions.push_back(DefOrCallInfo(
-                        std::make_shared<std::tuple<string, SMTRef>>(
-                            "HEAP$" + std::to_string(Program),
-                            name(resolveName("HEAP$" + std::to_string(Program),
-                                             Constructed)))));
-                    Constructed.insert("HEAP$" + std::to_string(Program));
-                }
-                Definitions.push_back(DefOrCallInfo(
-                    toCallInfo(CallInst->getName(), CallInst, Constructed)));
-                if (Heap) {
-                    Definitions.push_back(DefOrCallInfo(
-                        std::make_shared<std::tuple<string, SMTRef>>(
-                            "HEAP$" + std::to_string(Program),
-                            name("HEAP$" + std::to_string(Program) + "_res"))));
+                auto Fun = CallInst->getCalledFunction();
+                if (Fun->getIntrinsicID() == llvm::Intrinsic::memcpy) {
+                    auto CastInst0 = llvm::dyn_cast<llvm::CastInst>(
+                        CallInst->getArgOperand(0));
+                    auto CastInst1 = llvm::dyn_cast<llvm::CastInst>(
+                        CallInst->getArgOperand(1));
+                    if (CastInst0 && CastInst1) {
+                        auto Ty0 = llvm::dyn_cast<llvm::PointerType>(
+                            CastInst0->getSrcTy());
+                        auto Ty1 = llvm::dyn_cast<llvm::PointerType>(
+                            CastInst1->getSrcTy());
+                        auto StructTy0 = llvm::dyn_cast<llvm::StructType>(
+                            Ty0->getElementType());
+                        auto StructTy1 = llvm::dyn_cast<llvm::StructType>(
+                            Ty1->getElementType());
+                        if (StructTy0 && StructTy1) {
+                            assert(StructTy0->isLayoutIdentical(StructTy1));
+                            SMTRef BasePointerDest = instrNameOrVal(
+                                CallInst->getArgOperand(0),
+                                CallInst->getArgOperand(0)->getType(),
+                                Constructed);
+                            SMTRef BasePointerSrc = instrNameOrVal(
+                                CallInst->getArgOperand(1),
+                                CallInst->getArgOperand(1)->getType(),
+                                Constructed);
+                            string HeapName = "HEAP$" + std::to_string(Program);
+                            SMTRef HeapOld =
+                                name(resolveName(HeapName, Constructed));
+                            int i = 0;
+                            for (auto ElTy : StructTy0->elements()) {
+                                assert(ElTy->isIntegerTy() ||
+                                       ElTy->isPointerTy());
+                                SMTRef Select = makeBinOp(
+                                    "select", HeapOld,
+                                    makeBinOp("+", BasePointerSrc,
+                                              name(std::to_string(i))));
+                                vector<SMTRef> Args = {
+                                    HeapOld, makeBinOp("+", BasePointerDest,
+                                                       name(std::to_string(i))),
+                                    Select};
+                                SMTRef Store = make_shared<Op>("store", Args);
+                                Definitions.push_back(
+                                    make_shared<std::tuple<string, SMTRef>>(
+                                        HeapName, Store));
+                                ++i;
+                            }
+                            Constructed.insert(HeapName);
+                        } else {
+                            llvm::errs() << "ERROR: currently only memcpy of "
+                                            "structs is supported\n";
+                        }
+                    } else {
+                        llvm::errs() << "ERROR: currently only memcpy of "
+                                        "bitcasted pointers is supported\n";
+                    }
+                } else {
+                    if (Heap) {
+                        Definitions.push_back(DefOrCallInfo(
+                            std::make_shared<std::tuple<string, SMTRef>>(
+                                "HEAP$" + std::to_string(Program),
+                                name(resolveName("HEAP$" +
+                                                     std::to_string(Program),
+                                                 Constructed)))));
+                        Constructed.insert("HEAP$" + std::to_string(Program));
+                    }
+                    Definitions.push_back(DefOrCallInfo(toCallInfo(
+                        CallInst->getName(), CallInst, Constructed)));
+                    if (Heap) {
+                        Definitions.push_back(DefOrCallInfo(
+                            std::make_shared<std::tuple<string, SMTRef>>(
+                                "HEAP$" + std::to_string(Program),
+                                name("HEAP$" + std::to_string(Program) +
+                                     "_res"))));
+                    }
                 }
             } else {
                 Definitions.push_back(DefOrCallInfo(
@@ -1195,6 +1271,20 @@ instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
                            TruncInst->getOperand(0)->getType(), Constructed);
         return make_shared<std::tuple<string, SMTRef>>(TruncInst->getName(),
                                                        Val);
+    }
+    if (auto BitCast = llvm::dyn_cast<llvm::CastInst>(&Instr)) {
+        auto Val =
+            instrNameOrVal(BitCast->getOperand(0),
+                           BitCast->getOperand(0)->getType(), Constructed);
+        return make_shared<std::tuple<string, SMTRef>>(BitCast->getName(), Val);
+    }
+    if (auto AllocaInst = llvm::dyn_cast<llvm::AllocaInst>(&Instr)) {
+        return make_shared<std::tuple<string, SMTRef>>(
+            AllocaInst->getName(),
+            name(llvm::cast<llvm::MDString>(
+                     AllocaInst->getMetadata("reve.stack_pointer")
+                         ->getOperand(0))
+                     ->getString()));
     }
     llvm::errs() << Instr << "\n";
     llvm::errs() << "Couldn't convert instruction to def\n";
@@ -1610,32 +1700,4 @@ shared_ptr<std::tuple<string, SMTRef>> resolveGEP(llvm::GetElementPtrInst &GEP,
     }
     return make_shared<std::tuple<string, SMTRef>>(GEP.getName(),
                                                    make_shared<Op>("+", Args));
-}
-
-int typeSize(llvm::Type *Ty) {
-    if (auto IntTy = llvm::dyn_cast<llvm::IntegerType>(Ty)) {
-        if (IntTy->getBitWidth() == 32 || IntTy->getBitWidth() == 64 || IntTy->getBitWidth() == 8) {
-            return 1;
-        }
-        llvm::errs() << "Unsupported integer bitwidth: " << IntTy->getBitWidth()
-                     << "\n";
-    }
-    if (auto StructTy = llvm::dyn_cast<llvm::StructType>(Ty)) {
-        int Size = 0;
-        for (auto ElTy : StructTy->elements()) {
-            Size += typeSize(ElTy);
-        }
-        return Size;
-    }
-    if (auto ArrayTy = llvm::dyn_cast<llvm::ArrayType>(Ty)) {
-        return static_cast<int>(ArrayTy->getNumElements()) *
-               typeSize(ArrayTy->getElementType());
-    }
-    if (llvm::isa<llvm::PointerType>(Ty)) {
-        return 1;
-    }
-    llvm::errs() << "Couldn't calculate size of type\n";
-    Ty->print(llvm::errs());
-    llvm::errs() << "\n";
-    return 0;
 }
