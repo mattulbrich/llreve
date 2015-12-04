@@ -207,5 +207,6 @@ auto adaptSizeToHeap(unsigned long Size, std::vector<string> FreeVars)
 auto flagInstr(llvm::Instruction &Instr, std::string Flag) -> void;
 auto resolveGEP(llvm::GetElementPtrInst &GEP, set<string> &Constructed)
     -> std::shared_ptr<std::tuple<string, SMTRef>>;
+auto isStackOp(const llvm::Instruction* Inst) -> bool;
 
 #endif // SMT_GENERATION_H

@@ -941,9 +941,6 @@ SMTRef inInvariant(llvm::Function &Fun1, llvm::Function &Fun2, SMTRef Body,
             Args.push_back(makeBinOp("=", ArgPair.first, ArgPair.second));
         }
     }
-    for (auto Pointer : Pointers) {
-        Args.push_back(makeBinOp(">=", Pointer, "0"));
-    }
     if (Body == nullptr) {
         Body = make_shared<Op>("and", Args);
     }
@@ -963,13 +960,12 @@ SMTRef outInvariant(SMTRef Body, bool Heap) {
         ForallArgs.push_back(SortedVar("i", "Int"));
         Body = makeBinOp("=", "result$1", "result$2");
         if (Heap) {
-            Body = makeBinOp(
-                "and", Body,
-                make_shared<Forall>(
-                    ForallArgs,
-                    makeBinOp("=>", makeBinOp(">=", "i", "0"),
+            Body =
+                makeBinOp("and", Body,
+                          make_shared<Forall>(
+                              ForallArgs,
                               makeBinOp("=", makeBinOp("select", "HEAP$1", "i"),
-                                        makeBinOp("select", "HEAP$2", "i")))));
+                                        makeBinOp("select", "HEAP$2", "i"))));
         }
     }
 
@@ -1077,28 +1073,42 @@ vector<DefOrCallInfo> blockAssignments(llvm::BasicBlock *BB,
                                 CallInst->getArgOperand(1),
                                 CallInst->getArgOperand(1)->getType(),
                                 Constructed);
-                            string HeapName = "HEAP$" + std::to_string(Program);
-                            SMTRef HeapOld =
-                                name(resolveName(HeapName, Constructed));
+                            string HeapNameSelect =
+                                "HEAP$" + std::to_string(Program);
+                            if (isStackOp(CastInst1)) {
+                                HeapNameSelect =
+                                    "STACK$" + std::to_string(Program);
+                            }
+                            string HeapNameStore =
+                                "HEAP$" + std::to_string(Program);
+                            if (isStackOp(CastInst0)) {
+                                HeapNameStore =
+                                    "STACK$" + std::to_string(Program);
+                            }
                             int i = 0;
                             for (auto ElTy : StructTy0->elements()) {
+                                SMTRef HeapSelect = name(
+                                    resolveName(HeapNameSelect, Constructed));
+                                SMTRef HeapStore = name(
+                                    resolveName(HeapNameStore, Constructed));
                                 assert(ElTy->isIntegerTy() ||
                                        ElTy->isPointerTy());
                                 SMTRef Select = makeBinOp(
-                                    "select", HeapOld,
+                                    "select", HeapSelect,
                                     makeBinOp("+", BasePointerSrc,
                                               name(std::to_string(i))));
                                 vector<SMTRef> Args = {
-                                    HeapOld, makeBinOp("+", BasePointerDest,
-                                                       name(std::to_string(i))),
+                                    HeapStore,
+                                    makeBinOp("+", BasePointerDest,
+                                              name(std::to_string(i))),
                                     Select};
                                 SMTRef Store = make_shared<Op>("store", Args);
                                 Definitions.push_back(
                                     make_shared<std::tuple<string, SMTRef>>(
-                                        HeapName, Store));
+                                        HeapNameStore, Store));
+                                Constructed.insert(HeapNameStore);
                                 ++i;
                             }
-                            Constructed.insert(HeapName);
                         } else {
                             llvm::errs() << "ERROR: currently only memcpy of "
                                             "structs is supported\n";
@@ -1511,10 +1521,12 @@ std::map<int, vector<string>> freeVars(PathMap Map1, PathMap Map2,
         Vars.insert(Vars.end(), Vars1.begin(), Vars1.end());
         if (Heap) {
             Vars.push_back("HEAP$1");
+            Vars.push_back("STACK$1");
         }
         Vars.insert(Vars.end(), Vars2.begin(), Vars2.end());
         if (Heap) {
             Vars.push_back("HEAP$2");
+            Vars.push_back("STACK$2");
         }
         FreeVarsMapVect[Index] = Vars;
     }
@@ -1522,7 +1534,9 @@ std::map<int, vector<string>> freeVars(PathMap Map1, PathMap Map2,
     auto Args2 = filterVars(2, FunArgs);
     if (Heap) {
         Args1.push_back("HEAP$1");
+        Args1.push_back("STACK$1");
         Args2.push_back("HEAP$2");
+        Args2.push_back("STACK$2");
     }
     Args1.insert(Args1.end(), Args2.begin(), Args2.end());
 
@@ -1700,4 +1714,8 @@ shared_ptr<std::tuple<string, SMTRef>> resolveGEP(llvm::GetElementPtrInst &GEP,
     }
     return make_shared<std::tuple<string, SMTRef>>(GEP.getName(),
                                                    make_shared<Op>("+", Args));
+}
+
+bool isStackOp(const llvm::Instruction *Inst) {
+    return Inst->getMetadata("reve.stackop");
 }
