@@ -342,7 +342,19 @@ shared_ptr<llvm::FunctionAnalysisManager> preprocessModule(llvm::Function &Fun,
 ErrorOr<std::vector<std::pair<llvm::Function *, llvm::Function *>>>
 zipFunctions(llvm::Module &Mod1, llvm::Module &Mod2) {
     std::vector<std::pair<llvm::Function *, llvm::Function *>> Funs;
-    if (Mod1.size() != Mod2.size()) {
+    int Size1 = 0;
+    int Size2 = 0;
+    for (auto &Fun : Mod1) {
+        if (!Fun.isDeclaration()) {
+            ++Size1;
+        }
+    }
+    for (auto &Fun : Mod2) {
+        if (!Fun.isDeclaration()) {
+            ++Size2;
+        }
+    }
+    if (Size1 != Size2) {
         llvm::errs() << "Error: unequal number of functions\n";
         return ErrorOr<
             std::vector<std::pair<llvm::Function *, llvm::Function *>>>(
