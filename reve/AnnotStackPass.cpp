@@ -1,5 +1,6 @@
 #include "AnnotStackPass.h"
 
+#include "MarkAnalysis.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/PassManager.h"
 
@@ -20,7 +21,9 @@ llvm::PreservedAnalyses AnnotStackPass::run(llvm::Function &F,
             }
         }
     }
-    return llvm::PreservedAnalyses::none();
+    llvm::PreservedAnalyses PreservedAnalysis;
+    PreservedAnalysis.preserve<MarkAnalysis>();
+    return PreservedAnalysis;
 }
 
 void markStackInstruction(llvm::Instruction &Inst, std::string MetadataName,

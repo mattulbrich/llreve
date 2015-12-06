@@ -161,10 +161,10 @@ vector<SMTRef> synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                         StartIndex, EndIndex, FreeVarsMap.at(StartIndex),
                         FreeVarsMap.at(EndIndex), Both, FunName, Heap);
                     auto Defs1 =
-                        assignmentsOnPath(Path1, 1, FreeVarsMap.at(EndIndex),
+                        assignmentsOnPath(Path1, 1, FreeVarsMap.at(StartIndex),
                                           EndIndex == EXIT_MARK, Heap);
                     auto Defs2 =
-                        assignmentsOnPath(Path2, 2, FreeVarsMap.at(EndIndex),
+                        assignmentsOnPath(Path2, 2, FreeVarsMap.at(StartIndex),
                                           EndIndex == EXIT_MARK, Heap);
                     PathExprs.push_back(assertForall(
                         interleaveAssignments(EndInvariant, Defs1, Defs2,
@@ -206,10 +206,10 @@ vector<SMTRef> mainSynchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                     auto EndInvariant = mainInvariant(
                         EndIndex, FreeVarsMap.at(EndIndex), FunName, Heap);
                     auto Defs1 =
-                        assignmentsOnPath(Path1, 1, FreeVarsMap.at(EndIndex),
+                        assignmentsOnPath(Path1, 1, FreeVarsMap.at(StartIndex),
                                           EndIndex == EXIT_MARK, Heap);
                     auto Defs2 =
-                        assignmentsOnPath(Path2, 2, FreeVarsMap.at(EndIndex),
+                        assignmentsOnPath(Path2, 2, FreeVarsMap.at(StartIndex),
                                           EndIndex == EXIT_MARK, Heap);
                     PathExprs.push_back(assertForall(
                         interleaveAssignments(EndInvariant, Defs1, Defs2,
@@ -294,7 +294,7 @@ void nonmutualPaths(PathMap PathMap, vector<SMTRef> &PathExprs,
                     invariant(StartIndex, EndIndex, FreeVarsMap.at(StartIndex),
                               FreeVarsMap.at(EndIndex), For, FunName, Heap);
                 auto Defs =
-                    assignmentsOnPath(Path, Program, FreeVarsMap.at(EndIndex),
+                    assignmentsOnPath(Path, Program, FreeVarsMap.at(StartIndex),
                                       EndIndex == EXIT_MARK, Heap);
                 PathExprs.push_back(assertForall(
                     nonmutualSMT(EndInvariant1, Defs, For, Heap),
@@ -490,9 +490,9 @@ SMTRef interleaveAssignments(SMTRef EndClause,
                 }
             }
             if (CallIt != NonMutualCallInfo.rend()) {
-                Clause = nonmutualRecursiveForall(Clause, CallIt->Args,
-                                                  CallIt->AssignedTo, NonMutual,
-                                                  CallIt->CallName, Heap);
+                Clause = nonmutualRecursiveForall(
+                    Clause, CallIt->Args, CallIt->AssignedTo, NonMutual,
+                    CallIt->CallName, CallIt->Extern, Heap);
                 ++CallIt;
             }
         }
@@ -504,10 +504,14 @@ SMTRef interleaveAssignments(SMTRef EndClause,
         if (First) {
             First = false;
         } else {
+            if (CallIt1->CallName != CallIt2->CallName) {
+                llvm::errs() << CallIt1->CallName << "; " << CallIt2->CallName
+                             << "\n";
+            }
             assert(CallIt1->CallName == CallIt2->CallName);
             Clause = mutualRecursiveForall(
                 Clause, CallIt1->Args, CallIt2->Args, CallIt1->AssignedTo,
-                CallIt2->AssignedTo, CallIt1->CallName, Heap);
+                CallIt2->AssignedTo, CallIt1->CallName, CallIt1->Extern, Heap);
             ++CallIt1;
             ++CallIt2;
         }
@@ -541,9 +545,9 @@ SMTRef nonmutualSMT(SMTRef EndClause,
         if (first) {
             first = false;
         } else {
-            Clause = nonmutualRecursiveForall(Clause, CallIt->Args,
-                                              CallIt->AssignedTo, For,
-                                              CallIt->CallName, Heap);
+            Clause = nonmutualRecursiveForall(
+                Clause, CallIt->Args, CallIt->AssignedTo, For, CallIt->CallName,
+                CallIt->Extern, Heap);
             ++CallIt;
         }
         for (auto Assgns : makeReverse(AssgnsVec)) {
@@ -748,7 +752,8 @@ SMTRef dontLoopInvariant(SMTRef EndClause, int StartIndex, PathMap PathMap,
 
 SMTRef mutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args1,
                              vector<SMTRef> Args2, std::string Ret1,
-                             std::string Ret2, std::string FunName, bool Heap) {
+                             std::string Ret2, std::string FunName, bool Extern,
+                             bool Heap) {
     vector<SortedVar> Args;
     Args.push_back(SortedVar(Ret1, "Int"));
     Args.push_back(SortedVar(Ret2, "Int"));
@@ -759,46 +764,71 @@ SMTRef mutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args1,
     vector<SMTRef> ImplArgs;
     vector<SMTRef> PreArgs;
 
-    for (auto Arg : Args1) {
-        ImplArgs.push_back(Arg);
-    }
-    if (Heap) {
-        ImplArgs.push_back(name("i1"));
-        ImplArgs.push_back(makeBinOp("select", "HEAP$1", "i1"));
-    }
-    for (auto Arg : Args2) {
-        ImplArgs.push_back(Arg);
-    }
-    if (Heap) {
-        ImplArgs.push_back(name("i2"));
-        ImplArgs.push_back(makeBinOp("select", "HEAP$2", "i2"));
-    }
-    PreArgs.insert(PreArgs.end(), ImplArgs.begin(), ImplArgs.end());
+    if (Extern) {
+        for (auto Arg : Args1) {
+            ImplArgs.push_back(Arg);
+        }
+        if (Heap) {
+            ImplArgs.push_back(name("HEAP$1"));
+        }
+        for (auto Arg : Args2) {
+            ImplArgs.push_back(Arg);
+        }
+        if (Heap) {
+            ImplArgs.push_back(name("HEAP$2"));
+        }
+        ImplArgs.push_back(name(Ret1));
+        ImplArgs.push_back(name(Ret2));
+        if (Heap) {
+            ImplArgs.push_back(name("HEAP$1_res"));
+            ImplArgs.push_back(name("HEAP$2_res"));
+        }
+        SMTRef PostInvariant = std::make_shared<Op>(
+            invariantName(ENTRY_MARK, Both, FunName), ImplArgs);
+        Clause = makeBinOp("=>", PostInvariant, Clause);
+        return make_shared<Forall>(Args, Clause);
+    } else {
+        for (auto Arg : Args1) {
+            ImplArgs.push_back(Arg);
+        }
+        if (Heap) {
+            ImplArgs.push_back(name("i1"));
+            ImplArgs.push_back(makeBinOp("select", "HEAP$1", "i1"));
+        }
+        for (auto Arg : Args2) {
+            ImplArgs.push_back(Arg);
+        }
+        if (Heap) {
+            ImplArgs.push_back(name("i2"));
+            ImplArgs.push_back(makeBinOp("select", "HEAP$2", "i2"));
+        }
+        PreArgs.insert(PreArgs.end(), ImplArgs.begin(), ImplArgs.end());
 
-    ImplArgs.push_back(name(Ret1));
-    ImplArgs.push_back(name(Ret2));
-    if (Heap) {
-        ImplArgs.push_back(name("i1_res"));
-        ImplArgs.push_back(makeBinOp("select", "HEAP$1_res", "i1_res"));
-        ImplArgs.push_back(name("i2_res"));
-        ImplArgs.push_back(makeBinOp("select", "HEAP$2_res", "i2_res"));
+        ImplArgs.push_back(name(Ret1));
+        ImplArgs.push_back(name(Ret2));
+        if (Heap) {
+            ImplArgs.push_back(name("i1_res"));
+            ImplArgs.push_back(makeBinOp("select", "HEAP$1_res", "i1_res"));
+            ImplArgs.push_back(name("i2_res"));
+            ImplArgs.push_back(makeBinOp("select", "HEAP$2_res", "i2_res"));
+        }
+        SMTRef PostInvariant = std::make_shared<Op>(
+            invariantName(ENTRY_MARK, Both, FunName), ImplArgs);
+        PostInvariant =
+            wrapHeap(PostInvariant, Heap, {"i1", "i2", "i1_res", "i2_res"});
+        Clause = makeBinOp("=>", PostInvariant, Clause);
+        Clause = make_shared<Forall>(Args, Clause);
+        auto PreInv = wrapHeap(
+            std::make_shared<Op>(
+                invariantName(ENTRY_MARK, Both, FunName) + "_PRE", PreArgs),
+            Heap, {"i1", "i2"});
+        return makeBinOp("and", PreInv, Clause);
     }
-    SMTRef PostInvariant = std::make_shared<Op>(
-        invariantName(ENTRY_MARK, Both, FunName), ImplArgs);
-    PostInvariant =
-        wrapHeap(PostInvariant, Heap, {"i1", "i2", "i1_res", "i2_res"});
-    Clause = makeBinOp("=>", PostInvariant, Clause);
-    Clause = make_shared<Forall>(Args, Clause);
-    auto PreInv = wrapHeap(
-        std::make_shared<Op>(invariantName(ENTRY_MARK, Both, FunName) + "_PRE",
-                             PreArgs),
-        Heap, {"i1", "i2"});
-    return makeBinOp("and", PreInv, Clause);
 }
 
 SMTRef nonmutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args,
                                 std::string Ret, SMTFor For,
-                                std::string FunName, bool Heap) {
+                                std::string FunName, bool Extern, bool Heap) {
     vector<SortedVar> ForallArgs;
     vector<SMTRef> ImplArgs;
     vector<SMTRef> PreArgs;
@@ -811,30 +841,50 @@ SMTRef nonmutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args,
         ForallArgs.push_back(
             SortedVar("HEAP$" + ProgramS + "_res", "(Array Int Int)"));
     }
+    if (Extern) {
+        if (Heap) {
+            Args.push_back(name("HEAP$" + ProgramS));
+        }
+        Args.push_back(name(Ret));
+        if (Heap) {
+            Args.push_back(name("HEAP$" + ProgramS + "_res"));
+        }
+        SMTRef EndInvariant =
+            make_shared<Op>(invariantName(ENTRY_MARK, For, FunName), Args);
+        Clause = makeBinOp("=>", EndInvariant, Clause);
+        return make_shared<Forall>(ForallArgs, Clause);
+    } else {
+        if (Heap) {
+            Args.push_back(name("i" + ProgramS));
+            Args.push_back(
+                makeBinOp("select", "HEAP$" + ProgramS, "i" + ProgramS));
+        }
+        ImplArgs.insert(ImplArgs.end(), Args.begin(), Args.end());
+        PreArgs.insert(PreArgs.end(), Args.begin(), Args.end());
 
-    if (Heap) {
-        Args.push_back(name("i" + ProgramS));
-        Args.push_back(makeBinOp("select", "HEAP$" + ProgramS, "i" + ProgramS));
+        ImplArgs.push_back(name(Ret));
+        if (Heap) {
+            if (Extern) {
+                ImplArgs.push_back(name("HEAP$" + ProgramS + "_res"));
+            } else {
+                ImplArgs.push_back(name("i" + ProgramS + "_res"));
+                ImplArgs.push_back(makeBinOp("select",
+                                             "HEAP$" + ProgramS + "_res",
+                                             "i" + ProgramS + "_res"));
+            }
+        }
+
+        SMTRef EndInvariant =
+            make_shared<Op>(invariantName(ENTRY_MARK, For, FunName), ImplArgs);
+        EndInvariant = wrapHeap(EndInvariant, Heap,
+                                {"i" + ProgramS, "i" + ProgramS + "_res"});
+        Clause = makeBinOp("=>", EndInvariant, Clause);
+        Clause = make_shared<Forall>(ForallArgs, Clause);
+        auto PreInv = std::make_shared<Op>(
+            invariantName(ENTRY_MARK, For, FunName) + "_PRE", PreArgs);
+        return makeBinOp("and", wrapHeap(PreInv, Heap, {"i" + ProgramS}),
+                         Clause);
     }
-    ImplArgs.insert(ImplArgs.end(), Args.begin(), Args.end());
-    PreArgs.insert(PreArgs.end(), Args.begin(), Args.end());
-
-    ImplArgs.push_back(name(Ret));
-    if (Heap) {
-        ImplArgs.push_back(name("i" + ProgramS + "_res"));
-        ImplArgs.push_back(makeBinOp("select", "HEAP$" + ProgramS + "_res",
-                                     "i" + ProgramS + "_res"));
-    }
-
-    SMTRef EndInvariant =
-        make_shared<Op>(invariantName(ENTRY_MARK, For, FunName), ImplArgs);
-    EndInvariant =
-        wrapHeap(EndInvariant, Heap, {"i" + ProgramS, "i" + ProgramS + "_res"});
-    Clause = makeBinOp("=>", EndInvariant, Clause);
-    Clause = make_shared<Forall>(ForallArgs, Clause);
-    auto PreInv = std::make_shared<Op>(
-        invariantName(ENTRY_MARK, For, FunName) + "_PRE", PreArgs);
-    return makeBinOp("and", wrapHeap(PreInv, Heap, {"i" + ProgramS}), Clause);
 }
 
 /// Wrap the clause in a forall
@@ -1492,7 +1542,7 @@ std::map<int, vector<string>> freeVars(PathMap Map1, PathMap Map2,
                     if (Constructed.at(StartIndex).at(EndIndex).find(Var) ==
                         Constructed.at(StartIndex).at(EndIndex).end()) {
                         auto Inserted = FreeVarsMap.at(StartIndex).insert(Var);
-                        Changed = Inserted.second;
+                        Changed = Changed || Inserted.second;
                     }
                 }
             }
@@ -1601,14 +1651,14 @@ std::shared_ptr<CallInfo> toCallInfo(string AssignedTo,
     vector<SMTRef> Args;
     unsigned int i = 0;
     auto FunTy = CallInst->getFunctionType();
+    llvm::Function *Fun = CallInst->getCalledFunction();
     for (auto &Arg : CallInst->arg_operands()) {
-
         Args.push_back(
             instrNameOrVal(Arg, FunTy->getParamType(i), Constructed));
         ++i;
     }
-    return make_shared<CallInfo>(
-        AssignedTo, CallInst->getCalledFunction()->getName(), Args);
+    return make_shared<CallInfo>(AssignedTo, Fun->getName(), Args,
+                                 Fun->isDeclaration());
 }
 
 std::vector<std::string> resolveHeapReferences(std::vector<std::string> Args,

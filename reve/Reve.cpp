@@ -73,7 +73,8 @@ static llvm::cl::opt<bool>
 static llvm::cl::opt<bool>
     OnlyRec("only-rec", llvm::cl::desc("Only generate recursive invariants"));
 static llvm::cl::opt<bool> Heap("heap", llvm::cl::desc("Enable heaps"));
-static llvm::cl::opt<string> Fun("fun", llvm::cl::desc("Function which should be verified"));
+static llvm::cl::opt<string>
+    Fun("fun", llvm::cl::desc("Function which should be verified"));
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
@@ -81,8 +82,8 @@ template <int N>
 llvm::SmallVector<const char *, N>
 initializeArgs(const char *ExeName, string Input1, string Input2) {
     llvm::SmallVector<const char *, N> Args;
-    Args.push_back(ExeName);        // add executable name
-    Args.push_back("-xc");          // force language to C
+    Args.push_back(ExeName); // add executable name
+    Args.push_back("-xc");   // force language to C
     Args.push_back("-std=c11");
     Args.push_back(Input1.c_str()); // add input file
     Args.push_back(Input2.c_str());
@@ -258,6 +259,7 @@ int main(int Argc, const char **Argv) {
     SMTExprs.push_back(std::make_shared<SetLogic>("HORN"));
 
     std::pair<SMTRef, SMTRef> InOutInvs = parseInOutInvs(FileName1, FileName2);
+    externDeclarations(*Mod1, *Mod2, Declarations);
     if (Fun == "" && !Funs.get().empty()) {
         Fun = Funs.get().at(0).first->getName();
     }
@@ -275,10 +277,16 @@ int main(int Argc, const char **Argv) {
             Assertions.insert(Assertions.end(), NewSMTExprs.begin(),
                               NewSMTExprs.end());
         }
-        auto NewSMTExprs = convertToSMT(*FunPair.first, *FunPair.second, Fam1,
-                                        Fam2, OffByN, Declarations, Heap);
-        Assertions.insert(Assertions.end(), NewSMTExprs.begin(),
-                          NewSMTExprs.end());
+        if (FunPair.first->getName() != Fun ||
+            (!(doesNotRecurse(*FunPair.first) &&
+               doesNotRecurse(*FunPair.second)) ||
+             OnlyRec)) {
+            auto NewSMTExprs =
+                convertToSMT(*FunPair.first, *FunPair.second, Fam1, Fam2,
+                             OffByN, Declarations, Heap);
+            Assertions.insert(Assertions.end(), NewSMTExprs.begin(),
+                              NewSMTExprs.end());
+        }
     }
     SMTExprs.insert(SMTExprs.end(), Declarations.begin(), Declarations.end());
     SMTExprs.insert(SMTExprs.end(), Assertions.begin(), Assertions.end());
@@ -324,7 +332,7 @@ shared_ptr<llvm::FunctionAnalysisManager> preprocessModule(llvm::Function &Fun,
 
     llvm::FunctionPassManager FPM(true); // enable debug log
 
-    FPM.addPass(PromotePass());    // mem2reg
+    FPM.addPass(PromotePass()); // mem2reg
     // FPM.addPass(llvm::SimplifyCFGPass());
     FPM.addPass(UniqueNamePass(Prefix)); // prefix register names
     FPM.addPass(RemoveMarkPass());
@@ -333,7 +341,7 @@ shared_ptr<llvm::FunctionAnalysisManager> preprocessModule(llvm::Function &Fun,
     }
     FPM.addPass(AnnotStackPass()); // annotate load/store of stack variables
     FPM.addPass(llvm::VerifierPass());
-    FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
+    // FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
     FPM.run(Fun, FAM.get());
 
     return FAM;
@@ -376,4 +384,117 @@ zipFunctions(llvm::Module &Mod1, llvm::Module &Mod2) {
     }
     return ErrorOr<std::vector<std::pair<llvm::Function *, llvm::Function *>>>(
         Funs);
+}
+
+void externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
+                        std::vector<SMTRef> &Declarations) {
+    for (auto &Fun1 : Mod1) {
+        if (Fun1.isDeclaration()) {
+            auto Fun2P = Mod2.getFunction(Fun1.getName());
+            if (Fun2P && Fun1.getName() != "__mark") {
+                llvm::Function &Fun2 = *Fun2P;
+                std::vector<SortedVar> Args;
+                auto FunArgs1 = funArgs(Fun1, "arg1_");
+                for (auto Arg : FunArgs1) {
+                    Args.push_back(Arg);
+                }
+                if (Heap) {
+                    Args.push_back(SortedVar("HEAP$1", "(Array Int Int)"));
+                }
+                auto FunArgs2 = funArgs(Fun2, "arg2_");
+                for (auto Arg : FunArgs2) {
+                    Args.push_back(Arg);
+                }
+                if (Heap) {
+                    Args.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
+                }
+                std::string FunName = "INV_REC_" + Fun1.getName().str();
+                Args.push_back(SortedVar("res1", "Int"));
+                Args.push_back(SortedVar("res2", "Int"));
+                if (Heap) {
+                    Args.push_back(SortedVar("HEAP$1_res", "(Array Int Int)"));
+                    Args.push_back(SortedVar("HEAP$2_res", "(Array Int Int)"));
+                }
+                SMTRef Body = makeBinOp("=", "res1", "res2");
+                if (Heap) {
+                    std::vector<SortedVar> ForallArgs = {SortedVar("i", "Int")};
+                    SMTRef HeapOutEqual = make_shared<Forall>(
+                        ForallArgs,
+                        makeBinOp("=", makeBinOp("select", "HEAP$1_res", "i"),
+                                  makeBinOp("select", "HEAP$2_res", "i")));
+                    Body = makeBinOp("and", Body, HeapOutEqual);
+                }
+                std::vector<SMTRef> Equal;
+                for (auto It1 = Fun1.arg_begin(), It2 = Fun2.arg_begin();
+                     It1 != Fun1.arg_end() && It2 != Fun2.arg_end(); ++It1) {
+                    Equal.push_back(
+                        makeBinOp("=", It1->getName(), It2->getName()));
+                    ++It2;
+                }
+                if (Heap) {
+                    std::vector<SortedVar> ForallArgs = {SortedVar("i", "Int")};
+                    SMTRef HeapInEqual = make_shared<Forall>(
+                        ForallArgs,
+                        makeBinOp("=", makeBinOp("select", "HEAP$1", "i"),
+                                  makeBinOp("select", "HEAP$2", "i")));
+                    Equal.push_back(HeapInEqual);
+                }
+                Body = makeBinOp("=>", make_shared<Op>("and", Equal), Body);
+                SMTRef MainInv =
+                    make_shared<FunDef>(FunName, Args, "Bool", Body);
+                Declarations.push_back(MainInv);
+            }
+        }
+    }
+    for (auto &Fun1 : Mod1) {
+        if (Fun1.isDeclaration()) {
+            Declarations.push_back(externFunDecl(Fun1, 1, Heap));
+        }
+    }
+    for (auto &Fun2 : Mod2) {
+        if (Fun2.isDeclaration()) {
+            Declarations.push_back(externFunDecl(Fun2, 2, Heap));
+        }
+    }
+}
+
+std::vector<SortedVar> funArgs(llvm::Function &Fun, std::string Prefix) {
+    std::vector<SortedVar> Args;
+    int ArgIndex = 0;
+    for (auto &Arg : Fun.getArgumentList()) {
+        if (Arg.getName().empty()) {
+            Arg.setName(Prefix + std::to_string(ArgIndex++));
+        }
+        Args.push_back(SortedVar(Arg.getName(), "Int"));
+    }
+    return Args;
+}
+
+SMTRef externFunDecl(llvm::Function &Fun, int Program, bool Heap) {
+    std::vector<SortedVar> Args = funArgs(Fun, "arg_");
+    if (Heap) {
+        Args.push_back(SortedVar("HEAP", "(Array Int Int)"));
+    }
+    Args.push_back(SortedVar("res", "Int"));
+    Args.push_back(SortedVar("HEAP_res", "(Array Int Int)"));
+    std::string FunName =
+        "INV_REC_" + Fun.getName().str() + "__" + std::to_string(Program);
+    SMTRef Body = name("true");
+    return make_shared<FunDef>(FunName, Args, "Bool", Body);
+}
+
+// this does not actually check if the function recurses but the next version of
+// llvm provides a function for that and I’m too lazy to implement it myself
+bool doesNotRecurse(llvm::Function &Fun) {
+    for (auto &BB : Fun) {
+        for (auto &Inst : BB) {
+            if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(&Inst)) {
+                auto CalledFun = CallInst->getCalledFunction();
+                if (CalledFun && !CalledFun->isDeclaration()) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
 }

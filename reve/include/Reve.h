@@ -35,5 +35,10 @@ auto getCodeGenAction(const llvm::opt::ArgStringList &CCArgs,
 auto parseInOutInvs(std::string FileName1, std::string FileName2)
     -> std::pair<SMTRef, SMTRef>;
 auto processLine(std::string Line, SMTRef &In, SMTRef &Out) -> void;
+auto externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
+                        std::vector<SMTRef> &Declarations) -> void;
+auto funArgs(llvm::Function &Fun, std::string Prefix) -> std::vector<SortedVar>;
+auto externFunDecl(llvm::Function &Fun, int Program, bool Heap) -> SMTRef;
+auto doesNotRecurse(llvm::Function &Fun) -> bool;
 
 #endif // REVE_H

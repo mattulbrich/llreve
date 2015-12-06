@@ -15,8 +15,8 @@ PreservedAnalyses UniqueNamePass::run(llvm::Function &F,
     (void)AM;
     std::map<string, int> InstructionNames;
 
-    for (auto &Args : F.args()) {
-        makePrefixed(Args, Prefix, InstructionNames);
+    for (auto &Arg : F.args()) {
+        makePrefixed(Arg, Prefix, InstructionNames);
     }
 
     for (auto &Block : F) {
