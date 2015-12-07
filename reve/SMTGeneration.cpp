@@ -1354,6 +1354,7 @@ string predicateName(llvm::CmpInst::Predicate Pred) {
     case CmpInst::ICMP_SGE:
         return ">=";
     case CmpInst::ICMP_SGT:
+    case CmpInst::ICMP_UGT:
         return ">";
     case CmpInst::ICMP_NE:
         return "distinct";
