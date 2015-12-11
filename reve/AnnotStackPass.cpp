@@ -38,7 +38,7 @@ void markStackInstruction(llvm::Instruction &Inst, std::string MetadataName,
 int typeSize(llvm::Type *Ty) {
     if (auto IntTy = llvm::dyn_cast<llvm::IntegerType>(Ty)) {
         if (IntTy->getBitWidth() == 32 || IntTy->getBitWidth() == 64 ||
-            IntTy->getBitWidth() == 8) {
+            IntTy->getBitWidth() == 16 || IntTy->getBitWidth() == 8) {
             return 1;
         }
         llvm::errs() << "Unsupported integer bitwidth: " << IntTy->getBitWidth()

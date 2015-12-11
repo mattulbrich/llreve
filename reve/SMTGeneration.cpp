@@ -5,6 +5,7 @@
 #include "AnnotStackPass.h"
 
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/Operator.h"
 #include "llvm/IR/Intrinsics.h"
 
 using llvm::CmpInst;
@@ -1168,7 +1169,7 @@ vector<DefOrCallInfo> blockAssignments(llvm::BasicBlock *BB,
                         Constructed.insert("HEAP$" + std::to_string(Program));
                     }
                     Definitions.push_back(DefOrCallInfo(toCallInfo(
-                        CallInst->getName(), CallInst, Constructed)));
+                        CallInst->getName(), Program, CallInst, Constructed)));
                     if (Heap) {
                         Definitions.push_back(DefOrCallInfo(
                             std::make_shared<std::tuple<string, SMTRef>>(
@@ -1346,12 +1347,15 @@ instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
 string predicateName(llvm::CmpInst::Predicate Pred) {
     switch (Pred) {
     case CmpInst::ICMP_SLT:
+    case CmpInst::ICMP_ULT:
         return "<";
     case CmpInst::ICMP_SLE:
+    case CmpInst::ICMP_ULE:
         return "<=";
     case CmpInst::ICMP_EQ:
         return "=";
     case CmpInst::ICMP_SGE:
+    case CmpInst::ICMP_UGE:
         return ">=";
     case CmpInst::ICMP_SGT:
     case CmpInst::ICMP_UGT:
@@ -1374,7 +1378,11 @@ string opName(const llvm::BinaryOperator &Op) {
         return "*";
     case Instruction::SDiv:
         return "div";
+    case Instruction::URem:
+        return "mod";
     default:
+        llvm::errs() << "Warning: unknown opcode: " << Op.getOpcodeName()
+                     << "\n";
         return Op.getOpcodeName();
     }
 }
@@ -1396,6 +1404,14 @@ SMTRef instrNameOrVal(const llvm::Value *Val, const llvm::Type *Ty,
     }
     if (llvm::isa<llvm::ConstantPointerNull>(Val)) {
         return name("0");
+    }
+    if (Val->getName().empty()) {
+        if (llvm::isa<llvm::ConcreteOperator<llvm::Operator,
+                                             llvm::Instruction::GetElementPtr>>(
+                Val)) {
+            // TODO: deal properly with string constants
+            return name("0");
+        }
     }
     resolveName(Val->getName(), Constructed);
     if (Constructed.find(Val->getName()) == Constructed.end()) {
@@ -1646,10 +1662,13 @@ splitAssignments(vector<AssignmentCallBlock> AssignmentCallBlocks) {
     return make_pair(AssignmentBlocks, CallInfos);
 }
 
-std::shared_ptr<CallInfo> toCallInfo(string AssignedTo,
+std::shared_ptr<CallInfo> toCallInfo(string AssignedTo, int Program,
                                      const llvm::CallInst *CallInst,
                                      set<string> &Constructed) {
     vector<SMTRef> Args;
+    if (AssignedTo.empty()) {
+        AssignedTo = "res" + std::to_string(Program);
+    }
     unsigned int i = 0;
     auto FunTy = CallInst->getFunctionType();
     llvm::Function *Fun = CallInst->getCalledFunction();

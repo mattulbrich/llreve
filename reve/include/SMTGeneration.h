@@ -21,8 +21,9 @@ struct CallInfo {
     std::vector<SMTRef> Args;
     bool Extern;
     CallInfo(std::string AssignedTo, std::string CallName,
-             std::vector<SMTRef> Args,bool Extern)
-        : AssignedTo(AssignedTo), CallName(CallName), Args(Args), Extern(Extern) {}
+             std::vector<SMTRef> Args, bool Extern)
+        : AssignedTo(AssignedTo), CallName(CallName), Args(Args),
+          Extern(Extern) {}
 };
 
 enum DefOrCallInfoTag { Call, Def };
@@ -136,11 +137,11 @@ auto dontLoopInvariant(SMTRef EndClause, int StartIndex, PathMap PathMap,
 
 auto mutualRecursiveForall(SMTRef Clause, std::vector<SMTRef> Args1,
                            std::vector<SMTRef> Args2, std::string Ret1,
-                           std::string Ret2, std::string FunName, bool Extern, bool Heap)
-    -> SMTRef;
+                           std::string Ret2, std::string FunName, bool Extern,
+                           bool Heap) -> SMTRef;
 auto nonmutualRecursiveForall(SMTRef Clause, std::vector<SMTRef> Args,
-                              std::string Ret, SMTFor For, std::string FunName, bool Extern,
-                              bool Heap) -> SMTRef;
+                              std::string Ret, SMTFor For, std::string FunName,
+                              bool Extern, bool Heap) -> SMTRef;
 auto assertForall(SMTRef Clause, std::vector<std::string> FreeVars,
                   int BlockIndex, SMTFor For, std::string FunName, bool Main)
     -> SMTRef;
@@ -194,8 +195,9 @@ auto swapIndex(int I) -> int;
 auto splitAssignments(std::vector<AssignmentCallBlock>)
     -> std::pair<std::vector<std::vector<AssignmentBlock>>,
                  std::vector<CallInfo>>;
-auto toCallInfo(std::string AssignedTo, const llvm::CallInst *CallInst,
-                set<string> &Constructed) -> std::shared_ptr<CallInfo>;
+auto toCallInfo(std::string AssignedTo, int Program,
+                const llvm::CallInst *CallInst, set<string> &Constructed)
+    -> std::shared_ptr<CallInfo>;
 auto resolveHeapReferences(std::vector<std::string> Args, std::string Suffix,
                            bool &Heap) -> std::vector<std::string>;
 /* auto wrapHeap(SMTRef Inv, SMTFor For, bool Heap) -> SMTRef; */
