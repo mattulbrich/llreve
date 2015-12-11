@@ -622,7 +622,7 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
         // assert our own invariant
         vector<SortedVar> ForallArgs;
         for (auto ResultArg : ResultArgs) {
-            if (ResultArg.substr(0, 4) == "HEAP") {
+            if (std::regex_match(ResultArg, HEAP_REGEX)) {
                 ForallArgs.push_back(SortedVar(ResultArg, "(Array Int Int)"));
             } else {
                 ForallArgs.push_back(SortedVar(ResultArg, "Int"));
@@ -895,9 +895,14 @@ SMTRef assertForall(SMTRef Clause, vector<string> FreeVars, int BlockIndex,
     vector<string> PreVars;
     bool Heap = false;
     for (auto &Arg : FreeVars) {
-        if (Arg == "HEAP$1" || Arg == "HEAP$2") {
+        std::smatch MatchResult;
+        if (std::regex_match(Arg, MatchResult, HEAP_REGEX)) {
             Vars.push_back(SortedVar(Arg + "_old", "(Array Int Int)"));
-            string index = "i" + Arg.substr(5, 6);
+            string I = MatchResult[2];
+            string index = "i" + I;
+            if (MatchResult[1] == "STACK") {
+                index += "_stack";
+            }
             PreVars.push_back(index);
             PreVars.push_back("(select " + Arg + "_old " + index + ")");
             Heap = true;
@@ -953,7 +958,9 @@ SMTRef inInvariant(llvm::Function &Fun1, llvm::Function &Fun2, SMTRef Body,
     vector<string> Args2 = FunArgsPair.second;
     if (Heap) {
         Args1.push_back("HEAP$1");
+        Args1.push_back("STACK$1");
         Args2.push_back("HEAP$2");
+        Args2.push_back("STACK$2");
     }
     assert(Args1.size() == Args2.size());
     vector<SortedVar> FunArgs;
@@ -969,18 +976,10 @@ SMTRef inInvariant(llvm::Function &Fun1, llvm::Function &Fun2, SMTRef Body,
         }
     }
     for (auto Arg : Args1) {
-        if (Arg.substr(0, 4) == "HEAP") {
-            FunArgs.push_back(SortedVar(Arg, "(Array Int Int)"));
-        } else {
-            FunArgs.push_back(SortedVar(Arg, "Int"));
-        }
+        FunArgs.push_back(SortedVar(Arg, argSort(Arg)));
     }
     for (auto Arg : Args2) {
-        if (Arg.substr(0, 4) == "HEAP") {
-            FunArgs.push_back(SortedVar(Arg, "(Array Int Int)"));
-        } else {
-            FunArgs.push_back(SortedVar(Arg, "Int"));
-        }
+        FunArgs.push_back(SortedVar(Arg, argSort(Arg)));
     }
     for (auto ArgPair : makeZip(Args1, Args2)) {
         vector<SortedVar> ForallArgs = {SortedVar("i", "Int")};
@@ -1035,11 +1034,7 @@ SMTRef equalInputsEqualOutputs(vector<string> FunArgs, vector<string> FunArgs1,
     PreInvArgs = Args;
 
     for (auto Arg : FunArgs) {
-        if (Arg == "HEAP$1" || Arg == "HEAP$2") {
-            ForallArgs.push_back(SortedVar(Arg, "(Array Int Int)"));
-        } else {
-            ForallArgs.push_back(SortedVar(Arg, "Int"));
-        }
+        ForallArgs.push_back(SortedVar(Arg, argSort(Arg)));
     }
     ForallArgs.push_back(SortedVar("result$1", "Int"));
     ForallArgs.push_back(SortedVar("result$2", "Int"));
@@ -1700,9 +1695,13 @@ std::vector<std::string> resolveHeapReferences(std::vector<std::string> Args,
     Heap = false;
     vector<string> Result;
     for (auto Arg : Args) {
-        if (Arg == "HEAP$1" || Arg == "HEAP$2" || Arg == "HEAP$1_old" ||
-            Arg == "HEAP$2_old") {
-            string Index = "i" + Arg.substr(5, 6);
+        std::smatch MatchResult;
+        if (std::regex_match(Arg, MatchResult, HEAP_REGEX)) {
+            string I = MatchResult[2];
+            string Index = "i" + I;
+            if (MatchResult[1] == "STACK") {
+                Index += "_stack";
+            }
             Result.push_back(Index);
             Result.push_back("(select " + Arg + Suffix + " " + Index + ")");
             Heap = true;
@@ -1728,8 +1727,7 @@ SMTRef wrapHeap(SMTRef Inv, bool Heap, vector<string> FreeVars) {
     }
     std::vector<SortedVar> Args;
     for (auto Var : FreeVars) {
-        if (Var == "i1" || Var == "i2" || Var == "i1_old" || Var == "i2_old" ||
-            Var == "i1_res" || Var == "i2_res") {
+        if (std::regex_match(Var, INDEX_REGEX)) {
             Args.push_back(SortedVar(Var, "Int"));
         }
     }
@@ -1748,7 +1746,15 @@ unsigned long adaptSizeToHeap(unsigned long Size, vector<string> FreeVars) {
         FreeVars.end()) {
         Size++;
     }
+    if (std::find(FreeVars.begin(), FreeVars.end(), "STACK$1") !=
+        FreeVars.end()) {
+        Size++;
+    }
     if (std::find(FreeVars.begin(), FreeVars.end(), "HEAP$2") !=
+        FreeVars.end()) {
+        Size++;
+    }
+    if (std::find(FreeVars.begin(), FreeVars.end(), "STACK$2") !=
         FreeVars.end()) {
         Size++;
     }
@@ -1788,4 +1794,11 @@ shared_ptr<std::tuple<string, SMTRef>> resolveGEP(llvm::GetElementPtrInst &GEP,
 
 bool isStackOp(const llvm::Instruction *Inst) {
     return Inst->getMetadata("reve.stackop");
+}
+
+string argSort(string Arg) {
+    if (std::regex_match(Arg, HEAP_REGEX)) {
+        return "(Array Int Int)";
+    }
+    return "Int";
 }
