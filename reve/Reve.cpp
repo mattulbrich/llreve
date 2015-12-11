@@ -389,7 +389,7 @@ zipFunctions(llvm::Module &Mod1, llvm::Module &Mod2) {
 void externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
                         std::vector<SMTRef> &Declarations) {
     for (auto &Fun1 : Mod1) {
-        if (Fun1.isDeclaration()) {
+        if (Fun1.isDeclaration() && !Fun1.isIntrinsic()) {
             auto Fun2P = Mod2.getFunction(Fun1.getName());
             if (Fun2P && Fun1.getName() != "__mark") {
                 llvm::Function &Fun2 = *Fun2P;
@@ -447,12 +447,12 @@ void externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
         }
     }
     for (auto &Fun1 : Mod1) {
-        if (Fun1.isDeclaration()) {
+        if (Fun1.isDeclaration() && !Fun1.isIntrinsic()) {
             Declarations.push_back(externFunDecl(Fun1, 1, Heap));
         }
     }
     for (auto &Fun2 : Mod2) {
-        if (Fun2.isDeclaration()) {
+        if (Fun2.isDeclaration() && !Fun2.isIntrinsic()) {
             Declarations.push_back(externFunDecl(Fun2, 2, Heap));
         }
     }
