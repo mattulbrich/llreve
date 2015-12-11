@@ -9,7 +9,7 @@ int f(int t, int c, int r) {
       c--;
   }
 
-  while(__mark(13) & r > 0) {
+  while(__mark(13) & (r > 0)) {
       x+=2;
       r--;
   }

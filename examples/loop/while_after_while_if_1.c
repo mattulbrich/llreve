@@ -11,7 +11,7 @@ int f(int t, int c, int r) {
       __mark(23);
   }
 
-  while(__mark(13) & r > 0) {
+  while(__mark(13) & (r > 0)) {
       x+=2;
       r--;
   }
