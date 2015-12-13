@@ -39,5 +39,6 @@ auto externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
 auto funArgs(llvm::Function &Fun, std::string Prefix) -> std::vector<SortedVar>;
 auto externFunDecl(llvm::Function &Fun, int Program, bool Heap) -> SMTRef;
 auto doesNotRecurse(llvm::Function &Fun) -> bool;
+auto globalDeclarations(llvm::Module &Mod1, llvm::Module &Mod2) -> std::vector<SMTRef>;
 
 #endif // REVE_H

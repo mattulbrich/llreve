@@ -1295,14 +1295,18 @@ instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
     }
     if (auto GetElementPtrInst =
             llvm::dyn_cast<llvm::GetElementPtrInst>(&Instr)) {
-        return resolveGEP(*GetElementPtrInst, Constructed);
+        return make_shared<std::tuple<string, SMTRef>>(
+            GetElementPtrInst->getName(),
+            resolveGEP(*GetElementPtrInst, Constructed));
     }
     if (auto LoadInst = llvm::dyn_cast<llvm::LoadInst>(&Instr)) {
+        SMTRef Pointer =
+            instrNameOrVal(LoadInst->getOperand(0),
+                           LoadInst->getOperand(0)->getType(), Constructed);
         auto Load = makeBinOp(
             "select",
             name(resolveName("HEAP$" + std::to_string(Program), Constructed)),
-            instrNameOrVal(LoadInst->getOperand(0),
-                           LoadInst->getOperand(0)->getType(), Constructed));
+            Pointer);
         return make_shared<std::tuple<string, SMTRef>>(LoadInst->getName(),
                                                        Load);
     }
@@ -1409,6 +1413,14 @@ SMTRef instrNameOrVal(const llvm::Value *Val, const llvm::Type *Ty,
     }
     if (llvm::isa<llvm::ConstantPointerNull>(Val)) {
         return name("0");
+    }
+    if (auto GEP = llvm::dyn_cast<llvm::GEPOperator>(Val)) {
+        if (!llvm::isa<llvm::Instruction>(Val)) {
+            return resolveGEP(*GEP, Constructed);
+        }
+    }
+    if (llvm::isa<llvm::GlobalValue>(Val)) {
+        return name(Val->getName());
     }
     if (Val->getName().empty()) {
         if (llvm::isa<llvm::ConcreteOperator<llvm::Operator,
@@ -1768,8 +1780,7 @@ void flagInstr(llvm::Instruction &Instr, string Flag) {
     Instr.setMetadata(Flag, Unit);
 }
 
-shared_ptr<std::tuple<string, SMTRef>> resolveGEP(llvm::GetElementPtrInst &GEP,
-                                                  set<string> &Constructed) {
+template <typename T> SMTRef resolveGEP(T &GEP, set<string> &Constructed) {
     std::vector<SMTRef> Args;
     Args.push_back(instrNameOrVal(GEP.getPointerOperand(),
                                   GEP.getPointerOperand()->getType(),
@@ -1788,8 +1799,7 @@ shared_ptr<std::tuple<string, SMTRef>> resolveGEP(llvm::GetElementPtrInst &GEP,
                           instrNameOrVal(*Ix, (*Ix)->getType(), Constructed)));
         }
     }
-    return make_shared<std::tuple<string, SMTRef>>(GEP.getName(),
-                                                   make_shared<Op>("+", Args));
+    return make_shared<Op>("+", Args);
 }
 
 bool isStackOp(const llvm::Instruction *Inst) {

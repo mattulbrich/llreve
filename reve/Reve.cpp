@@ -265,6 +265,10 @@ int main(int Argc, const char **Argv) {
         Fun = Funs.get().at(0).first->getName();
     }
 
+    auto GlobalDeclarations = globalDeclarations(*Mod1, *Mod2);
+    Declarations.insert(Declarations.end(), GlobalDeclarations.begin(),
+                        GlobalDeclarations.end());
+
     for (auto FunPair : Funs.get()) {
         auto Fam1 = preprocessModule(*FunPair.first, "1");
         auto Fam2 = preprocessModule(*FunPair.second, "2");
@@ -498,4 +502,57 @@ bool doesNotRecurse(llvm::Function &Fun) {
         }
     }
     return true;
+}
+
+std::vector<SMTRef> globalDeclarations(llvm::Module &Mod1, llvm::Module &Mod2) {
+    // First match globals with the same name to make sure that they get the
+    // same pointer, then match globals that only exist in one module
+    std::vector<SMTRef> Declarations;
+    int GlobalPointer = 1;
+    for (auto &Global1 : Mod1.globals()) {
+        std::string GlobalName = Global1.getName();
+        if (Mod2.getNamedGlobal(GlobalName)) {
+            GlobalPointer += typeSize(Global1.getType());
+            std::vector<SortedVar> Empty;
+            auto ConstDef1 = make_shared<FunDef>(
+                GlobalName + "$1", Empty, "Int",
+                makeUnaryOp("-", std::to_string(GlobalPointer)));
+            auto ConstDef2 = make_shared<FunDef>(
+                GlobalName + "$2", Empty, "Int",
+                makeUnaryOp("-", std::to_string(GlobalPointer)));
+            Declarations.push_back(ConstDef1);
+            Declarations.push_back(ConstDef2);
+        }
+    }
+    int GlobalPointer1 = GlobalPointer;
+    int GlobalPointer2 = GlobalPointer;
+    for (auto &Global1 : Mod1.globals()) {
+        std::string GlobalName = Global1.getName();
+        if (!Mod2.getNamedGlobal(GlobalName)) {
+            GlobalPointer1 += typeSize(Global1.getType());
+            std::vector<SortedVar> Empty;
+            auto ConstDef1 = make_shared<FunDef>(
+                GlobalName + "$1", Empty, "Int",
+                makeUnaryOp("-", std::to_string(GlobalPointer1)));
+            Declarations.push_back(ConstDef1);
+        }
+    }
+    for (auto &Global2 : Mod2.globals()) {
+        std::string GlobalName = Global2.getName();
+        if (!Mod1.getNamedGlobal(GlobalName)) {
+            GlobalPointer2 += typeSize(Global2.getType());
+            std::vector<SortedVar> Empty;
+            auto ConstDef2 = make_shared<FunDef>(
+                GlobalName + "$2", Empty, "Int",
+                makeUnaryOp("-", std::to_string(GlobalPointer2)));
+            Declarations.push_back(ConstDef2);
+        }
+    }
+    for (auto &Global1 : Mod1.globals()) {
+        Global1.setName(Global1.getName() + "$1");
+    }
+    for (auto &Global2 : Mod2.globals()) {
+        Global2.setName(Global2.getName() + "$2");
+    }
+    return Declarations;
 }

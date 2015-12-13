@@ -16,8 +16,10 @@ using llvm::Instruction;
 
 using Assignment = std::tuple<std::string, SMTRef>;
 
-const std::regex HEAP_REGEX = std::regex("^(HEAP|STACK)\\$(1|2)(_old)?$", std::regex::ECMAScript);
-const std::regex INDEX_REGEX = std::regex("^i(1|2)(_res|_old|_stack)?$", std::regex::ECMAScript);
+const std::regex HEAP_REGEX =
+    std::regex("^(HEAP|STACK)\\$(1|2)(_old)?$", std::regex::ECMAScript);
+const std::regex INDEX_REGEX =
+    std::regex("^i(1|2)(_res|_old|_stack)?$", std::regex::ECMAScript);
 
 struct CallInfo {
     std::string AssignedTo;
@@ -212,9 +214,9 @@ auto resolveName(std::string Name, std::set<std::string> &Constructed)
 auto adaptSizeToHeap(unsigned long Size, std::vector<string> FreeVars)
     -> unsigned long;
 auto flagInstr(llvm::Instruction &Instr, std::string Flag) -> void;
-auto resolveGEP(llvm::GetElementPtrInst &GEP, set<string> &Constructed)
-    -> std::shared_ptr<std::tuple<string, SMTRef>>;
-auto isStackOp(const llvm::Instruction* Inst) -> bool;
+template <typename T>
+auto resolveGEP(T &GEP, set<string> &Constructed) -> SMTRef;
+auto isStackOp(const llvm::Instruction *Inst) -> bool;
 auto argSort(std::string Arg) -> std::string;
 
 #endif // SMT_GENERATION_H
