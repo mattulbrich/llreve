@@ -24,6 +24,8 @@
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/Verifier.h"
+#include "llvm/IR/Constant.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/Path.h"
@@ -266,15 +268,16 @@ int main(int Argc, const char **Argv) {
     }
 
     auto GlobalDeclarations = globalDeclarations(*Mod1, *Mod2);
-    Declarations.insert(Declarations.end(), GlobalDeclarations.begin(),
-                        GlobalDeclarations.end());
+    SMTExprs.insert(SMTExprs.end(), GlobalDeclarations.begin(),
+                    GlobalDeclarations.end());
 
     for (auto FunPair : Funs.get()) {
         auto Fam1 = preprocessModule(*FunPair.first, "1");
         auto Fam2 = preprocessModule(*FunPair.second, "2");
         if (FunPair.first->getName() == Fun) {
             SMTExprs.push_back(inInvariant(*FunPair.first, *FunPair.second,
-                                           InOutInvs.first, Heap));
+                                           InOutInvs.first, Heap, *Mod1,
+                                           *Mod2));
             SMTExprs.push_back(outInvariant(InOutInvs.second, Heap));
             auto NewSMTExprs =
                 mainAssertion(*FunPair.first, *FunPair.second, Fam1, Fam2,
@@ -512,7 +515,12 @@ std::vector<SMTRef> globalDeclarations(llvm::Module &Mod1, llvm::Module &Mod2) {
     for (auto &Global1 : Mod1.globals()) {
         std::string GlobalName = Global1.getName();
         if (Mod2.getNamedGlobal(GlobalName)) {
-            GlobalPointer += typeSize(Global1.getType());
+            // we want the size of string constants not the size of the pointer pointing to them
+            if (auto PointerTy = llvm::dyn_cast<llvm::PointerType>(Global1.getType())) {
+                GlobalPointer += typeSize(PointerTy->getElementType());
+            } else {
+                GlobalPointer += typeSize(Global1.getType());
+            }
             std::vector<SortedVar> Empty;
             auto ConstDef1 = make_shared<FunDef>(
                 GlobalName + "$1", Empty, "Int",

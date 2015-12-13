@@ -159,7 +159,7 @@ auto makeFunArgsEqual(SMTRef Clause, SMTRef PreClause,
                       std::vector<std::string> Args1,
                       std::vector<std::string> Args2) -> SMTRef;
 auto inInvariant(llvm::Function &Fun1, llvm::Function &Fun2, SMTRef Body,
-                 bool Heap) -> SMTRef;
+                 bool Heap, llvm::Module &Mod1, llvm::Module &Mod2) -> SMTRef;
 auto outInvariant(SMTRef Body, bool Heap) -> SMTRef;
 auto equalInputsEqualOutputs(std::vector<string> FunArgs,
                              std::vector<string> FunArgs1,
@@ -218,5 +218,6 @@ template <typename T>
 auto resolveGEP(T &GEP, set<string> &Constructed) -> SMTRef;
 auto isStackOp(const llvm::Instruction *Inst) -> bool;
 auto argSort(std::string Arg) -> std::string;
+auto stringConstants(llvm::Module &Mod, string Heap) -> std::vector<SMTRef>;
 
 #endif // SMT_GENERATION_H

@@ -950,7 +950,8 @@ SMTRef makeFunArgsEqual(SMTRef Clause, SMTRef PreClause, vector<string> Args1,
 }
 
 SMTRef inInvariant(llvm::Function &Fun1, llvm::Function &Fun2, SMTRef Body,
-                   bool Heap) {
+                   bool Heap, llvm::Module &Mod1, llvm::Module &Mod2) {
+
     vector<SMTRef> Args;
     std::pair<vector<string>, vector<string>> FunArgsPair =
         functionArgs(Fun1, Fun2);
@@ -991,6 +992,10 @@ SMTRef inInvariant(llvm::Function &Fun1, llvm::Function &Fun2, SMTRef Body,
             Args.push_back(makeBinOp("=", ArgPair.first, ArgPair.second));
         }
     }
+    auto StringConstants1 = stringConstants(Mod1, "HEAP$1");
+    Args.push_back(make_shared<Op>("and", StringConstants1));
+    auto StringConstants2 = stringConstants(Mod2, "HEAP$2");
+    Args.push_back(make_shared<Op>("and", StringConstants2));
     if (Body == nullptr) {
         Body = make_shared<Op>("and", Args);
     }
@@ -1811,4 +1816,26 @@ string argSort(string Arg) {
         return "(Array Int Int)";
     }
     return "Int";
+}
+
+vector<SMTRef> stringConstants(llvm::Module &Mod, string Heap) {
+    vector<SMTRef> StringConstants;
+    for (auto &Global : Mod.globals()) {
+        std::string GlobalName = Global.getName();
+        vector<SMTRef> StringConstant;
+        if (Global.hasInitializer() && Global.isConstant()) {
+            if (auto Arr = llvm::dyn_cast<llvm::ConstantDataArray>(
+                    Global.getInitializer())) {
+                for (unsigned int i = 0; i < Arr->getNumElements(); ++i) {
+                    StringConstant.push_back(makeBinOp(
+                        "=", name(std::to_string(Arr->getElementAsInteger(i))),
+                        makeBinOp(
+                            "select", name(Heap),
+                            makeBinOp("+", GlobalName, std::to_string(i)))));
+                }
+            }
+        }
+        StringConstants.push_back(make_shared<Op>("and", StringConstant));
+    }
+    return StringConstants;
 }
