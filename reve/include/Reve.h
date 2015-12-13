@@ -35,9 +35,9 @@ auto parseInOutInvs(std::string FileName1, std::string FileName2)
     -> std::pair<SMTRef, SMTRef>;
 auto processLine(std::string Line, SMTRef &In, SMTRef &Out) -> void;
 auto externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
-                        std::vector<SMTRef> &Declarations) -> void;
+                        std::vector<SMTRef> &Declarations, uint8_t Mem) -> void;
 auto funArgs(llvm::Function &Fun, std::string Prefix) -> std::vector<SortedVar>;
-auto externFunDecl(llvm::Function &Fun, int Program, bool Heap) -> SMTRef;
+auto externFunDecl(llvm::Function &Fun, int Program, uint8_t Mem) -> SMTRef;
 auto doesNotRecurse(llvm::Function &Fun) -> bool;
 auto globalDeclarations(llvm::Module &Mod1, llvm::Module &Mod2) -> std::vector<SMTRef>;
 

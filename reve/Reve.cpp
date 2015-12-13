@@ -75,6 +75,7 @@ static llvm::cl::opt<bool>
 static llvm::cl::opt<bool>
     OnlyRec("only-rec", llvm::cl::desc("Only generate recursive invariants"));
 static llvm::cl::opt<bool> Heap("heap", llvm::cl::desc("Enable heaps"));
+static llvm::cl::opt<bool> Stack("stack", llvm::cl::desc("Enable stacks"));
 static llvm::cl::opt<string>
     Fun("fun", llvm::cl::desc("Function which should be verified"));
 
@@ -261,8 +262,16 @@ int main(int Argc, const char **Argv) {
     std::vector<SMTRef> SMTExprs;
     SMTExprs.push_back(std::make_shared<SetLogic>("HORN"));
 
+    Memory Mem = 0;
+    if (Heap) {
+        Mem |= HEAP_MASK;
+    }
+    if (Stack) {
+        Mem |= STACK_MASK;
+    }
+
     std::pair<SMTRef, SMTRef> InOutInvs = parseInOutInvs(FileName1, FileName2);
-    externDeclarations(*Mod1, *Mod2, Declarations);
+    externDeclarations(*Mod1, *Mod2, Declarations, Mem);
     if (Fun == "" && !Funs.get().empty()) {
         Fun = Funs.get().at(0).first->getName();
     }
@@ -276,12 +285,12 @@ int main(int Argc, const char **Argv) {
         auto Fam2 = preprocessModule(*FunPair.second, "2");
         if (FunPair.first->getName() == Fun) {
             SMTExprs.push_back(inInvariant(*FunPair.first, *FunPair.second,
-                                           InOutInvs.first, Heap, *Mod1,
+                                           InOutInvs.first, Mem, *Mod1,
                                            *Mod2));
-            SMTExprs.push_back(outInvariant(InOutInvs.second, Heap));
+            SMTExprs.push_back(outInvariant(InOutInvs.second, Mem));
             auto NewSMTExprs =
                 mainAssertion(*FunPair.first, *FunPair.second, Fam1, Fam2,
-                              OffByN, Declarations, OnlyRec, Heap);
+                              OffByN, Declarations, OnlyRec, Mem);
             Assertions.insert(Assertions.end(), NewSMTExprs.begin(),
                               NewSMTExprs.end());
         }
@@ -291,7 +300,7 @@ int main(int Argc, const char **Argv) {
              OnlyRec)) {
             auto NewSMTExprs =
                 convertToSMT(*FunPair.first, *FunPair.second, Fam1, Fam2,
-                             OffByN, Declarations, Heap);
+                             OffByN, Declarations, Mem);
             Assertions.insert(Assertions.end(), NewSMTExprs.begin(),
                               NewSMTExprs.end());
         }
@@ -395,7 +404,7 @@ zipFunctions(llvm::Module &Mod1, llvm::Module &Mod2) {
 }
 
 void externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
-                        std::vector<SMTRef> &Declarations) {
+                        std::vector<SMTRef> &Declarations, Memory Mem) {
     for (auto &Fun1 : Mod1) {
         if (Fun1.isDeclaration() && !Fun1.isIntrinsic()) {
             auto Fun2P = Mod2.getFunction(Fun1.getName());
@@ -406,25 +415,25 @@ void externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
                 for (auto Arg : FunArgs1) {
                     Args.push_back(Arg);
                 }
-                if (Heap) {
+                if (Mem & HEAP_MASK) {
                     Args.push_back(SortedVar("HEAP$1", "(Array Int Int)"));
                 }
                 auto FunArgs2 = funArgs(Fun2, "arg2_");
                 for (auto Arg : FunArgs2) {
                     Args.push_back(Arg);
                 }
-                if (Heap) {
+                if (Mem) {
                     Args.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
                 }
                 std::string FunName = "INV_REC_" + Fun1.getName().str();
                 Args.push_back(SortedVar("res1", "Int"));
                 Args.push_back(SortedVar("res2", "Int"));
-                if (Heap) {
+                if (Mem & HEAP_MASK) {
                     Args.push_back(SortedVar("HEAP$1_res", "(Array Int Int)"));
                     Args.push_back(SortedVar("HEAP$2_res", "(Array Int Int)"));
                 }
                 SMTRef Body = makeBinOp("=", "res1", "res2");
-                if (Heap) {
+                if (Mem & HEAP_MASK) {
                     std::vector<SortedVar> ForallArgs = {SortedVar("i", "Int")};
                     SMTRef HeapOutEqual = make_shared<Forall>(
                         ForallArgs,
@@ -439,7 +448,7 @@ void externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
                         makeBinOp("=", It1->getName(), It2->getName()));
                     ++It2;
                 }
-                if (Heap) {
+                if (Mem & HEAP_MASK) {
                     std::vector<SortedVar> ForallArgs = {SortedVar("i", "Int")};
                     SMTRef HeapInEqual = make_shared<Forall>(
                         ForallArgs,
@@ -456,12 +465,12 @@ void externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
     }
     for (auto &Fun1 : Mod1) {
         if (Fun1.isDeclaration() && !Fun1.isIntrinsic()) {
-            Declarations.push_back(externFunDecl(Fun1, 1, Heap));
+            Declarations.push_back(externFunDecl(Fun1, 1, Mem));
         }
     }
     for (auto &Fun2 : Mod2) {
         if (Fun2.isDeclaration() && !Fun2.isIntrinsic()) {
-            Declarations.push_back(externFunDecl(Fun2, 2, Heap));
+            Declarations.push_back(externFunDecl(Fun2, 2, Mem));
         }
     }
 }
@@ -478,9 +487,9 @@ std::vector<SortedVar> funArgs(llvm::Function &Fun, std::string Prefix) {
     return Args;
 }
 
-SMTRef externFunDecl(llvm::Function &Fun, int Program, bool Heap) {
+SMTRef externFunDecl(llvm::Function &Fun, int Program, Memory Mem) {
     std::vector<SortedVar> Args = funArgs(Fun, "arg_");
-    if (Heap) {
+    if (Mem) {
         Args.push_back(SortedVar("HEAP", "(Array Int Int)"));
     }
     Args.push_back(SortedVar("res", "Int"));
