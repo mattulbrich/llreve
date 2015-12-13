@@ -1661,7 +1661,7 @@ splitAssignments(vector<AssignmentCallBlock> AssignmentCallBlocks) {
                 AssignmentBlocks.push_back(CurrentAssignmentsList);
                 CurrentAssignmentsList.clear();
                 Condition = nullptr;
-                CallInfos.push_back(*DefOrCall.CallInfo);
+                CallInfos.push_back(*DefOrCall.CallInfo_);
             }
         }
         CurrentAssignmentsList.push_back(

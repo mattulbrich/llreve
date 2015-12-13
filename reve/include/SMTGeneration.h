@@ -34,12 +34,12 @@ enum DefOrCallInfoTag { Call, Def };
 
 struct DefOrCallInfo {
     std::shared_ptr<Assignment> Definition;
-    std::shared_ptr<CallInfo> CallInfo;
+    std::shared_ptr<CallInfo> CallInfo_;
     enum DefOrCallInfoTag Tag;
     DefOrCallInfo(std::shared_ptr<Assignment> Definition)
-        : Definition(Definition), CallInfo(nullptr), Tag(Def) {}
-    DefOrCallInfo(std::shared_ptr<struct CallInfo> CallInfo)
-        : Definition(nullptr), CallInfo(CallInfo), Tag(Call) {}
+        : Definition(Definition), CallInfo_(nullptr), Tag(Def) {}
+    DefOrCallInfo(std::shared_ptr<struct CallInfo> CallInfo_)
+        : Definition(nullptr), CallInfo_(CallInfo_), Tag(Call) {}
 };
 
 struct AssignmentCallBlock {

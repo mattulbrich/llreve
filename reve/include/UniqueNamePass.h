@@ -8,7 +8,7 @@ class UniqueNamePass {
     explicit UniqueNamePass(const std::string Prefix) : Prefix(Prefix) {}
     llvm::PreservedAnalyses run(llvm::Function &F,
                                 llvm::FunctionAnalysisManager *AM);
-    static std::string name() { return "UniqueNamePass"; }
+    static llvm::StringRef name() { return "UniqueNamePass"; }
 
   private:
     const std::string Prefix;

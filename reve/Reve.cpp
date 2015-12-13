@@ -78,15 +78,21 @@ static llvm::cl::opt<string>
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
-template <int N>
-llvm::SmallVector<const char *, N>
-initializeArgs(const char *ExeName, string Input1, string Input2) {
-    llvm::SmallVector<const char *, N> Args;
+std::vector<const char *> initializeArgs(const char *ExeName, string Input1,
+                                         string Input2) {
+    std::vector<const char *> Args;
     Args.push_back(ExeName); // add executable name
     Args.push_back("-xc");   // force language to C
     Args.push_back("-std=c11");
-    Args.push_back(Input1.c_str()); // add input file
-    Args.push_back(Input2.c_str());
+    // archlinux migrated to the new gcc api and something is completely broken
+    // so don’t use c_str here but instead allocate a new string and leak it
+    // like a boss
+    char *NewInput1 = static_cast<char *>(malloc(Input1.length() + 1));
+    memcpy(static_cast<void *>(NewInput1), Input1.data(), Input1.length() + 1);
+    char *NewInput2 = static_cast<char *>(malloc(Input2.length() + 1));
+    memcpy(static_cast<void *>(NewInput2), Input2.data(), Input2.length() + 1);
+    Args.push_back(NewInput1);       // add input file
+    Args.push_back(NewInput2);       // add input file
     Args.push_back("-fsyntax-only"); // don't do more work than necessary
     return Args;
 }
@@ -129,11 +135,6 @@ getCmd(Compilation &Comp, DiagnosticsEngine &Diags) {
             std::error_code());
     }
 
-    std::vector<ArgStringList> Args;
-    for (auto &Cmd : Jobs) {
-        Args.push_back(Cmd.getArguments());
-    }
-
     return makeErrorOr(std::make_tuple(
         Jobs.begin()->getArguments(), std::next(Jobs.begin())->getArguments()));
 }
@@ -146,7 +147,7 @@ std::tuple<unique_ptr<clang::CodeGenAction>, unique_ptr<clang::CodeGenAction>>
 getModule(const char *ExeName, string Input1, string Input2) {
     auto Diags = initializeDiagnostics();
     auto Driver = initializeDriver(*Diags);
-    auto Args = initializeArgs<16>(ExeName, Input1, Input2);
+    auto Args = initializeArgs(ExeName, Input1, Input2);
 
     std::unique_ptr<Compilation> Comp(Driver->BuildCompilation(Args));
     if (!Comp) {

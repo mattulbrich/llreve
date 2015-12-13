@@ -14,9 +14,8 @@
 auto main(int Argc, const char **Argv) -> int;
 auto zipFunctions(llvm::Module &Mod1, llvm::Module &Mod2) -> llvm::ErrorOr<
     std::vector<std::pair<llvm::Function *, llvm::Function *>>>;
-template <int N>
 auto initializeArgs(const char *ExeName, std::string Input1, std::string Input2)
-    -> llvm::SmallVector<const char *, N>;
+    -> std::vector<const char*>;
 auto initializeDiagnostics(void) -> std::unique_ptr<clang::DiagnosticsEngine>;
 auto initializeDriver(clang::DiagnosticsEngine &Diags)
     -> std::unique_ptr<clang::driver::Driver>;
