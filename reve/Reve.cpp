@@ -76,7 +76,8 @@ static llvm::cl::opt<bool>
     OnlyRec("only-rec", llvm::cl::desc("Only generate recursive invariants"));
 static llvm::cl::opt<bool> Heap("heap", llvm::cl::desc("Enable heaps"));
 static llvm::cl::opt<bool> Stack("stack", llvm::cl::desc("Enable stacks"));
-static llvm::cl::opt<bool> Strings("strings", llvm::cl::desc("Enable string constants"));
+static llvm::cl::opt<bool> Strings("strings",
+                                   llvm::cl::desc("Enable string constants"));
 static llvm::cl::opt<string>
     Fun("fun", llvm::cl::desc("Function which should be verified"));
 
@@ -272,7 +273,10 @@ int main(int Argc, const char **Argv) {
     }
 
     std::pair<SMTRef, SMTRef> InOutInvs = parseInOutInvs(FileName1, FileName2);
-    externDeclarations(*Mod1, *Mod2, Declarations, Mem);
+
+    auto FunCondMap = collectFunConds();
+
+    externDeclarations(*Mod1, *Mod2, Declarations, Mem, FunCondMap);
     if (Fun == "" && !Funs.get().empty()) {
         Fun = Funs.get().at(0).first->getName();
     }
@@ -286,8 +290,8 @@ int main(int Argc, const char **Argv) {
         auto Fam2 = preprocessModule(*FunPair.second, "2");
         if (FunPair.first->getName() == Fun) {
             SMTExprs.push_back(inInvariant(*FunPair.first, *FunPair.second,
-                                           InOutInvs.first, Mem, *Mod1,
-                                           *Mod2, Strings));
+                                           InOutInvs.first, Mem, *Mod1, *Mod2,
+                                           Strings));
             SMTExprs.push_back(outInvariant(InOutInvs.second, Mem));
             auto NewSMTExprs =
                 mainAssertion(*FunPair.first, *FunPair.second, Fam1, Fam2,
@@ -405,7 +409,8 @@ zipFunctions(llvm::Module &Mod1, llvm::Module &Mod2) {
 }
 
 void externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
-                        std::vector<SMTRef> &Declarations, Memory Mem) {
+                        std::vector<SMTRef> &Declarations, Memory Mem,
+                        std::multimap<string, string> FunCondMap) {
     for (auto &Fun1 : Mod1) {
         if (Fun1.isDeclaration() && !Fun1.isIntrinsic()) {
             auto Fun2P = Mod2.getFunction(Fun1.getName());
@@ -441,6 +446,15 @@ void externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
                         makeBinOp("=", makeBinOp("select", "HEAP$1_res", "i"),
                                   makeBinOp("select", "HEAP$2_res", "i")));
                     Body = makeBinOp("and", Body, HeapOutEqual);
+                }
+                std::vector<SMTRef> EqualOut;
+                auto Range = FunCondMap.equal_range(Fun1.getName());
+                for (auto I = Range.first; I != Range.second; ++I) {
+                    EqualOut.push_back(name(I->second));
+                }
+                if (!EqualOut.empty()) {
+                    EqualOut.push_back(Body);
+                    Body = make_shared<Op>("and", EqualOut);
                 }
                 std::vector<SMTRef> Equal;
                 for (auto It1 = Fun1.arg_begin(), It2 = Fun2.arg_begin();
@@ -525,8 +539,10 @@ std::vector<SMTRef> globalDeclarations(llvm::Module &Mod1, llvm::Module &Mod2) {
     for (auto &Global1 : Mod1.globals()) {
         std::string GlobalName = Global1.getName();
         if (Mod2.getNamedGlobal(GlobalName)) {
-            // we want the size of string constants not the size of the pointer pointing to them
-            if (auto PointerTy = llvm::dyn_cast<llvm::PointerType>(Global1.getType())) {
+            // we want the size of string constants not the size of the pointer
+            // pointing to them
+            if (auto PointerTy =
+                    llvm::dyn_cast<llvm::PointerType>(Global1.getType())) {
                 GlobalPointer += typeSize(PointerTy->getElementType());
             } else {
                 GlobalPointer += typeSize(Global1.getType());
@@ -573,4 +589,25 @@ std::vector<SMTRef> globalDeclarations(llvm::Module &Mod1, llvm::Module &Mod2) {
         Global2.setName(Global2.getName() + "$2");
     }
     return Declarations;
+}
+
+std::multimap<string, string> collectFunConds() {
+    // TODO: search in both files
+    std::multimap<string, string> Map;
+    std::ifstream FileStream(FileName1);
+    std::string FileString((std::istreambuf_iterator<char>(FileStream)),
+                           std::istreambuf_iterator<char>());
+    std::regex CondRegex(
+        "/\\*@\\s*addfuncond\\s*(\\w*)\\s*\\(([\\s\\S]*?)\\)\\s*@\\*/",
+        std::regex::ECMAScript);
+    for (std::sregex_iterator
+             I = std::sregex_iterator(FileString.begin(), FileString.end(),
+                                      CondRegex),
+             E = std::sregex_iterator();
+         I != E; ++I) {
+        std::smatch match = *I;
+        std::string match_str = match[2];
+        Map.insert(make_pair(match[1], "(" + match_str + ")"));
+    }
+    return Map;
 }

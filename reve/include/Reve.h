@@ -15,7 +15,7 @@ auto main(int Argc, const char **Argv) -> int;
 auto zipFunctions(llvm::Module &Mod1, llvm::Module &Mod2) -> llvm::ErrorOr<
     std::vector<std::pair<llvm::Function *, llvm::Function *>>>;
 auto initializeArgs(const char *ExeName, std::string Input1, std::string Input2)
-    -> std::vector<const char*>;
+    -> std::vector<const char *>;
 auto initializeDiagnostics(void) -> std::unique_ptr<clang::DiagnosticsEngine>;
 auto initializeDriver(clang::DiagnosticsEngine &Diags)
     -> std::unique_ptr<clang::driver::Driver>;
@@ -35,10 +35,13 @@ auto parseInOutInvs(std::string FileName1, std::string FileName2)
     -> std::pair<SMTRef, SMTRef>;
 auto processLine(std::string Line, SMTRef &In, SMTRef &Out) -> void;
 auto externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
-                        std::vector<SMTRef> &Declarations, uint8_t Mem) -> void;
+                        std::vector<SMTRef> &Declarations, uint8_t Mem,
+                        std::multimap<string, string> FunCondMap) -> void;
 auto funArgs(llvm::Function &Fun, std::string Prefix) -> std::vector<SortedVar>;
 auto externFunDecl(llvm::Function &Fun, int Program, uint8_t Mem) -> SMTRef;
 auto doesNotRecurse(llvm::Function &Fun) -> bool;
-auto globalDeclarations(llvm::Module &Mod1, llvm::Module &Mod2) -> std::vector<SMTRef>;
+auto globalDeclarations(llvm::Module &Mod1, llvm::Module &Mod2)
+    -> std::vector<SMTRef>;
+auto collectFunConds() -> std::multimap<string, string>;
 
 #endif // REVE_H
