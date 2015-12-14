@@ -76,6 +76,7 @@ static llvm::cl::opt<bool>
     OnlyRec("only-rec", llvm::cl::desc("Only generate recursive invariants"));
 static llvm::cl::opt<bool> Heap("heap", llvm::cl::desc("Enable heaps"));
 static llvm::cl::opt<bool> Stack("stack", llvm::cl::desc("Enable stacks"));
+static llvm::cl::opt<bool> Strings("strings", llvm::cl::desc("Enable string constants"));
 static llvm::cl::opt<string>
     Fun("fun", llvm::cl::desc("Function which should be verified"));
 
@@ -286,7 +287,7 @@ int main(int Argc, const char **Argv) {
         if (FunPair.first->getName() == Fun) {
             SMTExprs.push_back(inInvariant(*FunPair.first, *FunPair.second,
                                            InOutInvs.first, Mem, *Mod1,
-                                           *Mod2));
+                                           *Mod2, Strings));
             SMTExprs.push_back(outInvariant(InOutInvs.second, Mem));
             auto NewSMTExprs =
                 mainAssertion(*FunPair.first, *FunPair.second, Fam1, Fam2,

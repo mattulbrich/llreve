@@ -189,7 +189,8 @@ vector<SMTRef> mainSynchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                                      vector<string> FunArgs1,
                                      vector<string> FunArgs2,
                                      std::string FunName,
-                                     vector<SMTRef> &Declarations, Memory Heap) {
+                                     vector<SMTRef> &Declarations,
+                                     Memory Heap) {
     vector<SMTRef> PathExprs;
     for (auto &PathMapIt : PathMap1) {
         int StartIndex = PathMapIt.first;
@@ -963,7 +964,8 @@ SMTRef makeFunArgsEqual(SMTRef Clause, SMTRef PreClause, vector<string> Args1,
 }
 
 SMTRef inInvariant(llvm::Function &Fun1, llvm::Function &Fun2, SMTRef Body,
-                   Memory Heap, llvm::Module &Mod1, llvm::Module &Mod2) {
+                   Memory Heap, llvm::Module &Mod1, llvm::Module &Mod2,
+                   bool Strings) {
 
     vector<SMTRef> Args;
     std::pair<vector<string>, vector<string>> FunArgsPair =
@@ -1011,13 +1013,15 @@ SMTRef inInvariant(llvm::Function &Fun1, llvm::Function &Fun2, SMTRef Body,
             Args.push_back(makeBinOp("=", ArgPair.first, ArgPair.second));
         }
     }
-    auto StringConstants1 = stringConstants(Mod1, "HEAP$1");
-    if (!StringConstants1.empty()) {
-        Args.push_back(make_shared<Op>("and", StringConstants1));
-    }
-    auto StringConstants2 = stringConstants(Mod2, "HEAP$2");
-    if (!StringConstants2.empty()) {
-        Args.push_back(make_shared<Op>("and", StringConstants2));
+    if (Strings) {
+        auto StringConstants1 = stringConstants(Mod1, "HEAP$1");
+        if (!StringConstants1.empty()) {
+            Args.push_back(make_shared<Op>("and", StringConstants1));
+        }
+        auto StringConstants2 = stringConstants(Mod2, "HEAP$2");
+        if (!StringConstants2.empty()) {
+            Args.push_back(make_shared<Op>("and", StringConstants2));
+        }
     }
     if (Body == nullptr) {
         Body = make_shared<Op>("and", Args);

@@ -114,8 +114,8 @@ auto offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
 // Functions for generating SMT for a single/mutual path
 
 auto assignmentsOnPath(Path Path, int Program,
-                       std::vector<std::string> FreeVars, bool ToEnd, Memory Heap)
-    -> std::vector<AssignmentCallBlock>;
+                       std::vector<std::string> FreeVars, bool ToEnd,
+                       Memory Heap) -> std::vector<AssignmentCallBlock>;
 auto interleaveAssignments(SMTRef EndClause,
                            std::vector<AssignmentCallBlock> Assignments1,
                            std::vector<AssignmentCallBlock> Assignments2,
@@ -164,7 +164,8 @@ auto makeFunArgsEqual(SMTRef Clause, SMTRef PreClause,
                       std::vector<std::string> Args1,
                       std::vector<std::string> Args2) -> SMTRef;
 auto inInvariant(llvm::Function &Fun1, llvm::Function &Fun2, SMTRef Body,
-                 Memory Heap, llvm::Module &Mod1, llvm::Module &Mod2) -> SMTRef;
+                 Memory Heap, llvm::Module &Mod1, llvm::Module &Mod2,
+                 bool Strings) -> SMTRef;
 auto outInvariant(SMTRef Body, Memory Heap) -> SMTRef;
 auto equalInputsEqualOutputs(std::vector<string> FunArgs,
                              std::vector<string> FunArgs1,
