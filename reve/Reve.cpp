@@ -479,12 +479,12 @@ void externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
         }
     }
     for (auto &Fun1 : Mod1) {
-        if (Fun1.isDeclaration() && !Fun1.isIntrinsic()) {
+        if (Fun1.isDeclaration() && !Fun1.isIntrinsic() && Fun1.getName() != "__mark") {
             Declarations.push_back(externFunDecl(Fun1, 1, Mem));
         }
     }
     for (auto &Fun2 : Mod2) {
-        if (Fun2.isDeclaration() && !Fun2.isIntrinsic()) {
+        if (Fun2.isDeclaration() && !Fun2.isIntrinsic() && Fun2.getName() != "__mark") {
             Declarations.push_back(externFunDecl(Fun2, 2, Mem));
         }
     }
