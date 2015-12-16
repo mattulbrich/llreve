@@ -1907,7 +1907,7 @@ vector<InterleaveStep> matchFunCalls(vector<CallInfo> CallInfos1,
                 Table[i][j] = Table[i - 1][j - 1];
             } else {
                 Table[i][j] =
-                    std::min(Table[i - 1][j] + 1, Table[j - 1][i] + 1);
+                    std::min(Table[i - 1][j] + 1, Table[i][j - 1] + 1);
             }
         }
     }
@@ -1924,6 +1924,7 @@ vector<InterleaveStep> matchFunCalls(vector<CallInfo> CallInfos1,
                 --i;
             } else {
                 InterleaveSteps.push_back(StepSecond);
+                --j;
             }
         }
     }
