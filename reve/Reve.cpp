@@ -80,6 +80,8 @@ static llvm::cl::opt<bool> Strings("strings",
                                    llvm::cl::desc("Enable string constants"));
 static llvm::cl::opt<string>
     Fun("fun", llvm::cl::desc("Function which should be verified"));
+static llvm::cl::opt<string>
+    Include("I", llvm::cl::desc("Include path"));
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
@@ -89,6 +91,12 @@ std::vector<const char *> initializeArgs(const char *ExeName, string Input1,
     Args.push_back(ExeName); // add executable name
     Args.push_back("-xc");   // force language to C
     Args.push_back("-std=c11");
+    if (!Include.empty()) {
+        char* NewInclude = static_cast<char *>(malloc(Include.length() + 1));
+        memcpy(static_cast<void *>(NewInclude), Include.data(), Include.length() + 1);
+        Args.push_back("-I");
+        Args.push_back(NewInclude);
+    }
     // archlinux migrated to the new gcc api and something is completely broken
     // so don’t use c_str here but instead allocate a new string and leak it
     // like a boss

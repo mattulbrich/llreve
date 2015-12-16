@@ -5,6 +5,7 @@
 
 #include <set>
 
+const int UNREACHABLE_MARK = -3;
 const int EXIT_MARK = -2;
 const int ENTRY_MARK = -1;
 

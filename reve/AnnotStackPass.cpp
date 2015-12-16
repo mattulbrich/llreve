@@ -64,12 +64,14 @@ void markStackInstruction(llvm::Instruction &Inst, std::string MetadataName,
 
 int typeSize(llvm::Type *Ty) {
     if (auto IntTy = llvm::dyn_cast<llvm::IntegerType>(Ty)) {
-        if (IntTy->getBitWidth() == 32 || IntTy->getBitWidth() == 64 ||
-            IntTy->getBitWidth() == 16 || IntTy->getBitWidth() == 8) {
+        if (IntTy->getBitWidth() <= 64) {
             return 1;
         }
         llvm::errs() << "Unsupported integer bitwidth: " << IntTy->getBitWidth()
                      << "\n";
+    }
+    if (Ty->isDoubleTy()) {
+        return 1;
     }
     if (auto StructTy = llvm::dyn_cast<llvm::StructType>(Ty)) {
         int Size = 0;

@@ -11,6 +11,7 @@
 using llvm::CmpInst;
 
 #include <iostream>
+
 using std::vector;
 
 vector<SMTRef> convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
@@ -54,9 +55,8 @@ vector<SMTRef> convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
     Declarations.push_back(Invariants_2.first);
     Declarations.push_back(Invariants_2.second);
 
-    auto SynchronizedPaths =
-        synchronizedPaths(PathMap1, PathMap2, FreeVarsMap, FunArgsPair.first,
-                          FunArgsPair.second, FunName, Declarations, Heap);
+    auto SynchronizedPaths = synchronizedPaths(PathMap1, PathMap2, FreeVarsMap,
+                                               FunName, Declarations, Heap);
 
     // add actual path smts
     PathExprs.insert(PathExprs.end(), SynchronizedPaths.begin(),
@@ -115,7 +115,7 @@ vector<SMTRef> mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
     }
 
     auto SynchronizedPaths = mainSynchronizedPaths(
-        PathMap1, PathMap2, FreeVarsMap, FunArgsPair.first, FunArgsPair.second,
+        PathMap1, PathMap2, FreeVarsMap,
         FunName, Declarations, Heap);
     auto ForbiddenPaths =
         forbiddenPaths(PathMap1, PathMap2, Marked1, Marked2, FreeVarsMap,
@@ -140,8 +140,7 @@ vector<SMTRef> mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
 
 vector<SMTRef> synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                                  std::map<int, vector<string>> FreeVarsMap,
-                                 vector<string> FunArgs1,
-                                 vector<string> FunArgs2, std::string FunName,
+                                 std::string FunName,
                                  vector<SMTRef> &Declarations, Memory Heap) {
     vector<SMTRef> PathExprs;
     for (auto &PathMapIt : PathMap1) {
@@ -168,8 +167,7 @@ vector<SMTRef> synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                         assignmentsOnPath(Path2, 2, FreeVarsMap.at(StartIndex),
                                           EndIndex == EXIT_MARK, Heap);
                     PathExprs.push_back(assertForall(
-                        interleaveAssignments(EndInvariant, Defs1, Defs2,
-                                              FunArgs1, FunArgs2, Heap),
+                        interleaveAssignments(EndInvariant, Defs1, Defs2, Heap),
                         FreeVarsMap.at(StartIndex), StartIndex, Both, FunName,
                         false));
                 }
@@ -186,8 +184,6 @@ vector<SMTRef> synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
 
 vector<SMTRef> mainSynchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                                      std::map<int, vector<string>> FreeVarsMap,
-                                     vector<string> FunArgs1,
-                                     vector<string> FunArgs2,
                                      std::string FunName,
                                      vector<SMTRef> &Declarations,
                                      Memory Heap) {
@@ -214,8 +210,7 @@ vector<SMTRef> mainSynchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                         assignmentsOnPath(Path2, 2, FreeVarsMap.at(StartIndex),
                                           EndIndex == EXIT_MARK, Heap);
                     PathExprs.push_back(assertForall(
-                        interleaveAssignments(EndInvariant, Defs1, Defs2,
-                                              FunArgs1, FunArgs2, Heap),
+                        interleaveAssignments(EndInvariant, Defs1, Defs2, Heap),
                         FreeVarsMap.at(StartIndex), StartIndex, Both, FunName,
                         true));
                 }
@@ -423,7 +418,6 @@ vector<AssignmentCallBlock> assignmentsOnPath(Path Path, int Program,
 SMTRef interleaveAssignments(SMTRef EndClause,
                              vector<AssignmentCallBlock> AssignmentCallBlocks1,
                              vector<AssignmentCallBlock> AssignmentCallBlocks2,
-                             vector<string> FunArgs1, vector<string> FunArgs2,
                              Memory Heap) {
     SMTRef Clause = EndClause;
     auto SplitAssignments1 = splitAssignments(AssignmentCallBlocks1);
@@ -433,103 +427,91 @@ SMTRef interleaveAssignments(SMTRef EndClause,
     auto CallInfo1 = SplitAssignments1.second;
     auto CallInfo2 = SplitAssignments2.second;
 
+    auto InterleaveSteps = matchFunCalls(CallInfo1, CallInfo2);
+
     assert(AssignmentBlocks1.size() == CallInfo1.size() + 1);
     assert(AssignmentBlocks2.size() == CallInfo2.size() + 1);
     assert(AssignmentCallBlocks1.size() >= 1);
     assert(AssignmentCallBlocks2.size() >= 1);
 
-    vector<vector<AssignmentBlock>> MutualBlocks1;
-    vector<vector<AssignmentBlock>> MutualBlocks2;
-    int MutualSize = std::min(static_cast<int>(AssignmentBlocks1.size()),
-                              static_cast<int>(AssignmentBlocks2.size()));
-    MutualBlocks1.insert(MutualBlocks1.end(), AssignmentBlocks1.begin(),
-                         std::next(AssignmentBlocks1.begin(), MutualSize));
-    MutualBlocks2.insert(MutualBlocks2.end(), AssignmentBlocks2.begin(),
-                         std::next(AssignmentBlocks2.begin(), MutualSize));
-    vector<CallInfo> MutualCallInfo1;
-    vector<CallInfo> MutualCallInfo2;
-    MutualCallInfo1.insert(
-        MutualCallInfo1.end(), CallInfo1.begin(),
-        std::next(CallInfo1.begin(), std::max(MutualSize - 1, 0)));
-    MutualCallInfo2.insert(
-        MutualCallInfo2.end(), CallInfo2.begin(),
-        std::next(CallInfo2.begin(), std::max(MutualSize - 1, 0)));
-
-    auto CallIt1 = MutualCallInfo1.rbegin();
-    auto CallIt2 = MutualCallInfo2.rbegin();
-    vector<vector<AssignmentBlock>> NonMutualBlocks;
-    vector<CallInfo> NonMutualCallInfo;
-    auto NonMutual = SMTFor::Both;
-    vector<string> NonMutualFunArgs;
-
-    if (AssignmentBlocks1.size() > AssignmentBlocks2.size()) {
-        NonMutual = SMTFor::First;
-        NonMutualBlocks.insert(NonMutualBlocks.end(),
-                               std::next(AssignmentBlocks1.begin(), MutualSize),
-                               AssignmentBlocks1.end());
-        NonMutualCallInfo.insert(NonMutualCallInfo.end(),
-                                 std::next(CallInfo1.begin(), MutualSize - 1),
-                                 CallInfo1.end());
-        NonMutualFunArgs = FunArgs1;
-    } else if (AssignmentBlocks2.size() > AssignmentBlocks1.size()) {
-        NonMutual = SMTFor::Second;
-        NonMutualBlocks.insert(NonMutualBlocks.end(),
-                               std::next(AssignmentBlocks2.begin(), MutualSize),
-                               AssignmentBlocks2.end());
-        NonMutualCallInfo.insert(NonMutualCallInfo.end(),
-                                 std::next(CallInfo2.begin(), MutualSize - 1),
-                                 CallInfo2.end());
-        NonMutualFunArgs = FunArgs2;
+    auto CallIt1 = CallInfo1.rbegin();
+    auto CallIt2 = CallInfo2.rbegin();
+    auto AssignmentIt1 = AssignmentBlocks1.rbegin();
+    auto AssignmentIt2 = AssignmentBlocks2.rbegin();
+    // crappy stuff
+    for (auto Assgns : makeReverse(*AssignmentIt1)) {
+        Clause = nestLets(Clause, Assgns.Definitions);
+        if (Assgns.Condition) {
+            Clause = makeBinOp("=>", Assgns.Condition, Clause);
+        }
     }
+    for (auto Assgns : makeReverse(*AssignmentIt2)) {
+        Clause = nestLets(Clause, Assgns.Definitions);
+        if (Assgns.Condition) {
+            Clause = makeBinOp("=>", Assgns.Condition, Clause);
+        }
+    }
+    ++AssignmentIt1;
+    ++AssignmentIt2;
 
-    if (NonMutual != Both) {
-        auto CallIt = NonMutualCallInfo.rbegin();
-        for (auto AssgnsVec : makeReverse(NonMutualBlocks)) {
-            for (auto Assgns : makeReverse(AssgnsVec)) {
+    for (InterleaveStep Step : makeReverse(InterleaveSteps)) {
+        switch (Step) {
+        case StepFirst:
+            Clause = nonmutualRecursiveForall(
+                Clause, CallIt1->Args, CallIt1->AssignedTo, First,
+                CallIt1->CallName, CallIt1->Extern, Heap);
+            for (auto Assgns : makeReverse(*AssignmentIt1)) {
                 Clause = nestLets(Clause, Assgns.Definitions);
                 if (Assgns.Condition) {
                     Clause = makeBinOp("=>", Assgns.Condition, Clause);
                 }
             }
-            if (CallIt != NonMutualCallInfo.rend()) {
-                Clause = nonmutualRecursiveForall(
-                    Clause, CallIt->Args, CallIt->AssignedTo, NonMutual,
-                    CallIt->CallName, CallIt->Extern, Heap);
-                ++CallIt;
+            ++CallIt1;
+            ++AssignmentIt1;
+            break;
+        case StepSecond:
+            Clause = nonmutualRecursiveForall(
+                Clause, CallIt2->Args, CallIt2->AssignedTo, Second,
+                CallIt2->CallName, CallIt2->Extern, Heap);
+            for (auto Assgns : makeReverse(*AssignmentIt2)) {
+                Clause = nestLets(Clause, Assgns.Definitions);
+                if (Assgns.Condition) {
+                    Clause = makeBinOp("=>", Assgns.Condition, Clause);
+                }
             }
-        }
-    }
-
-    bool First = true;
-    for (auto It :
-         makeZip(makeReverse(MutualBlocks1), makeReverse(MutualBlocks2))) {
-        if (First) {
-            First = false;
-        } else {
-            if (CallIt1->CallName != CallIt2->CallName) {
-                llvm::errs() << CallIt1->CallName << "; " << CallIt2->CallName
-                             << "\n";
-            }
+            ++CallIt2;
+            ++AssignmentIt2;
+            break;
+        case StepBoth:
             assert(CallIt1->CallName == CallIt2->CallName);
             Clause = mutualRecursiveForall(
                 Clause, CallIt1->Args, CallIt2->Args, CallIt1->AssignedTo,
                 CallIt2->AssignedTo, CallIt1->CallName, CallIt1->Extern, Heap);
+            for (auto Assgns : makeReverse(*AssignmentIt1)) {
+                Clause = nestLets(Clause, Assgns.Definitions);
+                if (Assgns.Condition) {
+                    Clause = makeBinOp("=>", Assgns.Condition, Clause);
+                }
+            }
+            for (auto Assgns : makeReverse(*AssignmentIt2)) {
+                Clause = nestLets(Clause, Assgns.Definitions);
+                if (Assgns.Condition) {
+                    Clause = makeBinOp("=>", Assgns.Condition, Clause);
+                }
+            }
             ++CallIt1;
             ++CallIt2;
-        }
-        for (auto Assgns : makeReverse(It.second)) {
-            Clause = nestLets(Clause, Assgns.Definitions);
-            if (Assgns.Condition) {
-                Clause = makeBinOp("=>", Assgns.Condition, Clause);
-            }
-        }
-        for (auto Assgns : makeReverse(It.first)) {
-            Clause = nestLets(Clause, Assgns.Definitions);
-            if (Assgns.Condition) {
-                Clause = makeBinOp("=>", Assgns.Condition, Clause);
-            }
+            ++AssignmentIt1;
+            ++AssignmentIt2;
+            break;
         }
     }
+
+    assert(CallIt1 == CallInfo1.rend());
+    assert(CallIt2 == CallInfo2.rend());
+    assert(AssignmentIt1 == AssignmentBlocks1.rend());
+    assert(AssignmentIt2 == AssignmentBlocks2.rend());
+
     return Clause;
 }
 
@@ -625,25 +607,27 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
         for (auto ResultArg : ResultArgs) {
             ForallArgs.push_back(SortedVar(ResultArg, argSort(ResultArg)));
         }
-
-        vector<string> UsingArgsVect;
-        UsingArgsVect.insert(UsingArgsVect.begin(), FilteredEndArgs.begin(),
-                             FilteredEndArgs.end());
-        Memory Heap = 0;
-        UsingArgsVect = resolveHeapReferences(UsingArgsVect, "", Heap);
-        auto PreInv = makeOp(invariantName(EndIndex, SMTFor, FunName) + "_PRE",
-                             UsingArgsVect);
-        UsingArgsVect.insert(UsingArgsVect.end(), ResultArgs.begin(),
-                             ResultArgs.end());
-        UsingArgsVect = resolveHeapReferences(UsingArgsVect, "", Heap);
-        Clause = makeBinOp(
-            "=>", wrapHeap(makeOp(invariantName(EndIndex, SMTFor, FunName),
-                                  UsingArgsVect),
-                           Heap, UsingArgsVect),
-            Clause);
-        if (SMTFor == Both) {
-            Clause =
-                makeBinOp("and", wrapHeap(PreInv, Heap, UsingArgsVect), Clause);
+        if (EndIndex != UNREACHABLE_MARK) {
+            vector<string> UsingArgsVect;
+            UsingArgsVect.insert(UsingArgsVect.begin(), FilteredEndArgs.begin(),
+                                 FilteredEndArgs.end());
+            Memory Heap = 0;
+            UsingArgsVect = resolveHeapReferences(UsingArgsVect, "", Heap);
+            auto PreInv =
+                makeOp(invariantName(EndIndex, SMTFor, FunName) + "_PRE",
+                       UsingArgsVect);
+            UsingArgsVect.insert(UsingArgsVect.end(), ResultArgs.begin(),
+                                 ResultArgs.end());
+            UsingArgsVect = resolveHeapReferences(UsingArgsVect, "", Heap);
+            Clause = makeBinOp(
+                "=>", wrapHeap(makeOp(invariantName(EndIndex, SMTFor, FunName),
+                                      UsingArgsVect),
+                               Heap, UsingArgsVect),
+                Clause);
+            if (SMTFor == Both) {
+                Clause = makeBinOp("and", wrapHeap(PreInv, Heap, UsingArgsVect),
+                                   Clause);
+            }
         }
         Clause = make_shared<Forall>(ForallArgs, Clause);
     }
@@ -659,6 +643,9 @@ SMTRef mainInvariant(int EndIndex, vector<string> FreeVars, string FunName,
             Args.push_back("HEAP$2_res");
         }
         return makeOp("OUT_INV", Args);
+    }
+    if (EndIndex == UNREACHABLE_MARK) {
+        return name("true");
     }
     FreeVars = resolveHeapReferences(FreeVars, "", Heap);
     return wrapHeap(
@@ -865,6 +852,8 @@ SMTRef nonmutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args,
             Args.push_back(name("i" + ProgramS));
             Args.push_back(
                 makeBinOp("select", "HEAP$" + ProgramS, "i" + ProgramS));
+        }
+        if (Heap & STACK_MASK) {
             Args.push_back(name("i" + ProgramS + "_stack"));
             Args.push_back(
                 makeBinOp("select", "STACK$" + ProgramS, "i" + ProgramS));
@@ -886,19 +875,29 @@ SMTRef nonmutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args,
 
         SMTRef EndInvariant =
             make_shared<Op>(invariantName(ENTRY_MARK, For, FunName), ImplArgs);
-        EndInvariant =
-            wrapHeap(EndInvariant, Heap,
-                     {"i" + ProgramS, "i" + ProgramS + "_res",
-                      "i" + ProgramS + "_stack", "STACK$" + ProgramS});
+        if (Heap & STACK_MASK) {
+            EndInvariant =
+                wrapHeap(EndInvariant, Heap,
+                         {"i" + ProgramS, "i" + ProgramS + "_res",
+                          "i" + ProgramS + "_stack", "STACK$" + ProgramS});
+        } else {
+            EndInvariant = wrapHeap(EndInvariant, Heap,
+                                    {"i" + ProgramS, "i" + ProgramS + "_res"});
+        }
         Clause = makeBinOp("=>", EndInvariant, Clause);
         Clause = make_shared<Forall>(ForallArgs, Clause);
         auto PreInv = std::make_shared<Op>(
             invariantName(ENTRY_MARK, For, FunName) + "_PRE", PreArgs);
-        return makeBinOp(
-            "and",
-            wrapHeap(PreInv, Heap, {"i" + ProgramS, "i" + ProgramS + "_stack",
-                                    "STACK$" + ProgramS}),
-            Clause);
+        if (Heap & STACK_MASK) {
+            return makeBinOp("and",
+                             wrapHeap(PreInv, Heap, {"i" + ProgramS,
+                                                     "i" + ProgramS + "_stack",
+                                                     "STACK$" + ProgramS}),
+                             Clause);
+        } else {
+            return makeBinOp("and", wrapHeap(PreInv, Heap, {"i" + ProgramS}),
+                             Clause);
+        }
     }
 }
 
@@ -1595,6 +1594,7 @@ std::map<int, vector<string>> freeVars(PathMap Map1, PathMap Map2,
     }
 
     FreeVarsMap[EXIT_MARK] = set<string>();
+    FreeVarsMap[UNREACHABLE_MARK] = set<string>();
     // search for a least fixpoint
     // don't tell anyone I wrote that
     bool Changed = true;
@@ -1881,4 +1881,60 @@ vector<SMTRef> stringConstants(llvm::Module &Mod, string Heap) {
         }
     }
     return StringConstants;
+}
+
+vector<InterleaveStep> matchFunCalls(vector<CallInfo> CallInfos1,
+                                     vector<CallInfo> CallInfos2) {
+    vector<string> CallInfoNames1;
+    vector<string> CallInfoNames2;
+    std::transform(CallInfos1.begin(), CallInfos1.end(),
+                   std::back_inserter(CallInfoNames1),
+                   [](CallInfo C) { return C.CallName; });
+    std::transform(CallInfos2.begin(), CallInfos2.end(),
+                   std::back_inserter(CallInfoNames2),
+                   [](CallInfo C) { return C.CallName; });
+    vector<vector<size_t>> Table(CallInfoNames1.size() + 1,
+                                 vector<size_t>(CallInfoNames2.size() + 1, 0));
+    for (unsigned int i = 0; i <= CallInfoNames1.size(); ++i) {
+        Table[i][0] = i;
+    }
+    for (unsigned int j = 0; j <= CallInfoNames2.size(); ++j) {
+        Table[0][j] = j;
+    }
+    for (unsigned int i = 1; i <= CallInfoNames1.size(); ++i) {
+        for (unsigned int j = 1; j <= CallInfoNames2.size(); ++j) {
+            if (CallInfoNames1[i - 1] == CallInfoNames2[j - 1]) {
+                Table[i][j] = Table[i - 1][j - 1];
+            } else {
+                Table[i][j] =
+                    std::min(Table[i - 1][j] + 1, Table[j - 1][i] + 1);
+            }
+        }
+    }
+    vector<InterleaveStep> InterleaveSteps;
+    unsigned long i = CallInfoNames1.size(), j = CallInfoNames2.size();
+    while (i > 0 && j > 0) {
+        if (CallInfoNames1[i - 1] == CallInfoNames2[j - 1]) {
+            InterleaveSteps.push_back(StepBoth);
+            --i;
+            --j;
+        } else {
+            if (Table[i - 1][j] <= Table[i][j - 1]) {
+                InterleaveSteps.push_back(StepFirst);
+                --i;
+            } else {
+                InterleaveSteps.push_back(StepSecond);
+            }
+        }
+    }
+    while (i > 0) {
+        InterleaveSteps.push_back(StepFirst);
+        --i;
+    }
+    while (j > 0) {
+        InterleaveSteps.push_back(StepSecond);
+        --j;
+    }
+    std::reverse(InterleaveSteps.begin(), InterleaveSteps.end());
+    return InterleaveSteps;
 }

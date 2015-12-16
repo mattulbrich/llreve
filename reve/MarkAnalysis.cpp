@@ -37,6 +37,10 @@ MarkAnalysis::run(llvm::Function &Fun, llvm::FunctionAnalysisManager *AM) {
                 }
             }
         }
+        if (llvm::isa<llvm::UnreachableInst>(BB.getTerminator())) {
+            MarkedBlocks[UNREACHABLE_MARK].insert(&BB);
+            BlockedMarks[&BB].insert(UNREACHABLE_MARK);
+        }
     }
     return BidirBlockMarkMap(BlockedMarks, MarkedBlocks);
 }

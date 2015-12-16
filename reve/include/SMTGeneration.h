@@ -17,6 +17,8 @@ using llvm::Instruction;
 const uint8_t HEAP_MASK = 0x01;
 const uint8_t STACK_MASK = 0x02;
 
+enum InterleaveStep { StepBoth, StepFirst, StepSecond };
+
 using Memory = uint8_t;
 
 using Assignment = std::tuple<std::string, SMTRef>;
@@ -82,14 +84,11 @@ auto mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
 
 auto synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                        std::map<int, std::vector<string>> FreeVarsMap,
-                       std::vector<string> FunArgs1,
-                       std::vector<string> FunArgs2, std::string FunName,
-                       std::vector<SMTRef> &Declarations, Memory Heap)
-    -> std::vector<SMTRef>;
+                       std::string FunName, std::vector<SMTRef> &Declarations,
+                       Memory Heap) -> std::vector<SMTRef>;
 auto mainSynchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                            std::map<int, std::vector<string>> FreeVarsMap,
-                           std::vector<string> FunArgs1,
-                           std::vector<string> FunArgs2, std::string FunName,
+                           std::string FunName,
                            std::vector<SMTRef> &Declarations, Memory Heap)
     -> std::vector<SMTRef>;
 auto forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
@@ -119,8 +118,7 @@ auto assignmentsOnPath(Path Path, int Program,
 auto interleaveAssignments(SMTRef EndClause,
                            std::vector<AssignmentCallBlock> Assignments1,
                            std::vector<AssignmentCallBlock> Assignments2,
-                           std::vector<string> FunArgs1,
-                           std::vector<string> FunArgs2, Memory Heap) -> SMTRef;
+                           Memory Heap) -> SMTRef;
 auto nonmutualSMT(SMTRef EndClause,
                   std::vector<AssignmentCallBlock> Assignments, SMTFor For,
                   Memory Heap) -> SMTRef;
@@ -224,5 +222,8 @@ auto resolveGEP(T &GEP, set<string> &Constructed) -> SMTRef;
 auto isStackOp(const llvm::Instruction *Inst) -> bool;
 auto argSort(std::string Arg) -> std::string;
 auto stringConstants(llvm::Module &Mod, string Heap) -> std::vector<SMTRef>;
+auto matchFunCalls(std::vector<CallInfo> CallInfos1,
+                   std::vector<CallInfo> CallInfos2)
+    -> std::vector<InterleaveStep>;
 
 #endif // SMT_GENERATION_H

@@ -13,7 +13,7 @@ PathMap PathAnalysis::run(llvm::Function &F,
     auto BidirMarkBlockMap = AM->getResult<MarkAnalysis>(F);
     for (auto BBTuple : BidirMarkBlockMap.MarkToBlocksMap) {
         // don't start at return instructions
-        if (BBTuple.first != EXIT_MARK) {
+        if (BBTuple.first != EXIT_MARK && BBTuple.first != UNREACHABLE_MARK) {
             for (auto BB : BBTuple.second) {
                 std::map<int, Paths> NewPaths =
                     findPaths(BBTuple.first, BB, BidirMarkBlockMap);
@@ -63,8 +63,9 @@ std::map<int, Paths> findPaths(int For, llvm::BasicBlock *BB,
         }
         for (auto Index : Indices) {
             // don't allow paths to the same node but with a different mark
-            if (PathIt.empty() || !(PathIt.back().Block == BB && Index != For)) {
-            FoundPaths[Index].push_back(Path(BB, PathIt));
+            if (PathIt.empty() ||
+                !(PathIt.back().Block == BB && Index != For)) {
+                FoundPaths[Index].push_back(Path(BB, PathIt));
             }
         }
     }
@@ -126,12 +127,13 @@ bool isMarked(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks) {
 bool isReturn(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks) {
     auto Marks = MarkedBlocks.BlockToMarksMap.find(BB);
     if (Marks != MarkedBlocks.BlockToMarksMap.end()) {
-        return Marks->second.find(EXIT_MARK) != Marks->second.end();
+        return Marks->second.find(EXIT_MARK) != Marks->second.end() ||
+               llvm::isa<llvm::UnreachableInst>(BB->getTerminator());
     }
     return false;
 }
 
-llvm::BasicBlock* lastBlock(Path Path) {
+llvm::BasicBlock *lastBlock(Path Path) {
     if (Path.Edges.empty()) {
         return Path.Start;
     }
