@@ -600,17 +600,27 @@ std::vector<SMTRef> globalDeclarations(llvm::Module &Mod1, llvm::Module &Mod2) {
 }
 
 std::multimap<string, string> collectFunConds() {
-    // TODO: search in both files
     std::multimap<string, string> Map;
-    std::ifstream FileStream(FileName1);
-    std::string FileString((std::istreambuf_iterator<char>(FileStream)),
-                           std::istreambuf_iterator<char>());
+    std::ifstream FileStream1(FileName1);
+    std::string FileString1((std::istreambuf_iterator<char>(FileStream1)),
+                            std::istreambuf_iterator<char>());
+    std::ifstream FileStream2(FileName2);
+    std::string FileString2((std::istreambuf_iterator<char>(FileStream2)),
+                            std::istreambuf_iterator<char>());
+    auto Map1 = collectFunCondsInFile(FileString1);
+    auto Map2 = collectFunCondsInFile(FileString2);
+    std::merge(Map1.begin(), Map1.end(), Map2.begin(), Map2.end(),
+               std::inserter(Map, std::end(Map)));
+    return Map;
+}
+
+std::multimap<string, string> collectFunCondsInFile(std::string File) {
+    std::multimap<string, string> Map;
     std::regex CondRegex(
         "/\\*@\\s*addfuncond\\s*(\\w*)\\s*\\(([\\s\\S]*?)\\)\\s*@\\*/",
         std::regex::ECMAScript);
     for (std::sregex_iterator
-             I = std::sregex_iterator(FileString.begin(), FileString.end(),
-                                      CondRegex),
+             I = std::sregex_iterator(File.begin(), File.end(), CondRegex),
              E = std::sregex_iterator();
          I != E; ++I) {
         std::smatch match = *I;

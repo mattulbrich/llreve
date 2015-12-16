@@ -43,5 +43,6 @@ auto doesNotRecurse(llvm::Function &Fun) -> bool;
 auto globalDeclarations(llvm::Module &Mod1, llvm::Module &Mod2)
     -> std::vector<SMTRef>;
 auto collectFunConds() -> std::multimap<string, string>;
+auto collectFunCondsInFile(std::string File) -> std::multimap<string, string>;
 
 #endif // REVE_H
