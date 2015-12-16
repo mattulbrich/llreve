@@ -80,8 +80,7 @@ static llvm::cl::opt<bool> Strings("strings",
                                    llvm::cl::desc("Enable string constants"));
 static llvm::cl::opt<string>
     Fun("fun", llvm::cl::desc("Function which should be verified"));
-static llvm::cl::opt<string>
-    Include("I", llvm::cl::desc("Include path"));
+static llvm::cl::opt<string> Include("I", llvm::cl::desc("Include path"));
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
@@ -92,8 +91,9 @@ std::vector<const char *> initializeArgs(const char *ExeName, string Input1,
     Args.push_back("-xc");   // force language to C
     Args.push_back("-std=c11");
     if (!Include.empty()) {
-        char* NewInclude = static_cast<char *>(malloc(Include.length() + 1));
-        memcpy(static_cast<void *>(NewInclude), Include.data(), Include.length() + 1);
+        char *NewInclude = static_cast<char *>(malloc(Include.length() + 1));
+        memcpy(static_cast<void *>(NewInclude), Include.data(),
+               Include.length() + 1);
         Args.push_back("-I");
         Args.push_back(NewInclude);
     }
@@ -208,36 +208,34 @@ std::pair<SMTRef, SMTRef> parseInOutInvs(std::string FileName1,
                                          std::string FileName2) {
     SMTRef In = nullptr;
     SMTRef Out = nullptr;
-    std::ifstream InFile1(FileName1);
-    if (InFile1.is_open()) {
-        string Line1;
-        getline(InFile1, Line1);
-        processLine(Line1, In, Out);
-        string Line2;
-        getline(InFile1, Line2);
-        processLine(Line2, In, Out);
-    }
-    std::ifstream InFile2(FileName2);
-    if (InFile2.is_open()) {
-        string Line1;
-        getline(InFile2, Line1);
-        processLine(Line1, In, Out);
-        string Line2;
-        getline(InFile2, Line2);
-        processLine(Line2, In, Out);
-    }
+    std::ifstream FileStream1(FileName1);
+    std::string FileString1((std::istreambuf_iterator<char>(FileStream1)),
+                            std::istreambuf_iterator<char>());
+    std::ifstream FileStream2(FileName2);
+    std::string FileString2((std::istreambuf_iterator<char>(FileStream2)),
+                            std::istreambuf_iterator<char>());
+
+    processFile(FileString1, In, Out);
+    processFile(FileString2, In, Out);
 
     return std::make_pair(In, Out);
 }
 
-void processLine(std::string Line, SMTRef &In, SMTRef &Out) {
-    if (Line.length() > 4) {
-        if (Line.substr(4, 6) == "rel_in" && In == nullptr) {
-            In = name(Line.substr(11, Line.length() - 11 - 4));
-        }
-        if (Line.substr(4, 7) == "rel_out" && Out == nullptr) {
-            Out = name(Line.substr(12, Line.length() - 12 - 4));
-        }
+void processFile(std::string File, SMTRef &In, SMTRef &Out) {
+    std::regex RelinRegex(
+        "/\\*@\\s*rel_in\\s*(\\w*)\\s*\\(([\\s\\S]*?)\\)\\s*@\\*/",
+        std::regex::ECMAScript);
+    std::regex ReloutRegex(
+        "/\\*@\\s*rel_out\\s*(\\w*)\\s*\\(([\\s\\S]*?)\\)\\s*@\\*/",
+        std::regex::ECMAScript);
+    std::smatch Match;
+    if (std::regex_search(File, Match, RelinRegex) && In == nullptr) {
+        std::string MatchStr = Match[2];
+        In = name("(" + MatchStr + ")");
+    }
+    if (std::regex_search(File, Match, ReloutRegex) && Out == nullptr) {
+        std::string MatchStr = Match[2];
+        Out = name("(" + MatchStr + ")");
     }
 }
 
@@ -487,12 +485,14 @@ void externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
         }
     }
     for (auto &Fun1 : Mod1) {
-        if (Fun1.isDeclaration() && !Fun1.isIntrinsic() && Fun1.getName() != "__mark") {
+        if (Fun1.isDeclaration() && !Fun1.isIntrinsic() &&
+            Fun1.getName() != "__mark") {
             Declarations.push_back(externFunDecl(Fun1, 1, Mem));
         }
     }
     for (auto &Fun2 : Mod2) {
-        if (Fun2.isDeclaration() && !Fun2.isIntrinsic() && Fun2.getName() != "__mark") {
+        if (Fun2.isDeclaration() && !Fun2.isIntrinsic() &&
+            Fun2.getName() != "__mark") {
             Declarations.push_back(externFunDecl(Fun2, 2, Mem));
         }
     }

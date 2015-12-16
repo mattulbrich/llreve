@@ -1,4 +1,12 @@
-/*@ rel_in (and (forall ((i Int)) (= (select HEAP$1 i) (select HEAP$2 i))) (let ((server-state (select HEAP$2 (+ server$2 (* 682 0) 160)))) (or (= 2 server-state) (= 3 server-state) (> server-state 11) (< server-state 2)))) @*/
+/*@ rel_in
+    (and
+      (forall
+         ((i Int))
+         (= (select HEAP$1 i) (select HEAP$2 i)))
+      (let
+          ((server-state (select HEAP$2 (+ server$2 (* 682 0) 160))))
+        (or (= 2 server-state) (= 3 server-state) (> server-state 11) (< server-state 2))))
+@*/
 #include "server.h"
 
 int slaveIsInHandshakeState(void) {

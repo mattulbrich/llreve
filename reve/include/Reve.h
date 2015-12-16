@@ -33,7 +33,7 @@ auto getCodeGenAction(const llvm::opt::ArgStringList &CCArgs,
     -> std::unique_ptr<clang::CodeGenAction>;
 auto parseInOutInvs(std::string FileName1, std::string FileName2)
     -> std::pair<SMTRef, SMTRef>;
-auto processLine(std::string Line, SMTRef &In, SMTRef &Out) -> void;
+auto processFile(std::string File, SMTRef &In, SMTRef &Out) -> void;
 auto externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
                         std::vector<SMTRef> &Declarations, uint8_t Mem,
                         std::multimap<string, string> FunCondMap) -> void;
