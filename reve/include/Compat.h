@@ -64,4 +64,10 @@ std::set<A> intersection(std::set<A> SetA, std::set<A> SetB) {
     return Ret;
 }
 
+template <typename A> std::set<A> immutableInsert(std::set<A> Set, A El) {
+    std::set<A> SetNew = Set;
+    SetNew.insert(El);
+    return SetNew;
+}
+
 #endif // COMPAT_H

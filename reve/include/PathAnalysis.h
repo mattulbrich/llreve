@@ -45,7 +45,7 @@ auto findPaths(int For, llvm::BasicBlock *BB,
     -> std::map<int, Paths>;
 
 auto traverse(llvm::BasicBlock *BB,
-              BidirBlockMarkMap MarkedBlocks, bool First)
+              BidirBlockMarkMap MarkedBlocks, bool First, std::set<llvm::BasicBlock*> Visited)
     -> Paths_;
 
 auto isMarked(llvm::BasicBlock *BB,
