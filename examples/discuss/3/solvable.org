@@ -1,0 +1,16 @@
+| example | what’s changed                                               | solvable |
+|---------+--------------------------------------------------------------+----------|
+|       0 | no 2. inner loop                                             | yes      |
+|       1 | no body of 2. inner loop                                     | no       |
+|       2 | no 1. inner loop                                             | no       |
+|       3 | no 1. inner loop, no body of 2. inner loop                   | no       |
+|       4 | no 1. outer loop, no 1. inner loop, no body of 2. inner loop | yes      |
+|       5 | no 1. outer loop, no body of 2. inner loop                   | yes      |
+|       6 | no 1. outer loop                                             | no       |
+|       7 | no 1. outer loop, no body of 1. inner loop                   | no       |
+|       8 | no 1. outer loop, no 1. inner loop                           | yes      |
+
+conclusion:
+
+The second inner loop seems to be problematic here. Also the body of
+the loops seems to play close to no role.
