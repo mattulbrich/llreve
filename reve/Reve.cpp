@@ -2,6 +2,7 @@
 
 #include "AnnotStackPass.h"
 #include "CFGPrinter.h"
+#include "Compat.h"
 #include "PathAnalysis.h"
 #include "RemoveMarkPass.h"
 #include "SExpr.h"
@@ -270,8 +271,16 @@ int main(int Argc, const char **Argv) {
     std::vector<SMTRef> SMTExprs;
     SMTExprs.push_back(std::make_shared<SetLogic>("HORN"));
 
+    std::vector<std::pair<std::shared_ptr<llvm::FunctionAnalysisManager>,
+                          std::shared_ptr<llvm::FunctionAnalysisManager>>> Fams;
+    for (auto FunPair : Funs.get()) {
+        auto Fam1 = preprocessFunction(*FunPair.first, "1");
+        auto Fam2 = preprocessFunction(*FunPair.second, "2");
+        Fams.push_back(make_pair(Fam1, Fam2));
+    }
+
     Memory Mem = 0;
-    if (Heap) {
+    if (Heap || doesAccessMemory(*Mod1) || doesAccessMemory(*Mod2)) {
         Mem |= HEAP_MASK;
     }
     if (Stack) {
@@ -291,26 +300,26 @@ int main(int Argc, const char **Argv) {
     SMTExprs.insert(SMTExprs.end(), GlobalDeclarations.begin(),
                     GlobalDeclarations.end());
 
-    for (auto FunPair : Funs.get()) {
-        auto Fam1 = preprocessModule(*FunPair.first, "1");
-        auto Fam2 = preprocessModule(*FunPair.second, "2");
-        if (FunPair.first->getName() == Fun) {
-            SMTExprs.push_back(inInvariant(*FunPair.first, *FunPair.second,
-                                           InOutInvs.first, Mem, *Mod1, *Mod2,
-                                           Strings));
+    for (auto FunPair : makeZip(Funs.get(), Fams)) {
+        if (FunPair.first.first->getName() == Fun) {
+            SMTExprs.push_back(
+                inInvariant(*FunPair.first.first, *FunPair.first.second,
+                            InOutInvs.first, Mem, *Mod1, *Mod2, Strings));
             SMTExprs.push_back(outInvariant(InOutInvs.second, Mem));
             auto NewSMTExprs =
-                mainAssertion(*FunPair.first, *FunPair.second, Fam1, Fam2,
+                mainAssertion(*FunPair.first.first, *FunPair.first.second,
+                              FunPair.second.first, FunPair.second.second,
                               OffByN, Declarations, OnlyRec, Mem);
             Assertions.insert(Assertions.end(), NewSMTExprs.begin(),
                               NewSMTExprs.end());
         }
-        if (FunPair.first->getName() != Fun ||
-            (!(doesNotRecurse(*FunPair.first) &&
-               doesNotRecurse(*FunPair.second)) ||
+        if (FunPair.first.first->getName() != Fun ||
+            (!(doesNotRecurse(*FunPair.first.first) &&
+               doesNotRecurse(*FunPair.first.second)) ||
              OnlyRec)) {
             auto NewSMTExprs =
-                convertToSMT(*FunPair.first, *FunPair.second, Fam1, Fam2,
+                convertToSMT(*FunPair.first.first, *FunPair.first.second,
+                             FunPair.second.first, FunPair.second.second,
                              OffByN, Declarations, Mem);
             Assertions.insert(Assertions.end(), NewSMTExprs.begin(),
                               NewSMTExprs.end());
@@ -348,8 +357,8 @@ int main(int Argc, const char **Argv) {
     return 0;
 }
 
-shared_ptr<llvm::FunctionAnalysisManager> preprocessModule(llvm::Function &Fun,
-                                                           string Prefix) {
+shared_ptr<llvm::FunctionAnalysisManager>
+preprocessFunction(llvm::Function &Fun, string Prefix) {
     llvm::PassBuilder PB;
     auto FAM =
         make_shared<llvm::FunctionAnalysisManager>(true); // enable debug log
@@ -537,6 +546,23 @@ bool doesNotRecurse(llvm::Function &Fun) {
         }
     }
     return true;
+}
+
+bool doesAccessMemory(llvm::Module &Mod) {
+    for (auto &Fun : Mod) {
+        for (auto &BB : Fun) {
+            for (auto &Instr : BB) {
+                if (llvm::isa<llvm::LoadInst>(&Instr) ||
+                    llvm::isa<llvm::StoreInst>(&Instr)) {
+                    llvm::errs() << "Memory access:\n";
+                    Instr.print(llvm::errs());
+                    llvm::errs() << "\n";
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 std::vector<SMTRef> globalDeclarations(llvm::Module &Mod1, llvm::Module &Mod2) {

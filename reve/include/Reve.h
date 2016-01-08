@@ -19,7 +19,7 @@ auto initializeArgs(const char *ExeName, std::string Input1, std::string Input2)
 auto initializeDiagnostics(void) -> std::unique_ptr<clang::DiagnosticsEngine>;
 auto initializeDriver(clang::DiagnosticsEngine &Diags)
     -> std::unique_ptr<clang::driver::Driver>;
-auto preprocessModule(llvm::Function &Fun, std::string Prefix)
+auto preprocessFunction(llvm::Function &Fun, std::string Prefix)
     -> std::shared_ptr<llvm::FunctionAnalysisManager>;
 auto getCmd(clang::driver::Compilation &Comp, clang::DiagnosticsEngine &Diags)
     -> llvm::ErrorOr<
@@ -44,5 +44,6 @@ auto globalDeclarations(llvm::Module &Mod1, llvm::Module &Mod2)
     -> std::vector<SMTRef>;
 auto collectFunConds() -> std::multimap<string, string>;
 auto collectFunCondsInFile(std::string File) -> std::multimap<string, string>;
+auto doesAccessMemory(llvm::Module &Mod) -> bool;
 
 #endif // REVE_H
