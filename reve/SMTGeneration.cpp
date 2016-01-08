@@ -438,14 +438,13 @@ SMTRef interleaveAssignments(SMTRef EndClause,
     auto CallIt2 = CallInfo2.rbegin();
     auto AssignmentIt1 = AssignmentBlocks1.rbegin();
     auto AssignmentIt2 = AssignmentBlocks2.rbegin();
-    // crappy stuff
-    for (auto Assgns : makeReverse(*AssignmentIt1)) {
+    for (auto Assgns : makeReverse(*AssignmentIt2)) {
         Clause = nestLets(Clause, Assgns.Definitions);
         if (Assgns.Condition) {
             Clause = makeBinOp("=>", Assgns.Condition, Clause);
         }
     }
-    for (auto Assgns : makeReverse(*AssignmentIt2)) {
+    for (auto Assgns : makeReverse(*AssignmentIt1)) {
         Clause = nestLets(Clause, Assgns.Definitions);
         if (Assgns.Condition) {
             Clause = makeBinOp("=>", Assgns.Condition, Clause);
@@ -487,13 +486,13 @@ SMTRef interleaveAssignments(SMTRef EndClause,
             Clause = mutualRecursiveForall(
                 Clause, CallIt1->Args, CallIt2->Args, CallIt1->AssignedTo,
                 CallIt2->AssignedTo, CallIt1->CallName, CallIt1->Extern, Heap);
-            for (auto Assgns : makeReverse(*AssignmentIt1)) {
+            for (auto Assgns : makeReverse(*AssignmentIt2)) {
                 Clause = nestLets(Clause, Assgns.Definitions);
                 if (Assgns.Condition) {
                     Clause = makeBinOp("=>", Assgns.Condition, Clause);
                 }
             }
-            for (auto Assgns : makeReverse(*AssignmentIt2)) {
+            for (auto Assgns : makeReverse(*AssignmentIt1)) {
                 Clause = nestLets(Clause, Assgns.Definitions);
                 if (Assgns.Condition) {
                     Clause = makeBinOp("=>", Assgns.Condition, Clause);
