@@ -1,6 +1,7 @@
 #include "SMTGeneration.h"
 
 #include "Compat.h"
+#include "Helper.h"
 #include "MarkAnalysis.h"
 #include "AnnotStackPass.h"
 
@@ -115,8 +116,7 @@ vector<SMTRef> mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
     }
 
     auto SynchronizedPaths = mainSynchronizedPaths(
-        PathMap1, PathMap2, FreeVarsMap,
-        FunName, Declarations, Heap);
+        PathMap1, PathMap2, FreeVarsMap, FunName, Declarations, Heap);
     auto ForbiddenPaths =
         forbiddenPaths(PathMap1, PathMap2, Marked1, Marked2, FreeVarsMap,
                        OffByN, FunName, true, Heap);
@@ -1186,12 +1186,12 @@ vector<DefOrCallInfo> blockAssignments(llvm::BasicBlock *BB,
                                 ++i;
                             }
                         } else {
-                            llvm::errs() << "ERROR: currently only memcpy of "
-                                            "structs is supported\n";
+                            logError("currently only memcpy of structs is "
+                                     "supported\n");
                         }
                     } else {
-                        llvm::errs() << "ERROR: currently only memcpy of "
-                                        "bitcasted pointers is supported\n";
+                        logError("currently only memcpy of "
+                                 "bitcasted pointers is supported\n");
                     }
                 } else {
                     if (Heap & HEAP_MASK) {
@@ -1376,8 +1376,7 @@ instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
                          ->getOperand(0))
                      ->getString()));
     }
-    llvm::errs() << Instr << "\n";
-    llvm::errs() << "Couldn't convert instruction to def\n";
+    logErrorData("Couldn’t convert instruction to def\n", Instr);
     return make_shared<std::tuple<string, SMTRef>>("UNKNOWN INSTRUCTION",
                                                    name("UNKNOWN ARGS"));
 }
@@ -1420,8 +1419,7 @@ string opName(const llvm::BinaryOperator &Op) {
     case Instruction::URem:
         return "mod";
     default:
-        llvm::errs() << "Warning: unknown opcode: " << Op.getOpcodeName()
-                     << "\n";
+        logError("Unknown opcode: " + std::string(Op.getOpcodeName()) + "\n");
         return Op.getOpcodeName();
     }
 }

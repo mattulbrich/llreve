@@ -61,9 +61,7 @@ Paths_ traverse(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks,
         return MyPaths;
     }
     if (Visited.find(BB) != Visited.end()) {
-        logError("Found cycle at block:");
-        BB->print(llvm::errs());
-        llvm::errs() << "\n";
+        logErrorData("Found cycle at block:\n", *BB);
         exit(1);
     }
     Visited.insert(BB);
@@ -98,9 +96,7 @@ Paths_ traverse(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks,
         }
         return TraversedPaths0;
     }
-    llvm::errs() << "Unknown terminator\n";
-    TermInst->print(llvm::errs());
-    llvm::errs() << "\n";
+    logWarningData("Unknown terminator\n", *TermInst);
     return Paths_();
 }
 

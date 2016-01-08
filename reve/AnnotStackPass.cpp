@@ -1,6 +1,8 @@
 #include "AnnotStackPass.h"
 
 #include "MarkAnalysis.h"
+#include "Helper.h"
+
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/PassManager.h"
 
@@ -67,8 +69,8 @@ int typeSize(llvm::Type *Ty) {
         if (IntTy->getBitWidth() <= 64) {
             return 1;
         }
-        llvm::errs() << "Unsupported integer bitwidth: " << IntTy->getBitWidth()
-                     << "\n";
+        logError("Unsupported integer bitwidth: " +
+                 std::to_string(IntTy->getBitWidth()) + "\n");
     }
     if (Ty->isDoubleTy()) {
         return 1;
@@ -87,8 +89,6 @@ int typeSize(llvm::Type *Ty) {
     if (llvm::isa<llvm::PointerType>(Ty)) {
         return 1;
     }
-    llvm::errs() << "Couldn't calculate size of type\n";
-    Ty->print(llvm::errs());
-    llvm::errs() << "\n";
+    logErrorData("Couldn’t calculate size of type\n", *Ty);
     return 0;
 }

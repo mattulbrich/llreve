@@ -3,6 +3,7 @@
 #include "AnnotStackPass.h"
 #include "CFGPrinter.h"
 #include "Compat.h"
+#include "Helper.h"
 #include "PathAnalysis.h"
 #include "RemoveMarkPass.h"
 #include "SExpr.h"
@@ -400,7 +401,7 @@ zipFunctions(llvm::Module &Mod1, llvm::Module &Mod2) {
         }
     }
     if (Size1 != Size2) {
-        llvm::errs() << "Error: unequal number of functions\n";
+        logError("Number of functions is not equal\n");
         return ErrorOr<
             std::vector<std::pair<llvm::Function *, llvm::Function *>>>(
             std::error_code());
@@ -411,8 +412,7 @@ zipFunctions(llvm::Module &Mod1, llvm::Module &Mod2) {
         }
         auto Fun2 = Mod2.getFunction(Fun1.getName());
         if (!Fun2) {
-            llvm::errs() << "Error: no corresponding function for "
-                         << Fun1.getName() << "\n";
+            logError("No corresponding function for " + Fun1.getName() + "\n");
             return ErrorOr<
                 std::vector<std::pair<llvm::Function *, llvm::Function *>>>(
                 std::error_code());
@@ -554,9 +554,6 @@ bool doesAccessMemory(llvm::Module &Mod) {
             for (auto &Instr : BB) {
                 if (llvm::isa<llvm::LoadInst>(&Instr) ||
                     llvm::isa<llvm::StoreInst>(&Instr)) {
-                    llvm::errs() << "Memory access:\n";
-                    Instr.print(llvm::errs());
-                    llvm::errs() << "\n";
                     return true;
                 }
             }
