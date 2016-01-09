@@ -1222,7 +1222,7 @@ vector<DefOrCallInfo> blockAssignments(llvm::BasicBlock *BB,
         }
     }
     if (auto RetInst = llvm::dyn_cast<llvm::ReturnInst>(BB->getTerminator())) {
-        // TODO: use a more clever approach for void functions
+        // TODO (moritz): use a more clever approach for void functions
         auto RetName = name("0");
         if (RetInst->getReturnValue() != nullptr) {
             RetName = instrNameOrVal(RetInst->getReturnValue(),
@@ -1452,12 +1452,7 @@ SMTRef instrNameOrVal(const llvm::Value *Val, const llvm::Type *Ty,
         return name(Val->getName());
     }
     if (Val->getName().empty()) {
-        if (llvm::isa<llvm::ConcreteOperator<llvm::Operator,
-                                             llvm::Instruction::GetElementPtr>>(
-                Val)) {
-            // TODO: deal properly with string constants
-            return name("0");
-        }
+        logErrorData("Unnamed variable\n", *Val);
     }
     resolveName(Val->getName(), Constructed);
     if (Constructed.find(Val->getName()) == Constructed.end()) {
