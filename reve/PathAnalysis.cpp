@@ -5,6 +5,7 @@
 
 #include <iostream>
 
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/Instructions.h"
 
 char PathAnalysis::PassID;
@@ -55,6 +56,7 @@ std::map<int, Paths> findPaths(int For, llvm::BasicBlock *BB,
 
 Paths_ traverse(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks,
                 bool First, std::set<llvm::BasicBlock *> Visited) {
+    std::set<std::string> Constructed;
     if ((!First && isMarked(BB, MarkedBlocks)) || isReturn(BB, MarkedBlocks)) {
         Paths_ MyPaths;
         MyPaths.push_back(Path_());
@@ -91,10 +93,29 @@ Paths_ traverse(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks,
                                  name(BranchInst->getCondition()->getName())),
                      BranchInst->getSuccessor(1)));
         }
-        for (auto &Path : TraversedPaths1) {
-            TraversedPaths0.push_back(Path);
-        }
+        TraversedPaths0.insert(TraversedPaths0.end(), TraversedPaths1.begin(),
+                               TraversedPaths1.end());
         return TraversedPaths0;
+    }
+    if (auto SwitchInst = llvm::dyn_cast<llvm::SwitchInst>(TermInst)) {
+        Paths_ TraversedPaths;
+        for (auto Case : SwitchInst->cases()) {
+            int64_t Val = Case.getCaseValue()->getSExtValue();
+            auto TraversedPaths_ =
+                traverse(Case.getCaseSuccessor(), MarkedBlocks, false, Visited);
+            for (auto &P : TraversedPaths_) {
+                std::set<std::string> Constructed;
+                P.insert(
+                    P.begin(),
+                    Edge(makeBinOp("=",
+                                   name(SwitchInst->getCondition()->getName()),
+                                   name(std::to_string(Val))),
+                         Case.getCaseSuccessor()));
+            }
+            TraversedPaths.insert(TraversedPaths.end(), TraversedPaths_.begin(),
+                                  TraversedPaths_.end());
+        }
+        return TraversedPaths;
     }
     logWarningData("Unknown terminator\n", *TermInst);
     return Paths_();

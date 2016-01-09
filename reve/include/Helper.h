@@ -1,10 +1,13 @@
 #ifndef HELPER_H
 #define HELPER_H
 
+#include "SMT.h"
+
 #include <string>
 
 #include <unistd.h>
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/IR/Instructions.h"
 
 #define logError(Message) logError_(Message,__FILE__,__LINE__)
 #define logWarning(Message) logWarning_(Message,__FILE__,__LINE__)
