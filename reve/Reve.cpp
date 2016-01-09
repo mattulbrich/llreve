@@ -370,7 +370,7 @@ preprocessFunction(llvm::Function &Fun, string Prefix) {
     llvm::FunctionPassManager FPM(true); // enable debug log
 
     FPM.addPass(PromotePass()); // mem2reg
-    // FPM.addPass(llvm::SimplifyCFGPass());
+    FPM.addPass(llvm::SimplifyCFGPass());
     FPM.addPass(UniqueNamePass(Prefix)); // prefix register names
     FPM.addPass(RemoveMarkPass());
     if (ShowCFG) {
