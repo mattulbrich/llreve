@@ -1126,6 +1126,10 @@ vector<DefOrCallInfo> blockAssignments(llvm::BasicBlock *BB,
         if (!OnlyPhis && !llvm::isa<llvm::PHINode>(Instr)) {
             if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(Instr)) {
                 auto Fun = CallInst->getCalledFunction();
+                if (!Fun) {
+                    logErrorData("Call to undeclared function\n", *CallInst);
+                    exit(1);
+                }
                 if (Fun->getIntrinsicID() == llvm::Intrinsic::memcpy) {
                     auto CastInst0 = llvm::dyn_cast<llvm::CastInst>(
                         CallInst->getArgOperand(0));

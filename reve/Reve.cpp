@@ -91,7 +91,7 @@ std::vector<const char *> initializeArgs(const char *ExeName, string Input1,
     std::vector<const char *> Args;
     Args.push_back(ExeName); // add executable name
     Args.push_back("-xc");   // force language to C
-    Args.push_back("-std=c11");
+    // Args.push_back("-std=c11");
     if (!Include.empty()) {
         char *NewInclude = static_cast<char *>(malloc(Include.length() + 1));
         memcpy(static_cast<void *>(NewInclude), Include.data(),

@@ -22,7 +22,7 @@ template <typename Str> auto logError_(Str Message, const char* File, int Line) 
 
 template <typename Str> auto logWarning_(Str Message, const char* File, int Line) -> void {
     if (isatty(fileno(stdout))) {
-        llvm::errs() << "\x1b[33;2mWARNING\x1b[0m\x1b[1m (" << File << ":" << Line << "): " << Message << "\x1b[0m";
+        llvm::errs() << "\x1b[33;1mWARNING\x1b[0m\x1b[1m (" << File << ":" << Line << "): " << Message << "\x1b[0m";
     } else {
         llvm::errs() << "WARNING: " << Message;
     }
