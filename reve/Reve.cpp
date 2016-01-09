@@ -127,8 +127,7 @@ unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
 unique_ptr<Driver> initializeDriver(DiagnosticsEngine &Diags) {
     string TripleStr = llvm::sys::getProcessTriple();
     llvm::Triple Triple(TripleStr);
-    // TODO(moritz): Find the correct path instead of hardcoding it
-    auto Driver = llvm::make_unique<clang::driver::Driver>("/usr/bin/clang",
+    auto Driver = llvm::make_unique<clang::driver::Driver>("clang",
                                                            Triple.str(), Diags);
     Driver->setTitle("reve");
     Driver->setCheckInputsExist(false);

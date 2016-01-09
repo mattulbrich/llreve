@@ -20,9 +20,9 @@ vector<SMTRef> convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
                             shared_ptr<llvm::FunctionAnalysisManager> Fam2,
                             bool OffByN, vector<SMTRef> &Declarations,
                             Memory Heap) {
-    // TODO(moritz): check that the marks are the same
     auto PathMap1 = Fam1->getResult<PathAnalysis>(Fun1);
     auto PathMap2 = Fam2->getResult<PathAnalysis>(Fun2);
+    checkPathMaps(PathMap1, PathMap2);
     auto Marked1 = Fam1->getResult<MarkAnalysis>(Fun1);
     auto Marked2 = Fam2->getResult<MarkAnalysis>(Fun2);
     std::string FunName = Fun1.getName();
@@ -92,6 +92,7 @@ vector<SMTRef> mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
                              bool OnlyRec, Memory Heap) {
     auto PathMap1 = Fam1->getResult<PathAnalysis>(Fun1);
     auto PathMap2 = Fam2->getResult<PathAnalysis>(Fun2);
+    checkPathMaps(PathMap1, PathMap2);
     auto Marked1 = Fam1->getResult<MarkAnalysis>(Fun1);
     auto Marked2 = Fam2->getResult<MarkAnalysis>(Fun2);
     std::vector<SMTRef> SMTExprs;
@@ -1935,4 +1936,22 @@ vector<InterleaveStep> matchFunCalls(vector<CallInfo> CallInfos1,
     }
     std::reverse(InterleaveSteps.begin(), InterleaveSteps.end());
     return InterleaveSteps;
+}
+
+/// Check if the marks match
+void checkPathMaps(PathMap Map1, PathMap Map2) {
+    if (!mapSubset(Map1, Map2) || !mapSubset(Map2, Map1)) {
+        exit(1);
+    }
+}
+
+bool mapSubset(PathMap Map1, PathMap Map2) {
+    for (auto Pair : Map1) {
+        if (Map2.find(Pair.first) == Map2.end()) {
+            logError("Mark '" + std::to_string(Pair.first) +
+                     "' doesn’t exist in both files\n");
+            return false;
+        }
+    }
+    return true;
 }

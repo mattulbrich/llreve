@@ -225,5 +225,7 @@ auto stringConstants(llvm::Module &Mod, string Heap) -> std::vector<SMTRef>;
 auto matchFunCalls(std::vector<CallInfo> CallInfos1,
                    std::vector<CallInfo> CallInfos2)
     -> std::vector<InterleaveStep>;
+auto checkPathMaps(PathMap Map1, PathMap Map2) -> void;
+auto mapSubset(PathMap Map1, PathMap Map2) -> bool;
 
 #endif // SMT_GENERATION_H
