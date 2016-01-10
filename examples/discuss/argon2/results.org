@@ -1,0 +1,10 @@
+* Results
+| example | result                            | what’s changed                                          |
+|---------+-----------------------------------+---------------------------------------------------------|
+|       0 | unknown, even manual doesn’t work | nothing                                                 |
+|       1 | "                                 | memory access removed from loop                         |
+|       2 | sat                               | don’t return when thread is null (check is still there) |
+|       3 | sat                               | don’t calloc                                            |
+|       4 | sat                               | removed loop                                            |
+* Conclusion
+wtf

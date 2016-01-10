@@ -1,0 +1,10 @@
+* Manual solving
+- Removing the solution for INV_10 results in infinite loop
+  - z3 instantly solves this
+- Removing any of the other invariants results in unknown even when enabling undef
+  - Removing 13 results in unsat for z3
+  - Removing 12 results in infinite loop in z3
+    - Disabling undef results in unsat
+  - Removing 11 results in unsat
+* Conclusion
+wtf
