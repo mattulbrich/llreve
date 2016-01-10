@@ -1216,7 +1216,7 @@ instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
                 }
             }
         }
-        if (BinOp->getOpcode() == Instruction::Or) {
+        if (BinOp->getOpcode() == Instruction::Or || BinOp->getOpcode() == Instruction::And) {
             if (!(BinOp->getOperand(0)->getType()->isIntegerTy(1) &&
                   BinOp->getOperand(1)->getType()->isIntegerTy(1))) {
                 logWarning("Or of bitwidth > 1 is not supported\n");
@@ -1364,12 +1364,16 @@ string opName(const llvm::BinaryOperator &Op) {
         return "*";
     case Instruction::SDiv:
         return "div";
+    case Instruction::UDiv:
+        return "div";
+    case Instruction::SRem:
+        return "mod";
     case Instruction::URem:
         return "mod";
     case Instruction::Or:
-        // TODO(moritz): Check if we have i1 bitwidth here, otherwise our answer
-        // is incorrect
         return "or";
+    case Instruction::And:
+        return "and";
     default:
         logError("Unknown opcode: " + std::string(Op.getOpcodeName()) + "\n");
         return Op.getOpcodeName();
