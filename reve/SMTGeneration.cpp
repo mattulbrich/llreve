@@ -1221,7 +1221,9 @@ instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
             BinOp->getOpcode() == Instruction::Xor) {
             if (!(BinOp->getOperand(0)->getType()->isIntegerTy(1) &&
                   BinOp->getOperand(1)->getType()->isIntegerTy(1))) {
-                logWarning("Or of bitwidth > 1 is not supported\n");
+                logWarningData(
+                    "Bitwise operators of bitwidth > 1 is not supported\n",
+                    *BinOp);
             }
         }
         return make_shared<std::tuple<string, SMTRef>>(
