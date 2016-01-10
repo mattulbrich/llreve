@@ -1131,78 +1131,10 @@ vector<DefOrCallInfo> blockAssignments(llvm::BasicBlock *BB,
                     exit(1);
                 }
                 if (Fun->getIntrinsicID() == llvm::Intrinsic::memcpy) {
-                    auto CastInst0 = llvm::dyn_cast<llvm::CastInst>(
-                        CallInst->getArgOperand(0));
-                    auto CastInst1 = llvm::dyn_cast<llvm::CastInst>(
-                        CallInst->getArgOperand(1));
-                    if (CastInst0 && CastInst1) {
-                        auto Ty0 = llvm::dyn_cast<llvm::PointerType>(
-                            CastInst0->getSrcTy());
-                        auto Ty1 = llvm::dyn_cast<llvm::PointerType>(
-                            CastInst1->getSrcTy());
-                        auto StructTy0 = llvm::dyn_cast<llvm::StructType>(
-                            Ty0->getElementType());
-                        auto StructTy1 = llvm::dyn_cast<llvm::StructType>(
-                            Ty1->getElementType());
-                        if (StructTy0 && StructTy1) {
-                            assert(StructTy0->isLayoutIdentical(StructTy1));
-                            SMTRef BasePointerDest = instrNameOrVal(
-                                CallInst->getArgOperand(0),
-                                CallInst->getArgOperand(0)->getType(),
-                                Constructed);
-                            SMTRef BasePointerSrc = instrNameOrVal(
-                                CallInst->getArgOperand(1),
-                                CallInst->getArgOperand(1)->getType(),
-                                Constructed);
-                            string HeapNameSelect =
-                                "HEAP$" + std::to_string(Program);
-                            if (isStackOp(CastInst1)) {
-                                HeapNameSelect =
-                                    "STACK$" + std::to_string(Program);
-                            }
-                            string HeapNameStore =
-                                "HEAP$" + std::to_string(Program);
-                            if (isStackOp(CastInst0)) {
-                                HeapNameStore =
-                                    "STACK$" + std::to_string(Program);
-                            }
-                            int i = 0;
-                            for (auto ElTy : StructTy0->elements()) {
-                                SMTRef HeapSelect = name(
-                                    resolveName(HeapNameSelect, Constructed));
-                                SMTRef HeapStore = name(
-                                    resolveName(HeapNameStore, Constructed));
-                                if (!(ElTy->isIntegerTy() ||
-                                      ElTy->isPointerTy())) {
-                                    logErrorData("Only memcpy of integer and "
-                                                 "pointer types is supported\n",
-                                                 *ElTy);
-                                    exit(1);
-                                }
-                                SMTRef Select = makeBinOp(
-                                    "select", HeapSelect,
-                                    makeBinOp("+", BasePointerSrc,
-                                              name(std::to_string(i))));
-                                vector<SMTRef> Args = {
-                                    HeapStore,
-                                    makeBinOp("+", BasePointerDest,
-                                              name(std::to_string(i))),
-                                    Select};
-                                SMTRef Store = make_shared<Op>("store", Args);
-                                Definitions.push_back(
-                                    make_shared<std::tuple<string, SMTRef>>(
-                                        HeapNameStore, Store));
-                                Constructed.insert(HeapNameStore);
-                                ++i;
-                            }
-                        } else {
-                            logError("currently only memcpy of structs is "
-                                     "supported\n");
-                        }
-                    } else {
-                        logError("currently only memcpy of "
-                                 "bitcasted pointers is supported\n");
-                    }
+                    vector<DefOrCallInfo> Defs =
+                        memcpyIntrinsic(CallInst, Constructed, Program);
+                    Definitions.insert(Definitions.end(), Defs.begin(),
+                                       Defs.end());
                 } else {
                     if (Heap & HEAP_MASK) {
                         Definitions.push_back(DefOrCallInfo(
@@ -1969,4 +1901,68 @@ bool mapSubset(PathMap Map1, PathMap Map2) {
         }
     }
     return true;
+}
+
+vector<DefOrCallInfo> memcpyIntrinsic(llvm::CallInst *CallInst,
+                                      set<string> &Constructed, int Program) {
+    vector<DefOrCallInfo> Definitions;
+    auto CastInst0 = llvm::dyn_cast<llvm::CastInst>(CallInst->getArgOperand(0));
+    auto CastInst1 = llvm::dyn_cast<llvm::CastInst>(CallInst->getArgOperand(1));
+    if (CastInst0 && CastInst1) {
+        auto Ty0 = llvm::dyn_cast<llvm::PointerType>(CastInst0->getSrcTy());
+        auto Ty1 = llvm::dyn_cast<llvm::PointerType>(CastInst1->getSrcTy());
+        auto StructTy0 =
+            llvm::dyn_cast<llvm::StructType>(Ty0->getElementType());
+        auto StructTy1 =
+            llvm::dyn_cast<llvm::StructType>(Ty1->getElementType());
+        if (StructTy0 && StructTy1) {
+            assert(StructTy0->isLayoutIdentical(StructTy1));
+            SMTRef BasePointerDest = instrNameOrVal(
+                CallInst->getArgOperand(0),
+                CallInst->getArgOperand(0)->getType(), Constructed);
+            SMTRef BasePointerSrc = instrNameOrVal(
+                CallInst->getArgOperand(1),
+                CallInst->getArgOperand(1)->getType(), Constructed);
+            string HeapNameSelect = "HEAP$" + std::to_string(Program);
+            if (isStackOp(CastInst1)) {
+                HeapNameSelect = "STACK$" + std::to_string(Program);
+            }
+            string HeapNameStore = "HEAP$" + std::to_string(Program);
+            if (isStackOp(CastInst0)) {
+                HeapNameStore = "STACK$" + std::to_string(Program);
+            }
+            int i = 0;
+            for (auto ElTy : StructTy0->elements()) {
+                SMTRef HeapSelect =
+                    name(resolveName(HeapNameSelect, Constructed));
+                SMTRef HeapStore =
+                    name(resolveName(HeapNameStore, Constructed));
+                for (int j = 0; j < typeSize(ElTy); ++j) {
+                    SMTRef Select =
+                        makeBinOp("select", HeapSelect,
+                                  makeBinOp("+", BasePointerSrc,
+                                            name(std::to_string(i))));
+                    vector<SMTRef> Args = {HeapStore,
+                                           makeBinOp("+", BasePointerDest,
+                                                     name(std::to_string(i))),
+                                           Select};
+                    SMTRef Store = make_shared<Op>("store", Args);
+                    Definitions.push_back(
+                        make_shared<std::tuple<string, SMTRef>>(HeapNameStore,
+                                                                Store));
+                    ++i;
+                }
+                Constructed.insert(HeapNameStore);
+            }
+        } else {
+            logError("currently only memcpy of structs is "
+                     "supported\n");
+            exit(1);
+        }
+    } else {
+        logError("currently only memcpy of "
+                 "bitcasted pointers is supported\n");
+        exit(1);
+    }
+    return Definitions;
 }
