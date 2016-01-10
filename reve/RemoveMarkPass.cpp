@@ -21,7 +21,11 @@ llvm::PreservedAnalyses RemoveMarkPass::run(llvm::Function &Fun,
         }
     }
     for (auto Instr : ToDelete) {
-        for (auto User : Instr->users()) {
+        // Store the users to prevent modifications during the loop causing a
+        // segfault
+        std::vector<llvm::User *> Users;
+        Users.insert(Users.end(), Instr->users().begin(), Instr->users().end());
+        for (auto User : Users) {
             if (auto UserInstr = llvm::dyn_cast<llvm::Instruction>(User)) {
                 // handle and
                 if (auto BinOp =
@@ -56,7 +60,9 @@ void removeAnd(llvm::Instruction *Instr, llvm::BinaryOperator *BinOp) {
     }
     for (auto &Use : BinOp->uses()) {
         if (auto Used = llvm::dyn_cast<llvm::User>(Use.getUser())) {
-            Used->replaceUsesOfWith(BinOp, Replace);
+            if (Used != BinOp) {
+                Used->replaceUsesOfWith(BinOp, Replace);
+            }
         }
     }
     BinOp->eraseFromParent();
