@@ -1172,8 +1172,13 @@ vector<DefOrCallInfo> blockAssignments(llvm::BasicBlock *BB,
                                     resolveName(HeapNameSelect, Constructed));
                                 SMTRef HeapStore = name(
                                     resolveName(HeapNameStore, Constructed));
-                                assert(ElTy->isIntegerTy() ||
-                                       ElTy->isPointerTy());
+                                if (!(ElTy->isIntegerTy() ||
+                                      ElTy->isPointerTy())) {
+                                    logErrorData("Only memcpy of integer and "
+                                                 "pointer types is supported\n",
+                                                 *ElTy);
+                                    exit(1);
+                                }
                                 SMTRef Select = makeBinOp(
                                     "select", HeapSelect,
                                     makeBinOp("+", BasePointerSrc,
@@ -1467,6 +1472,7 @@ SMTRef instrNameOrVal(const llvm::Value *Val, const llvm::Type *Ty,
     }
     if (Val->getName().empty()) {
         logErrorData("Unnamed variable\n", *Val);
+        exit(1);
     }
     resolveName(Val->getName(), Constructed);
     if (Constructed.find(Val->getName()) == Constructed.end()) {
