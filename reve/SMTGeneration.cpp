@@ -199,21 +199,25 @@ vector<SMTRef> mainSynchronizedPaths(PathMap PathMap1, PathMap PathMap2,
         }
         for (auto &InnerPathMapIt : PathMapIt.second) {
             int EndIndex = InnerPathMapIt.first;
-            auto Paths = PathMap2.at(StartIndex).at(EndIndex);
-            for (auto &Path1 : InnerPathMapIt.second) {
-                for (auto &Path2 : Paths) {
-                    auto EndInvariant = mainInvariant(
-                        EndIndex, FreeVarsMap.at(EndIndex), FunName, Heap);
-                    auto Defs1 =
-                        assignmentsOnPath(Path1, 1, FreeVarsMap.at(StartIndex),
-                                          EndIndex == EXIT_MARK, Heap);
-                    auto Defs2 =
-                        assignmentsOnPath(Path2, 2, FreeVarsMap.at(StartIndex),
-                                          EndIndex == EXIT_MARK, Heap);
-                    PathExprs.push_back(assertForall(
-                        interleaveAssignments(EndInvariant, Defs1, Defs2, Heap),
-                        FreeVarsMap.at(StartIndex), StartIndex, Both, FunName,
-                        true));
+            if (PathMap2.at(StartIndex).find(EndIndex) !=
+                PathMap2.at(StartIndex).end()) {
+                auto Paths = PathMap2.at(StartIndex).at(EndIndex);
+                for (auto &Path1 : InnerPathMapIt.second) {
+                    for (auto &Path2 : Paths) {
+                        auto EndInvariant = mainInvariant(
+                            EndIndex, FreeVarsMap.at(EndIndex), FunName, Heap);
+                        auto Defs1 = assignmentsOnPath(
+                            Path1, 1, FreeVarsMap.at(StartIndex),
+                            EndIndex == EXIT_MARK, Heap);
+                        auto Defs2 = assignmentsOnPath(
+                            Path2, 2, FreeVarsMap.at(StartIndex),
+                            EndIndex == EXIT_MARK, Heap);
+                        PathExprs.push_back(
+                            assertForall(interleaveAssignments(
+                                             EndInvariant, Defs1, Defs2, Heap),
+                                         FreeVarsMap.at(StartIndex), StartIndex,
+                                         Both, FunName, true));
+                    }
                 }
             }
         }
