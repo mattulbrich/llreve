@@ -461,9 +461,7 @@ SMTRef interleaveAssignments(SMTRef EndClause,
     for (InterleaveStep Step : makeReverse(InterleaveSteps)) {
         switch (Step) {
         case StepFirst:
-            Clause = nonmutualRecursiveForall(
-                Clause, CallIt1->Args, CallIt1->AssignedTo, First,
-                CallIt1->CallName, CallIt1->Extern, Heap);
+            Clause = nonmutualRecursiveForall(Clause, *CallIt1, First, Heap);
             for (auto Assgns : makeReverse(*AssignmentIt1)) {
                 Clause = nestLets(Clause, Assgns.Definitions);
                 if (Assgns.Condition) {
@@ -474,9 +472,7 @@ SMTRef interleaveAssignments(SMTRef EndClause,
             ++AssignmentIt1;
             break;
         case StepSecond:
-            Clause = nonmutualRecursiveForall(
-                Clause, CallIt2->Args, CallIt2->AssignedTo, Second,
-                CallIt2->CallName, CallIt2->Extern, Heap);
+            Clause = nonmutualRecursiveForall(Clause, *CallIt2, Second, Heap);
             for (auto Assgns : makeReverse(*AssignmentIt2)) {
                 Clause = nestLets(Clause, Assgns.Definitions);
                 if (Assgns.Condition) {
@@ -488,9 +484,7 @@ SMTRef interleaveAssignments(SMTRef EndClause,
             break;
         case StepBoth:
             assert(CallIt1->CallName == CallIt2->CallName);
-            Clause = mutualRecursiveForall(
-                Clause, CallIt1->Args, CallIt2->Args, CallIt1->AssignedTo,
-                CallIt2->AssignedTo, CallIt1->CallName, CallIt1->Extern, Heap);
+            Clause = mutualRecursiveForall(Clause, *CallIt1, *CallIt2, Heap);
             for (auto Assgns : makeReverse(*AssignmentIt2)) {
                 Clause = nestLets(Clause, Assgns.Definitions);
                 if (Assgns.Condition) {
@@ -533,9 +527,7 @@ SMTRef nonmutualSMT(SMTRef EndClause,
         if (first) {
             first = false;
         } else {
-            Clause = nonmutualRecursiveForall(
-                Clause, CallIt->Args, CallIt->AssignedTo, For, CallIt->CallName,
-                CallIt->Extern, Heap);
+            Clause = nonmutualRecursiveForall(Clause, *CallIt, For, Heap);
             ++CallIt;
         }
         for (auto Assgns : makeReverse(AssgnsVec)) {
@@ -694,12 +686,16 @@ SMTRef mainInvariantDeclaration(int BlockIndex, vector<string> FreeVars,
 }
 
 /// Return the invariant name, special casing the entry block
-string invariantName(int Index, SMTFor For, std::string FunName) {
+string invariantName(int Index, SMTFor For, std::string FunName,
+                     uint32_t VarArgs) {
     string Name;
     if (Index == ENTRY_MARK) {
         Name = "INV_REC_" + FunName;
     } else {
         Name = "INV_" + std::to_string(Index);
+    }
+    if (VarArgs > 0) {
+        Name += "_" + std::to_string(VarArgs) + "varargs";
     }
     if (For == First) {
         return Name + "__1";
@@ -739,13 +735,13 @@ SMTRef dontLoopInvariant(SMTRef EndClause, int StartIndex, PathMap PathMap,
 /* -------------------------------------------------------------------------- */
 // Functions to generate various foralls
 
-SMTRef mutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args1,
-                             vector<SMTRef> Args2, std::string Ret1,
-                             std::string Ret2, std::string FunName, bool Extern,
+SMTRef mutualRecursiveForall(SMTRef Clause, CallInfo Call1, CallInfo Call2,
                              Memory Heap) {
+    uint32_t VarArgs = static_cast<uint32_t>(Call1.Args.size()) -
+                       Call1.Fun.getFunctionType()->getNumParams();
     vector<SortedVar> Args;
-    Args.push_back(SortedVar(Ret1, "Int"));
-    Args.push_back(SortedVar(Ret2, "Int"));
+    Args.push_back(SortedVar(Call1.AssignedTo, "Int"));
+    Args.push_back(SortedVar(Call2.AssignedTo, "Int"));
     if (Heap & HEAP_MASK) {
         Args.push_back(SortedVar("HEAP$1_res", "(Array Int Int)"));
         Args.push_back(SortedVar("HEAP$2_res", "(Array Int Int)"));
@@ -753,31 +749,32 @@ SMTRef mutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args1,
     vector<SMTRef> ImplArgs;
     vector<SMTRef> PreArgs;
 
-    if (Extern) {
-        for (auto Arg : Args1) {
+    if (Call1.Extern) {
+        for (auto Arg : Call1.Args) {
             ImplArgs.push_back(Arg);
         }
         if (Heap & HEAP_MASK) {
             ImplArgs.push_back(name("HEAP$1"));
         }
-        for (auto Arg : Args2) {
+        for (auto Arg : Call2.Args) {
             ImplArgs.push_back(Arg);
         }
         if (Heap & HEAP_MASK) {
             ImplArgs.push_back(name("HEAP$2"));
         }
-        ImplArgs.push_back(name(Ret1));
-        ImplArgs.push_back(name(Ret2));
+        ImplArgs.push_back(name(Call1.AssignedTo));
+        ImplArgs.push_back(name(Call2.AssignedTo));
         if (Heap & HEAP_MASK) {
             ImplArgs.push_back(name("HEAP$1_res"));
             ImplArgs.push_back(name("HEAP$2_res"));
         }
+
         SMTRef PostInvariant = std::make_shared<Op>(
-            invariantName(ENTRY_MARK, Both, FunName), ImplArgs);
+            invariantName(ENTRY_MARK, Both, Call1.CallName, VarArgs), ImplArgs);
         Clause = makeBinOp("=>", PostInvariant, Clause);
         return make_shared<Forall>(Args, Clause);
     } else {
-        for (auto Arg : Args1) {
+        for (auto Arg : Call1.Args) {
             ImplArgs.push_back(Arg);
         }
         if (Heap & HEAP_MASK) {
@@ -788,7 +785,7 @@ SMTRef mutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args1,
             ImplArgs.push_back(name("i1_stack"));
             ImplArgs.push_back(makeBinOp("select", "STACK$1", "i1_stack"));
         }
-        for (auto Arg : Args2) {
+        for (auto Arg : Call2.Args) {
             ImplArgs.push_back(Arg);
         }
         if (Heap & HEAP_MASK) {
@@ -801,8 +798,8 @@ SMTRef mutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args1,
         }
         PreArgs.insert(PreArgs.end(), ImplArgs.begin(), ImplArgs.end());
 
-        ImplArgs.push_back(name(Ret1));
-        ImplArgs.push_back(name(Ret2));
+        ImplArgs.push_back(name(Call1.AssignedTo));
+        ImplArgs.push_back(name(Call2.AssignedTo));
         if (Heap & HEAP_MASK) {
             ImplArgs.push_back(name("i1_res"));
             ImplArgs.push_back(makeBinOp("select", "HEAP$1_res", "i1_res"));
@@ -810,7 +807,7 @@ SMTRef mutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args1,
             ImplArgs.push_back(makeBinOp("select", "HEAP$2_res", "i2_res"));
         }
         SMTRef PostInvariant = std::make_shared<Op>(
-            invariantName(ENTRY_MARK, Both, FunName), ImplArgs);
+            invariantName(ENTRY_MARK, Both, Call1.CallName), ImplArgs);
         PostInvariant = wrapHeap(PostInvariant, Heap,
                                  {"i1", "i2", "i1_res", "i2_res", "i1_stack",
                                   "i2_stack", "STACK$1", "STACK$2"});
@@ -818,15 +815,15 @@ SMTRef mutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args1,
         Clause = make_shared<Forall>(Args, Clause);
         auto PreInv = wrapHeap(
             std::make_shared<Op>(
-                invariantName(ENTRY_MARK, Both, FunName) + "_PRE", PreArgs),
+                invariantName(ENTRY_MARK, Both, Call1.CallName) + "_PRE",
+                PreArgs),
             Heap, {"i1", "i2", "i1_stack", "i2_stack", "STACK$1", "STACK$2"});
         return makeBinOp("and", PreInv, Clause);
     }
 }
 
-SMTRef nonmutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args,
-                                std::string Ret, SMTFor For,
-                                std::string FunName, bool Extern, Memory Heap) {
+SMTRef nonmutualRecursiveForall(SMTRef Clause, CallInfo Call, SMTFor For,
+                                Memory Heap) {
     vector<SortedVar> ForallArgs;
     vector<SMTRef> ImplArgs;
     vector<SMTRef> PreArgs;
@@ -834,40 +831,42 @@ SMTRef nonmutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args,
     int Program = For == First ? 1 : 2;
     string ProgramS = std::to_string(Program);
 
-    ForallArgs.push_back(SortedVar(Ret, "Int"));
+    uint32_t VarArgs = static_cast<uint32_t>(Call.Args.size()) -
+                       Call.Fun.getFunctionType()->getNumParams();
+    ForallArgs.push_back(SortedVar(Call.AssignedTo, "Int"));
     if (Heap & HEAP_MASK) {
         ForallArgs.push_back(
             SortedVar("HEAP$" + ProgramS + "_res", "(Array Int Int)"));
     }
-    if (Extern) {
+    if (Call.Extern) {
         if (Heap & HEAP_MASK) {
-            Args.push_back(name("HEAP$" + ProgramS));
+            Call.Args.push_back(name("HEAP$" + ProgramS));
         }
-        Args.push_back(name(Ret));
+        Call.Args.push_back(name(Call.AssignedTo));
         if (Heap & HEAP_MASK) {
-            Args.push_back(name("HEAP$" + ProgramS + "_res"));
+            Call.Args.push_back(name("HEAP$" + ProgramS + "_res"));
         }
-        SMTRef EndInvariant =
-            make_shared<Op>(invariantName(ENTRY_MARK, For, FunName), Args);
+        SMTRef EndInvariant = make_shared<Op>(
+            invariantName(ENTRY_MARK, For, Call.CallName, VarArgs), Call.Args);
         Clause = makeBinOp("=>", EndInvariant, Clause);
         return make_shared<Forall>(ForallArgs, Clause);
     } else {
         if (Heap & HEAP_MASK) {
-            Args.push_back(name("i" + ProgramS));
-            Args.push_back(
+            Call.Args.push_back(name("i" + ProgramS));
+            Call.Args.push_back(
                 makeBinOp("select", "HEAP$" + ProgramS, "i" + ProgramS));
         }
         if (Heap & STACK_MASK) {
-            Args.push_back(name("i" + ProgramS + "_stack"));
-            Args.push_back(
+            Call.Args.push_back(name("i" + ProgramS + "_stack"));
+            Call.Args.push_back(
                 makeBinOp("select", "STACK$" + ProgramS, "i" + ProgramS));
         }
-        ImplArgs.insert(ImplArgs.end(), Args.begin(), Args.end());
-        PreArgs.insert(PreArgs.end(), Args.begin(), Args.end());
+        ImplArgs.insert(ImplArgs.end(), Call.Args.begin(), Call.Args.end());
+        PreArgs.insert(PreArgs.end(), Call.Args.begin(), Call.Args.end());
 
-        ImplArgs.push_back(name(Ret));
+        ImplArgs.push_back(name(Call.AssignedTo));
         if (Heap & HEAP_MASK) {
-            if (Extern) {
+            if (Call.Extern) {
                 ImplArgs.push_back(name("HEAP$" + ProgramS + "_res"));
             } else {
                 ImplArgs.push_back(name("i" + ProgramS + "_res"));
@@ -877,8 +876,8 @@ SMTRef nonmutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args,
             }
         }
 
-        SMTRef EndInvariant =
-            make_shared<Op>(invariantName(ENTRY_MARK, For, FunName), ImplArgs);
+        SMTRef EndInvariant = make_shared<Op>(
+            invariantName(ENTRY_MARK, For, Call.CallName), ImplArgs);
         if (Heap & STACK_MASK) {
             EndInvariant =
                 wrapHeap(EndInvariant, Heap,
@@ -891,7 +890,7 @@ SMTRef nonmutualRecursiveForall(SMTRef Clause, vector<SMTRef> Args,
         Clause = makeBinOp("=>", EndInvariant, Clause);
         Clause = make_shared<Forall>(ForallArgs, Clause);
         auto PreInv = std::make_shared<Op>(
-            invariantName(ENTRY_MARK, For, FunName) + "_PRE", PreArgs);
+            invariantName(ENTRY_MARK, For, Call.CallName) + "_PRE", PreArgs);
         if (Heap & STACK_MASK) {
             return makeBinOp("and",
                              wrapHeap(PreInv, Heap, {"i" + ProgramS,
@@ -1700,7 +1699,7 @@ std::shared_ptr<CallInfo> toCallInfo(string AssignedTo, int Program,
         ++i;
     }
     return make_shared<CallInfo>(AssignedTo, Fun->getName(), Args,
-                                 Fun->isDeclaration());
+                                 Fun->isDeclaration(), *Fun);
 }
 
 std::vector<std::string> resolveHeapReferences(std::vector<std::string> Args,
@@ -1844,25 +1843,17 @@ vector<SMTRef> stringConstants(llvm::Module &Mod, string Heap) {
 
 vector<InterleaveStep> matchFunCalls(vector<CallInfo> CallInfos1,
                                      vector<CallInfo> CallInfos2) {
-    vector<string> CallInfoNames1;
-    vector<string> CallInfoNames2;
-    std::transform(CallInfos1.begin(), CallInfos1.end(),
-                   std::back_inserter(CallInfoNames1),
-                   [](CallInfo C) { return C.CallName; });
-    std::transform(CallInfos2.begin(), CallInfos2.end(),
-                   std::back_inserter(CallInfoNames2),
-                   [](CallInfo C) { return C.CallName; });
-    vector<vector<size_t>> Table(CallInfoNames1.size() + 1,
-                                 vector<size_t>(CallInfoNames2.size() + 1, 0));
-    for (unsigned int i = 0; i <= CallInfoNames1.size(); ++i) {
+    vector<vector<size_t>> Table(CallInfos1.size() + 1,
+                                 vector<size_t>(CallInfos2.size() + 1, 0));
+    for (unsigned int i = 0; i <= CallInfos1.size(); ++i) {
         Table[i][0] = i;
     }
-    for (unsigned int j = 0; j <= CallInfoNames2.size(); ++j) {
+    for (unsigned int j = 0; j <= CallInfos2.size(); ++j) {
         Table[0][j] = j;
     }
-    for (unsigned int i = 1; i <= CallInfoNames1.size(); ++i) {
-        for (unsigned int j = 1; j <= CallInfoNames2.size(); ++j) {
-            if (CallInfoNames1[i - 1] == CallInfoNames2[j - 1]) {
+    for (unsigned int i = 1; i <= CallInfos1.size(); ++i) {
+        for (unsigned int j = 1; j <= CallInfos2.size(); ++j) {
+            if (CallInfos1[i - 1] == CallInfos2[j - 1]) {
                 Table[i][j] = Table[i - 1][j - 1];
             } else {
                 Table[i][j] =
@@ -1871,9 +1862,9 @@ vector<InterleaveStep> matchFunCalls(vector<CallInfo> CallInfos1,
         }
     }
     vector<InterleaveStep> InterleaveSteps;
-    unsigned long i = CallInfoNames1.size(), j = CallInfoNames2.size();
+    unsigned long i = CallInfos1.size(), j = CallInfos2.size();
     while (i > 0 && j > 0) {
-        if (CallInfoNames1[i - 1] == CallInfoNames2[j - 1]) {
+        if (CallInfos1[i - 1] == CallInfos2[j - 1]) {
             InterleaveSteps.push_back(StepBoth);
             --i;
             --j;

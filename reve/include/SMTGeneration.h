@@ -33,10 +33,16 @@ struct CallInfo {
     std::string CallName;
     std::vector<SMTRef> Args;
     bool Extern;
+    llvm::Function &Fun;
     CallInfo(std::string AssignedTo, std::string CallName,
-             std::vector<SMTRef> Args, bool Extern)
+             std::vector<SMTRef> Args, bool Extern, llvm::Function &Fun)
         : AssignedTo(AssignedTo), CallName(CallName), Args(Args),
-          Extern(Extern) {}
+          Extern(Extern), Fun(Fun) {}
+    bool operator==(const CallInfo &Other) const {
+        return CallName == Other.CallName &&
+               Fun.getFunctionType()->getNumParams() ==
+                   Other.Fun.getFunctionType()->getNumParams();
+    }
 };
 
 enum DefOrCallInfoTag { Call, Def };
@@ -136,7 +142,8 @@ auto invariantDeclaration(int BlockIndex, std::vector<std::string> FreeVars,
     -> std::pair<SMTRef, SMTRef>;
 auto mainInvariantDeclaration(int BlockIndex, std::vector<string> FreeVars,
                               SMTFor For, std::string FunName) -> SMTRef;
-auto invariantName(int Index, SMTFor For, std::string FunName) -> std::string;
+auto invariantName(int Index, SMTFor For, std::string FunName,
+                   uint32_t VarArgs = 0) -> std::string;
 auto dontLoopInvariant(SMTRef EndClause, int StartIndex, PathMap PathMap,
                        std::map<int, std::vector<string>> FreeVarsMap,
                        int Program, SMTFor For, Memory Heap) -> SMTRef;
@@ -144,13 +151,10 @@ auto dontLoopInvariant(SMTRef EndClause, int StartIndex, PathMap PathMap,
 /* -------------------------------------------------------------------------- */
 // Functions to generate various foralls
 
-auto mutualRecursiveForall(SMTRef Clause, std::vector<SMTRef> Args1,
-                           std::vector<SMTRef> Args2, std::string Ret1,
-                           std::string Ret2, std::string FunName, bool Extern,
+auto mutualRecursiveForall(SMTRef Clause, CallInfo Call1, CallInfo Call2,
                            Memory Heap) -> SMTRef;
-auto nonmutualRecursiveForall(SMTRef Clause, std::vector<SMTRef> Args,
-                              std::string Ret, SMTFor For, std::string FunName,
-                              bool Extern, Memory Heap) -> SMTRef;
+auto nonmutualRecursiveForall(SMTRef Clause, CallInfo Call, SMTFor For,
+                              Memory Heap) -> SMTRef;
 auto assertForall(SMTRef Clause, std::vector<std::string> FreeVars,
                   int BlockIndex, SMTFor For, std::string FunName, bool Main)
     -> SMTRef;

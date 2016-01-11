@@ -37,8 +37,9 @@ auto processFile(std::string File, SMTRef &In, SMTRef &Out) -> void;
 auto externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
                         std::vector<SMTRef> &Declarations, uint8_t Mem,
                         std::multimap<string, string> FunCondMap) -> void;
-auto funArgs(llvm::Function &Fun, std::string Prefix) -> std::vector<SortedVar>;
-auto externFunDecl(llvm::Function &Fun, int Program, uint8_t Mem) -> SMTRef;
+auto funArgs(llvm::Function &Fun, std::string Prefix, uint32_t VarArgs) -> std::vector<SortedVar>;
+auto varArgs(llvm::Function &Fun) -> std::set<uint32_t>;
+auto externFunDecl(llvm::Function &Fun, int Program, uint8_t Mem) -> std::vector<SMTRef>;
 auto doesNotRecurse(llvm::Function &Fun) -> bool;
 auto globalDeclarations(llvm::Module &Mod1, llvm::Module &Mod2)
     -> std::vector<SMTRef>;

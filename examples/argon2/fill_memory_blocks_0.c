@@ -46,10 +46,8 @@ void fill_memory_blocks(argon2_instance_t *instance) {
                     rc = argon2_thread_join(thread[l - instance->threads]);
                     if (rc) {
                         // CHANGED: I hate varargs
-                        /* printf( */
-                        /*     "ERROR; return code from pthread_join() #1 is
-                         * %d\n", */
-                        /*     rc); */
+                        printf("ERROR; return code from pthread_join() #1 is % d\n",
+                               rc);
                         exit(-1);
                     }
                 }
@@ -69,10 +67,8 @@ void fill_memory_blocks(argon2_instance_t *instance) {
                                           (void *)&thr_data[l]);
                 if (rc) {
                     // CHANGED: I still hate varargs
-                    /* printf("ERROR; return code from argon2_thread_create() is
-                     * " */
-                    /*        "%d\n", */
-                    /*        rc); */
+                    printf("ERROR; return code from argon2_thread_create() is %d\n",
+                           rc);
                     exit(-1);
                 }
 
@@ -86,9 +82,8 @@ void fill_memory_blocks(argon2_instance_t *instance) {
                 rc = argon2_thread_join(thread[l]);
                 if (rc) {
                     // CHANGED: By now you should know my opinion about varargs
-                    /* printf("ERROR; return code from pthread_join() is %d\n",
-                     */
-                    /*        rc); */
+                    printf("ERROR; return code from pthread_join() is %d\n",
+                           rc);
                     exit(-1);
                 }
             }

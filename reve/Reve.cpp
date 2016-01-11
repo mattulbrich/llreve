@@ -127,8 +127,8 @@ unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
 unique_ptr<Driver> initializeDriver(DiagnosticsEngine &Diags) {
     string TripleStr = llvm::sys::getProcessTriple();
     llvm::Triple Triple(TripleStr);
-    auto Driver = llvm::make_unique<clang::driver::Driver>("clang",
-                                                           Triple.str(), Diags);
+    auto Driver =
+        llvm::make_unique<clang::driver::Driver>("clang", Triple.str(), Diags);
     Driver->setTitle("reve");
     Driver->setCheckInputsExist(false);
     return Driver;
@@ -430,83 +430,113 @@ void externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
             auto Fun2P = Mod2.getFunction(Fun1.getName());
             if (Fun2P && Fun1.getName() != "__mark") {
                 llvm::Function &Fun2 = *Fun2P;
-                std::vector<SortedVar> Args;
-                auto FunArgs1 = funArgs(Fun1, "arg1_");
-                for (auto Arg : FunArgs1) {
-                    Args.push_back(Arg);
+                // Calculate the number of varargs used in function calls
+                set<uint32_t> VarArgs = varArgs(Fun1);
+                set<uint32_t> VarArgs2 = varArgs(Fun2);
+                for (auto El : VarArgs2) {
+                    VarArgs.insert(El);
                 }
-                if (Mem & HEAP_MASK) {
-                    Args.push_back(SortedVar("HEAP$1", "(Array Int Int)"));
+                for (auto ArgNum : VarArgs) {
+                    std::vector<SortedVar> Args;
+                    auto FunArgs1 = funArgs(Fun1, "arg1_", ArgNum);
+                    for (auto Arg : FunArgs1) {
+                        Args.push_back(Arg);
+                    }
+                    if (Mem & HEAP_MASK) {
+                        Args.push_back(SortedVar("HEAP$1", "(Array Int Int)"));
+                    }
+                    auto FunArgs2 = funArgs(Fun2, "arg2_", ArgNum);
+                    for (auto Arg : FunArgs2) {
+                        Args.push_back(Arg);
+                    }
+                    if (Mem) {
+                        Args.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
+                    }
+                    std::string FunName = invariantName(
+                        ENTRY_MARK, Both, Fun1.getName().str(), ArgNum);
+                    Args.push_back(SortedVar("res1", "Int"));
+                    Args.push_back(SortedVar("res2", "Int"));
+                    if (Mem & HEAP_MASK) {
+                        Args.push_back(
+                            SortedVar("HEAP$1_res", "(Array Int Int)"));
+                        Args.push_back(
+                            SortedVar("HEAP$2_res", "(Array Int Int)"));
+                    }
+                    SMTRef Body = makeBinOp("=", "res1", "res2");
+                    if (Mem & HEAP_MASK) {
+                        std::vector<SortedVar> ForallArgs = {
+                            SortedVar("i", "Int")};
+                        SMTRef HeapOutEqual = make_shared<Forall>(
+                            ForallArgs,
+                            makeBinOp("=",
+                                      makeBinOp("select", "HEAP$1_res", "i"),
+                                      makeBinOp("select", "HEAP$2_res", "i")));
+                        Body = makeBinOp("and", Body, HeapOutEqual);
+                    }
+                    std::vector<SMTRef> EqualOut;
+                    auto Range = FunCondMap.equal_range(Fun1.getName());
+                    for (auto I = Range.first; I != Range.second; ++I) {
+                        EqualOut.push_back(name(I->second));
+                    }
+                    if (!EqualOut.empty()) {
+                        EqualOut.push_back(Body);
+                        Body = make_shared<Op>("and", EqualOut);
+                    }
+                    std::vector<SMTRef> Equal;
+                    for (auto It1 = FunArgs1.begin(), It2 = FunArgs2.begin();
+                         It1 != FunArgs1.end() && It2 != FunArgs2.end();
+                         ++It1) {
+                        Equal.push_back(makeBinOp("=", It1->Name, It2->Name));
+                        ++It2;
+                    }
+                    if (Mem & HEAP_MASK) {
+                        std::vector<SortedVar> ForallArgs = {
+                            SortedVar("i", "Int")};
+                        SMTRef HeapInEqual = make_shared<Forall>(
+                            ForallArgs,
+                            makeBinOp("=", makeBinOp("select", "HEAP$1", "i"),
+                                      makeBinOp("select", "HEAP$2", "i")));
+                        Equal.push_back(HeapInEqual);
+                    }
+                    Body = makeBinOp("=>", make_shared<Op>("and", Equal), Body);
+                    SMTRef MainInv =
+                        make_shared<FunDef>(FunName, Args, "Bool", Body);
+                    Declarations.push_back(MainInv);
                 }
-                auto FunArgs2 = funArgs(Fun2, "arg2_");
-                for (auto Arg : FunArgs2) {
-                    Args.push_back(Arg);
-                }
-                if (Mem) {
-                    Args.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
-                }
-                std::string FunName = "INV_REC_" + Fun1.getName().str();
-                Args.push_back(SortedVar("res1", "Int"));
-                Args.push_back(SortedVar("res2", "Int"));
-                if (Mem & HEAP_MASK) {
-                    Args.push_back(SortedVar("HEAP$1_res", "(Array Int Int)"));
-                    Args.push_back(SortedVar("HEAP$2_res", "(Array Int Int)"));
-                }
-                SMTRef Body = makeBinOp("=", "res1", "res2");
-                if (Mem & HEAP_MASK) {
-                    std::vector<SortedVar> ForallArgs = {SortedVar("i", "Int")};
-                    SMTRef HeapOutEqual = make_shared<Forall>(
-                        ForallArgs,
-                        makeBinOp("=", makeBinOp("select", "HEAP$1_res", "i"),
-                                  makeBinOp("select", "HEAP$2_res", "i")));
-                    Body = makeBinOp("and", Body, HeapOutEqual);
-                }
-                std::vector<SMTRef> EqualOut;
-                auto Range = FunCondMap.equal_range(Fun1.getName());
-                for (auto I = Range.first; I != Range.second; ++I) {
-                    EqualOut.push_back(name(I->second));
-                }
-                if (!EqualOut.empty()) {
-                    EqualOut.push_back(Body);
-                    Body = make_shared<Op>("and", EqualOut);
-                }
-                std::vector<SMTRef> Equal;
-                for (auto It1 = Fun1.arg_begin(), It2 = Fun2.arg_begin();
-                     It1 != Fun1.arg_end() && It2 != Fun2.arg_end(); ++It1) {
-                    Equal.push_back(
-                        makeBinOp("=", It1->getName(), It2->getName()));
-                    ++It2;
-                }
-                if (Mem & HEAP_MASK) {
-                    std::vector<SortedVar> ForallArgs = {SortedVar("i", "Int")};
-                    SMTRef HeapInEqual = make_shared<Forall>(
-                        ForallArgs,
-                        makeBinOp("=", makeBinOp("select", "HEAP$1", "i"),
-                                  makeBinOp("select", "HEAP$2", "i")));
-                    Equal.push_back(HeapInEqual);
-                }
-                Body = makeBinOp("=>", make_shared<Op>("and", Equal), Body);
-                SMTRef MainInv =
-                    make_shared<FunDef>(FunName, Args, "Bool", Body);
-                Declarations.push_back(MainInv);
             }
         }
     }
     for (auto &Fun1 : Mod1) {
         if (Fun1.isDeclaration() && !Fun1.isIntrinsic() &&
             Fun1.getName() != "__mark") {
-            Declarations.push_back(externFunDecl(Fun1, 1, Mem));
+            auto Decls = externFunDecl(Fun1, 1, Mem);
+            Declarations.insert(Declarations.end(), Decls.begin(), Decls.end());
         }
     }
     for (auto &Fun2 : Mod2) {
         if (Fun2.isDeclaration() && !Fun2.isIntrinsic() &&
             Fun2.getName() != "__mark") {
-            Declarations.push_back(externFunDecl(Fun2, 2, Mem));
+            auto Decls = externFunDecl(Fun2, 2, Mem);
+            Declarations.insert(Declarations.end(), Decls.begin(), Decls.end());
         }
     }
 }
 
-std::vector<SortedVar> funArgs(llvm::Function &Fun, std::string Prefix) {
+std::set<uint32_t> varArgs(llvm::Function &Fun) {
+    std::set<uint32_t> VarArgs;
+    for (auto User : Fun.users()) {
+        if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(User)) {
+            VarArgs.insert(CallInst->getNumArgOperands() -
+                           Fun.getFunctionType()->getNumParams());
+        } else {
+            logWarningData("Unsupported use of function\n", *User);
+        }
+    }
+    return VarArgs;
+}
+
+std::vector<SortedVar> funArgs(llvm::Function &Fun, std::string Prefix,
+                               uint32_t VarArgs) {
     std::vector<SortedVar> Args;
     int ArgIndex = 0;
     for (auto &Arg : Fun.getArgumentList()) {
@@ -515,20 +545,30 @@ std::vector<SortedVar> funArgs(llvm::Function &Fun, std::string Prefix) {
         }
         Args.push_back(SortedVar(Arg.getName(), "Int"));
     }
+    for (uint32_t i = 0; i < VarArgs; ++i) {
+        Args.push_back(SortedVar("var" + Prefix + std::to_string(i), "Int"));
+    }
     return Args;
 }
 
-SMTRef externFunDecl(llvm::Function &Fun, int Program, Memory Mem) {
-    std::vector<SortedVar> Args = funArgs(Fun, "arg_");
-    if (Mem) {
-        Args.push_back(SortedVar("HEAP", "(Array Int Int)"));
+std::vector<SMTRef> externFunDecl(llvm::Function &Fun, int Program,
+                                  Memory Mem) {
+    std::vector<SMTRef> Decls;
+    set<uint32_t> VarArgs = varArgs(Fun);
+    for (auto ArgNum : VarArgs) {
+        std::vector<SortedVar> Args = funArgs(Fun, "arg_", ArgNum);
+        if (Mem) {
+            Args.push_back(SortedVar("HEAP", "(Array Int Int)"));
+        }
+        Args.push_back(SortedVar("res", "Int"));
+        Args.push_back(SortedVar("HEAP_res", "(Array Int Int)"));
+        std::string FunName =
+            invariantName(ENTRY_MARK, Program == 1 ? First : Second,
+                          Fun.getName().str(), ArgNum);
+        SMTRef Body = name("true");
+        Decls.push_back(make_shared<FunDef>(FunName, Args, "Bool", Body));
     }
-    Args.push_back(SortedVar("res", "Int"));
-    Args.push_back(SortedVar("HEAP_res", "(Array Int Int)"));
-    std::string FunName =
-        "INV_REC_" + Fun.getName().str() + "__" + std::to_string(Program);
-    SMTRef Body = name("true");
-    return make_shared<FunDef>(FunName, Args, "Bool", Body);
+    return Decls;
 }
 
 // this does not actually check if the function recurses but the next version of
