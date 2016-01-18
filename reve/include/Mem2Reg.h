@@ -1,5 +1,4 @@
-#ifndef MEM2REG_H
-#define MEM2REG_H
+#pragma once
 
 #include "llvm/IR/PassManager.h"
 
@@ -10,5 +9,3 @@ struct PromotePass {
                                 llvm::FunctionAnalysisManager *AM);
     static llvm::StringRef name() { return "PromotePass"; }
 };
-
-#endif // MEM2REG_H

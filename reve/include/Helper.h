@@ -1,5 +1,4 @@
-#ifndef HELPER_H
-#define HELPER_H
+#pragma once
 
 #include "SMT.h"
 
@@ -42,5 +41,3 @@ template <typename Str, typename A> auto logWarningData_(Str Message, A& El, con
     El.print(llvm::errs());
     llvm::errs() << "\n";
 }
-
-#endif // HELPER_H

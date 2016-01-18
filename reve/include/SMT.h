@@ -1,5 +1,4 @@
-#ifndef SMT_H
-#define SMT_H
+#pragma once
 
 #include "SExpr.h"
 

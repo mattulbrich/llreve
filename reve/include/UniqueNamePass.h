@@ -1,5 +1,4 @@
-#ifndef UNIQUENAMEPASS_H
-#define UNIQUENAMEPASS_H
+#pragma once
 
 #include "llvm/IR/PassManager.h"
 
@@ -15,5 +14,3 @@ class UniqueNamePass {
 };
 
 void makePrefixed(llvm::Value& Val, std::string Prefix, std::map<std::string, int> &InstructionNames);
-
-#endif // UNIQUENAMEPASS_H

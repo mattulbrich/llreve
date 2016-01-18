@@ -1,5 +1,4 @@
-#ifndef SEXPR_H
-#define SEXPR_H
+#pragma once
 
 #include <algorithm>
 #include <memory>
@@ -98,5 +97,3 @@ std::ostream &operator<<(std::ostream &OS, const SExpr<T> &Val) {
 }
 
 } // namespace sexpr
-
-#endif // SEXPR_H

@@ -1,5 +1,4 @@
-#ifndef MARKANALYSIS_H
-#define MARKANALYSIS_H
+#pragma once
 
 #include "Mem2Reg.h"
 
@@ -27,5 +26,3 @@ class MarkAnalysis {
   private:
     static char PassID;
 };
-
-#endif // MARKANALYSIS_H

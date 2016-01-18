@@ -1,5 +1,4 @@
-#ifndef ANNOTSTACKPASS_H
-#define ANNOTSTACKPASS_H
+#pragma once
 
 #include "llvm/IR/PassManager.h"
 
@@ -13,5 +12,3 @@ class AnnotStackPass {
 auto markStackInstruction(llvm::Instruction &Inst, std::string MetadataName,
                           int Pointer) -> void;
 auto typeSize(llvm::Type *Ty) -> int;
-
-#endif // ANNOTSTACKPASS_H

@@ -1,5 +1,4 @@
-#ifndef UNIFYFUNCTIONEXITNODES_H
-#define UNIFYFUNCTIONEXITNODES_H
+#pragma once
 
 #include "llvm/IR/PassManager.h"
 
@@ -13,5 +12,3 @@ class UnifyFunctionExitNodes {
   private:
     static char PassID;
 };
-
-#endif // UNIFYFUNCTIONEXITNODES_H

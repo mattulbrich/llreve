@@ -1,5 +1,4 @@
-#ifndef COMPAT_H
-#define COMPAT_H
+#pragma once
 
 #include <iterator>
 #include <algorithm>
@@ -69,5 +68,3 @@ template <typename A> std::set<A> immutableInsert(std::set<A> Set, A El) {
     SetNew.insert(El);
     return SetNew;
 }
-
-#endif // COMPAT_H

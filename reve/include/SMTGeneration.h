@@ -1,5 +1,4 @@
-#ifndef SMT_GENERATION_H
-#define SMT_GENERATION_H
+#pragma once
 
 #include "PathAnalysis.h"
 #include "SMT.h"
@@ -233,5 +232,3 @@ auto checkPathMaps(PathMap Map1, PathMap Map2) -> void;
 auto mapSubset(PathMap Map1, PathMap Map2) -> bool;
 auto memcpyIntrinsic(llvm::CallInst *CallInst, set<string> &Constructed,
                      int Program) -> std::vector<DefOrCallInfo>;
-
-#endif // SMT_GENERATION_H

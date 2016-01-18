@@ -1,5 +1,4 @@
-#ifndef REMOVEMARKPASS_H
-#define REMOVEMARKPASS_H
+#pragma once
 
 #include "MarkAnalysis.h"
 
@@ -15,5 +14,3 @@ class RemoveMarkPass {
 };
 
 void removeAnd(llvm::Instruction *Instr, llvm::BinaryOperator *BinOp);
-
-#endif // REMOVEMARKPASS_H

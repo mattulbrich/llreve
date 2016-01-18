@@ -1,5 +1,4 @@
-#ifndef PATHANALYSIS_H
-#define PATHANALYSIS_H
+#pragma once
 
 #include "SMT.h"
 #include "MarkAnalysis.h"
@@ -52,5 +51,3 @@ auto isMarked(llvm::BasicBlock *BB,
               BidirBlockMarkMap MarkedBlocks) -> bool;
 
 auto isReturn(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks) -> bool;
-
-#endif // PATHANALYSIS_H

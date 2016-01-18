@@ -1,5 +1,4 @@
-#ifndef REVE_H
-#define REVE_H
+#pragma once
 
 #include "PathAnalysis.h"
 #include "SMT.h"
@@ -46,5 +45,3 @@ auto globalDeclarations(llvm::Module &Mod1, llvm::Module &Mod2)
 auto collectFunConds() -> std::multimap<string, string>;
 auto collectFunCondsInFile(std::string File) -> std::multimap<string, string>;
 auto doesAccessMemory(llvm::Module &Mod) -> bool;
-
-#endif // REVE_H
