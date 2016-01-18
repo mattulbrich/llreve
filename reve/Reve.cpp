@@ -193,14 +193,14 @@ getCodeGenAction(const ArgStringList &CCArgs, clang::DiagnosticsEngine &Diags) {
     Clang.setInvocation(CI.release());
     Clang.createDiagnostics();
     if (!Clang.hasDiagnostics()) {
-        std::cerr << "Couldn't enable diagnostics\n";
-        return nullptr;
+        logError("Couldn’t enable diagnostics\n");
+        exit(1);
     }
     std::unique_ptr<CodeGenAction> Act =
         llvm::make_unique<clang::EmitLLVMOnlyAction>();
     if (!Clang.ExecuteAction(*Act)) {
-        std::cerr << "Couldn't execute action\n";
-        return nullptr;
+        logError("Couldn’t execute action\n");
+        exit(1);
     }
     return Act;
 }
