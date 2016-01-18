@@ -194,5 +194,3 @@ class Comment : public SMTExpr {
 
 auto nestLets(SMTRef Clause, std::vector<std::tuple<std::string, SMTRef>> Defs)
     -> SMTRef;
-
-#endif // SMT_H

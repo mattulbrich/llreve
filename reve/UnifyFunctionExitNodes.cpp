@@ -7,8 +7,9 @@ char UnifyFunctionExitNodes::PassID;
 using llvm::BasicBlock;
 using llvm::Function;
 
-BasicBlock *UnifyFunctionExitNodes::run(llvm::Function &Fun,
-                                        llvm::FunctionAnalysisManager * /*unused*/) {
+BasicBlock *
+UnifyFunctionExitNodes::run(llvm::Function &Fun,
+                            llvm::FunctionAnalysisManager * /*unused*/) {
     // Loop over all of the blocks in a function, tracking all of the blocks
     // that
     // return.
@@ -22,8 +23,8 @@ BasicBlock *UnifyFunctionExitNodes::run(llvm::Function &Fun,
             ReturningBlocks.push_back(I);
         } else if (llvm::isa<llvm::UnreachableInst>(I->getTerminator())) {
             UnreachableBlocks.push_back(I);
-}
-}
+        }
+    }
 
     // Then unreachable blocks.
     if (UnreachableBlocks.empty()) {
@@ -65,8 +66,9 @@ BasicBlock *UnifyFunctionExitNodes::run(llvm::Function &Fun,
         llvm::ReturnInst::Create(Fun.getContext(), nullptr, NewRetBlock);
     } else {
         // If the function doesn't return void... add a PHI node to the block...
-        PN = llvm::PHINode::Create(Fun.getReturnType(), static_cast<unsigned int>(ReturningBlocks.size()),
-                             "UnifiedRetVal");
+        PN = llvm::PHINode::Create(
+            Fun.getReturnType(),
+            static_cast<unsigned int>(ReturningBlocks.size()), "UnifiedRetVal");
         NewRetBlock->getInstList().push_back(PN);
         llvm::ReturnInst::Create(Fun.getContext(), PN, NewRetBlock);
     }
@@ -80,7 +82,7 @@ BasicBlock *UnifyFunctionExitNodes::run(llvm::Function &Fun,
         // is merging into this new block...
         if (PN != nullptr) {
             PN->addIncoming(BB->getTerminator()->getOperand(0), BB);
-}
+        }
 
         BB->getInstList().pop_back(); // Remove the return insn
         llvm::BranchInst::Create(NewRetBlock, BB);
