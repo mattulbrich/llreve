@@ -373,10 +373,10 @@ preprocessFunction(llvm::Function &Fun, string Prefix) {
     FPM.addPass(PromotePass()); // mem2reg
     FPM.addPass(llvm::SimplifyCFGPass());
     FPM.addPass(UniqueNamePass(Prefix)); // prefix register names
-    FPM.addPass(RemoveMarkPass());
     if (ShowCFG) {
         FPM.addPass(CFGViewerPass()); // show cfg
     }
+    FPM.addPass(RemoveMarkPass());
     FPM.addPass(AnnotStackPass()); // annotate load/store of stack variables
     FPM.addPass(llvm::VerifierPass());
     // FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
