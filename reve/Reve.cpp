@@ -9,6 +9,7 @@
 #include "SExpr.h"
 #include "SMT.h"
 #include "SMTGeneration.h"
+#include "SplitEntryBlockPass.h"
 #include "UnifyFunctionExitNodes.h"
 #include "UniqueNamePass.h"
 
@@ -372,6 +373,7 @@ preprocessFunction(llvm::Function &Fun, string Prefix) {
 
     FPM.addPass(PromotePass()); // mem2reg
     FPM.addPass(llvm::SimplifyCFGPass());
+    FPM.addPass(SplitEntryBlockPass());
     FPM.addPass(UniqueNamePass(Prefix)); // prefix register names
     if (ShowCFG) {
         FPM.addPass(CFGViewerPass()); // show cfg
