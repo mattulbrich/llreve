@@ -9,8 +9,10 @@ int g(int n)
     i--;
   }
 
-  r=0;
   i=n;
+  n=r;
+  r=0;
+
   while (__mark(1) & (i > 0)) {
     r = r + n;
     i--;
