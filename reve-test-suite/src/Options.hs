@@ -7,7 +7,8 @@ data Options = Options {optReve :: FilePath
                        ,optZ3 :: FilePath
                        ,optExamples :: FilePath
                        ,optBuild :: FilePath
-                       ,optProcesses :: Int}
+                       ,optProcesses :: Int
+                       ,optVerbose :: Bool}
 
 optionParser :: Parser Options
 optionParser =
@@ -26,6 +27,5 @@ optionParser =
              help "Directory where the smt files are placed in" <>
              value "build") <*>
   option auto
-         (short 'j' <> metavar "PROCESSES" <>
-          help "Number of parallel solver instances" <>
-          value 1)
+         (short 'j' <> help "Number of parallel solver instances" <> value 1) <*>
+  switch (short 'v' <> help "Verbose output")

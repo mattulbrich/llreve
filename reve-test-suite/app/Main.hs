@@ -39,8 +39,12 @@ instance MonadSafe m => MonadSafe (LoggingT' m) where
   register = lift . register
   release = lift . release
 
-run :: Effect (LoggingT' (SafeT IO)) r -> IO r
-run = runSafeT . runStderrLoggingT . runLoggingT' . runEffect
+run :: Bool -> Effect (LoggingT' (SafeT IO)) r -> IO r
+run verbose =
+  runSafeT .
+  runStderrLoggingT .
+  filterLogger (\_source level -> verbose || level > LevelDebug) .
+  runLoggingT' . runEffect
 
 main :: IO ()
 main =
@@ -49,7 +53,7 @@ main =
      (mergeOutput,mergeInput,mergeSeal) <- spawn' unbounded
      do a <-
           async $
-          do run $
+          do run (optVerbose parsedOpts) $
                P.find (optExamples parsedOpts)
                       (when_ (filename_ (`elem` (ignoredDirectories ++
                                                  ignoredFiles)))
@@ -65,16 +69,15 @@ main =
           forM [(1 :: Int) .. (optProcesses parsedOpts)] $
           const $
           async $
-          do runSafeT $
-               runStderrLoggingT $
-               runLoggingT' $
-               runEffect (fromInput input >->
-                          P.mapM (solveSmt (optEldarica parsedOpts)) >->
-                          toOutput mergeOutput)
+          do run (optVerbose parsedOpts) $
+               (fromInput input >-> P.mapM (solveSmt (optEldarica parsedOpts)) >->
+                toOutput mergeOutput)
              atomically seal
-        b <- async $ do run $ fromInput mergeInput >-> P.print
-                        atomically mergeSeal
-        liftIO $ mapM_ wait (a:b:as)
+        b <-
+          async $
+          do run (optVerbose parsedOpts) $ fromInput mergeInput >-> P.print
+             atomically mergeSeal
+        liftIO $ mapM_ wait (a : b : as)
   where opts =
           info (helper <*> optionParser)
                (fullDesc <> progDesc "Test all examples" <>
@@ -94,7 +97,7 @@ solveSmt
 solveSmt eldarica smt =
   do let producer =
            producerCmd (eldarica <> " -t:60 " <> smt) >-> P.map (either id id)
-     $(logDebug) $ "Solving " <> (T.pack smt)
+     $logDebug $ "Solving " <> (T.pack smt)
      lastLine <- P.last (void $ concats $ producer ^. utf8 . P.lines)
      pure . (smt,) $
        case lastLine of
