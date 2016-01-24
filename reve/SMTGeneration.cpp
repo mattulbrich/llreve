@@ -259,9 +259,10 @@ vector<SMTRef> forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
                                 auto Smt1 = assignmentsOnPath(
                                     Path1, 1, vector<string>(),
                                     EndIndex1 == EXIT_MARK, Heap);
-                                auto SMT = nonmutualSMT(name("false"), Smt2,
-                                                        Second, Heap);
-                                SMT = nonmutualSMT(SMT, Smt1, First, Heap);
+                                // We need to interleave here, because otherwise
+                                // extern functions are not matched
+                                auto SMT = interleaveAssignments(
+                                    name("false"), Smt1, Smt2, Heap);
                                 PathExprs.push_back(assertForall(
                                     SMT, FreeVarsMap.at(StartIndex), StartIndex,
                                     Both, FunName, Main));
