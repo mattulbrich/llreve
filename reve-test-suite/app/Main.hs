@@ -1,9 +1,9 @@
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Main where
 
 import           Control.Concurrent.Async

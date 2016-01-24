@@ -1,11 +1,17 @@
 resolver: nightly-2016-01-24
 packages:
   - '.'
-  - location: '../hierarchy'
+  - location:
+      git: https://cocreature@bitbucket.org/cocreature/pipes-shell.git
+      commit: 24ec1e5e2b7479ff0bd57c0f5fcdd70c57ad9851
     extra-dep: true
-  - location: '../pipes-files'
+  - location:
+      git: https://github.com/cocreature/pipes-files.git
+      commit: 16441eaeb61f240b6d30cc070ae9d300b8a47b3f
     extra-dep: true
-  - location: '../pipes-shell'
+  - location:
+      git: https://github.com/cocreature/hierarchy.git
+      commit: e2f5d534a104eff72ef8f4cf61c45617f110d7a9
     extra-dep: true
 extra-deps:
   - posix-paths-0.2.1.0
