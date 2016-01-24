@@ -10,6 +10,7 @@ import           Control.Concurrent.Async
 import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Logger
+import           Control.Monad.Trans.Control
 import           Data.Monoid
 import qualified Data.Text as T
 import           Options
@@ -28,56 +29,60 @@ import           System.Exit
 import           System.FilePath
 import           System.Process
 
-
-newtype LoggingT' m a =
-  LoggingT' {runLoggingT' :: LoggingT m a}
-  deriving (MonadMask,MonadTrans,MonadCatch,MonadThrow,Monad,Functor,Applicative,MonadIO,MonadLogger)
-
-instance MonadSafe m => MonadSafe (LoggingT' m) where
-  type Base (LoggingT' m) = Base m
+instance MonadSafe m => MonadSafe (LoggingT m) where
+  type Base (LoggingT m) = Base m
   liftBase = lift . liftBase
   register = lift . register
   release = lift . release
 
-run :: Bool -> Effect (LoggingT' (SafeT IO)) r -> IO r
-run verbose =
-  runSafeT .
-  runStderrLoggingT .
-  filterLogger (\_source level -> verbose || level > LevelDebug) .
-  runLoggingT' . runEffect
+solverWorker :: (MonadLogger m,MonadSafe m)
+             => Input FilePath -> STM b -> Output (FilePath,Maybe Status) -> FilePath -> m b
+solverWorker input seal mergeOutput eldarica =
+  do runEffect $
+       (fromInput input >-> P.mapM (solveSmt eldarica) >-> toOutput mergeOutput)
+     liftIO $ atomically seal
+
+smtGeneratorWorker
+  :: MonadSafe m =>
+     FilePath -> FilePath -> String -> Output FilePath -> STM b -> m b
+smtGeneratorWorker examples build reve output seal =
+  do runEffect $
+       P.find examples
+              (when_ (filename_ (`elem` (ignoredDirectories ++ ignoredFiles))) prune_ >>
+               glob "*_1.c") >->
+       P.mapM (generateSmt build reve examples) >->
+       toOutput output
+     liftIO $ atomically seal
 
 main :: IO ()
 main =
   do parsedOpts <- execParser opts
      (output,input,seal) <- spawn' unbounded
      (mergeOutput,mergeInput,mergeSeal) <- spawn' unbounded
-     do a <-
-          async $
-          do run (optVerbose parsedOpts) $
-               P.find (optExamples parsedOpts)
-                      (when_ (filename_ (`elem` (ignoredDirectories ++
-                                                 ignoredFiles)))
-                             prune_ >>
-                       glob "*_1.c") >->
-               P.mapM (generateSmt (optBuild parsedOpts)
-                                   (optReve parsedOpts)
-                                   (optExamples parsedOpts)) >->
-               toOutput output
-             atomically seal
-        as <-
-          liftIO $
-          forM [(1 :: Int) .. (optProcesses parsedOpts)] $
-          const $
-          async $
-          do run (optVerbose parsedOpts) $
-               (fromInput input >-> P.mapM (solveSmt (optEldarica parsedOpts)) >->
-                toOutput mergeOutput)
-             atomically seal
-        b <-
-          async $
-          do run (optVerbose parsedOpts) $ fromInput mergeInput >-> P.print
-             atomically mergeSeal
-        liftIO $ mapM_ wait (a : b : as)
+     runSafeT .
+       runStderrLoggingT .
+       filterLogger
+         (\_source level -> (optVerbose parsedOpts) || level > LevelDebug) $
+       do a <-
+            liftBaseDiscard async $
+            smtGeneratorWorker (optExamples parsedOpts)
+                               (optBuild parsedOpts)
+                               (optReve parsedOpts)
+                               output
+                               seal
+          as <-
+            forM [(1 :: Int) .. (optProcesses parsedOpts)] $
+            const $
+            liftBaseDiscard async $
+            solverWorker input
+                         seal
+                         mergeOutput
+                         (optEldarica parsedOpts)
+          b <-
+            liftBaseDiscard async $
+            do runEffect $ fromInput mergeInput >-> P.print
+               liftIO $ atomically mergeSeal
+          liftIO $ mapM_ wait (a : b : as)
   where opts =
           info (helper <*> optionParser)
                (fullDesc <> progDesc "Test all examples" <>

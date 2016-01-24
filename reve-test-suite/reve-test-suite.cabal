@@ -24,6 +24,7 @@ library
                      , directory
                      , filepath
                      , foldl
+                     , monad-control
                      , monad-logger
                      , optparse-applicative
                      , pipes-group
@@ -44,6 +45,7 @@ executable reve-test-suite
                      , filepath
                      , foldl
                      , lens
+                     , monad-control
                      , monad-logger
                      , optparse-applicative
                      , pipes
