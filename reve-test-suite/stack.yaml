@@ -1,0 +1,13 @@
+resolver: nightly-2016-01-24
+packages:
+  - '.'
+  - location: '../hierarchy'
+    extra-dep: true
+  - location: '../pipes-files'
+    extra-dep: true
+  - location: '../pipes-shell'
+    extra-dep: true
+extra-deps:
+  - posix-paths-0.2.1.0
+flags: {}
+extra-package-dbs: []
