@@ -5,11 +5,17 @@
 
 #include "llvm/IR/PassManager.h"
 
+class Condition {
+  public:
+    virtual SMTRef toSmt(const std::set<string> Constructed) const = 0;
+    virtual ~Condition();
+};
+
 class Edge {
   public:
-    Edge(SMTRef Condition, llvm::BasicBlock *Block)
-        : Condition(std::move(Condition)), Block(std::move(Block)) {}
-    SMTRef Condition;
+    Edge(std::shared_ptr<const Condition> Cond, llvm::BasicBlock *Block)
+        : Cond(std::move(Cond)), Block(std::move(Block)) {}
+    std::shared_ptr<const Condition> Cond;
     llvm::BasicBlock *Block;
 };
 
@@ -19,6 +25,33 @@ class Path {
         : Start(std::move(Start)), Edges(std::move(Edges)) {}
     llvm::BasicBlock *Start;
     std::vector<Edge> Edges;
+};
+
+class BooleanCondition : public Condition {
+  public:
+    BooleanCondition(llvm::Value *Cond, const bool True)
+        : Cond(std::move(Cond)), True(std::move(True)) {}
+    llvm::Value *Cond;
+    const bool True;
+    SMTRef toSmt(const std::set<string> Constructed) const override;
+};
+
+class SwitchCondition : public Condition {
+  public:
+    SwitchCondition(llvm::Value *Cond, int64_t Val)
+        : Cond(std::move(Cond)), Val(std::move(Val)) {}
+    const llvm::Value *const Cond;
+    const int64_t Val;
+    SMTRef toSmt(const std::set<string> Constructed) const override;
+};
+
+class SwitchDefault : public Condition {
+  public:
+    SwitchDefault(llvm::Value *Cond, std::vector<int64_t> Vals)
+        : Cond(std::move(Cond)), Vals(std::move(Vals)) {}
+    const llvm::Value *const Cond;
+    const std::vector<int64_t> Vals;
+    SMTRef toSmt(const std::set<string> Constructed) const override;
 };
 
 using Path_ = std::vector<Edge>;
@@ -37,17 +70,14 @@ class PathAnalysis {
     static char PassID;
 };
 
-auto lastBlock(Path Path) -> llvm::BasicBlock*;
+auto lastBlock(Path Path) -> llvm::BasicBlock *;
 
-auto findPaths(int For, llvm::BasicBlock *BB,
-               BidirBlockMarkMap MarkedBlocks)
+auto findPaths(int For, llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks)
     -> std::map<int, Paths>;
 
-auto traverse(llvm::BasicBlock *BB,
-              BidirBlockMarkMap MarkedBlocks, bool First, std::set<llvm::BasicBlock*> Visited)
-    -> Paths_;
+auto traverse(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks, bool First,
+              std::set<llvm::BasicBlock *> Visited) -> Paths_;
 
-auto isMarked(llvm::BasicBlock *BB,
-              BidirBlockMarkMap MarkedBlocks) -> bool;
+auto isMarked(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks) -> bool;
 
 auto isReturn(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks) -> bool;

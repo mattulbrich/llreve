@@ -8,6 +8,8 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Instructions.h"
 
+using std::make_shared;
+
 char PathAnalysis::PassID;
 
 PathMap PathAnalysis::run(llvm::Function &F,
@@ -82,16 +84,14 @@ Paths_ traverse(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks,
         auto TraversedPaths1 =
             traverse(BranchInst->getSuccessor(1), MarkedBlocks, false, Visited);
         for (auto &P : TraversedPaths0) {
-            P.insert(P.begin(),
-                     Edge(name(BranchInst->getCondition()->getName()),
-                          BranchInst->getSuccessor(0)));
+            P.insert(P.begin(), Edge(make_shared<const BooleanCondition>(
+                                         BranchInst->getCondition(), true),
+                                     BranchInst->getSuccessor(0)));
         }
         for (auto &P : TraversedPaths1) {
-            P.insert(
-                P.begin(),
-                Edge(makeUnaryOp("not",
-                                 name(BranchInst->getCondition()->getName())),
-                     BranchInst->getSuccessor(1)));
+            P.insert(P.begin(), Edge(make_shared<const BooleanCondition>(
+                                         BranchInst->getCondition(), false),
+                                     BranchInst->getSuccessor(1)));
         }
         TraversedPaths0.insert(TraversedPaths0.end(), TraversedPaths1.begin(),
                                TraversedPaths1.end());
@@ -99,22 +99,31 @@ Paths_ traverse(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks,
     }
     if (auto SwitchInst = llvm::dyn_cast<llvm::SwitchInst>(TermInst)) {
         Paths_ TraversedPaths;
+        std::vector<int64_t> Vals;
         for (auto Case : SwitchInst->cases()) {
             int64_t Val = Case.getCaseValue()->getSExtValue();
+            Vals.push_back(Val);
             auto TraversedPaths_ =
                 traverse(Case.getCaseSuccessor(), MarkedBlocks, false, Visited);
             for (auto &P : TraversedPaths_) {
-                std::set<std::string> Constructed;
-                P.insert(
-                    P.begin(),
-                    Edge(makeBinOp("=",
-                                   name(SwitchInst->getCondition()->getName()),
-                                   name(std::to_string(Val))),
-                         Case.getCaseSuccessor()));
+                P.insert(P.begin(), Edge(make_shared<const SwitchCondition>(
+                                             SwitchInst->getCondition(), Val),
+                                         Case.getCaseSuccessor()));
             }
             TraversedPaths.insert(TraversedPaths.end(), TraversedPaths_.begin(),
                                   TraversedPaths_.end());
         }
+        // Handle default case separately
+        auto TraversedPaths_ = traverse(SwitchInst->getDefaultDest(),
+                                        MarkedBlocks, false, Visited);
+        for (auto &P : TraversedPaths_) {
+            P.insert(P.begin(), Edge(make_shared<const SwitchDefault>(
+                                         SwitchInst->getCondition(), Vals),
+                                     SwitchInst->getDefaultDest()));
+        }
+        TraversedPaths.insert(TraversedPaths.end(), TraversedPaths_.begin(),
+                              TraversedPaths_.end());
+
         return TraversedPaths;
     }
     logWarningData("Unknown terminator\n", *TermInst);
@@ -143,4 +152,28 @@ llvm::BasicBlock *lastBlock(Path Path) {
         return Path.Start;
     }
     return Path.Edges.back().Block;
+}
+
+Condition::~Condition() = default;
+
+SMTRef BooleanCondition::toSmt(const std::set<string> Constructed) const {
+    SMTRef Result = name(resolveName(Cond->getName(), Constructed));
+    if (True) {
+        return Result;
+    }
+    return makeUnaryOp("not", Result);
+}
+
+SMTRef SwitchCondition::toSmt(const std::set<string> Constructed) const {
+    return makeBinOp("=", resolveName(Cond->getName(), Constructed),
+                     std::to_string(Val));
+}
+
+SMTRef SwitchDefault::toSmt(const std::set<string> Constructed) const {
+    std::vector<string> StringVals;
+    for (auto Val : Vals) {
+        StringVals.push_back(std::to_string(Val));
+    }
+    StringVals.push_back(resolveName(Cond->getName(), Constructed));
+    return makeOp("distinct", StringVals);
 }

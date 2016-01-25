@@ -405,7 +405,7 @@ vector<AssignmentCallBlock> assignmentsOnPath(Path Path, int Program,
         bool Last = i == Path.Edges.size();
         auto Defs = blockAssignments(Edge.Block, Prev, false, Last && !ToEnd,
                                      Program, Constructed, Heap);
-        AllDefs.push_back(AssignmentCallBlock(Defs, Edge.Condition));
+        AllDefs.push_back(AssignmentCallBlock(Defs, Edge.Cond == nullptr ? nullptr : Edge.Cond->toSmt(Constructed)));
         Prev = Edge.Block;
     }
 
@@ -1748,13 +1748,6 @@ SMTRef wrapHeap(SMTRef Inv, Memory Heap, vector<string> FreeVars) {
         }
     }
     return make_shared<Forall>(Args, Inv);
-}
-
-string resolveName(string Name, set<string> &Constructed) {
-    if (Constructed.find(Name) == Constructed.end()) {
-        return Name + "_old";
-    }
-    return Name;
 }
 
 unsigned long adaptSizeToHeap(unsigned long Size, vector<string> FreeVars) {

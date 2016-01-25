@@ -215,8 +215,6 @@ auto resolveHeapReferences(std::vector<std::string> Args, std::string Suffix,
                            Memory &Heap) -> std::vector<std::string>;
 auto wrapHeap(SMTRef Inv, Memory Heap, std::vector<std::string> FreeVars)
     -> SMTRef;
-auto resolveName(std::string Name, std::set<std::string> &Constructed)
-    -> std::string;
 auto adaptSizeToHeap(unsigned long Size, std::vector<string> FreeVars)
     -> unsigned long;
 auto flagInstr(llvm::Instruction &Instr, std::string Flag) -> void;
