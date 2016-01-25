@@ -52,11 +52,11 @@ printStatus Timeout = yellow $ "timeout"
 printStatus (Error s) = red $ "error:" <+> dquotes (text (T.unpack s))
 
 solverWorker :: (MonadLogger m,MonadSafe m)
-             => Input FilePath -> STM b -> Output (FilePath,Status) -> FilePath -> m b
-solverWorker input seal mergeOutput eldarica =
+             => Input FilePath -> STM () -> Output (FilePath,Status) -> STM () -> FilePath -> m ()
+solverWorker input seal mergeOutput mergeSeal eldarica =
   do runEffect $
        (fromInput input >-> P.mapM (solveSmt eldarica) >-> toOutput mergeOutput)
-     liftIO $ atomically seal
+     liftIO $ atomically (seal >> mergeSeal)
 
 smtGeneratorWorker
   :: MonadSafe m =>
@@ -106,13 +106,13 @@ main =
             solverWorker input
                          seal
                          mergeOutput
+                         mergeSeal
                          (optEldarica parsedOpts)
           b <-
             liftBaseDiscard async $
             do runEffect $
                  fromInput mergeInput >-> P.map printResult >->
                  P.mapM_ (liftIO . putDoc)
-               liftIO $ atomically mergeSeal
           liftIO $ mapM_ wait (a : b : as)
   where opts =
           info (helper <*> optionParser)
@@ -122,10 +122,27 @@ main =
 data Status = Sat | Unsat | Timeout | Unknown | Error T.Text deriving (Show,Eq,Ord)
 
 ignoredDirectories :: [FilePath]
-ignoredDirectories = ["ignored","notyetworking","discuss","argon2"]
+ignoredDirectories =
+  ["ignored"
+  ,"notyetworking"
+  ,"discuss"
+  ,"argon2"
+  ,"coreutils"
+  ,"redis"
+  ,"git"
+  ,"linux"
+  ,"torch"]
 
 ignoredFiles :: [FilePath]
-ignoredFiles = ["a_1.c","linux_1.c"]
+ignoredFiles =
+  ["a_1.c"
+  ,"linux_1.c"
+  ,"add-horn_1.c"
+  ,"cocome1_1.c"
+  ,"triangular_1.c"
+  ,"selsort_1.c"
+  ,"findmax_1.c"
+  ,"fib_1.c"]
 
 data EldaricaOutput =
   EldOutput {eldUnsat :: Bool
