@@ -32,6 +32,7 @@ library
                      , monad-logger
                      , optparse-applicative
                      , pipes
+                     , pipes-bytestring
                      , pipes-concurrency
                      , pipes-files
                      , pipes-group

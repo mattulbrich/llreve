@@ -1,6 +1,6 @@
 module Types
   (Status(..)
-  ,EldaricaOutput(..)
+  ,SolverOutput(..)
   ) where
 
 import qualified Data.Text as T
@@ -13,8 +13,8 @@ data Status
   | Error T.Text
   deriving (Show,Eq,Ord)
 
-data EldaricaOutput =
-  EldOutput {eldUnsat :: Bool
-            ,eldSat :: Bool
-            ,eldUnknown :: Bool
-            ,eldOutput :: [T.Text]}
+data SolverOutput =
+  SolverOutput {solverUnsat :: Bool
+               ,solverSat :: Bool
+               ,solverUnknown :: Bool
+               ,solverOutput :: [T.Text]}

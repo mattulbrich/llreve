@@ -3,6 +3,7 @@ module Workers
 
 import           Config
 import           Control.Monad.Logger
+import           Options
 import           Output
 import           Pipes
 import           Pipes.Concurrent
@@ -14,21 +15,22 @@ import           Text.PrettyPrint.ANSI.Leijen (putDoc)
 import           Types
 
 solverWorker :: (MonadLogger m,MonadSafe m)
-             => Input FilePath -> STM () -> Output (FilePath,Status) -> STM () -> FilePath -> m ()
-solverWorker input seal mergeOutput mergeSeal eldarica =
+             => Options -> Input FilePath -> STM () -> Output (FilePath,Status) -> STM () -> m ()
+solverWorker options input seal mergeOutput mergeSeal =
   flip finally (liftIO $ atomically (seal >> mergeSeal)) $ runEffect $
-    (fromInput input >-> P.mapM (solveSmt eldarica) >-> toOutput mergeOutput)
+    fromInput input >-> P.mapM (solveSmt (optBuild options) (optEldarica options) (optZ3 options))
+                    >-> toOutput mergeOutput
 
 smtGeneratorWorker :: MonadSafe m
-                   => FilePath -> FilePath -> String -> Output FilePath -> STM () -> m ()
-smtGeneratorWorker examples build reve output seal =
+                   => Options -> Output FilePath -> STM () -> m ()
+smtGeneratorWorker opts output seal =
   flip finally
   (liftIO $ atomically seal) $
   runEffect $
-    P.find examples
+    P.find (optExamples opts)
            (when_ (filename_ (`elem` (ignoredDirectories ++ ignoredFiles))) prune_ >>
             glob "*_1.c") >->
-    P.mapM (generateSmt build reve examples) >->
+    P.mapM (generateSmt opts) >->
     toOutput output
 
 outputWorker :: MonadSafe m

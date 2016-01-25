@@ -1,6 +1,7 @@
 module Config
   (ignoredDirectories
-  ,ignoredFiles) where
+  ,ignoredFiles
+  ,z3Files) where
 
 ignoredDirectories :: [FilePath]
 ignoredDirectories =
@@ -18,9 +19,11 @@ ignoredFiles :: [FilePath]
 ignoredFiles =
   ["a_1.c"
   ,"linux_1.c"
-  ,"add-horn_1.c"
   ,"cocome1_1.c"
   ,"triangular_1.c"
   ,"selsort_1.c"
   ,"findmax_1.c"
   ,"fib_1.c"]
+
+z3Files :: [FilePath]
+z3Files = ["rec/add-horn.smt2"]

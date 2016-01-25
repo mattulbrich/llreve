@@ -40,21 +40,16 @@ main =
          (\_source level -> (optVerbose parsedOpts) || level > LevelDebug) $
        do a <-
             liftBaseDiscard async $
-            smtGeneratorWorker (optExamples parsedOpts)
-                               (optBuild parsedOpts)
-                               (optReve parsedOpts)
-                               output
-                               seal
+            smtGeneratorWorker parsedOpts
+                               output seal
           as <-
             forM [(1 :: Int) .. (optProcesses parsedOpts)] $
-            const $ liftBaseDiscard async $
-            solverWorker input
-                         seal
-                         mergeOutput
-                         mergeSeal
-                         (optEldarica parsedOpts)
-          b <-
-            liftBaseDiscard async $ outputWorker mergeInput mergeSeal
+            const $
+            liftBaseDiscard async $
+            solverWorker parsedOpts
+                         input seal
+                         mergeOutput mergeSeal
+          b <- liftBaseDiscard async $ outputWorker mergeInput mergeSeal
           liftIO $ mapM_ wait (a : b : as)
   where opts =
           info (helper <*> optionParser)
