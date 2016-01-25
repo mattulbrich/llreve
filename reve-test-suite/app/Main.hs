@@ -54,21 +54,20 @@ printStatus (Error s) = red $ "error:" <+> dquotes (text (T.unpack s))
 solverWorker :: (MonadLogger m,MonadSafe m)
              => Input FilePath -> STM () -> Output (FilePath,Status) -> STM () -> FilePath -> m ()
 solverWorker input seal mergeOutput mergeSeal eldarica =
-  do runEffect $
-       (fromInput input >-> P.mapM (solveSmt eldarica) >-> toOutput mergeOutput)
-     liftIO $ atomically (seal >> mergeSeal)
+  flip finally (liftIO $ atomically (seal >> mergeSeal)) $ runEffect $
+    (fromInput input >-> P.mapM (solveSmt eldarica) >-> toOutput mergeOutput)
 
-smtGeneratorWorker
-  :: MonadSafe m =>
-     FilePath -> FilePath -> String -> Output FilePath -> STM b -> m b
+smtGeneratorWorker :: MonadSafe m
+                   => FilePath -> FilePath -> String -> Output FilePath -> STM () -> m ()
 smtGeneratorWorker examples build reve output seal =
-  do runEffect $
-       P.find examples
-              (when_ (filename_ (`elem` (ignoredDirectories ++ ignoredFiles))) prune_ >>
-               glob "*_1.c") >->
-       P.mapM (generateSmt build reve examples) >->
-       toOutput output
-     liftIO $ atomically seal
+  flip finally
+  (liftIO $ atomically seal) $
+  runEffect $
+    P.find examples
+           (when_ (filename_ (`elem` (ignoredDirectories ++ ignoredFiles))) prune_ >>
+            glob "*_1.c") >->
+    P.mapM (generateSmt build reve examples) >->
+    toOutput output
 
 ignoredJavaOpts :: [String]
 ignoredJavaOpts = ["-Dawt.useSystemAAFontSettings=","-Dswing.aatext=","-Dswing.defaultlaf="]
@@ -101,8 +100,7 @@ main =
                                seal
           as <-
             forM [(1 :: Int) .. (optProcesses parsedOpts)] $
-            const $
-            liftBaseDiscard async $
+            const $ liftBaseDiscard async $
             solverWorker input
                          seal
                          mergeOutput
@@ -110,9 +108,10 @@ main =
                          (optEldarica parsedOpts)
           b <-
             liftBaseDiscard async $
-            do runEffect $
-                 fromInput mergeInput >-> P.map printResult >->
-                 P.mapM_ (liftIO . putDoc)
+            flip finally (atomically $ mergeSeal) $ runEffect $
+              fromInput mergeInput >->
+              P.map printResult >->
+              P.mapM_ (liftIO . putDoc)
           liftIO $ mapM_ wait (a : b : as)
   where opts =
           info (helper <*> optionParser)
