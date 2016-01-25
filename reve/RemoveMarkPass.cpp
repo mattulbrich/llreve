@@ -58,31 +58,9 @@ void removeAnd(llvm::Instruction *Instr, llvm::BinaryOperator *BinOp) {
     if (Replace == nullptr) {
         return;
     }
-    for (auto &Use : BinOp->uses()) {
-        if (auto Used = llvm::dyn_cast<llvm::User>(Use.getUser())) {
-            if (Used != BinOp) {
-                Used->replaceUsesOfWith(BinOp, Replace);
-            }
-        }
+
+    for (auto Used : BinOp->users()) {
+        Used->replaceUsesOfWith(BinOp, Replace);
     }
     BinOp->eraseFromParent();
-
-    // try to remove the zext and all uses of it
-    auto ZExt = llvm::dyn_cast<llvm::ZExtInst>(Replace);
-    if (ZExt == nullptr) {
-        return;
-    }
-    for (auto User : ZExt->users()) {
-        if (auto UserInstr = llvm::dyn_cast<llvm::Instruction>(User)) {
-            for (auto UserOfUser : User->users()) {
-                if (auto UserOfUserInstr =
-                        llvm::dyn_cast<llvm::User>(UserOfUser)) {
-                    UserOfUserInstr->replaceUsesOfWith(User,
-                                                       ZExt->getOperand(0));
-                }
-            }
-            UserInstr->eraseFromParent();
-        }
-    }
-    ZExt->eraseFromParent();
 }

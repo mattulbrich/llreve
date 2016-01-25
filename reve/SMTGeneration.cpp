@@ -405,7 +405,9 @@ vector<AssignmentCallBlock> assignmentsOnPath(Path Path, int Program,
         bool Last = i == Path.Edges.size();
         auto Defs = blockAssignments(Edge.Block, Prev, false, Last && !ToEnd,
                                      Program, Constructed, Heap);
-        AllDefs.push_back(AssignmentCallBlock(Defs, Edge.Cond == nullptr ? nullptr : Edge.Cond->toSmt(Constructed)));
+        AllDefs.push_back(AssignmentCallBlock(
+            Defs,
+            Edge.Cond == nullptr ? nullptr : Edge.Cond->toSmt(Constructed)));
         Prev = Edge.Block;
     }
 
@@ -1317,6 +1319,24 @@ instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
                            TruncInst->getOperand(0)->getType(), Constructed);
         return make_shared<std::tuple<string, SMTRef>>(TruncInst->getName(),
                                                        Val);
+    }
+    if (auto ZExt = llvm::dyn_cast<llvm::ZExtInst>(&Instr)) {
+        auto Operand = ZExt->getOperand(0);
+        auto Val = instrNameOrVal(Operand, Operand->getType(), Constructed);
+        auto RetTy = ZExt->getType();
+        if (RetTy->isIntegerTy() && RetTy->getIntegerBitWidth() > 1 &&
+            Operand->getType()->isIntegerTy(1)) {
+            std::vector<SMTRef> Args;
+            Args.push_back(Val);
+            Args.push_back(name("1"));
+            Args.push_back(name("0"));
+            return make_shared<std::tuple<string, SMTRef>>(
+                ZExt->getName(),
+                make_shared<Op>("ite", Args));
+        } else {
+            return make_shared<std::tuple<string, SMTRef>>(ZExt->getName(),
+                                                           Val);
+        }
     }
     if (auto BitCast = llvm::dyn_cast<llvm::CastInst>(&Instr)) {
         auto Val =
