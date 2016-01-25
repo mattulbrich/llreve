@@ -6,12 +6,13 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Main where
 
-import qualified Control.Foldl as F
 import           Control.Concurrent.Async
+import qualified Control.Foldl as F
 import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Logger
 import           Control.Monad.Trans.Control
+import           Data.List
 import           Data.Monoid
 import qualified Data.Text as T
 import           Options
@@ -26,6 +27,7 @@ import           Pipes.Shell
 import qualified Pipes.Text as P hiding (find,map,last)
 import           Pipes.Text.Encoding
 import           System.Directory
+import           System.Environment
 import           System.Exit
 import           System.FilePath
 import           System.Process
@@ -72,9 +74,22 @@ smtGeneratorWorker examples build reve output seal =
        toOutput output
      liftIO $ atomically seal
 
+ignoredJavaOpts :: [String]
+ignoredJavaOpts = ["-Dawt.useSystemAAFontSettings=","-Dswing.aatext=","-Dswing.defaultlaf="]
+
+resetJavaOpts :: IO ()
+resetJavaOpts =
+  do opts <- lookupEnv "_JAVA_OPTIONS"
+     case fmap (filter (\opt -> not $ any (`isPrefixOf` opt) ignoredJavaOpts) . words) opts of
+       Nothing -> pure ()
+       Just [] -> unsetEnv "_JAVA_OPTIONS"
+       Just opts' -> setEnv "_JAVA_OPTIONS" (unwords opts')
+
+
 main :: IO ()
 main =
   do parsedOpts <- execParser opts
+     resetJavaOpts
      (output,input,seal) <- spawn' unbounded
      (mergeOutput,mergeInput,mergeSeal) <- spawn' unbounded
      runSafeT .
@@ -121,7 +136,7 @@ solveSmt
   => FilePath -> FilePath -> m (FilePath,Maybe Status)
 solveSmt eldarica smt =
   do let producer =
-           producerCmdEnv (Just [("_JAVA_OPTIONS","")]) (eldarica <> " -t:60 " <> smt) >-> P.map (either id id)
+           producerCmd (eldarica <> " -t:60 " <> smt) >-> P.map (either id id)
      $logDebug $ "Solving " <> (T.pack smt)
      (lastLine,accumulated) <- F.purely P.fold ((,) <$> F.last <*> F.list) (void $ concats $ producer ^. utf8 . P.lines)
      pure . (smt,) $
