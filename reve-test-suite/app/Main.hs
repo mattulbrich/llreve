@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -39,24 +40,19 @@ instance MonadSafe m => MonadSafe (LoggingT m) where
   register = lift . register
   release = lift . release
 
-printResult :: (FilePath,Maybe Status) -> Doc
+printResult :: (FilePath,Status) -> Doc
 printResult (path,status) =
-  fill 20 (text path) <+>
-  ":" <+>
-  (case status of
-     Nothing -> red (text "missing output")
-     Just s -> printStatus s) <>
-  line
+  fill 30 (text path) <+> ":" <+> printStatus status <> line
 
 printStatus :: Status -> Doc
 printStatus Sat = green $ "sat"
 printStatus Unsat = yellow $ "unsat"
 printStatus Unknown = red $ "unknown"
 printStatus Timeout = yellow $ "timeout"
-printStatus (ParseError s) = red $ "error:" <+> dquotes (text (T.unpack s))
+printStatus (Error s) = red $ "error:" <+> dquotes (text (T.unpack s))
 
 solverWorker :: (MonadLogger m,MonadSafe m)
-             => Input FilePath -> STM b -> Output (FilePath,Maybe Status) -> FilePath -> m b
+             => Input FilePath -> STM b -> Output (FilePath,Status) -> FilePath -> m b
 solverWorker input seal mergeOutput eldarica =
   do runEffect $
        (fromInput input >-> P.mapM (solveSmt eldarica) >-> toOutput mergeOutput)
@@ -123,7 +119,7 @@ main =
                (fullDesc <> progDesc "Test all examples" <>
                 header "reve-test-suite")
 
-data Status = Sat | Unsat | Timeout | Unknown | ParseError T.Text deriving (Show,Eq,Ord)
+data Status = Sat | Unsat | Timeout | Unknown | Error T.Text deriving (Show,Eq,Ord)
 
 ignoredDirectories :: [FilePath]
 ignoredDirectories = ["ignored","notyetworking","discuss","argon2"]
@@ -131,23 +127,30 @@ ignoredDirectories = ["ignored","notyetworking","discuss","argon2"]
 ignoredFiles :: [FilePath]
 ignoredFiles = ["a_1.c","linux_1.c"]
 
+data EldaricaOutput =
+  EldOutput {eldUnsat :: Bool
+            ,eldSat :: Bool
+            ,eldUnknown :: Bool
+            ,eldOutput :: [T.Text]}
+
 solveSmt
   :: (Monad m, MonadIO m, MonadSafe m, MonadLogger m)
-  => FilePath -> FilePath -> m (FilePath,Maybe Status)
+  => FilePath -> FilePath -> m (FilePath,Status)
 solveSmt eldarica smt =
   do let producer =
            producerCmd (eldarica <> " -t:60 " <> smt) >-> P.map (either id id)
      $logDebug $ "Solving " <> (T.pack smt)
-     (lastLine,accumulated) <- F.purely P.fold ((,) <$> F.last <*> F.list) (void $ concats $ producer ^. utf8 . P.lines)
+     EldOutput{..} <-
+       F.purely P.fold
+                (EldOutput <$> F.any (== "unsat") <*> F.any (== "sat") <*>
+                 F.any (== "unknown") <*>
+                 F.list)
+                (void $ concats $ producer ^. utf8 . P.lines)
      pure . (smt,) $
-       case lastLine of
-         Nothing -> Nothing
-         Just "unsat" -> Just Unsat
-         Just "sat" -> Just Sat
-         Just "unknown" -> Just Unknown
-         Just s ->
-           if |  "Elapsed Time:" `T.isPrefixOf` s -> Just Timeout
-              |  otherwise -> Just (ParseError (T.unlines accumulated))
+       if |  eldUnsat -> Unsat
+          |  eldSat -> Sat
+          |  eldUnknown -> Unknown
+          |  otherwise -> Error (T.unlines eldOutput)
 
 generateSmt :: (MonadIO m, MonadThrow m)
             => FilePath -> String -> FilePath -> FilePath -> m FilePath
