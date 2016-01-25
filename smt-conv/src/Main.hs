@@ -13,8 +13,8 @@ main :: IO ()
 main =
   do options <- execParser opts
      inFile <-
-       readProcess "eld"
-                   ["-sp",input options]
+       readProcess (optEld options)
+                   ["-sp",optIn options]
                    ""
      let res =
            parseString (runParser smt)
@@ -23,7 +23,7 @@ main =
      case res of
        Failure err -> hPrint stderr err
        Success a ->
-         writeFile (output options)
+         writeFile (optOut options)
                    (show . pPrint . mergeNotExists . simplify $ a)
   where opts =
           info (helper <*> optionParser)
@@ -32,8 +32,9 @@ main =
                 header "smt-conv - hornify smt")
 
 data Options =
-  Options {input :: FilePath
-          ,output :: FilePath}
+  Options {optIn :: FilePath
+          ,optOut :: FilePath
+          ,optEld :: FilePath}
 
 optionParser :: OP.Parser Options
 optionParser =
@@ -41,4 +42,5 @@ optionParser =
   strOption (short 'i' <> metavar "INPUT" <>
              help "Path to smt that should be converted") <*>
   strOption (short 'o' <> metavar "OUTPUT" <>
-             help "Path where the converted smt should be written to")
+             help "Path where the converted smt should be written to") <*>
+  strOption (long "eldarica" <> metavar "PATH" <> help "Path to eldarica" <> value "eld")
