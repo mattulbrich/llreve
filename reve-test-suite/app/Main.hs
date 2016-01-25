@@ -6,6 +6,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Main where
 
+import qualified Control.Foldl as F
 import           Control.Concurrent.Async
 import           Control.Lens
 import           Control.Monad
@@ -14,7 +15,7 @@ import           Control.Monad.Trans.Control
 import           Data.Monoid
 import qualified Data.Text as T
 import           Options
-import           Options.Applicative hiding ((<>))
+import           Options.Applicative hiding ((<>),(<$>))
 import           Pipes
 import           Pipes.Concurrent
 import           Pipes.Files as P
@@ -28,12 +29,29 @@ import           System.Directory
 import           System.Exit
 import           System.FilePath
 import           System.Process
+import           Text.PrettyPrint.ANSI.Leijen hiding ((<>),(</>),(<$>))
 
 instance MonadSafe m => MonadSafe (LoggingT m) where
   type Base (LoggingT m) = Base m
   liftBase = lift . liftBase
   register = lift . register
   release = lift . release
+
+printResult :: (FilePath,Maybe Status) -> Doc
+printResult (path,status) =
+  fill 20 (text path) <+>
+  ":" <+>
+  (case status of
+     Nothing -> red (text "missing output")
+     Just s -> printStatus s) <>
+  line
+
+printStatus :: Status -> Doc
+printStatus Sat = green $ "sat"
+printStatus Unsat = yellow $ "unsat"
+printStatus Unknown = red $ "unknown"
+printStatus Timeout = yellow $ "timeout"
+printStatus (ParseError s) = red $ "error:" <+> dquotes (text (T.unpack s))
 
 solverWorker :: (MonadLogger m,MonadSafe m)
              => Input FilePath -> STM b -> Output (FilePath,Maybe Status) -> FilePath -> m b
@@ -80,7 +98,9 @@ main =
                          (optEldarica parsedOpts)
           b <-
             liftBaseDiscard async $
-            do runEffect $ fromInput mergeInput >-> P.print
+            do runEffect $
+                 fromInput mergeInput >-> P.map printResult >->
+                 P.mapM_ (liftIO . putDoc)
                liftIO $ atomically mergeSeal
           liftIO $ mapM_ wait (a : b : as)
   where opts =
@@ -94,16 +114,16 @@ ignoredDirectories :: [FilePath]
 ignoredDirectories = ["ignored","notyetworking","discuss","argon2"]
 
 ignoredFiles :: [FilePath]
-ignoredFiles = ["a_1.c"]
+ignoredFiles = ["a_1.c","linux_1.c"]
 
 solveSmt
   :: (Monad m, MonadIO m, MonadSafe m, MonadLogger m)
   => FilePath -> FilePath -> m (FilePath,Maybe Status)
 solveSmt eldarica smt =
   do let producer =
-           producerCmd (eldarica <> " -t:60 " <> smt) >-> P.map (either id id)
+           producerCmdEnv (Just [("_JAVA_OPTIONS","")]) (eldarica <> " -t:60 " <> smt) >-> P.map (either id id)
      $logDebug $ "Solving " <> (T.pack smt)
-     lastLine <- P.last (void $ concats $ producer ^. utf8 . P.lines)
+     (lastLine,accumulated) <- F.purely P.fold ((,) <$> F.last <*> F.list) (void $ concats $ producer ^. utf8 . P.lines)
      pure . (smt,) $
        case lastLine of
          Nothing -> Nothing
@@ -112,7 +132,7 @@ solveSmt eldarica smt =
          Just "unknown" -> Just Unknown
          Just s ->
            if |  "Elapsed Time:" `T.isPrefixOf` s -> Just Timeout
-              |  otherwise -> Just (ParseError s)
+              |  otherwise -> Just (ParseError (T.unlines accumulated))
 
 generateSmt :: (MonadIO m, MonadThrow m)
             => FilePath -> String -> FilePath -> FilePath -> m FilePath
