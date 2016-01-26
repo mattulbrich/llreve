@@ -13,6 +13,7 @@ import           Control.Lens
 import           Control.Monad.IO.Class
 import           Control.Monad.Logger
 import           Control.Monad.Reader
+import qualified Data.Map as M
 import           Data.Monoid
 import qualified Data.Text as T
 import           Options
@@ -36,7 +37,7 @@ solveSmt
   => FilePath -> m (FilePath,Status)
 solveSmt smt =
   do (opts,conf) <- ask
-     if smt `elem` map (optBuild opts </>) (cnfZ3Files conf)
+     if smt `elem` map (optBuild opts </>) (conf ^. cnfZ3Files)
         then solveZ3 smt
         else solveEldarica (optEldarica opts) smt
 
@@ -81,10 +82,11 @@ solveEldarica eldarica smt =
        F.purely P.fold solverFold (void $ concats $ producer ^. utf8 . P.lines)
      pure (smt,solverStatus output)
 
-generateSmt :: (MonadIO m, MonadThrow m)
-            => Options -> FilePath -> m FilePath
-generateSmt opts path =
-  do let path' = makeRelative (optExamples opts) path
+generateSmt :: (MonadIO m, MonadThrow m, MonadReader (Options,Config) m)
+            => FilePath -> m FilePath
+generateSmt path =
+  do (opts,conf) <- ask
+     let path' = makeRelative (optExamples opts) path
          smtfile = (optBuild opts) </> (dropFromEnd 4 path') -<.> "smt2"
          file1 = path
          file2 = (dropFromEnd 4 path) <> "_2" -<.> "c"
@@ -95,18 +97,19 @@ generateSmt opts path =
        liftIO $
        readProcessWithExitCode
          (optReve opts)
-         [file1
-         ,file2
-         ,"-o"
-         ,smtfile
-         ,"-off-by-n"
-         ,"-I"
-         ,"/usr/lib/clang/3.7.1/include"]
+         ([file1,file2,"-o",smtfile,"-I","/usr/lib/clang/3.7.1/include"]
+          ++ optionsFor (conf ^. cnfCustomArgs) smtfile)
          []
      case code of
        ExitSuccess -> pure ()
        (ExitFailure _) -> throwM code
      pure smtfile
+
+optionsFor :: M.Map FilePath [String] -> FilePath -> [String]
+optionsFor m file =
+  case M.lookup file m of
+    Nothing -> ["-off-by-n"]
+    Just opts -> opts
 
 dropFromEnd :: Int -> [a] -> [a]
 dropFromEnd n xs = zipWith const xs (drop n xs)

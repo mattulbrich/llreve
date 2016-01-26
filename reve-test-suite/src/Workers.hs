@@ -6,6 +6,7 @@ module Workers
   ) where
 
 import           Config
+import           Control.Lens
 import           Control.Monad.Logger
 import           Control.Monad.Reader
 import           Options
@@ -35,10 +36,10 @@ smtGeneratorWorker output seal = do
     runEffect $
       P.find (optExamples opts)
                (when_ (pathname_ (`elem` (map (optExamples opts </>) $
-                                            cnfIgnoredDirs config ++ cnfIgnoredFiles config)))
+                                            config ^. cnfIgnoredDirs ++ config ^. cnfIgnoredFiles)))
                         prune_ >>
                   glob "*_1.c") >->
-      P.mapM (generateSmt opts) >->
+      P.mapM generateSmt >->
       toOutput output
 
 outputWorker :: MonadSafe m

@@ -17,3 +17,6 @@ ignored-files:
   - argon2/fill_memory_blocks_1.c
 z3-files:
   - rec/add-horn.smt2
+  - rec/rec_while.smt2
+custom-args:
+  rec/rec_while.smt2: []

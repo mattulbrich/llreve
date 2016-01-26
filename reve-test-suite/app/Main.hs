@@ -1,21 +1,25 @@
 module Main where
 
-import Control.Concurrent.Async
-import Control.Monad
-import Control.Monad.IO.Class
-import Control.Monad.Logger
-import Control.Monad.Reader
-import Control.Monad.Trans.Control
-import Data.List
-import Data.Monoid
-import Data.Yaml
-import Options
-import Options.Applicative hiding ((<>),(<$>))
-import Orphans ()
-import Pipes.Concurrent
-import Pipes.Safe
-import System.Environment
-import Workers
+import           Config
+import           Control.Concurrent.Async
+import           Control.Lens
+import           Control.Monad
+import           Control.Monad.IO.Class
+import           Control.Monad.Logger
+import           Control.Monad.Reader
+import           Control.Monad.Trans.Control
+import           Data.List
+import qualified Data.Map as M
+import           Data.Monoid
+import           Data.Yaml
+import           Options
+import           Options.Applicative hiding ((<>),(<$>))
+import           Orphans ()
+import           Pipes.Concurrent
+import           Pipes.Safe
+import           System.Environment
+import           System.FilePath
+import           Workers
 
 
 ignoredJavaOpts :: [String]
@@ -32,7 +36,8 @@ resetJavaOpts =
 main :: IO ()
 main =
   do opts <- execParser optParser
-     conf <- decodeFileEither (optConfig opts) >>= either throwM return
+     conf' <- decodeFileEither (optConfig opts) >>= either throwM return
+     let conf = conf' & cnfCustomArgs %~ M.mapKeys (optBuild opts </>)
      resetJavaOpts
      (output,input,seal) <- spawn' unbounded
      (mergeOutput,mergeInput,mergeSeal) <- spawn' unbounded
