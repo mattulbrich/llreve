@@ -7,11 +7,9 @@ int f(int n, int z) {
         r = n;
     } else {
         i = 0;
-        while (/*__mark(42) & */(i < n - 1)) {
-            __mark(42);
+        while (__mark(42) & (i < n - 1)) {
             i = i + 1;
         }
-        __mark(23);
         r = f(i, 0);
     }
     return r;
