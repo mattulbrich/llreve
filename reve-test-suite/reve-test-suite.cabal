@@ -31,6 +31,7 @@ library
                      , lens
                      , monad-control
                      , monad-logger
+                     , mtl
                      , optparse-applicative
                      , pipes
                      , pipes-bytestring
@@ -54,6 +55,7 @@ executable reve-test-suite
                      , base
                      , monad-control
                      , monad-logger
+                     , mtl
                      , optparse-applicative
                      , pipes-concurrency
                      , pipes-safe

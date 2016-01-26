@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -11,6 +12,7 @@ import qualified Control.Foldl as F
 import           Control.Lens
 import           Control.Monad.IO.Class
 import           Control.Monad.Logger
+import           Control.Monad.Reader
 import           Data.Monoid
 import qualified Data.Text as T
 import           Options
@@ -30,24 +32,27 @@ import           System.Process
 import           Types
 
 solveSmt
-  :: (Monad m, MonadIO m, MonadSafe m, MonadLogger m)
-  => [FilePath] -> FilePath -> FilePath -> FilePath -> FilePath -> m (FilePath,Status)
-solveSmt z3Files build eldarica z3 smt
-   | smt `elem` map (build</>) z3Files = solveZ3 eldarica z3 smt
-   | otherwise = solveEldarica eldarica smt
+  :: (Monad m, MonadIO m, MonadSafe m, MonadLogger m, MonadReader (Options,Config) m)
+  => FilePath -> m (FilePath,Status)
+solveSmt smt =
+  do (opts,conf) <- ask
+     if smt `elem` map (optBuild opts </>) (cnfZ3Files conf)
+        then solveZ3 smt
+        else solveEldarica (optEldarica opts) smt
 
-solveZ3 :: (Monad m, MonadIO m, MonadSafe m, MonadLogger m)
-        => FilePath -> FilePath -> FilePath -> m (FilePath,Status)
-solveZ3 eldarica z3 smt =
-  do let producer =
-           producerCmd (eldarica <> " -t:60 -sp " <> smt) >->
+solveZ3 :: (Monad m, MonadIO m, MonadSafe m, MonadLogger m,MonadReader (Options,a) m)
+        => FilePath -> m (FilePath,Status)
+solveZ3 smt =
+  do opts <- asks fst
+     let producer =
+           producerCmd (optEldarica opts <> " -t:60 -sp " <> smt) >->
            P.map (either (const "") id)
          smt' = smt <> ".z3"
      bracket (liftIO $ openFile smt' WriteMode)
              (liftIO . hClose) $
        \handle -> do runEffect $ producer >-> PB.toHandle handle
      $logDebug $ "Solving using z3: " <> (T.pack smt')
-     let z3Producer = producerCmd (z3 <> " fixedpoint.engine=duality " <> smt') >-> P.map (either id id)
+     let z3Producer = producerCmd (optZ3 opts <> " fixedpoint.engine=duality " <> smt') >-> P.map (either id id)
      output <- F.purely P.fold solverFold (void $ concats $ z3Producer ^. utf8 . P.lines)
      pure (smt',solverStatus output)
 

@@ -4,6 +4,7 @@ import Control.Concurrent.Async
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Logger
+import Control.Monad.Reader
 import Control.Monad.Trans.Control
 import Data.List
 import Data.Monoid
@@ -36,21 +37,18 @@ main =
      (output,input,seal) <- spawn' unbounded
      (mergeOutput,mergeInput,mergeSeal) <- spawn' unbounded
      runSafeT .
+       flip runReaderT (opts,conf) .
        runStderrLoggingT .
        filterLogger
          (\_source level -> (optVerbose opts) || level > LevelDebug) $
        do a <-
             liftBaseDiscard async $
-            smtGeneratorWorker opts
-                               conf
-                               output seal
+            smtGeneratorWorker output seal
           as <-
             forM [(1 :: Int) .. (optProcesses opts)] $
             const $
             liftBaseDiscard async $
-            solverWorker opts
-                         conf
-                         input seal
+            solverWorker input seal
                          mergeOutput mergeSeal
           b <- liftBaseDiscard async $ outputWorker mergeInput mergeSeal
           liftIO $ mapM_ wait (a : b : as)
