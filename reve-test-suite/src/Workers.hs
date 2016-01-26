@@ -21,9 +21,9 @@ import           Text.PrettyPrint.ANSI.Leijen (putDoc)
 import           Types
 
 solverWorker :: (MonadLogger m, MonadSafe m, MonadReader (Options, Config) m)
-             => Input FilePath -> STM () -> Output (FilePath,Status) -> STM () -> m ()
-solverWorker input seal mergeOutput mergeSeal =
-  flip finally (liftIO $ atomically (seal >> mergeSeal)) $ runEffect $
+             => Input FilePath -> STM () -> Output (FilePath,Status) -> m ()
+solverWorker input seal mergeOutput =
+  flip finally (liftIO (atomically seal)) $ runEffect $
     fromInput input >-> P.mapM solveSmt
                     >-> toOutput mergeOutput
 
@@ -31,7 +31,7 @@ smtGeneratorWorker :: (MonadSafe m, MonadReader (Options, Config) m)
                    => Output FilePath -> STM () -> m ()
 smtGeneratorWorker output seal = do
   (opts,config) <- ask
-  flip finally (liftIO $ atomically seal) $
+  flip finally (liftIO (atomically seal)) $
     runEffect $
       P.find (optExamples opts)
                (when_ (pathname_ (`elem` (map (optExamples opts </>) $
@@ -43,7 +43,7 @@ smtGeneratorWorker output seal = do
 
 outputWorker :: MonadSafe m
              => Input (FilePath, Status) -> STM b -> m ()
-outputWorker mergeInput mergeSeal = flip finally (liftIO $ atomically mergeSeal) $ runEffect $
+outputWorker mergeInput mergeSeal = flip finally (liftIO (atomically mergeSeal)) $ runEffect $
   fromInput mergeInput >->
   P.map printResult >->
   P.mapM_ (liftIO . putDoc)

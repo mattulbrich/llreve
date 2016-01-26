@@ -49,9 +49,11 @@ main =
             const $
             liftBaseDiscard async $
             solverWorker input seal
-                         mergeOutput mergeSeal
+                         mergeOutput
           b <- liftBaseDiscard async $ outputWorker mergeInput mergeSeal
-          liftIO $ mapM_ wait (a : b : as)
+          liftIO $ mapM_ wait (a : as)
+          liftIO $ atomically mergeSeal
+          liftIO $ wait b
   where optParser =
           info (helper <*> optionParser)
                (fullDesc <> progDesc "Test all examples" <>
