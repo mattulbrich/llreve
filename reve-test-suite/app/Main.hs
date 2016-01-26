@@ -7,6 +7,7 @@ import Control.Monad.Logger
 import Control.Monad.Trans.Control
 import Data.List
 import Data.Monoid
+import Data.Yaml
 import Options
 import Options.Applicative hiding ((<>),(<$>))
 import Orphans ()
@@ -27,31 +28,33 @@ resetJavaOpts =
        Just [] -> unsetEnv "_JAVA_OPTIONS"
        Just opts' -> setEnv "_JAVA_OPTIONS" (unwords opts')
 
-
 main :: IO ()
 main =
-  do parsedOpts <- execParser opts
+  do opts <- execParser optParser
+     conf <- decodeFileEither (optConfig opts) >>= either throwM return
      resetJavaOpts
      (output,input,seal) <- spawn' unbounded
      (mergeOutput,mergeInput,mergeSeal) <- spawn' unbounded
      runSafeT .
        runStderrLoggingT .
        filterLogger
-         (\_source level -> (optVerbose parsedOpts) || level > LevelDebug) $
+         (\_source level -> (optVerbose opts) || level > LevelDebug) $
        do a <-
             liftBaseDiscard async $
-            smtGeneratorWorker parsedOpts
+            smtGeneratorWorker opts
+                               conf
                                output seal
           as <-
-            forM [(1 :: Int) .. (optProcesses parsedOpts)] $
+            forM [(1 :: Int) .. (optProcesses opts)] $
             const $
             liftBaseDiscard async $
-            solverWorker parsedOpts
+            solverWorker opts
+                         conf
                          input seal
                          mergeOutput mergeSeal
           b <- liftBaseDiscard async $ outputWorker mergeInput mergeSeal
           liftIO $ mapM_ wait (a : b : as)
-  where opts =
+  where optParser =
           info (helper <*> optionParser)
                (fullDesc <> progDesc "Test all examples" <>
                 header "reve-test-suite")

@@ -8,7 +8,8 @@ data Options = Options {optReve :: FilePath
                        ,optExamples :: FilePath
                        ,optBuild :: FilePath
                        ,optProcesses :: Int
-                       ,optVerbose :: Bool}
+                       ,optVerbose :: Bool
+                       ,optConfig :: FilePath}
 
 optionParser :: Parser Options
 optionParser =
@@ -28,4 +29,6 @@ optionParser =
              value "build") <*>
   option auto
          (short 'j' <> help "Number of parallel solver instances" <> value 1) <*>
-  switch (short 'v' <> help "Verbose output")
+  switch (short 'v' <> help "Verbose output") <*>
+  strOption (long "config" <> metavar "PATH" <> help "Path to yaml config file" <>
+             value "config.yaml")

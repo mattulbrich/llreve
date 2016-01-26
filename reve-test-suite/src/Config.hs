@@ -1,29 +1,17 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Config
-  (ignoredDirectories
-  ,ignoredFiles
-  ,z3Files) where
+  (Config(..)
+  ) where
 
-ignoredDirectories :: [FilePath]
-ignoredDirectories =
-  ["ignored"
-  ,"notyetworking"
-  ,"discuss"
-  ,"argon2"
-  ,"coreutils"
-  ,"redis"
-  ,"git"
-  ,"linux"
-  ,"torch"]
+import Data.Aeson
 
-ignoredFiles :: [FilePath]
-ignoredFiles =
-  ["a_1.c"
-  ,"linux_1.c"
-  ,"cocome1_1.c"
-  ,"triangular_1.c"
-  ,"selsort_1.c"
-  ,"findmax_1.c"
-  ,"fib_1.c"]
+data Config = Conf {cnfIgnoredDirs :: [FilePath]
+                   ,cnfIgnoredFiles :: [FilePath]
+                   ,cnfZ3Files :: [FilePath]}
 
-z3Files :: [FilePath]
-z3Files = ["rec/add-horn.smt2"]
+instance FromJSON Config where
+  parseJSON (Object v) = Conf <$>
+                         v .: "ignored-dirs" <*>
+                         v .: "ignored-files" <*>
+                         v .: "z3-files"
+  parseJSON _ = mempty

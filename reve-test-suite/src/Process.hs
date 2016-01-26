@@ -31,8 +31,8 @@ import           Types
 
 solveSmt
   :: (Monad m, MonadIO m, MonadSafe m, MonadLogger m)
-  => FilePath -> FilePath -> FilePath -> FilePath -> m (FilePath,Status)
-solveSmt build eldarica z3 smt
+  => [FilePath] -> FilePath -> FilePath -> FilePath -> FilePath -> m (FilePath,Status)
+solveSmt z3Files build eldarica z3 smt
    | smt `elem` map (build</>) z3Files = solveZ3 eldarica z3 smt
    | otherwise = solveEldarica eldarica smt
 
