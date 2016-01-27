@@ -13,7 +13,8 @@ llvm::PreservedAnalyses PromotePass::run(llvm::Function &F,
                                          llvm::FunctionAnalysisManager *AM) {
     std::vector<llvm::AllocaInst *> Allocas;
 
-    llvm::BasicBlock &BB = F.getEntryBlock(); // Get the entry node for the function
+    llvm::BasicBlock &BB =
+        F.getEntryBlock(); // Get the entry node for the function
 
     llvm::DominatorTree &DT = AM->getResult<llvm::DominatorTreeAnalysis>(F);
     llvm::AssumptionCache &AC = AM->getResult<llvm::AssumptionAnalysis>(F);
@@ -24,8 +25,10 @@ llvm::PreservedAnalyses PromotePass::run(llvm::Function &F,
         // Find allocas that are safe to promote, by looking at all instructions
         // in
         // the entry node
-        for (llvm::BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I) {
-            if (llvm::AllocaInst *AI = llvm::dyn_cast<llvm::AllocaInst>(I)) { // Is it an alloca?
+        for (llvm::BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E;
+             ++I) {
+            if (const auto AI =
+                    llvm::dyn_cast<llvm::AllocaInst>(I)) { // Is it an alloca?
                 if (llvm::isAllocaPromotable(AI)) {
                     Allocas.push_back(AI);
                 }

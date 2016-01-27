@@ -48,4 +48,4 @@ auto globalDeclarationsForMod(int GlobalPointer, llvm::Module &Mod,
                               llvm::Module &OtherMod) -> std::vector<SMTRef>;
 auto collectFunConds() -> std::multimap<string, string>;
 auto collectFunCondsInFile(std::string File) -> std::multimap<string, string>;
-auto doesAccessMemory(llvm::Module &Mod) -> bool;
+auto doesAccessMemory(const llvm::Module &Mod) -> bool;

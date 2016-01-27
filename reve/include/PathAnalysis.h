@@ -29,16 +29,16 @@ class Path {
 
 class BooleanCondition : public Condition {
   public:
-    BooleanCondition(llvm::Value *Cond, const bool True)
+    BooleanCondition(const llvm::Value *Cond, const bool True)
         : Cond(std::move(Cond)), True(std::move(True)) {}
-    llvm::Value *Cond;
+    const llvm::Value *const Cond;
     const bool True;
     SMTRef toSmt(const std::set<string> Constructed) const override;
 };
 
 class SwitchCondition : public Condition {
   public:
-    SwitchCondition(llvm::Value *Cond, int64_t Val)
+    SwitchCondition(const llvm::Value *Cond, int64_t Val)
         : Cond(std::move(Cond)), Val(std::move(Val)) {}
     const llvm::Value *const Cond;
     const int64_t Val;
@@ -47,7 +47,7 @@ class SwitchCondition : public Condition {
 
 class SwitchDefault : public Condition {
   public:
-    SwitchDefault(llvm::Value *Cond, std::vector<int64_t> Vals)
+    SwitchDefault(const llvm::Value *Cond, std::vector<int64_t> Vals)
         : Cond(std::move(Cond)), Vals(std::move(Vals)) {}
     const llvm::Value *const Cond;
     const std::vector<int64_t> Vals;
@@ -61,7 +61,7 @@ using PathMap = std::map<int, std::map<int, Paths>>;
 
 class PathAnalysis {
   public:
-    typedef PathMap Result;
+    using Result = PathMap;
     static llvm::StringRef name() { return "PathAnalysis"; }
     static void *ID() { return static_cast<void *>(&PassID); }
     Result run(llvm::Function &F, llvm::FunctionAnalysisManager *AM);
@@ -76,8 +76,8 @@ auto findPaths(int For, llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks)
     -> std::map<int, Paths>;
 
 auto traverse(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks, bool First,
-              std::set<llvm::BasicBlock *> Visited) -> Paths_;
+              std::set<const llvm::BasicBlock *> Visited) -> Paths_;
 
-auto isMarked(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks) -> bool;
+auto isMarked(llvm::BasicBlock &BB, BidirBlockMarkMap MarkedBlocks) -> bool;
 
-auto isReturn(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks) -> bool;
+auto isReturn(llvm::BasicBlock &BB, BidirBlockMarkMap MarkedBlocks) -> bool;

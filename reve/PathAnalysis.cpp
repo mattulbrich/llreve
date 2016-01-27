@@ -20,7 +20,7 @@ PathMap PathAnalysis::run(llvm::Function &F,
         // don't start at return instructions
         if (BBTuple.first != EXIT_MARK && BBTuple.first != UNREACHABLE_MARK) {
             for (auto BB : BBTuple.second) {
-                std::map<int, Paths> NewPaths =
+                const std::map<int, Paths> NewPaths =
                     findPaths(BBTuple.first, BB, BidirMarkBlockMap);
                 for (auto NewPathTuple : NewPaths) {
                     MyPaths[BBTuple.first][NewPathTuple.first].insert(
@@ -37,7 +37,7 @@ PathMap PathAnalysis::run(llvm::Function &F,
 std::map<int, Paths> findPaths(int For, llvm::BasicBlock *BB,
                                BidirBlockMarkMap BidirBlockMarkMap) {
     std::map<int, Paths> FoundPaths;
-    auto MyPaths = traverse(BB, BidirBlockMarkMap, true, {});
+    const auto MyPaths = traverse(BB, BidirBlockMarkMap, true, {});
     for (auto &PathIt : MyPaths) {
         set<int> Indices;
         if (PathIt.empty()) {
@@ -57,9 +57,10 @@ std::map<int, Paths> findPaths(int For, llvm::BasicBlock *BB,
 }
 
 Paths_ traverse(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks,
-                bool First, std::set<llvm::BasicBlock *> Visited) {
+                bool First, std::set<const llvm::BasicBlock *> Visited) {
     std::set<std::string> Constructed;
-    if ((!First && isMarked(BB, MarkedBlocks)) || isReturn(BB, MarkedBlocks)) {
+    if ((!First && isMarked(*BB, MarkedBlocks)) ||
+        isReturn(*BB, MarkedBlocks)) {
         Paths_ MyPaths;
         MyPaths.push_back(Path_());
         return MyPaths;
@@ -130,19 +131,19 @@ Paths_ traverse(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks,
     return Paths_();
 }
 
-bool isMarked(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks) {
-    auto Marks = MarkedBlocks.BlockToMarksMap.find(BB);
+bool isMarked(llvm::BasicBlock &BB, BidirBlockMarkMap MarkedBlocks) {
+    const auto Marks = MarkedBlocks.BlockToMarksMap.find(&BB);
     if (Marks != MarkedBlocks.BlockToMarksMap.end()) {
         return !(Marks->second.empty());
     }
     return false;
 }
 
-bool isReturn(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks) {
-    auto Marks = MarkedBlocks.BlockToMarksMap.find(BB);
+bool isReturn(llvm::BasicBlock &BB, BidirBlockMarkMap MarkedBlocks) {
+    const auto Marks = MarkedBlocks.BlockToMarksMap.find(&BB);
     if (Marks != MarkedBlocks.BlockToMarksMap.end()) {
         return Marks->second.find(EXIT_MARK) != Marks->second.end() ||
-               llvm::isa<llvm::UnreachableInst>(BB->getTerminator());
+               llvm::isa<llvm::UnreachableInst>(BB.getTerminator());
     }
     return false;
 }

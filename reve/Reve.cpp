@@ -528,7 +528,7 @@ void externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
 std::set<uint32_t> varArgs(llvm::Function &Fun) {
     std::set<uint32_t> VarArgs;
     for (auto User : Fun.users()) {
-        if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(User)) {
+        if (const auto CallInst = llvm::dyn_cast<llvm::CallInst>(User)) {
             VarArgs.insert(CallInst->getNumArgOperands() -
                            Fun.getFunctionType()->getNumParams());
         } else {
@@ -579,8 +579,8 @@ std::vector<SMTRef> externFunDecl(llvm::Function &Fun, int Program,
 bool doesNotRecurse(llvm::Function &Fun) {
     for (auto &BB : Fun) {
         for (auto &Inst : BB) {
-            if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(&Inst)) {
-                auto CalledFun = CallInst->getCalledFunction();
+            if (const auto CallInst = llvm::dyn_cast<llvm::CallInst>(&Inst)) {
+                const auto CalledFun = CallInst->getCalledFunction();
                 if (CalledFun && !CalledFun->isDeclaration()) {
                     return false;
                 }
@@ -590,7 +590,7 @@ bool doesNotRecurse(llvm::Function &Fun) {
     return true;
 }
 
-bool doesAccessMemory(llvm::Module &Mod) {
+bool doesAccessMemory(const llvm::Module &Mod) {
     for (auto &Fun : Mod) {
         for (auto &BB : Fun) {
             for (auto &Instr : BB) {
@@ -630,7 +630,7 @@ std::vector<SMTRef> globalDeclarations(llvm::Module &Mod1, llvm::Module &Mod2) {
         if (Mod2.getNamedGlobal(GlobalName)) {
             // we want the size of string constants not the size of the pointer
             // pointing to them
-            if (auto PointerTy =
+            if (const auto PointerTy =
                     llvm::dyn_cast<llvm::PointerType>(Global1.getType())) {
                 GlobalPointer += typeSize(PointerTy->getElementType());
             } else {

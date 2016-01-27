@@ -19,12 +19,12 @@ MarkAnalysis::run(llvm::Function &Fun, llvm::FunctionAnalysisManager *AM) {
     BlockedMarks[AM->getResult<UnifyFunctionExitNodes>(Fun)].insert(EXIT_MARK);
     for (auto &BB : Fun) {
         for (auto &Inst : BB) {
-            if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(&Inst)) {
+            if (const auto CallInst = llvm::dyn_cast<llvm::CallInst>(&Inst)) {
                 if ((CallInst->getCalledFunction() != nullptr) &&
                     CallInst->getCalledFunction()->getName() == "__mark") {
-                    llvm::Value *IDVal = CallInst->getArgOperand(0);
+                    const llvm::Value *IDVal = CallInst->getArgOperand(0);
                     int ID = 0;
-                    if (auto ConstInt =
+                    if (const auto ConstInt =
                             llvm::dyn_cast<llvm::ConstantInt>(IDVal)) {
                         ID = static_cast<int>(
                             ConstInt->getValue().getSExtValue());
