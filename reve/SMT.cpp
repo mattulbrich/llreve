@@ -78,8 +78,8 @@ SExprRef Let::toSExpr() const {
     for (auto &Def : Defs) {
         std::vector<SExprRef> ArgSExprs;
         ArgSExprs.push_back(std::get<1>(Def)->toSExpr());
-        DefSExprs.push_back(make_unique<Apply<std::string>>(std::get<0>(Def),
-                                                        std::move(ArgSExprs)));
+        DefSExprs.push_back(make_unique<Apply<std::string>>(
+            std::get<0>(Def), std::move(ArgSExprs)));
     }
     Args.push_back(make_unique<List<std::string>>(std::move(DefSExprs)));
     Args.push_back(Expr->toSExpr());
@@ -101,6 +101,10 @@ set<string> Let::uses() const {
 
 SExprRef Op::toSExpr() const {
     std::vector<SExprRef> ArgSExprs;
+    // Special case for emty and
+    if (OpName == "and" && Args.empty()) {
+        return make_unique<Value<string>>("true");
+    }
     for (auto &Arg : Args) {
         ArgSExprs.push_back(Arg->toSExpr());
     }
@@ -284,7 +288,9 @@ SMTRef nestLets(SMTRef Clause, std::vector<std::tuple<string, SMTRef>> Defs) {
     return Lets;
 }
 
-SMTRef Comment::compressLets(std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs) const {
+SMTRef Comment::compressLets(
+    std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+    const {
     return nestLets(make_shared<Comment>(Val), Defs);
 }
 
@@ -292,6 +298,4 @@ SExprRef Comment::toSExpr() const {
     return llvm::make_unique<class sexpr::Comment<std::string>>(Val);
 }
 
-std::set<std::string> Comment::uses() const {
-    return std::set<std::string>();
-}
+std::set<std::string> Comment::uses() const { return std::set<std::string>(); }
