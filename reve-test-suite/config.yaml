@@ -9,8 +9,6 @@ ignored-dirs:
   - torch
 ignored-files:
   - a_1.c
-  - rec/cocome1_1.c
-  - rec/triangular_1.c
   - heap/selsort_1.c
   - heap/findmax_1.c
   - heap/fib_1.c
@@ -18,5 +16,7 @@ ignored-files:
 z3-files:
   - rec/add-horn.smt2
   - rec/rec_while.smt2
+  - rec/cocome1.smt2
+  - rec/triangular.smt2
 custom-args:
   rec/rec_while.smt2: []

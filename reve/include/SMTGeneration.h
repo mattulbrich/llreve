@@ -38,9 +38,17 @@ struct CallInfo {
         : AssignedTo(AssignedTo), CallName(CallName), Args(Args),
           Extern(Extern), Fun(Fun) {}
     bool operator==(const CallInfo &Other) const {
-        return CallName == Other.CallName &&
-               Fun.getFunctionType()->getNumParams() ==
-                   Other.Fun.getFunctionType()->getNumParams();
+        bool Result = CallName == Other.CallName;
+        if (!Extern) {
+            return Result;
+        } else {
+            // We don’t have a useful abstraction for extern functions which
+            // don’t have the same number of arguments so we only want to couple
+            // those that have one
+            return Result &&
+                   Fun.getFunctionType()->getNumParams() ==
+                       Other.Fun.getFunctionType()->getNumParams();
+        }
     }
 };
 
@@ -222,7 +230,8 @@ template <typename T>
 auto resolveGEP(T &GEP, set<string> Constructed) -> SMTRef;
 auto isStackOp(const llvm::Instruction &Inst) -> bool;
 auto argSort(std::string Arg) -> std::string;
-auto stringConstants(const llvm::Module &Mod, string Heap) -> std::vector<SMTRef>;
+auto stringConstants(const llvm::Module &Mod, string Heap)
+    -> std::vector<SMTRef>;
 auto matchFunCalls(std::vector<CallInfo> CallInfos1,
                    std::vector<CallInfo> CallInfos2)
     -> std::vector<InterleaveStep>;

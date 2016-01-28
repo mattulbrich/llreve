@@ -1593,7 +1593,8 @@ std::map<int, vector<string>> freeVars(PathMap Map1, PathMap Map2,
                 for (auto Var : FreeVarsMap.at(EndIndex)) {
                     if (Constructed.at(StartIndex).at(EndIndex).find(Var) ==
                         Constructed.at(StartIndex).at(EndIndex).end()) {
-                        const auto Inserted = FreeVarsMap.at(StartIndex).insert(Var);
+                        const auto Inserted =
+                            FreeVarsMap.at(StartIndex).insert(Var);
                         Changed = Changed || Inserted.second;
                     }
                 }
