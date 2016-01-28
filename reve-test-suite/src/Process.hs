@@ -116,16 +116,15 @@ dropFromEnd n xs = zipWith const xs (drop n xs)
 safeReadProcess :: FilePath -> [String] -> IO ()
 safeReadProcess cmd args =
   safeCreateProcess
-    ((proc cmd
-           args) {std_in = CreatePipe
-                 ,std_out = CreatePipe
-                 ,std_err = CreatePipe}) $
+    ((proc cmd args) {std_in = CreatePipe
+                     ,std_out = CreatePipe
+                     ,std_err = CreatePipe}) $
   \(_,_,Just err,handle) ->
     do ex <- waitForProcess handle
        case ex of
          ExitSuccess -> pure ()
-         (ExitFailure _) -> do runEffect $ PB.fromHandle err >-> PB.stdout
-                               throwM ex
+         (ExitFailure _) -> runEffect $ PB.fromHandle err >-> PB.stdout
+
 
 safeCreateProcess :: CreateProcess
                   -> ((Maybe Handle,Maybe Handle,Maybe Handle,ProcessHandle) -> IO a)
