@@ -39,8 +39,8 @@ main =
      conf' <- decodeFileEither (optConfig opts) >>= either throwM return
      let conf = conf' & cnfCustomArgs %~ M.mapKeys (optBuild opts </>)
      resetJavaOpts
-     (output,input,seal) <- spawn' unbounded
-     (mergeOutput,mergeInput,mergeSeal) <- spawn' unbounded
+     (output,input,seal) <- spawn' (bounded (optProcesses opts))
+     (mergeOutput,mergeInput,mergeSeal) <- spawn' (bounded (optProcesses opts))
      runSafeT .
        flip runReaderT (opts,conf) .
        runStderrLoggingT .

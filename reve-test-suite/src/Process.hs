@@ -8,6 +8,7 @@ module Process
   (solveSmt,generateSmt) where
 
 import           Config
+import qualified Control.Exception as Ex
 import qualified Control.Foldl as F
 import           Control.Lens
 import           Control.Monad.IO.Class
@@ -22,7 +23,7 @@ import qualified Pipes.ByteString as PB
 import           Pipes.Group
 import qualified Pipes.Prelude as P
 import           Pipes.Safe hiding (handle)
-import           Pipes.Shell
+import           Pipes.Shell hiding (cmd)
 import qualified Pipes.Text as P hiding (find,map,last)
 import           Pipes.Text.Encoding
 import           System.Directory
@@ -86,23 +87,23 @@ generateSmt :: (MonadIO m, MonadThrow m, MonadReader (Options,Config) m)
             => FilePath -> m FilePath
 generateSmt path =
   do (opts,conf) <- ask
-     let path' = makeRelative (optExamples opts) path
+     let path' =
+           makeRelative (optExamples opts)
+                        path
          smtfile = (optBuild opts) </> (dropFromEnd 4 path') -<.> "smt2"
          file1 = path
          file2 = (dropFromEnd 4 path) <> "_2" -<.> "c"
      liftIO $
        createDirectoryIfMissing True
                                 (takeDirectory smtfile)
-     (code,_,_) <-
-       liftIO $
-       readProcessWithExitCode
+     liftIO $ putStrLn $ "starting process: " ++ smtfile
+     liftIO $
+       safeReadProcess
          (optReve opts)
-         ([file1,file2,"-o",smtfile,"-I","/usr/lib/clang/3.7.1/include"]
-          ++ optionsFor (conf ^. cnfCustomArgs) smtfile)
-         []
-     case code of
-       ExitSuccess -> pure ()
-       (ExitFailure _) -> throwM code
+         ([file1,file2,"-o",smtfile,"-I","/usr/lib/clang/3.7.1/include"] ++
+          optionsFor (conf ^. cnfCustomArgs)
+                     smtfile)
+     liftIO $ putStrLn $ "process finished: " ++ smtfile
      pure smtfile
 
 optionsFor :: M.Map FilePath [String] -> FilePath -> [String]
@@ -113,3 +114,27 @@ optionsFor m file =
 
 dropFromEnd :: Int -> [a] -> [a]
 dropFromEnd n xs = zipWith const xs (drop n xs)
+
+safeReadProcess :: FilePath -> [String] -> IO ()
+safeReadProcess cmd args =
+  safeCreateProcess
+    ((proc cmd
+           args) {std_in = CreatePipe
+                 ,std_out = CreatePipe
+                 ,std_err = CreatePipe}) $
+  \(_,_,_,handle) ->
+    do ex <- waitForProcess handle
+       case ex of
+         ExitSuccess -> pure ()
+         (ExitFailure _) -> throwM ex
+
+safeCreateProcess :: CreateProcess
+                  -> ((Maybe Handle,Maybe Handle,Maybe Handle,ProcessHandle) -> IO a)
+                  -> IO a
+safeCreateProcess p f =
+  Ex.bracket (createProcess p)
+             (\(stdin',stdout',stderr',process) ->
+                mapM_ hClose stdin' >> mapM_ hClose stdout' >>
+                mapM_ hClose stderr' >>
+                terminateProcess process)
+             f

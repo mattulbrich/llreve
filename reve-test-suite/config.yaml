@@ -4,7 +4,6 @@ ignored-dirs:
   - discuss
   - coreutils
   - redis
-  - git
   - linux
   - torch
 ignored-files:
@@ -20,3 +19,5 @@ z3-files:
   - rec/triangular.smt2
 custom-args:
   rec/rec_while.smt2: []
+  git/swap.smt2:
+    - -stack
