@@ -3,7 +3,6 @@ ignored-dirs:
   - notyetworking
   - discuss
   - coreutils
-  - redis
   - linux
   - torch
 ignored-files:
@@ -21,3 +20,6 @@ custom-args:
   rec/rec_while.smt2: []
   git/swap.smt2:
     - -stack
+  redis/undoconnect.smt2:
+    - -fun
+    - undoconnectWithMaster
