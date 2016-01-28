@@ -96,14 +96,12 @@ generateSmt path =
      liftIO $
        createDirectoryIfMissing True
                                 (takeDirectory smtfile)
-     liftIO $ putStrLn $ "starting process: " ++ smtfile
      liftIO $
        safeReadProcess
          (optReve opts)
          ([file1,file2,"-o",smtfile,"-I","/usr/lib/clang/3.7.1/include"] ++
           optionsFor (conf ^. cnfCustomArgs)
                      smtfile)
-     liftIO $ putStrLn $ "process finished: " ++ smtfile
      pure smtfile
 
 optionsFor :: M.Map FilePath [String] -> FilePath -> [String]
@@ -122,11 +120,12 @@ safeReadProcess cmd args =
            args) {std_in = CreatePipe
                  ,std_out = CreatePipe
                  ,std_err = CreatePipe}) $
-  \(_,_,_,handle) ->
+  \(_,_,Just err,handle) ->
     do ex <- waitForProcess handle
        case ex of
          ExitSuccess -> pure ()
-         (ExitFailure _) -> throwM ex
+         (ExitFailure _) -> do runEffect $ PB.fromHandle err >-> PB.stdout
+                               throwM ex
 
 safeCreateProcess :: CreateProcess
                   -> ((Maybe Handle,Maybe Handle,Maybe Handle,ProcessHandle) -> IO a)
