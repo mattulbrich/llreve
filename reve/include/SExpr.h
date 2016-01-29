@@ -32,7 +32,7 @@ template <typename T> class Apply : public SExpr<T> {
         OS << "(" << Fun;
         std::vector<std::string> AtomicOps = {
             "+", "-",   "*",        "<=",     "<",     ">",  ">=",
-            "=", "not", "distinct", "select", "store"};
+            "=", "not", "distinct", "select", "store", "ite"};
         std::vector<std::string> ForceIndentOps = {"assert", "and"};
         bool AtomicOp = std::find(AtomicOps.begin(), AtomicOps.end(), Fun) !=
                         AtomicOps.end();
