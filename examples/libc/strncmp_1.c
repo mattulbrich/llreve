@@ -1,14 +1,4 @@
 /* openbsd */
-/*@ rel_in
-  (and
-      (= s1$1_0 s1$2_0)
-      (= s2$1_0 s2$2_0)
-      (= n$1_0 n$2_0)
-      (>= n$1_0 0)
-      (forall
-         ((i Int))
-         (= (select HEAP$1 i) (select HEAP$2 i))))
-  @*/
 #include <stddef.h>
 
 extern int __mark(int);

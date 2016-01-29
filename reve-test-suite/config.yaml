@@ -23,3 +23,5 @@ custom-args:
   redis/undoconnect.smt2:
     - -fun
     - undoconnectWithMaster
+  argon2/finalize.smt2:
+    - -signed

@@ -84,13 +84,13 @@ enum SMTFor { First, Second, Both };
 auto convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
                   std::shared_ptr<llvm::FunctionAnalysisManager> Fam1,
                   std::shared_ptr<llvm::FunctionAnalysisManager> Fam2,
-                  bool OffByN, std::vector<SMTRef> &Declarations, Memory Heap)
-    -> std::vector<SMTRef>;
+                  bool OffByN, std::vector<SMTRef> &Declarations, Memory Heap,
+                  bool Signed) -> std::vector<SMTRef>;
 auto mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
                    std::shared_ptr<llvm::FunctionAnalysisManager> Fam1,
                    std::shared_ptr<llvm::FunctionAnalysisManager> Fam2,
                    bool OffByN, std::vector<SMTRef> &Declarations, bool OnlyRec,
-                   Memory Heap) -> std::vector<SMTRef>;
+                   Memory Heap, bool Signed) -> std::vector<SMTRef>;
 
 /* -------------------------------------------------------------------------- */
 // Generate SMT for all paths
@@ -98,36 +98,37 @@ auto mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
 auto synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                        std::map<int, std::vector<string>> FreeVarsMap,
                        std::string FunName, std::vector<SMTRef> &Declarations,
-                       Memory Heap) -> std::vector<SMTRef>;
+                       Memory Heap, bool Signed) -> std::vector<SMTRef>;
 auto mainSynchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                            std::map<int, std::vector<string>> FreeVarsMap,
                            std::string FunName,
-                           std::vector<SMTRef> &Declarations, Memory Heap)
-    -> std::vector<SMTRef>;
+                           std::vector<SMTRef> &Declarations, Memory Heap,
+                           bool Signed) -> std::vector<SMTRef>;
 auto forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
                     BidirBlockMarkMap Marked1, BidirBlockMarkMap Marked2,
                     std::map<int, std::vector<string>> FreeVarsMap, bool OffByN,
-                    std::string FunName, bool Main, Memory Heap)
+                    std::string FunName, bool Main, Memory Heap, bool Signed)
     -> std::vector<SMTRef>;
 auto nonmutualPaths(PathMap PathMap, std::vector<SMTRef> &PathExprs,
                     std::map<int, std::vector<string>> FreeVarsMap, SMTFor For,
                     std::string FunName, std::vector<SMTRef> &Declarations,
-                    Memory Heap) -> void;
+                    Memory Heap, bool Signed) -> void;
 auto offByNPaths(PathMap PathMap1, PathMap PathMap2,
                  std::map<int, std::vector<string>> FreeVarsMap,
-                 std::string FunName, bool Main, Memory Heap)
+                 std::string FunName, bool Main, Memory Heap, bool Signed)
     -> std::vector<SMTRef>;
 auto offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
                        std::map<int, std::vector<string>> FreeVarsMap,
                        int Program, SMTFor For, std::string FunName, bool Main,
-                       Memory Heap) -> std::vector<SMTRef>;
+                       Memory Heap, bool Signed) -> std::vector<SMTRef>;
 
 /* -------------------------------------------------------------------------- */
 // Functions for generating SMT for a single/mutual path
 
 auto assignmentsOnPath(Path Path, int Program,
                        std::vector<std::string> FreeVars, bool ToEnd,
-                       Memory Heap) -> std::vector<AssignmentCallBlock>;
+                       Memory Heap, bool Signed)
+    -> std::vector<AssignmentCallBlock>;
 auto interleaveAssignments(SMTRef EndClause,
                            std::vector<AssignmentCallBlock> Assignments1,
                            std::vector<AssignmentCallBlock> Assignments2,
@@ -153,7 +154,8 @@ auto invariantName(int Index, SMTFor For, std::string FunName,
                    uint32_t VarArgs = 0) -> std::string;
 auto dontLoopInvariant(SMTRef EndClause, int StartIndex, PathMap PathMap,
                        std::map<int, std::vector<string>> FreeVarsMap,
-                       int Program, SMTFor For, Memory Heap) -> SMTRef;
+                       int Program, SMTFor For, Memory Heap, bool Signed)
+    -> SMTRef;
 
 /* -------------------------------------------------------------------------- */
 // Functions to generate various foralls
@@ -187,12 +189,14 @@ auto equalInputsEqualOutputs(std::vector<string> FunArgs,
 
 auto blockAssignments(llvm::BasicBlock &BB, const llvm::BasicBlock *PrevBB,
                       bool IgnorePhis, bool OnlyPhis, int Program,
-                      set<string> &Constructed, Memory Heap)
+                      set<string> &Constructed, Memory Heap, bool Signed)
     -> std::vector<DefOrCallInfo>;
 auto instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
-                     set<string> &Constructed, int Program)
+                     set<string> &Constructed, int Program, bool Signed)
     -> std::shared_ptr<std::tuple<std::string, SMTRef>>;
 auto predicateName(const llvm::CmpInst::Predicate Pred) -> std::string;
+auto predicateFun(const llvm::CmpInst::CmpInst &Pred, bool Signed)
+    -> std::function<SMTRef(SMTRef)>;
 auto opName(const llvm::BinaryOperator &Op) -> std::string;
 auto instrNameOrVal(const llvm::Value *Val, const llvm::Type *Ty,
                     std::set<std::string> Constructed) -> SMTRef;

@@ -85,6 +85,9 @@ static llvm::cl::opt<bool> Strings("strings",
 static llvm::cl::opt<string>
     Fun("fun", llvm::cl::desc("Function which should be verified"));
 static llvm::cl::opt<string> Include("I", llvm::cl::desc("Include path"));
+static llvm::cl::opt<bool>
+    Signed("signed",
+           llvm::cl::desc("Treat all operations as signed operatons"));
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
@@ -311,7 +314,7 @@ int main(int Argc, const char **Argv) {
             auto NewSMTExprs =
                 mainAssertion(*FunPair.first.first, *FunPair.first.second,
                               FunPair.second.first, FunPair.second.second,
-                              OffByN, Declarations, OnlyRec, Mem);
+                              OffByN, Declarations, OnlyRec, Mem, Signed);
             Assertions.insert(Assertions.end(), NewSMTExprs.begin(),
                               NewSMTExprs.end());
         }
@@ -322,7 +325,7 @@ int main(int Argc, const char **Argv) {
             auto NewSMTExprs =
                 convertToSMT(*FunPair.first.first, *FunPair.first.second,
                              FunPair.second.first, FunPair.second.second,
-                             OffByN, Declarations, Mem);
+                             OffByN, Declarations, Mem, Signed);
             Assertions.insert(Assertions.end(), NewSMTExprs.begin(),
                               NewSMTExprs.end());
         }
