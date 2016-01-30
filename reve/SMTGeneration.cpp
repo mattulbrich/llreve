@@ -421,8 +421,7 @@ vector<AssignmentCallBlock> assignmentsOnPath(Path Path, int Program,
         const auto Defs = blockAssignments(*Edge.Block, Prev, Last && !ToEnd,
                                            Program, Heap, Signed);
         AllDefs.push_back(AssignmentCallBlock(
-            Defs,
-            Edge.Cond == nullptr ? nullptr : Edge.Cond->toSmt()));
+            Defs, Edge.Cond == nullptr ? nullptr : Edge.Cond->toSmt()));
         Prev = Edge.Block;
     }
     return AllDefs;
@@ -975,9 +974,9 @@ SMTRef makeFunArgsEqual(SMTRef Clause, SMTRef PreClause, vector<string> Args1,
     return makeBinOp("=>", InInv, makeBinOp("and", Clause, PreClause));
 }
 
-SMTRef inInvariant(llvm::Function &Fun1, llvm::Function &Fun2, SMTRef Body,
-                   Memory Heap, llvm::Module &Mod1, llvm::Module &Mod2,
-                   bool Strings) {
+SMTRef inInvariant(const llvm::Function &Fun1, const llvm::Function &Fun2,
+                   SMTRef Body, Memory Heap, const llvm::Module &Mod1,
+                   const llvm::Module &Mod2, bool Strings) {
 
     vector<SMTRef> Args;
     const std::pair<vector<string>, vector<string>> FunArgsPair =
@@ -1121,7 +1120,7 @@ SMTRef equalInputsEqualOutputs(vector<string> FunArgs, vector<string> FunArgs1,
 // SMT assignments
 
 /// Convert a basic block to a list of assignments
-vector<DefOrCallInfo> blockAssignments(llvm::BasicBlock &BB,
+vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
                                        const llvm::BasicBlock *PrevBB,
                                        bool OnlyPhis, int Program, Memory Heap,
                                        bool Signed) {
@@ -1194,32 +1193,28 @@ vector<DefOrCallInfo> blockAssignments(llvm::BasicBlock &BB,
 
 /// Convert a single instruction to an assignment
 std::shared_ptr<std::tuple<string, SMTRef>>
-instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
+instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
                 int Program, bool Signed) {
     if (const auto BinOp = llvm::dyn_cast<llvm::BinaryOperator>(&Instr)) {
-        if (BinOp->getOpcode() == Instruction::Sub) {
-            if (const auto Instr0 =
-                    llvm::dyn_cast<llvm::Instruction>(BinOp->getOperand(0))) {
-                if (const auto Instr1 = llvm::dyn_cast<llvm::Instruction>(
-                        BinOp->getOperand(1))) {
-                    if (Instr0->getMetadata("reve.ptr_to_int") &&
-                        Instr1->getMetadata("reve.ptr_to_int")) {
-                        flagInstr(Instr, "reve.ptr_diff");
-                    }
-                }
-            }
-        }
         if (BinOp->getOpcode() == Instruction::SDiv) {
+            // This is a heuristic to remove divisions by 4 of pointer
+            // subtractions
+            // Since we treat every int as a single value, we expect the
+            // division to return the number of elements and not the number of
+            // bytes
             if (const auto Instr =
                     llvm::dyn_cast<llvm::Instruction>(BinOp->getOperand(0))) {
                 if (const auto ConstInt = llvm::dyn_cast<llvm::ConstantInt>(
                         BinOp->getOperand(1))) {
-                    if (ConstInt->getSExtValue() == 4 &&
-                        Instr->getMetadata("reve.ptr_diff")) {
+                    if (ConstInt->getSExtValue() == 4 && isPtrDiff(*Instr)) {
                         return make_shared<std::tuple<string, SMTRef>>(
                             BinOp->getName(),
                             instrNameOrVal(BinOp->getOperand(0),
                                            BinOp->getOperand(0)->getType()));
+                    } else {
+                        logWarning("Division of pointer difference by " +
+                                   std::to_string(ConstInt->getSExtValue()) +
+                                   "\n");
                     }
                 }
             }
@@ -1270,7 +1265,6 @@ instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
             SelectInst->getName(), std::make_shared<class Op>("ite", Args));
     }
     if (const auto PtrToIntInst = llvm::dyn_cast<llvm::PtrToIntInst>(&Instr)) {
-        flagInstr(Instr, "reve.ptr_to_int");
         return make_shared<std::tuple<string, SMTRef>>(
             PtrToIntInst->getName(),
             instrNameOrVal(PtrToIntInst->getPointerOperand(),
@@ -1297,8 +1291,7 @@ instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
         const auto Pointer =
             instrNameOrVal(StoreInst->getPointerOperand(),
                            StoreInst->getPointerOperand()->getType());
-        const std::vector<SMTRef> Args = {name(Heap), Pointer,
-                                          Val};
+        const std::vector<SMTRef> Args = {name(Heap), Pointer, Val};
         const auto Store = make_shared<Op>("store", Args);
         return make_shared<std::tuple<string, SMTRef>>(
             "HEAP$" + std::to_string(Program), Store);
@@ -1671,8 +1664,8 @@ std::map<int, vector<string>> freeVars(PathMap Map1, PathMap Map2,
 /* -------------------------------------------------------------------------- */
 // Miscellanous helper functions that don't really belong anywhere
 
-std::pair<vector<string>, vector<string>> functionArgs(llvm::Function &Fun1,
-                                                       llvm::Function &Fun2) {
+std::pair<vector<string>, vector<string>> functionArgs(const llvm::Function &Fun1,
+                                                       const llvm::Function &Fun2) {
     vector<string> Args1;
     for (auto &Arg : Fun1.args()) {
         Args1.push_back(Arg.getName());
@@ -1816,11 +1809,13 @@ unsigned long adaptSizeToHeap(unsigned long Size, vector<string> FreeVars) {
     return Size;
 }
 
-void flagInstr(llvm::Instruction &Instr, string Flag) {
-    llvm::LLVMContext &Cxt = Instr.getContext();
-    llvm::MDTuple *Unit =
-        llvm::MDTuple::get(Cxt, llvm::ArrayRef<llvm::Metadata *>());
-    Instr.setMetadata(Flag, Unit);
+bool isPtrDiff(const llvm::Instruction &Instr) {
+    if (const auto BinOp = llvm::dyn_cast<llvm::BinaryOperator>(&Instr)) {
+        return BinOp->getOpcode() == Instruction::Sub &&
+               llvm::isa<llvm::PtrToIntInst>(BinOp->getOperand(0)) &&
+               llvm::isa<llvm::PtrToIntInst>(BinOp->getOperand(1));
+    }
+    return false;
 }
 
 template <typename T> SMTRef resolveGEP(T &GEP) {
