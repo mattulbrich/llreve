@@ -39,8 +39,9 @@ llvm::PreservedAnalyses RemoveMarkPass::run(llvm::Function &Fun,
                     if ((ExtInst = llvm::dyn_cast<llvm::ZExtInst>(UserInstr)) ||
                         (ExtInst = llvm::dyn_cast<llvm::SExtInst>(UserInstr))) {
                         std::vector<llvm::User *> ExtUsers;
-                        ExtUsers.insert(ExtUsers.end(), ExtInst->users().begin(),
-                                     ExtInst->users().end());
+                        ExtUsers.insert(ExtUsers.end(),
+                                        ExtInst->users().begin(),
+                                        ExtInst->users().end());
                         for (auto User : ExtUsers) {
                             if (User != ExtInst) {
                                 if (auto BinOp =
@@ -64,9 +65,9 @@ llvm::PreservedAnalyses RemoveMarkPass::run(llvm::Function &Fun,
                     }
                 }
             }
-            // kill the call instruction
-            Instr->eraseFromParent();
         }
+        // kill the call instruction
+        Instr->eraseFromParent();
     }
     return llvm::PreservedAnalyses::all();
 }

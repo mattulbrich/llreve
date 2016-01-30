@@ -35,7 +35,6 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
-#include "llvm/Transforms/InstCombine/InstCombine.h"
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
 
 #include <fstream>
@@ -380,7 +379,6 @@ preprocessFunction(llvm::Function &Fun, string Prefix) {
 
     FPM.addPass(PromotePass()); // mem2reg
     FPM.addPass(llvm::SimplifyCFGPass());
-    FPM.addPass(llvm::InstCombinePass());
     FPM.addPass(SplitEntryBlockPass());
     FPM.addPass(UniqueNamePass(Prefix)); // prefix register names
     if (ShowMarkedCFG) {

@@ -1425,6 +1425,8 @@ string opName(const llvm::BinaryOperator &Op) {
     case Instruction::AShr:
     case Instruction::LShr:
         return "div";
+    case Instruction::Shl:
+        return "*";
     default:
         logError("Unknown opcode: " + std::string(Op.getOpcodeName()) + "\n");
         return Op.getOpcodeName();
@@ -1434,7 +1436,8 @@ string opName(const llvm::BinaryOperator &Op) {
 std::function<SMTRef(string, SMTRef, SMTRef)>
 combineOp(const llvm::BinaryOperator &Op) {
     if (Op.getOpcode() == Instruction::AShr ||
-        Op.getOpcode() == Instruction::LShr) {
+        Op.getOpcode() == Instruction::LShr ||
+        Op.getOpcode() == Instruction::Shl) {
         // We can only do that if there is a constant on the right side
         if (const auto ConstInt =
                 llvm::dyn_cast<llvm::ConstantInt>(Op.getOperand(1))) {
