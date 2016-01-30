@@ -75,6 +75,9 @@ static llvm::cl::opt<string>
                    llvm::cl::value_desc("filename"));
 static llvm::cl::opt<bool> ShowCFG("show-cfg", llvm::cl::desc("Show cfg"));
 static llvm::cl::opt<bool>
+    ShowMarkedCFG("show-marked-cfg",
+                  llvm::cl::desc("Show cfg before mark removal"));
+static llvm::cl::opt<bool>
     OffByN("off-by-n", llvm::cl::desc("Allow loops to be off by n iterations"));
 static llvm::cl::opt<bool>
     OnlyRec("only-rec", llvm::cl::desc("Only generate recursive invariants"));
@@ -378,6 +381,9 @@ preprocessFunction(llvm::Function &Fun, string Prefix) {
     FPM.addPass(llvm::SimplifyCFGPass());
     FPM.addPass(SplitEntryBlockPass());
     FPM.addPass(UniqueNamePass(Prefix)); // prefix register names
+    if (ShowMarkedCFG) {
+        FPM.addPass(CFGViewerPass()); // show cfg
+    }
     FPM.addPass(RemoveMarkPass());
     if (ShowCFG) {
         FPM.addPass(CFGViewerPass()); // show cfg

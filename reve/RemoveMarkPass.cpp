@@ -1,4 +1,5 @@
 #include "RemoveMarkPass.h"
+#include "Helper.h"
 
 llvm::PreservedAnalyses RemoveMarkPass::run(llvm::Function &Fun,
                                             llvm::FunctionAnalysisManager *AM) {
@@ -33,16 +34,44 @@ llvm::PreservedAnalyses RemoveMarkPass::run(llvm::Function &Fun,
                     if (BinOp->getOpcode() == llvm::Instruction::And) {
                         removeAnd(Instr, BinOp);
                     }
+                } else {
+                    llvm::Instruction *ExtInst;
+                    if ((ExtInst = llvm::dyn_cast<llvm::ZExtInst>(UserInstr)) ||
+                        (ExtInst = llvm::dyn_cast<llvm::SExtInst>(UserInstr))) {
+                        std::vector<llvm::User *> ExtUsers;
+                        ExtUsers.insert(ExtUsers.end(), ExtInst->users().begin(),
+                                     ExtInst->users().end());
+                        for (auto User : ExtUsers) {
+                            if (User != ExtInst) {
+                                if (auto BinOp =
+                                        llvm::dyn_cast<llvm::BinaryOperator>(
+                                            User)) {
+                                    if (BinOp->getOpcode() ==
+                                        llvm::Instruction::And) {
+                                        removeAnd(ExtInst, BinOp);
+                                    }
+                                } else {
+                                    logErrorData("Unexpected use of extended "
+                                                 "mark instruction\n",
+                                                 *User);
+                                }
+                            }
+                        }
+                        ExtInst->eraseFromParent();
+                    } else {
+                        logErrorData("Unexpected use of mark instruction\n",
+                                     *UserInstr);
+                    }
                 }
             }
+            // kill the call instruction
+            Instr->eraseFromParent();
         }
-        // kill the call instruction
-        Instr->eraseFromParent();
     }
     return llvm::PreservedAnalyses::all();
 }
 
-void removeAnd(llvm::Instruction *Instr, llvm::BinaryOperator *BinOp) {
+void removeAnd(const llvm::Instruction *Instr, llvm::BinaryOperator *BinOp) {
     llvm::Value *ReplaceVal = nullptr;
     // find non dummy operand
     if (Instr == BinOp->getOperand(0)) {

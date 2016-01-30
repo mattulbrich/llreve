@@ -13,4 +13,4 @@ class RemoveMarkPass {
     llvm::PreservedAnalyses run(llvm::Function &Fun, llvm::FunctionAnalysisManager *AM);
 };
 
-void removeAnd(llvm::Instruction *Instr, llvm::BinaryOperator *BinOp);
+void removeAnd(const llvm::Instruction *Instr, llvm::BinaryOperator *BinOp);
