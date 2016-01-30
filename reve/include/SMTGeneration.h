@@ -200,6 +200,8 @@ auto predicateFun(const llvm::CmpInst::CmpInst &Pred, bool Signed)
 auto opName(const llvm::BinaryOperator &Op) -> std::string;
 auto instrNameOrVal(const llvm::Value *Val, const llvm::Type *Ty,
                     std::set<std::string> Constructed) -> SMTRef;
+auto combineOp(const llvm::BinaryOperator &Op)
+    -> std::function<SMTRef(string, SMTRef, SMTRef)>;
 
 /* -------------------------------------------------------------------------- */
 // Functions  related to the search for free variables

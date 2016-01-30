@@ -1243,7 +1243,7 @@ instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
         }
         return make_shared<std::tuple<string, SMTRef>>(
             BinOp->getName(),
-            makeBinOp(
+            combineOp (*BinOp)(
                 opName(*BinOp),
                 instrNameOrVal(BinOp->getOperand(0),
                                BinOp->getOperand(0)->getType(), Constructed),
@@ -1286,12 +1286,6 @@ instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
             instrNameOrVal(PtrToIntInst->getPointerOperand(),
                            PtrToIntInst->getType(), Constructed));
     }
-    if (const auto SExtInst = llvm::dyn_cast<llvm::SExtInst>(&Instr)) {
-        return make_shared<std::tuple<string, SMTRef>>(
-            SExtInst->getName(),
-            instrNameOrVal(SExtInst->getOperand(0), SExtInst->getType(),
-                           Constructed));
-    }
     if (const auto GetElementPtrInst =
             llvm::dyn_cast<llvm::GetElementPtrInst>(&Instr)) {
         return make_shared<std::tuple<string, SMTRef>>(
@@ -1331,22 +1325,26 @@ instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
         return make_shared<std::tuple<string, SMTRef>>(TruncInst->getName(),
                                                        Val);
     }
-    if (const auto ZExt = llvm::dyn_cast<llvm::ZExtInst>(&Instr)) {
-        const auto Operand = ZExt->getOperand(0);
+    const llvm::Instruction *Ext = nullptr;
+    if ((Ext = llvm::dyn_cast<llvm::ZExtInst>(&Instr)) ||
+        (Ext = llvm::dyn_cast<llvm::SExtInst>(&Instr))) {
+        const auto Operand = Ext->getOperand(0);
         const auto Val =
             instrNameOrVal(Operand, Operand->getType(), Constructed);
-        const auto RetTy = ZExt->getType();
+        const auto RetTy = Ext->getType();
         if (RetTy->isIntegerTy() && RetTy->getIntegerBitWidth() > 1 &&
             Operand->getType()->isIntegerTy(1)) {
+            // Extensions are usually noops, but when we convert a boolean (1bit
+            // integer) to something bigger it needs to be an explicit
+            // conversion
             std::vector<SMTRef> Args;
             Args.push_back(Val);
             Args.push_back(name("1"));
             Args.push_back(name("0"));
             return make_shared<std::tuple<string, SMTRef>>(
-                ZExt->getName(), make_shared<Op>("ite", Args));
+                Ext->getName(), make_shared<Op>("ite", Args));
         } else {
-            return make_shared<std::tuple<string, SMTRef>>(ZExt->getName(),
-                                                           Val);
+            return make_shared<std::tuple<string, SMTRef>>(Ext->getName(), Val);
         }
     }
     if (const auto BitCast = llvm::dyn_cast<llvm::CastInst>(&Instr)) {
@@ -1424,10 +1422,37 @@ string opName(const llvm::BinaryOperator &Op) {
         return "and";
     case Instruction::Xor:
         return "xor";
+    case Instruction::AShr:
+    case Instruction::LShr:
+        return "div";
     default:
         logError("Unknown opcode: " + std::string(Op.getOpcodeName()) + "\n");
         return Op.getOpcodeName();
     }
+}
+
+std::function<SMTRef(string, SMTRef, SMTRef)>
+combineOp(const llvm::BinaryOperator &Op) {
+    if (Op.getOpcode() == Instruction::AShr ||
+        Op.getOpcode() == Instruction::LShr) {
+        // We can only do that if there is a constant on the right side
+        if (const auto ConstInt =
+                llvm::dyn_cast<llvm::ConstantInt>(Op.getOperand(1))) {
+            // rounding conversion to guard for floating point errors
+            uint64_t Divisor =
+                static_cast<uint64_t>(pow(2, ConstInt->getZExtValue()) + 0.5);
+            return
+                [Divisor](string OpName, SMTRef FirstArg, SMTRef /*unused*/) {
+                    return makeBinOp(OpName, FirstArg,
+                                     name(std::to_string(Divisor)));
+                };
+        } else {
+            logErrorData("Only shifts by a constant are supported\n", Op);
+        }
+    }
+    return [](string OpName, SMTRef FirstArg, SMTRef SecondArg) {
+        return makeBinOp(OpName, FirstArg, SecondArg);
+    };
 }
 
 /// Get the name of the instruction or a string representation of the value if
