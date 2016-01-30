@@ -25,3 +25,5 @@ custom-args:
     - undoconnectWithMaster
   argon2/finalize.smt2:
     - -signed
+  libc/memmem_1.smt2:
+    - -heap
