@@ -422,7 +422,7 @@ vector<AssignmentCallBlock> assignmentsOnPath(Path Path, int Program,
                                            Program, Heap, Signed);
         AllDefs.push_back(AssignmentCallBlock(
             Defs,
-            Edge.Cond == nullptr ? nullptr : Edge.Cond->toSmt(Constructed)));
+            Edge.Cond == nullptr ? nullptr : Edge.Cond->toSmt()));
         Prev = Edge.Block;
     }
     return AllDefs;
@@ -1153,8 +1153,7 @@ vector<DefOrCallInfo> blockAssignments(llvm::BasicBlock &BB,
                         Definitions.push_back(DefOrCallInfo(
                             std::make_shared<std::tuple<string, SMTRef>>(
                                 "HEAP$" + std::to_string(Program),
-                                name(resolveName("HEAP$" +
-                                                 std::to_string(Program))))));
+                                name("HEAP$" + std::to_string(Program)))));
                     }
                     Definitions.push_back(DefOrCallInfo(
                         toCallInfo(CallInst->getName(), Program, *CallInst)));
@@ -1187,7 +1186,7 @@ vector<DefOrCallInfo> blockAssignments(llvm::BasicBlock &BB,
             Definitions.push_back(
                 DefOrCallInfo(make_shared<std::tuple<string, SMTRef>>(
                     "HEAP$" + std::to_string(Program) + "_res",
-                    name(resolveName("HEAP$" + std::to_string(Program))))));
+                    name("HEAP$" + std::to_string(Program)))));
         }
     }
     return Definitions;
@@ -1286,8 +1285,7 @@ instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
         SMTRef Pointer = instrNameOrVal(LoadInst->getOperand(0),
                                         LoadInst->getOperand(0)->getType());
         const auto Load = makeBinOp(
-            "select", name(resolveName("HEAP$" + std::to_string(Program))),
-            Pointer);
+            "select", name("HEAP$" + std::to_string(Program)), Pointer);
         return make_shared<std::tuple<string, SMTRef>>(LoadInst->getName(),
                                                        Load);
     }
@@ -1299,7 +1297,7 @@ instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
         const auto Pointer =
             instrNameOrVal(StoreInst->getPointerOperand(),
                            StoreInst->getPointerOperand()->getType());
-        const std::vector<SMTRef> Args = {name(resolveName(Heap)), Pointer,
+        const std::vector<SMTRef> Args = {name(Heap), Pointer,
                                           Val};
         const auto Store = make_shared<Op>("store", Args);
         return make_shared<std::tuple<string, SMTRef>>(
@@ -1982,8 +1980,8 @@ vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *CallInst,
             }
             int i = 0;
             for (const auto ElTy : StructTy0->elements()) {
-                const SMTRef HeapSelect = name(resolveName(HeapNameSelect));
-                const SMTRef HeapStore = name(resolveName(HeapNameStore));
+                const SMTRef HeapSelect = name(HeapNameSelect);
+                const SMTRef HeapStore = name(HeapNameStore);
                 for (int j = 0; j < typeSize(ElTy); ++j) {
                     const SMTRef Select =
                         makeBinOp("select", HeapSelect,
