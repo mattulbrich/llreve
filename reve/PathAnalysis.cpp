@@ -158,7 +158,7 @@ llvm::BasicBlock *lastBlock(Path Path) {
 Condition::~Condition() = default;
 
 SMTRef BooleanCondition::toSmt(const std::set<string> Constructed) const {
-    SMTRef Result = name(resolveName(Cond->getName(), Constructed));
+    SMTRef Result = name(resolveName(Cond->getName()));
     if (True) {
         return Result;
     }
@@ -166,8 +166,7 @@ SMTRef BooleanCondition::toSmt(const std::set<string> Constructed) const {
 }
 
 SMTRef SwitchCondition::toSmt(const std::set<string> Constructed) const {
-    return makeBinOp("=", resolveName(Cond->getName(), Constructed),
-                     std::to_string(Val));
+    return makeBinOp("=", resolveName(Cond->getName()), std::to_string(Val));
 }
 
 SMTRef SwitchDefault::toSmt(const std::set<string> Constructed) const {
@@ -175,6 +174,6 @@ SMTRef SwitchDefault::toSmt(const std::set<string> Constructed) const {
     for (auto Val : Vals) {
         StringVals.push_back(std::to_string(Val));
     }
-    StringVals.push_back(resolveName(Cond->getName(), Constructed));
+    StringVals.push_back(resolveName(Cond->getName()));
     return makeOp("distinct", StringVals);
 }

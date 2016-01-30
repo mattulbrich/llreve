@@ -188,18 +188,16 @@ auto equalInputsEqualOutputs(std::vector<string> FunArgs,
 // blocks to SMT assignments
 
 auto blockAssignments(llvm::BasicBlock &BB, const llvm::BasicBlock *PrevBB,
-                      bool IgnorePhis, bool OnlyPhis, int Program,
-                      set<string> &Constructed, Memory Heap, bool Signed)
+                      bool OnlyPhis, int Program, Memory Heap, bool Signed)
     -> std::vector<DefOrCallInfo>;
 auto instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
-                     set<string> &Constructed, int Program, bool Signed)
+                     int Program, bool Signed)
     -> std::shared_ptr<std::tuple<std::string, SMTRef>>;
 auto predicateName(const llvm::CmpInst::Predicate Pred) -> std::string;
 auto predicateFun(const llvm::CmpInst::CmpInst &Pred, bool Signed)
     -> std::function<SMTRef(SMTRef)>;
 auto opName(const llvm::BinaryOperator &Op) -> std::string;
-auto instrNameOrVal(const llvm::Value *Val, const llvm::Type *Ty,
-                    std::set<std::string> Constructed) -> SMTRef;
+auto instrNameOrVal(const llvm::Value *Val, const llvm::Type *Ty) -> SMTRef;
 auto combineOp(const llvm::BinaryOperator &Op)
     -> std::function<SMTRef(string, SMTRef, SMTRef)>;
 
@@ -223,8 +221,7 @@ auto splitAssignments(std::vector<AssignmentCallBlock>)
     -> std::pair<std::vector<std::vector<AssignmentBlock>>,
                  std::vector<CallInfo>>;
 auto toCallInfo(std::string AssignedTo, int Program,
-                const llvm::CallInst &CallInst, set<string> Constructed)
-    -> std::shared_ptr<CallInfo>;
+                const llvm::CallInst &CallInst) -> std::shared_ptr<CallInfo>;
 auto resolveHeapReferences(std::vector<std::string> Args, std::string Suffix,
                            Memory &Heap) -> std::vector<std::string>;
 auto wrapHeap(SMTRef Inv, Memory Heap, std::vector<std::string> FreeVars)
@@ -232,8 +229,7 @@ auto wrapHeap(SMTRef Inv, Memory Heap, std::vector<std::string> FreeVars)
 auto adaptSizeToHeap(unsigned long Size, std::vector<string> FreeVars)
     -> unsigned long;
 auto flagInstr(llvm::Instruction &Instr, std::string Flag) -> void;
-template <typename T>
-auto resolveGEP(T &GEP, set<string> Constructed) -> SMTRef;
+template <typename T> auto resolveGEP(T &GEP) -> SMTRef;
 auto isStackOp(const llvm::Instruction &Inst) -> bool;
 auto argSort(std::string Arg) -> std::string;
 auto stringConstants(const llvm::Module &Mod, string Heap)
@@ -243,5 +239,5 @@ auto matchFunCalls(std::vector<CallInfo> CallInfos1,
     -> std::vector<InterleaveStep>;
 auto checkPathMaps(PathMap Map1, PathMap Map2) -> void;
 auto mapSubset(PathMap Map1, PathMap Map2) -> bool;
-auto memcpyIntrinsic(const llvm::CallInst *CallInst, set<string> &Constructed,
-                     int Program) -> std::vector<DefOrCallInfo>;
+auto memcpyIntrinsic(const llvm::CallInst *CallInst, int Program)
+    -> std::vector<DefOrCallInfo>;

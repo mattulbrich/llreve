@@ -255,10 +255,10 @@ vector<SMTRef> forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
                                  intersection(EndIndices1, EndIndices2)
                                      .empty())) {
                                 const auto Smt2 = assignmentsOnPath(
-                                    Path2, 2, vector<string>(),
+                                    Path2, 2, FreeVarsMap.at(StartIndex),
                                     EndIndex2 == EXIT_MARK, Heap, Signed);
                                 const auto Smt1 = assignmentsOnPath(
-                                    Path1, 1, vector<string>(),
+                                    Path1, 1, FreeVarsMap.at(StartIndex),
                                     EndIndex1 == EXIT_MARK, Heap, Signed);
                                 // We need to interleave here, because otherwise
                                 // extern functions are not matched
@@ -397,34 +397,34 @@ vector<AssignmentCallBlock> assignmentsOnPath(Path Path, int Program,
     set<string> Constructed;
     vector<CallInfo> CallInfos;
 
-    const auto StartDefs = blockAssignments(*Path.Start, nullptr, true, false,
-                                            Program, Constructed, Heap, Signed);
+    // Set the new values to the initial values
+    vector<DefOrCallInfo> OldDefs;
+    for (auto Var : FilteredFreeVars) {
+        OldDefs.push_back(DefOrCallInfo(
+            std::make_shared<Assignment>(Var, name(Var + "_old"))));
+    }
+    AllDefs.push_back(AssignmentCallBlock(OldDefs, nullptr));
+
+    // First block of path, this is special, because we don’t have a previous
+    // block so we can’t resolve phi nodes
+    const auto StartDefs =
+        blockAssignments(*Path.Start, nullptr, false, Program, Heap, Signed);
     AllDefs.push_back(AssignmentCallBlock(StartDefs, nullptr));
 
     auto Prev = Path.Start;
 
+    // Rest of the path
     unsigned int i = 0;
     for (auto Edge : Path.Edges) {
         i++;
         const bool Last = i == Path.Edges.size();
-        const auto Defs =
-            blockAssignments(*Edge.Block, Prev, false, Last && !ToEnd, Program,
-                             Constructed, Heap, Signed);
+        const auto Defs = blockAssignments(*Edge.Block, Prev, Last && !ToEnd,
+                                           Program, Heap, Signed);
         AllDefs.push_back(AssignmentCallBlock(
             Defs,
             Edge.Cond == nullptr ? nullptr : Edge.Cond->toSmt(Constructed)));
         Prev = Edge.Block;
     }
-
-    vector<DefOrCallInfo> OldDefs;
-    for (auto Var : FilteredFreeVars) {
-        if (Constructed.find(Var) == Constructed.end()) {
-            // Set the new value to the old value, if it hasn't already been set
-            OldDefs.push_back(DefOrCallInfo(
-                std::make_shared<Assignment>(Var, name(Var + "_old"))));
-        }
-    }
-    AllDefs.push_back(AssignmentCallBlock(OldDefs, nullptr));
     return AllDefs;
 }
 
@@ -1123,19 +1123,18 @@ SMTRef equalInputsEqualOutputs(vector<string> FunArgs, vector<string> FunArgs1,
 /// Convert a basic block to a list of assignments
 vector<DefOrCallInfo> blockAssignments(llvm::BasicBlock &BB,
                                        const llvm::BasicBlock *PrevBB,
-                                       bool IgnorePhis, bool OnlyPhis,
-                                       int Program, set<string> &Constructed,
-                                       Memory Heap, bool Signed) {
+                                       bool OnlyPhis, int Program, Memory Heap,
+                                       bool Signed) {
     vector<DefOrCallInfo> Definitions;
     assert(BB.size() >= 1); // There should be at least a terminator instruction
+    bool IgnorePhis = PrevBB == nullptr;
     for (auto Instr = BB.begin(), E = std::prev(BB.end(), 1); Instr != E;
          ++Instr) {
         // Ignore phi nodes if we are in a loop as they're bound in a
         // forall quantifier
         if (!IgnorePhis && llvm::isa<llvm::PHINode>(Instr)) {
             Definitions.push_back(DefOrCallInfo(
-                instrAssignment(*Instr, PrevBB, Constructed, Program, Signed)));
-            Constructed.insert(Instr->getName());
+                instrAssignment(*Instr, PrevBB, Program, Signed)));
         }
         if (!OnlyPhis && !llvm::isa<llvm::PHINode>(Instr)) {
             if (const auto CallInst = llvm::dyn_cast<llvm::CallInst>(Instr)) {
@@ -1146,7 +1145,7 @@ vector<DefOrCallInfo> blockAssignments(llvm::BasicBlock &BB,
                 }
                 if (Fun->getIntrinsicID() == llvm::Intrinsic::memcpy) {
                     const vector<DefOrCallInfo> Defs =
-                        memcpyIntrinsic(CallInst, Constructed, Program);
+                        memcpyIntrinsic(CallInst, Program);
                     Definitions.insert(Definitions.end(), Defs.begin(),
                                        Defs.end());
                 } else {
@@ -1155,12 +1154,10 @@ vector<DefOrCallInfo> blockAssignments(llvm::BasicBlock &BB,
                             std::make_shared<std::tuple<string, SMTRef>>(
                                 "HEAP$" + std::to_string(Program),
                                 name(resolveName("HEAP$" +
-                                                     std::to_string(Program),
-                                                 Constructed)))));
-                        Constructed.insert("HEAP$" + std::to_string(Program));
+                                                 std::to_string(Program))))));
                     }
-                    Definitions.push_back(DefOrCallInfo(toCallInfo(
-                        CallInst->getName(), Program, *CallInst, Constructed)));
+                    Definitions.push_back(DefOrCallInfo(
+                        toCallInfo(CallInst->getName(), Program, *CallInst)));
                     if (Heap & HEAP_MASK) {
                         Definitions.push_back(DefOrCallInfo(
                             std::make_shared<std::tuple<string, SMTRef>>(
@@ -1170,10 +1167,9 @@ vector<DefOrCallInfo> blockAssignments(llvm::BasicBlock &BB,
                     }
                 }
             } else {
-                Definitions.push_back(DefOrCallInfo(instrAssignment(
-                    *Instr, PrevBB, Constructed, Program, Signed)));
+                Definitions.push_back(DefOrCallInfo(
+                    instrAssignment(*Instr, PrevBB, Program, Signed)));
             }
-            Constructed.insert(Instr->getName());
         }
     }
     if (const auto RetInst =
@@ -1181,8 +1177,8 @@ vector<DefOrCallInfo> blockAssignments(llvm::BasicBlock &BB,
         // TODO (moritz): use a more clever approach for void functions
         auto RetName = name("0");
         if (RetInst->getReturnValue() != nullptr) {
-            RetName = instrNameOrVal(RetInst->getReturnValue(),
-                                     RetInst->getType(), Constructed);
+            RetName =
+                instrNameOrVal(RetInst->getReturnValue(), RetInst->getType());
         }
         Definitions.push_back(
             DefOrCallInfo(make_shared<std::tuple<string, SMTRef>>(
@@ -1191,8 +1187,7 @@ vector<DefOrCallInfo> blockAssignments(llvm::BasicBlock &BB,
             Definitions.push_back(
                 DefOrCallInfo(make_shared<std::tuple<string, SMTRef>>(
                     "HEAP$" + std::to_string(Program) + "_res",
-                    name(resolveName("HEAP$" + std::to_string(Program),
-                                     Constructed)))));
+                    name(resolveName("HEAP$" + std::to_string(Program))))));
         }
     }
     return Definitions;
@@ -1201,7 +1196,7 @@ vector<DefOrCallInfo> blockAssignments(llvm::BasicBlock &BB,
 /// Convert a single instruction to an assignment
 std::shared_ptr<std::tuple<string, SMTRef>>
 instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
-                set<string> &Constructed, int Program, bool Signed) {
+                int Program, bool Signed) {
     if (const auto BinOp = llvm::dyn_cast<llvm::BinaryOperator>(&Instr)) {
         if (BinOp->getOpcode() == Instruction::Sub) {
             if (const auto Instr0 =
@@ -1225,8 +1220,7 @@ instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
                         return make_shared<std::tuple<string, SMTRef>>(
                             BinOp->getName(),
                             instrNameOrVal(BinOp->getOperand(0),
-                                           BinOp->getOperand(0)->getType(),
-                                           Constructed));
+                                           BinOp->getOperand(0)->getType()));
                     }
                 }
             }
@@ -1244,38 +1238,35 @@ instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
         return make_shared<std::tuple<string, SMTRef>>(
             BinOp->getName(),
             combineOp (*BinOp)(
-                opName(*BinOp),
-                instrNameOrVal(BinOp->getOperand(0),
-                               BinOp->getOperand(0)->getType(), Constructed),
+                opName(*BinOp), instrNameOrVal(BinOp->getOperand(0),
+                                               BinOp->getOperand(0)->getType()),
                 instrNameOrVal(BinOp->getOperand(1),
-                               BinOp->getOperand(1)->getType(), Constructed)));
+                               BinOp->getOperand(1)->getType())));
     }
     if (const auto CmpInst = llvm::dyn_cast<llvm::CmpInst>(&Instr)) {
         auto Fun = predicateFun(*CmpInst, Signed);
-        const auto Cmp = makeBinOp(
-            predicateName(CmpInst->getPredicate()),
-            Fun(instrNameOrVal(CmpInst->getOperand(0),
-                               CmpInst->getOperand(0)->getType(), Constructed)),
-            Fun(instrNameOrVal(CmpInst->getOperand(1),
-                               CmpInst->getOperand(0)->getType(),
-                               Constructed)));
+        const auto Cmp =
+            makeBinOp(predicateName(CmpInst->getPredicate()),
+                      Fun(instrNameOrVal(CmpInst->getOperand(0),
+                                         CmpInst->getOperand(0)->getType())),
+                      Fun(instrNameOrVal(CmpInst->getOperand(1),
+                                         CmpInst->getOperand(0)->getType())));
         return make_shared<std::tuple<string, SMTRef>>(CmpInst->getName(), Cmp);
     }
     if (const auto PhiInst = llvm::dyn_cast<llvm::PHINode>(&Instr)) {
         const auto Val = PhiInst->getIncomingValueForBlock(PrevBB);
         assert(Val);
         return make_shared<std::tuple<string, SMTRef>>(
-            PhiInst->getName(),
-            instrNameOrVal(Val, Val->getType(), Constructed));
+            PhiInst->getName(), instrNameOrVal(Val, Val->getType()));
     }
     if (const auto SelectInst = llvm::dyn_cast<llvm::SelectInst>(&Instr)) {
         const auto Cond = SelectInst->getCondition();
         const auto TrueVal = SelectInst->getTrueValue();
         const auto FalseVal = SelectInst->getFalseValue();
         const vector<SMTRef> Args = {
-            instrNameOrVal(Cond, Cond->getType(), Constructed),
-            instrNameOrVal(TrueVal, TrueVal->getType(), Constructed),
-            instrNameOrVal(FalseVal, FalseVal->getType(), Constructed)};
+            instrNameOrVal(Cond, Cond->getType()),
+            instrNameOrVal(TrueVal, TrueVal->getType()),
+            instrNameOrVal(FalseVal, FalseVal->getType())};
         return make_shared<std::tuple<string, SMTRef>>(
             SelectInst->getName(), std::make_shared<class Op>("ite", Args));
     }
@@ -1284,44 +1275,39 @@ instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
         return make_shared<std::tuple<string, SMTRef>>(
             PtrToIntInst->getName(),
             instrNameOrVal(PtrToIntInst->getPointerOperand(),
-                           PtrToIntInst->getType(), Constructed));
+                           PtrToIntInst->getType()));
     }
     if (const auto GetElementPtrInst =
             llvm::dyn_cast<llvm::GetElementPtrInst>(&Instr)) {
         return make_shared<std::tuple<string, SMTRef>>(
-            GetElementPtrInst->getName(),
-            resolveGEP(*GetElementPtrInst, Constructed));
+            GetElementPtrInst->getName(), resolveGEP(*GetElementPtrInst));
     }
     if (const auto LoadInst = llvm::dyn_cast<llvm::LoadInst>(&Instr)) {
-        SMTRef Pointer =
-            instrNameOrVal(LoadInst->getOperand(0),
-                           LoadInst->getOperand(0)->getType(), Constructed);
+        SMTRef Pointer = instrNameOrVal(LoadInst->getOperand(0),
+                                        LoadInst->getOperand(0)->getType());
         const auto Load = makeBinOp(
-            "select",
-            name(resolveName("HEAP$" + std::to_string(Program), Constructed)),
+            "select", name(resolveName("HEAP$" + std::to_string(Program))),
             Pointer);
         return make_shared<std::tuple<string, SMTRef>>(LoadInst->getName(),
                                                        Load);
     }
     if (const auto StoreInst = llvm::dyn_cast<llvm::StoreInst>(&Instr)) {
         string Heap = "HEAP$" + std::to_string(Program);
-        const auto Val = instrNameOrVal(StoreInst->getValueOperand(),
-                                        StoreInst->getValueOperand()->getType(),
-                                        Constructed);
-        const auto Pointer = instrNameOrVal(
-            StoreInst->getPointerOperand(),
-            StoreInst->getPointerOperand()->getType(), Constructed);
-        const std::vector<SMTRef> Args = {name(resolveName(Heap, Constructed)),
-                                          Pointer, Val};
+        const auto Val =
+            instrNameOrVal(StoreInst->getValueOperand(),
+                           StoreInst->getValueOperand()->getType());
+        const auto Pointer =
+            instrNameOrVal(StoreInst->getPointerOperand(),
+                           StoreInst->getPointerOperand()->getType());
+        const std::vector<SMTRef> Args = {name(resolveName(Heap)), Pointer,
+                                          Val};
         const auto Store = make_shared<Op>("store", Args);
-        Constructed.insert(Heap);
         return make_shared<std::tuple<string, SMTRef>>(
             "HEAP$" + std::to_string(Program), Store);
     }
     if (const auto TruncInst = llvm::dyn_cast<llvm::TruncInst>(&Instr)) {
-        const auto Val =
-            instrNameOrVal(TruncInst->getOperand(0),
-                           TruncInst->getOperand(0)->getType(), Constructed);
+        const auto Val = instrNameOrVal(TruncInst->getOperand(0),
+                                        TruncInst->getOperand(0)->getType());
         return make_shared<std::tuple<string, SMTRef>>(TruncInst->getName(),
                                                        Val);
     }
@@ -1329,8 +1315,7 @@ instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
     if ((Ext = llvm::dyn_cast<llvm::ZExtInst>(&Instr)) ||
         (Ext = llvm::dyn_cast<llvm::SExtInst>(&Instr))) {
         const auto Operand = Ext->getOperand(0);
-        const auto Val =
-            instrNameOrVal(Operand, Operand->getType(), Constructed);
+        const auto Val = instrNameOrVal(Operand, Operand->getType());
         const auto RetTy = Ext->getType();
         if (RetTy->isIntegerTy() && RetTy->getIntegerBitWidth() > 1 &&
             Operand->getType()->isIntegerTy(1)) {
@@ -1348,9 +1333,8 @@ instrAssignment(llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
         }
     }
     if (const auto BitCast = llvm::dyn_cast<llvm::CastInst>(&Instr)) {
-        const auto Val =
-            instrNameOrVal(BitCast->getOperand(0),
-                           BitCast->getOperand(0)->getType(), Constructed);
+        const auto Val = instrNameOrVal(BitCast->getOperand(0),
+                                        BitCast->getOperand(0)->getType());
         return make_shared<std::tuple<string, SMTRef>>(BitCast->getName(), Val);
     }
     if (const auto AllocaInst = llvm::dyn_cast<llvm::AllocaInst>(&Instr)) {
@@ -1460,8 +1444,7 @@ combineOp(const llvm::BinaryOperator &Op) {
 
 /// Get the name of the instruction or a string representation of the value if
 /// it's a constant
-SMTRef instrNameOrVal(const llvm::Value *Val, const llvm::Type *Ty,
-                      set<string> Constructed) {
+SMTRef instrNameOrVal(const llvm::Value *Val, const llvm::Type *Ty) {
     if (const auto ConstInt = llvm::dyn_cast<llvm::ConstantInt>(Val)) {
         const auto ApInt = ConstInt->getValue();
         if (ApInt.isIntN(1) && Ty->isIntegerTy(1)) {
@@ -1478,7 +1461,7 @@ SMTRef instrNameOrVal(const llvm::Value *Val, const llvm::Type *Ty,
     }
     if (const auto GEP = llvm::dyn_cast<llvm::GEPOperator>(Val)) {
         if (!llvm::isa<llvm::Instruction>(Val)) {
-            return resolveGEP(*GEP, Constructed);
+            return resolveGEP(*GEP);
         }
     }
     if (llvm::isa<llvm::GlobalValue>(Val)) {
@@ -1487,11 +1470,6 @@ SMTRef instrNameOrVal(const llvm::Value *Val, const llvm::Type *Ty,
     if (Val->getName().empty()) {
         logErrorData("Unnamed variable\n", *Val);
         exit(1);
-    }
-    resolveName(Val->getName(), Constructed);
-    if (Constructed.find(Val->getName()) == Constructed.end()) {
-        const string Name = Val->getName();
-        return name(Name + "_old");
     }
     return name(Val->getName());
 }
@@ -1757,8 +1735,7 @@ splitAssignments(vector<AssignmentCallBlock> AssignmentCallBlocks) {
 }
 
 std::shared_ptr<CallInfo> toCallInfo(string AssignedTo, int Program,
-                                     const llvm::CallInst &CallInst,
-                                     set<string> Constructed) {
+                                     const llvm::CallInst &CallInst) {
     vector<SMTRef> Args;
     if (AssignedTo.empty()) {
         AssignedTo = "res" + std::to_string(Program);
@@ -1767,7 +1744,7 @@ std::shared_ptr<CallInfo> toCallInfo(string AssignedTo, int Program,
     const auto &FunTy = *CallInst.getFunctionType();
     const llvm::Function &Fun = *CallInst.getCalledFunction();
     for (auto &Arg : CallInst.arg_operands()) {
-        Args.push_back(instrNameOrVal(Arg, FunTy.getParamType(i), Constructed));
+        Args.push_back(instrNameOrVal(Arg, FunTy.getParamType(i)));
         ++i;
     }
     return make_shared<CallInfo>(AssignedTo, Fun.getName(), Args,
@@ -1848,11 +1825,10 @@ void flagInstr(llvm::Instruction &Instr, string Flag) {
     Instr.setMetadata(Flag, Unit);
 }
 
-template <typename T> SMTRef resolveGEP(T &GEP, set<string> Constructed) {
+template <typename T> SMTRef resolveGEP(T &GEP) {
     std::vector<SMTRef> Args;
     Args.push_back(instrNameOrVal(GEP.getPointerOperand(),
-                                  GEP.getPointerOperand()->getType(),
-                                  Constructed));
+                                  GEP.getPointerOperand()->getType()));
     const auto Type = GEP.getSourceElementType();
     std::vector<llvm::Value *> Indices;
     for (auto Ix = GEP.idx_begin(), E = GEP.idx_end(); Ix != E; ++Ix) {
@@ -1860,11 +1836,10 @@ template <typename T> SMTRef resolveGEP(T &GEP, set<string> Constructed) {
         const auto Size = typeSize(llvm::GetElementPtrInst::getIndexedType(
             Type, llvm::ArrayRef<llvm::Value *>(Indices)));
         if (Size == 1) {
-            Args.push_back(instrNameOrVal(*Ix, (*Ix)->getType(), Constructed));
+            Args.push_back(instrNameOrVal(*Ix, (*Ix)->getType()));
         } else {
-            Args.push_back(
-                makeBinOp("*", name(std::to_string(Size)),
-                          instrNameOrVal(*Ix, (*Ix)->getType(), Constructed)));
+            Args.push_back(makeBinOp("*", name(std::to_string(Size)),
+                                     instrNameOrVal(*Ix, (*Ix)->getType())));
         }
     }
     return make_shared<Op>("+", Args);
@@ -1974,7 +1949,7 @@ bool mapSubset(PathMap Map1, PathMap Map2) {
 }
 
 vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *CallInst,
-                                      set<string> &Constructed, int Program) {
+                                      int Program) {
     vector<DefOrCallInfo> Definitions;
     const auto CastInst0 =
         llvm::dyn_cast<llvm::CastInst>(CallInst->getArgOperand(0));
@@ -1991,12 +1966,12 @@ vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *CallInst,
             llvm::dyn_cast<llvm::StructType>(Ty1->getElementType());
         if (StructTy0 && StructTy1) {
             assert(StructTy0->isLayoutIdentical(StructTy1));
-            const SMTRef BasePointerDest = instrNameOrVal(
-                CallInst->getArgOperand(0),
-                CallInst->getArgOperand(0)->getType(), Constructed);
-            const SMTRef BasePointerSrc = instrNameOrVal(
-                CallInst->getArgOperand(1),
-                CallInst->getArgOperand(1)->getType(), Constructed);
+            const SMTRef BasePointerDest =
+                instrNameOrVal(CallInst->getArgOperand(0),
+                               CallInst->getArgOperand(0)->getType());
+            const SMTRef BasePointerSrc =
+                instrNameOrVal(CallInst->getArgOperand(1),
+                               CallInst->getArgOperand(1)->getType());
             string HeapNameSelect = "HEAP$" + std::to_string(Program);
             if (isStackOp(*CastInst1)) {
                 HeapNameSelect = "STACK$" + std::to_string(Program);
@@ -2007,10 +1982,8 @@ vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *CallInst,
             }
             int i = 0;
             for (const auto ElTy : StructTy0->elements()) {
-                const SMTRef HeapSelect =
-                    name(resolveName(HeapNameSelect, Constructed));
-                const SMTRef HeapStore =
-                    name(resolveName(HeapNameStore, Constructed));
+                const SMTRef HeapSelect = name(resolveName(HeapNameSelect));
+                const SMTRef HeapStore = name(resolveName(HeapNameStore));
                 for (int j = 0; j < typeSize(ElTy); ++j) {
                     const SMTRef Select =
                         makeBinOp("select", HeapSelect,
@@ -2026,7 +1999,6 @@ vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *CallInst,
                                                                 Store));
                     ++i;
                 }
-                Constructed.insert(HeapNameStore);
             }
         } else {
             logError("currently only memcpy of structs is "

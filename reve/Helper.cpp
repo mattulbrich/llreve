@@ -3,9 +3,6 @@
 using std::string;
 using std::set;
 
-string resolveName(const string Name, const set<string> Constructed) {
-    if (Constructed.find(Name) == Constructed.end()) {
-        return Name + "_old";
-    }
+string resolveName(const string Name) {
     return Name;
 }

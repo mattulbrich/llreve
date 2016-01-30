@@ -48,5 +48,4 @@ auto logWarningData_(Str Message, A &El, const char *File, int Line) -> void {
     llvm::errs() << "\n";
 }
 
-auto resolveName(const std::string Name,
-                 const std::set<std::string> Constructed) -> std::string;
+auto resolveName(const std::string Name) -> std::string;
