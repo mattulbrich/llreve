@@ -1,5 +1,6 @@
 #include "RemoveMarkPass.h"
 #include "Helper.h"
+#include "llvm/IR/Constants.h"
 
 llvm::PreservedAnalyses RemoveMarkPass::run(llvm::Function &Fun,
                                             llvm::FunctionAnalysisManager *AM) {
@@ -59,10 +60,24 @@ llvm::PreservedAnalyses RemoveMarkPass::run(llvm::Function &Fun,
                             }
                         }
                         ExtInst->eraseFromParent();
-                    } else {
-                        logErrorData("Unexpected use of mark instruction\n",
-                                     *UserInstr);
+                        continue;
+                    } else if (auto Cmp =
+                                   llvm::dyn_cast<llvm::ICmpInst>(User)) {
+                        if (Cmp->getPredicate() ==
+                            llvm::CmpInst::Predicate::ICMP_NE) {
+                            if (auto Const = llvm::dyn_cast<llvm::ConstantInt>(
+                                    Cmp->getOperand(1))) {
+                                if (Const->getValue().getSExtValue() == 0) {
+                                    Cmp->setOperand(0,
+                                                    llvm::ConstantInt::get(
+                                                        Const->getType(), 1));
+                                    continue;
+                                }
+                            }
+                        }
                     }
+                    logErrorData("Unexpected use of mark instruction\n",
+                                 *UserInstr);
                 }
             }
         }
