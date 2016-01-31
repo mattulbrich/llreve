@@ -1455,6 +1455,13 @@ SMTRef instrNameOrVal(const llvm::Value *Val, const llvm::Type *Ty) {
             return resolveGEP(*GEP);
         }
     }
+
+    if (const auto ConstExpr = llvm::dyn_cast<llvm::ConstantExpr>(Val)) {
+        if (ConstExpr->getOpcode() == llvm::Instruction::IntToPtr) {
+            return instrNameOrVal(ConstExpr->getOperand(0),
+                                  ConstExpr->getOperand(0)->getType());
+        }
+    }
     if (llvm::isa<llvm::GlobalValue>(Val)) {
         return name(Val->getName());
     }
@@ -1664,8 +1671,8 @@ std::map<int, vector<string>> freeVars(PathMap Map1, PathMap Map2,
 /* -------------------------------------------------------------------------- */
 // Miscellanous helper functions that don't really belong anywhere
 
-std::pair<vector<string>, vector<string>> functionArgs(const llvm::Function &Fun1,
-                                                       const llvm::Function &Fun2) {
+std::pair<vector<string>, vector<string>>
+functionArgs(const llvm::Function &Fun1, const llvm::Function &Fun2) {
     vector<string> Args1;
     for (auto &Arg : Fun1.args()) {
         Args1.push_back(Arg.getName());
