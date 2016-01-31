@@ -29,3 +29,5 @@ custom-args:
     - -signed
   libc/memmem_1.smt2:
     - -heap
+  libc/sbrk_1.smt2:
+    - -signed
