@@ -47,3 +47,25 @@ auto logWarningData_(Str Message, A &El, const char *File, int Line) -> void {
     El.print(llvm::errs());
     llvm::errs() << "\n";
 }
+
+auto instrNameOrVal(const llvm::Value *Val, const llvm::Type *Ty) -> SMTRef;
+auto typeSize(llvm::Type *Ty) -> int;
+template <typename T> SMTRef resolveGEP(T &GEP) {
+    std::vector<SMTRef> Args;
+    Args.push_back(instrNameOrVal(GEP.getPointerOperand(),
+                                  GEP.getPointerOperand()->getType()));
+    const auto Type = GEP.getSourceElementType();
+    std::vector<llvm::Value *> Indices;
+    for (auto Ix = GEP.idx_begin(), E = GEP.idx_end(); Ix != E; ++Ix) {
+        Indices.push_back(*Ix);
+        const auto Size = typeSize(llvm::GetElementPtrInst::getIndexedType(
+            Type, llvm::ArrayRef<llvm::Value *>(Indices)));
+        if (Size == 1) {
+            Args.push_back(instrNameOrVal(*Ix, (*Ix)->getType()));
+        } else {
+            Args.push_back(makeBinOp("*", name(std::to_string(Size)),
+                                     instrNameOrVal(*Ix, (*Ix)->getType())));
+        }
+    }
+    return std::make_shared<Op>("+", Args);
+}

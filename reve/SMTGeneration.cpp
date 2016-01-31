@@ -1433,45 +1433,6 @@ combineOp(const llvm::BinaryOperator &Op) {
     };
 }
 
-/// Get the name of the instruction or a string representation of the value if
-/// it's a constant
-SMTRef instrNameOrVal(const llvm::Value *Val, const llvm::Type *Ty) {
-    if (const auto ConstInt = llvm::dyn_cast<llvm::ConstantInt>(Val)) {
-        const auto ApInt = ConstInt->getValue();
-        if (ApInt.isIntN(1) && Ty->isIntegerTy(1)) {
-            return name(ApInt.getBoolValue() ? "true" : "false");
-        }
-        if (ApInt.isNegative()) {
-            return makeUnaryOp(
-                "-", name(ApInt.toString(10, true).substr(1, string::npos)));
-        }
-        return name(ApInt.toString(10, true));
-    }
-    if (llvm::isa<llvm::ConstantPointerNull>(Val)) {
-        return name("0");
-    }
-    if (const auto GEP = llvm::dyn_cast<llvm::GEPOperator>(Val)) {
-        if (!llvm::isa<llvm::Instruction>(Val)) {
-            return resolveGEP(*GEP);
-        }
-    }
-
-    if (const auto ConstExpr = llvm::dyn_cast<llvm::ConstantExpr>(Val)) {
-        if (ConstExpr->getOpcode() == llvm::Instruction::IntToPtr) {
-            return instrNameOrVal(ConstExpr->getOperand(0),
-                                  ConstExpr->getOperand(0)->getType());
-        }
-    }
-    if (llvm::isa<llvm::GlobalValue>(Val)) {
-        return name(Val->getName());
-    }
-    if (Val->getName().empty()) {
-        logErrorData("Unnamed variable\n", *Val);
-        exit(1);
-    }
-    return name(Val->getName());
-}
-
 /* -------------------------------------------------------------------------- */
 // Functions  related to the search for free variables
 
@@ -1823,26 +1784,6 @@ bool isPtrDiff(const llvm::Instruction &Instr) {
                llvm::isa<llvm::PtrToIntInst>(BinOp->getOperand(1));
     }
     return false;
-}
-
-template <typename T> SMTRef resolveGEP(T &GEP) {
-    std::vector<SMTRef> Args;
-    Args.push_back(instrNameOrVal(GEP.getPointerOperand(),
-                                  GEP.getPointerOperand()->getType()));
-    const auto Type = GEP.getSourceElementType();
-    std::vector<llvm::Value *> Indices;
-    for (auto Ix = GEP.idx_begin(), E = GEP.idx_end(); Ix != E; ++Ix) {
-        Indices.push_back(*Ix);
-        const auto Size = typeSize(llvm::GetElementPtrInst::getIndexedType(
-            Type, llvm::ArrayRef<llvm::Value *>(Indices)));
-        if (Size == 1) {
-            Args.push_back(instrNameOrVal(*Ix, (*Ix)->getType()));
-        } else {
-            Args.push_back(makeBinOp("*", name(std::to_string(Size)),
-                                     instrNameOrVal(*Ix, (*Ix)->getType())));
-        }
-    }
-    return make_shared<Op>("+", Args);
 }
 
 bool isStackOp(const llvm::Instruction &Inst) {

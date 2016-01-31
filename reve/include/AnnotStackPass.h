@@ -11,4 +11,3 @@ class AnnotStackPass {
 
 auto markStackInstruction(llvm::Instruction &Inst, std::string MetadataName,
                           int Pointer) -> void;
-auto typeSize(llvm::Type *Ty) -> int;

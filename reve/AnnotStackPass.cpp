@@ -63,32 +63,3 @@ void markStackInstruction(llvm::Instruction &Inst, std::string MetadataName,
         llvm::MDString::get(Ctxt, "(- " + std::to_string(-Pointer) + ")"));
     Inst.setMetadata(MetadataName, N);
 }
-
-int typeSize(llvm::Type *Ty) {
-    if (auto IntTy = llvm::dyn_cast<llvm::IntegerType>(Ty)) {
-        if (IntTy->getBitWidth() <= 64) {
-            return 1;
-        }
-        logError("Unsupported integer bitwidth: " +
-                 std::to_string(IntTy->getBitWidth()) + "\n");
-    }
-    if (Ty->isDoubleTy()) {
-        return 1;
-    }
-    if (auto StructTy = llvm::dyn_cast<llvm::StructType>(Ty)) {
-        int Size = 0;
-        for (auto ElTy : StructTy->elements()) {
-            Size += typeSize(ElTy);
-        }
-        return Size;
-    }
-    if (auto ArrayTy = llvm::dyn_cast<llvm::ArrayType>(Ty)) {
-        return static_cast<int>(ArrayTy->getNumElements()) *
-               typeSize(ArrayTy->getElementType());
-    }
-    if (llvm::isa<llvm::PointerType>(Ty)) {
-        return 1;
-    }
-    logErrorData("Couldn’t calculate size of type\n", *Ty);
-    return 0;
-}

@@ -3,6 +3,7 @@
 #include "AnnotStackPass.h"
 #include "CFGPrinter.h"
 #include "Compat.h"
+#include "ConstantProp.h"
 #include "Helper.h"
 #include "PathAnalysis.h"
 #include "RemoveMarkPass.h"
@@ -385,6 +386,7 @@ preprocessFunction(llvm::Function &Fun, string Prefix) {
         FPM.addPass(CFGViewerPass()); // show cfg
     }
     FPM.addPass(RemoveMarkPass());
+    FPM.addPass(ConstantProp());
     if (ShowCFG) {
         FPM.addPass(CFGViewerPass()); // show cfg
     }

@@ -47,14 +47,14 @@ solveZ3 :: (Monad m, MonadIO m, MonadSafe m, MonadLogger m,MonadReader (Options,
 solveZ3 smt =
   do opts <- asks fst
      let producer =
-           producerCmd (optEldarica opts <> " -t:120 -sp " <> smt) >->
+           producerCmd (optEldarica opts <> " -t:300 -sp " <> smt) >->
            P.map (either (const "") id)
          smt' = smt <> ".z3"
      bracket (liftIO $ openFile smt' WriteMode)
              (liftIO . hClose) $
        \handle -> do runEffect $ producer >-> PB.toHandle handle
      $logDebug $ "Solving using z3: " <> (T.pack smt')
-     let z3Producer = producerCmd (optZ3 opts <> " -T:120 fixedpoint.engine=duality " <> smt') >-> P.map (either id id)
+     let z3Producer = producerCmd (optZ3 opts <> " -T:300 fixedpoint.engine=duality " <> smt') >-> P.map (either id id)
      output <- F.purely P.fold solverFold (void $ concats $ z3Producer ^. utf8 . P.lines)
      pure (smt',solverStatus output)
 

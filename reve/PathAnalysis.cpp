@@ -158,7 +158,7 @@ llvm::BasicBlock *lastBlock(Path Path) {
 Condition::~Condition() = default;
 
 SMTRef BooleanCondition::toSmt() const {
-    SMTRef Result = name(Cond->getName());
+    SMTRef Result = instrNameOrVal(Cond, Cond->getType());
     if (True) {
         return Result;
     }
@@ -166,14 +166,15 @@ SMTRef BooleanCondition::toSmt() const {
 }
 
 SMTRef SwitchCondition::toSmt() const {
-    return makeBinOp("=", Cond->getName(), std::to_string(Val));
+    return makeBinOp("=", instrNameOrVal(Cond, Cond->getType()),
+                     name(std::to_string(Val)));
 }
 
 SMTRef SwitchDefault::toSmt() const {
-    std::vector<string> StringVals;
+    std::vector<SMTRef> StringVals;
     for (auto Val : Vals) {
-        StringVals.push_back(std::to_string(Val));
+        StringVals.push_back(name(std::to_string(Val)));
     }
-    StringVals.push_back(Cond->getName());
-    return makeOp("distinct", StringVals);
+    StringVals.push_back(instrNameOrVal(Cond, Cond->getType()));
+    return std::make_shared<Op>("distinct", StringVals);
 }

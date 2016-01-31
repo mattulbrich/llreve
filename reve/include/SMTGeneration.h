@@ -197,7 +197,6 @@ auto predicateName(const llvm::CmpInst::Predicate Pred) -> std::string;
 auto predicateFun(const llvm::CmpInst::CmpInst &Pred, bool Signed)
     -> std::function<SMTRef(SMTRef)>;
 auto opName(const llvm::BinaryOperator &Op) -> std::string;
-auto instrNameOrVal(const llvm::Value *Val, const llvm::Type *Ty) -> SMTRef;
 auto combineOp(const llvm::BinaryOperator &Op)
     -> std::function<SMTRef(string, SMTRef, SMTRef)>;
 
@@ -228,7 +227,6 @@ auto wrapHeap(SMTRef Inv, Memory Heap, std::vector<std::string> FreeVars)
     -> SMTRef;
 auto adaptSizeToHeap(unsigned long Size, std::vector<string> FreeVars)
     -> unsigned long;
-template <typename T> auto resolveGEP(T &GEP) -> SMTRef;
 auto isStackOp(const llvm::Instruction &Inst) -> bool;
 auto argSort(std::string Arg) -> std::string;
 auto stringConstants(const llvm::Module &Mod, string Heap)
