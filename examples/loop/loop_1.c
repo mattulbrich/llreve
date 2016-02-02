@@ -3,8 +3,7 @@ int f(int n) {
   int i = 0;
   int j = 0;
 
-  while (i <= n) {
-    __mark(42);
+  while (__mark(42) & (i <= n)) {
     i++;
     j++;
   }
