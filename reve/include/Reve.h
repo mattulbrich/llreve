@@ -45,7 +45,7 @@ auto doesNotRecurse(llvm::Function &Fun) -> bool;
 auto globalDeclarations(llvm::Module &Mod1, llvm::Module &Mod2)
     -> std::vector<SMTRef>;
 auto globalDeclarationsForMod(int GlobalPointer, llvm::Module &Mod,
-                              llvm::Module &OtherMod) -> std::vector<SMTRef>;
+                              llvm::Module &OtherMod, int Program) -> std::vector<SMTRef>;
 auto collectFunConds() -> std::multimap<string, string>;
 auto collectFunCondsInFile(std::string File) -> std::multimap<string, string>;
 auto doesAccessMemory(const llvm::Module &Mod) -> bool;

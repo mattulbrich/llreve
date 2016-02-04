@@ -24,7 +24,7 @@ PreservedAnalyses UniqueNamePass::run(llvm::Function &F,
             makePrefixed(Inst, Prefix, InstructionNames);
         }
     }
-    return PreservedAnalyses::none();
+    return PreservedAnalyses::all();
 }
 
 void makePrefixed(llvm::Value &Val, std::string Prefix,

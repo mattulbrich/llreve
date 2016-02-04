@@ -7,6 +7,7 @@
 #include "Helper.h"
 #include "PathAnalysis.h"
 #include "RemoveMarkPass.h"
+#include "RemoveMarkRefsPass.h"
 #include "SExpr.h"
 #include "SMT.h"
 #include "SMTGeneration.h"
@@ -37,6 +38,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
+#include "llvm/Transforms/InstCombine/InstCombine.h"
 
 #include <fstream>
 #include <iostream>
@@ -372,9 +374,7 @@ preprocessFunction(llvm::Function &Fun, string Prefix) {
     auto FAM =
         make_shared<llvm::FunctionAnalysisManager>(true); // enable debug log
     PB.registerFunctionAnalyses(*FAM); // register basic analyses
-    FAM->registerPass(MarkAnalysis());
     FAM->registerPass(UnifyFunctionExitNodes());
-    FAM->registerPass(PathAnalysis());
 
     llvm::FunctionPassManager FPM(true); // enable debug log
 
@@ -382,11 +382,16 @@ preprocessFunction(llvm::Function &Fun, string Prefix) {
     FPM.addPass(llvm::SimplifyCFGPass());
     FPM.addPass(SplitEntryBlockPass());
     FPM.addPass(UniqueNamePass(Prefix)); // prefix register names
+    FAM->registerPass(MarkAnalysis());
+    FPM.addPass(RemoveMarkRefsPass());
+    // FPM.addPass(llvm::InstCombinePass()); // This converts some things to
+    // bitoperations so we sadly can’t use it right now
+    FPM.addPass(ConstantProp());
+    FAM->registerPass(PathAnalysis());
     if (ShowMarkedCFG) {
-        FPM.addPass(CFGViewerPass()); // show cfg
+        FPM.addPass(CFGViewerPass()); // show marked cfg
     }
     FPM.addPass(RemoveMarkPass());
-    FPM.addPass(ConstantProp());
     if (ShowCFG) {
         FPM.addPass(CFGViewerPass()); // show cfg
     }
@@ -616,15 +621,22 @@ bool doesAccessMemory(const llvm::Module &Mod) {
 }
 
 vector<SMTRef> globalDeclarationsForMod(int GlobalPointer, llvm::Module &Mod,
-                                        llvm::Module &ModOther) {
+                                        llvm::Module &ModOther, int Program) {
     std::vector<SMTRef> Declarations;
     for (auto &Global1 : Mod.globals()) {
         std::string GlobalName = Global1.getName();
         if (!ModOther.getNamedGlobal(GlobalName)) {
-            GlobalPointer += typeSize(Global1.getType());
+            // we want the size of string constants not the size of the pointer
+            // pointing to them
+            if (const auto PointerTy =
+                    llvm::dyn_cast<llvm::PointerType>(Global1.getType())) {
+                GlobalPointer += typeSize(PointerTy->getElementType());
+            } else {
+                GlobalPointer += typeSize(Global1.getType());
+            }
             std::vector<SortedVar> Empty;
             auto ConstDef1 = make_shared<FunDef>(
-                GlobalName + "$1", Empty, "Int",
+                GlobalName + "$" + std::to_string(Program), Empty, "Int",
                 makeUnaryOp("-", std::to_string(GlobalPointer)));
             Declarations.push_back(ConstDef1);
         }
@@ -658,8 +670,8 @@ std::vector<SMTRef> globalDeclarations(llvm::Module &Mod1, llvm::Module &Mod2) {
             Declarations.push_back(ConstDef2);
         }
     }
-    auto Decls1 = globalDeclarationsForMod(GlobalPointer, Mod1, Mod2);
-    auto Decls2 = globalDeclarationsForMod(GlobalPointer, Mod1, Mod2);
+    auto Decls1 = globalDeclarationsForMod(GlobalPointer, Mod1, Mod2, 1);
+    auto Decls2 = globalDeclarationsForMod(GlobalPointer, Mod2, Mod1, 2);
     Declarations.insert(Declarations.end(), Decls1.begin(), Decls1.end());
     Declarations.insert(Declarations.end(), Decls2.begin(), Decls2.end());
     for (auto &Global1 : Mod1.globals()) {
