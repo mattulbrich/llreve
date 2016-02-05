@@ -1,5 +1,6 @@
 #include "Reve.h"
 
+#include "ADCE.h"
 #include "AnnotStackPass.h"
 #include "CFGPrinter.h"
 #include "Compat.h"
@@ -7,6 +8,7 @@
 #include "Helper.h"
 #include "PathAnalysis.h"
 #include "InlinePass.h"
+#include "InstCombine.h"
 #include "RemoveMarkPass.h"
 #include "RemoveMarkRefsPass.h"
 #include "SExpr.h"
@@ -39,7 +41,6 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
-#include "llvm/Transforms/InstCombine/InstCombine.h"
 
 #include <fstream>
 #include <iostream>
@@ -383,11 +384,10 @@ preprocessFunction(llvm::Function &Fun, string Prefix) {
     FPM.addPass(PromotePass()); // mem2reg
     FPM.addPass(llvm::SimplifyCFGPass());
     FPM.addPass(SplitEntryBlockPass());
-    FPM.addPass(UniqueNamePass(Prefix)); // prefix register names
     FAM->registerPass(MarkAnalysis());
     FPM.addPass(RemoveMarkRefsPass());
-    // FPM.addPass(llvm::InstCombinePass()); // This converts some things to
-    // bitoperations so we sadly can’t use it right now
+    FPM.addPass(InstCombinePass());
+    FPM.addPass(ADCEPass());
     FPM.addPass(ConstantProp());
     FAM->registerPass(PathAnalysis());
     if (ShowMarkedCFG) {
@@ -398,6 +398,7 @@ preprocessFunction(llvm::Function &Fun, string Prefix) {
         FPM.addPass(CFGViewerPass()); // show cfg
     }
     FPM.addPass(AnnotStackPass()); // annotate load/store of stack variables
+    FPM.addPass(UniqueNamePass(Prefix)); // prefix register names
     FPM.addPass(llvm::VerifierPass());
     // FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
     FPM.run(Fun, FAM.get());
