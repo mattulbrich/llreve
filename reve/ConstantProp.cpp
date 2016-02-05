@@ -60,9 +60,6 @@ llvm::PreservedAnalyses ConstantProp::run(llvm::Function &F,
                 // Remove the dead instruction.
                 WorkList.erase(I);
                 I->eraseFromParent();
-
-                // We made a change to the function...
-                Changed = true;
             }
     }
     return llvm::PreservedAnalyses::all();
