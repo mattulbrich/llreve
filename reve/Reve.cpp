@@ -6,6 +6,7 @@
 #include "ConstantProp.h"
 #include "Helper.h"
 #include "PathAnalysis.h"
+#include "InlinePass.h"
 #include "RemoveMarkPass.h"
 #include "RemoveMarkRefsPass.h"
 #include "SExpr.h"
@@ -378,6 +379,7 @@ preprocessFunction(llvm::Function &Fun, string Prefix) {
 
     llvm::FunctionPassManager FPM(true); // enable debug log
 
+    FPM.addPass(InlinePass());
     FPM.addPass(PromotePass()); // mem2reg
     FPM.addPass(llvm::SimplifyCFGPass());
     FPM.addPass(SplitEntryBlockPass());
@@ -419,10 +421,7 @@ zipFunctions(llvm::Module &Mod1, llvm::Module &Mod2) {
         }
     }
     if (Size1 != Size2) {
-        logError("Number of functions is not equal\n");
-        return ErrorOr<
-            std::vector<std::pair<llvm::Function *, llvm::Function *>>>(
-            std::error_code());
+        logWarning("Number of functions is not equal\n");
     }
     for (auto &Fun1 : Mod1) {
         if (Fun1.isDeclaration()) {
@@ -430,10 +429,8 @@ zipFunctions(llvm::Module &Mod1, llvm::Module &Mod2) {
         }
         auto Fun2 = Mod2.getFunction(Fun1.getName());
         if (!Fun2) {
-            logError("No corresponding function for " + Fun1.getName() + "\n");
-            return ErrorOr<
-                std::vector<std::pair<llvm::Function *, llvm::Function *>>>(
-                std::error_code());
+            logWarning("No corresponding function for " + Fun1.getName() + "\n");
+            continue;
         }
         Funs.push_back(std::make_pair(&Fun1, Fun2));
     }
