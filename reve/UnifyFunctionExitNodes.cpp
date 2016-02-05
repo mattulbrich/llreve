@@ -18,13 +18,11 @@ UnifyFunctionExitNodes::run(llvm::Function &Fun,
     BasicBlock *ReturnBlock = nullptr;
     std::vector<BasicBlock *> ReturningBlocks;
     std::vector<BasicBlock *> UnreachableBlocks;
-    for (Function::iterator I = Fun.begin(), E = Fun.end(); I != E; ++I) {
-        if (llvm::isa<llvm::ReturnInst>(I->getTerminator())) {
-            ReturningBlocks.push_back(I);
-        } else if (llvm::isa<llvm::UnreachableInst>(I->getTerminator())) {
-            UnreachableBlocks.push_back(I);
-        }
-    }
+    for (BasicBlock &BB : Fun)
+        if (llvm::isa<llvm::ReturnInst>(BB.getTerminator()))
+            ReturningBlocks.push_back(&BB);
+        else if (llvm::isa<llvm::UnreachableInst>(BB.getTerminator()))
+            UnreachableBlocks.push_back(&BB);
 
     // Then unreachable blocks.
     if (UnreachableBlocks.empty()) {
@@ -36,7 +34,10 @@ UnifyFunctionExitNodes::run(llvm::Function &Fun,
                                               "UnifiedUnreachableBlock", &Fun);
         new llvm::UnreachableInst(Fun.getContext(), UnreachableBlock);
 
-        for (auto BB : UnreachableBlocks) {
+        for (std::vector<BasicBlock *>::iterator I = UnreachableBlocks.begin(),
+                                                 E = UnreachableBlocks.end();
+             I != E; ++I) {
+            BasicBlock *BB = *I;
             BB->getInstList().pop_back(); // Remove the unreachable inst.
             llvm::BranchInst::Create(UnreachableBlock, BB);
         }
@@ -46,8 +47,7 @@ UnifyFunctionExitNodes::run(llvm::Function &Fun,
     if (ReturningBlocks.empty()) {
         ReturnBlock = nullptr;
         return ReturnBlock; // No blocks return
-    }
-    if (ReturningBlocks.size() == 1) {
+    } else if (ReturningBlocks.size() == 1) {
         ReturnBlock =
             ReturningBlocks.front(); // Already has a single return block
         return ReturnBlock;
@@ -76,13 +76,16 @@ UnifyFunctionExitNodes::run(llvm::Function &Fun,
     // Loop over all of the blocks, replacing the return instruction with an
     // unconditional branch.
     //
-    for (auto BB : ReturningBlocks) {
+    for (std::vector<BasicBlock *>::iterator I = ReturningBlocks.begin(),
+                                             E = ReturningBlocks.end();
+         I != E; ++I) {
+        BasicBlock *BB = *I;
+
         // Add an incoming element to the PHI node for every return instruction
         // that
         // is merging into this new block...
-        if (PN != nullptr) {
+        if (PN)
             PN->addIncoming(BB->getTerminator()->getOperand(0), BB);
-        }
 
         BB->getInstList().pop_back(); // Remove the return insn
         llvm::BranchInst::Create(NewRetBlock, BB);
