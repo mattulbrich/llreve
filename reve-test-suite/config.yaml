@@ -12,7 +12,6 @@ ignored-files:
   - heap/fib_1.c
   - argon2/fill_memory_blocks_1.c
 z3-files:
-  - rec/add-horn.smt2
   - rec/rec_while.smt2
   - rec/cocome1.smt2
   - rec/triangular.smt2

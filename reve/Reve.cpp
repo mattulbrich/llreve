@@ -390,6 +390,7 @@ preprocessFunction(llvm::Function &Fun, string Prefix) {
     FPM.addPass(ADCEPass());
     FPM.addPass(ConstantProp());
     FAM->registerPass(PathAnalysis());
+    FPM.addPass(UniqueNamePass(Prefix)); // prefix register names
     if (ShowMarkedCFG) {
         FPM.addPass(CFGViewerPass()); // show marked cfg
     }
@@ -398,7 +399,6 @@ preprocessFunction(llvm::Function &Fun, string Prefix) {
         FPM.addPass(CFGViewerPass()); // show cfg
     }
     FPM.addPass(AnnotStackPass()); // annotate load/store of stack variables
-    FPM.addPass(UniqueNamePass(Prefix)); // prefix register names
     FPM.addPass(llvm::VerifierPass());
     // FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
     FPM.run(Fun, FAM.get());

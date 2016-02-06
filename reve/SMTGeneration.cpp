@@ -450,6 +450,57 @@ SMTRef interleaveAssignments(SMTRef EndClause,
     auto CallIt2 = CallInfo2.rbegin();
     auto AssignmentIt1 = AssignmentBlocks1.rbegin();
     auto AssignmentIt2 = AssignmentBlocks2.rbegin();
+
+    // We step through the matched calls in reverse to build up the smt from the
+    // bottom up
+    for (InterleaveStep Step : makeReverse(InterleaveSteps)) {
+        switch (Step) {
+        case StepFirst:
+            for (auto Assgns : makeReverse(*AssignmentIt1)) {
+                Clause = nestLets(Clause, Assgns.Definitions);
+                if (Assgns.Condition) {
+                    Clause = makeBinOp("=>", Assgns.Condition, Clause);
+                }
+            }
+            Clause = nonmutualRecursiveForall(Clause, *CallIt1, First, Heap);
+            ++CallIt1;
+            ++AssignmentIt1;
+            break;
+        case StepSecond:
+            for (auto Assgns : makeReverse(*AssignmentIt2)) {
+                Clause = nestLets(Clause, Assgns.Definitions);
+                if (Assgns.Condition) {
+                    Clause = makeBinOp("=>", Assgns.Condition, Clause);
+                }
+            }
+            Clause = nonmutualRecursiveForall(Clause, *CallIt2, Second, Heap);
+            ++CallIt2;
+            ++AssignmentIt2;
+            break;
+        case StepBoth:
+            assert(CallIt1->CallName == CallIt2->CallName);
+            for (auto Assgns : makeReverse(*AssignmentIt2)) {
+                Clause = nestLets(Clause, Assgns.Definitions);
+                if (Assgns.Condition) {
+                    Clause = makeBinOp("=>", Assgns.Condition, Clause);
+                }
+            }
+            for (auto Assgns : makeReverse(*AssignmentIt1)) {
+                Clause = nestLets(Clause, Assgns.Definitions);
+                if (Assgns.Condition) {
+                    Clause = makeBinOp("=>", Assgns.Condition, Clause);
+                }
+            }
+            Clause = mutualRecursiveForall(Clause, *CallIt1, *CallIt2, Heap);
+            ++CallIt1;
+            ++CallIt2;
+            ++AssignmentIt1;
+            ++AssignmentIt2;
+            break;
+        }
+    }
+    // There is always one more block than there are calls, so we have to add it
+    // separately at the end
     for (auto Assgns : makeReverse(*AssignmentIt2)) {
         Clause = nestLets(Clause, Assgns.Definitions);
         if (Assgns.Condition) {
@@ -464,53 +515,6 @@ SMTRef interleaveAssignments(SMTRef EndClause,
     }
     ++AssignmentIt1;
     ++AssignmentIt2;
-
-    for (InterleaveStep Step : makeReverse(InterleaveSteps)) {
-        switch (Step) {
-        case StepFirst:
-            Clause = nonmutualRecursiveForall(Clause, *CallIt1, First, Heap);
-            for (auto Assgns : makeReverse(*AssignmentIt1)) {
-                Clause = nestLets(Clause, Assgns.Definitions);
-                if (Assgns.Condition) {
-                    Clause = makeBinOp("=>", Assgns.Condition, Clause);
-                }
-            }
-            ++CallIt1;
-            ++AssignmentIt1;
-            break;
-        case StepSecond:
-            Clause = nonmutualRecursiveForall(Clause, *CallIt2, Second, Heap);
-            for (auto Assgns : makeReverse(*AssignmentIt2)) {
-                Clause = nestLets(Clause, Assgns.Definitions);
-                if (Assgns.Condition) {
-                    Clause = makeBinOp("=>", Assgns.Condition, Clause);
-                }
-            }
-            ++CallIt2;
-            ++AssignmentIt2;
-            break;
-        case StepBoth:
-            assert(CallIt1->CallName == CallIt2->CallName);
-            Clause = mutualRecursiveForall(Clause, *CallIt1, *CallIt2, Heap);
-            for (auto Assgns : makeReverse(*AssignmentIt2)) {
-                Clause = nestLets(Clause, Assgns.Definitions);
-                if (Assgns.Condition) {
-                    Clause = makeBinOp("=>", Assgns.Condition, Clause);
-                }
-            }
-            for (auto Assgns : makeReverse(*AssignmentIt1)) {
-                Clause = nestLets(Clause, Assgns.Definitions);
-                if (Assgns.Condition) {
-                    Clause = makeBinOp("=>", Assgns.Condition, Clause);
-                }
-            }
-            ++CallIt1;
-            ++CallIt2;
-            ++AssignmentIt1;
-            ++AssignmentIt2;
-            break;
-        }
-    }
 
     assert(CallIt1 == CallInfo1.rend());
     assert(CallIt2 == CallInfo2.rend());
