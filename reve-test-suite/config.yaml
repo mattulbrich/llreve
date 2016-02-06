@@ -7,7 +7,6 @@ ignored-dirs:
   - torch
 ignored-files:
   - a_1.c
-  - heap/selsort_1.c
   - heap/findmax_1.c
   - heap/fib_1.c
   - argon2/fill_memory_blocks_1.c
@@ -21,6 +20,7 @@ custom-args:
     - -only-rec
   git/swap.smt2:
     - -stack
+  heap/selsort.smt2: []
   redis/undoconnect.smt2:
     - -fun
     - undoconnectWithMaster
