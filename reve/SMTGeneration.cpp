@@ -14,6 +14,8 @@ using llvm::CmpInst;
 #include <iostream>
 
 using std::vector;
+using std::map;
+using std::function;
 
 vector<SMTRef> convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
                             shared_ptr<llvm::FunctionAnalysisManager> Fam1,
@@ -76,8 +78,16 @@ vector<SMTRef> convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
         PathExprs.push_back(make_shared<Comment>("OFF BY N"));
         const auto OffByNPaths = offByNPaths(PathMap1, PathMap2, FreeVarsMap,
                                              FunName, false, Heap, Signed);
-        PathExprs.insert(PathExprs.end(), OffByNPaths.begin(),
-                         OffByNPaths.end());
+        for (auto It : OffByNPaths) {
+            int StartIndex = It.first;
+            for (auto It2 : It.second) {
+                for (auto PathFun : It2.second) {
+                    PathExprs.push_back(assertForall(
+                        PathFun(nullptr), FreeVarsMap.at(StartIndex),
+                        StartIndex, Both, FunName, false));
+                }
+            }
+        }
     }
 
     SMTExprs.insert(SMTExprs.end(), PathExprs.begin(), PathExprs.end());
@@ -116,22 +126,33 @@ vector<SMTRef> mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
         return SMTExprs;
     }
 
-    const auto SynchronizedPaths = mainSynchronizedPaths(
+    auto SynchronizedPaths = mainSynchronizedPaths(
         PathMap1, PathMap2, FreeVarsMap, FunName, Declarations, Heap, Signed);
     const auto ForbiddenPaths =
         forbiddenPaths(PathMap1, PathMap2, Marked1, Marked2, FreeVarsMap,
                        OffByN, FunName, true, Heap, Signed);
-    SMTExprs.insert(SMTExprs.end(), SynchronizedPaths.begin(),
-                    SynchronizedPaths.end());
-    SMTExprs.push_back(make_shared<Comment>("forbidden main"));
-    SMTExprs.insert(SMTExprs.end(), ForbiddenPaths.begin(),
-                    ForbiddenPaths.end());
     if (OffByN) {
         SMTExprs.push_back(make_shared<Comment>("offbyn main"));
         const auto OffByNPaths = offByNPaths(PathMap1, PathMap2, FreeVarsMap,
                                              FunName, true, Heap, Signed);
-        SMTExprs.insert(SMTExprs.end(), OffByNPaths.begin(), OffByNPaths.end());
+        SynchronizedPaths = mergePathFuns(SynchronizedPaths, OffByNPaths);
     }
+    for (auto It : SynchronizedPaths) {
+        int StartIndex = It.first;
+        for (auto It2 : It.second) {
+            int EndIndex = It2.first;
+            auto EndInvariant = mainInvariant(
+                EndIndex, FreeVarsMap.at(EndIndex), FunName, Heap);
+            for (auto PathFun : It2.second) {
+                SMTExprs.push_back(assertForall(
+                    PathFun(EndInvariant), FreeVarsMap.at(StartIndex),
+                    StartIndex, Both, FunName, true));
+            }
+        }
+    }
+    SMTExprs.push_back(make_shared<Comment>("forbidden main"));
+    SMTExprs.insert(SMTExprs.end(), ForbiddenPaths.begin(),
+                    ForbiddenPaths.end());
     SMTExprs.push_back(make_shared<Comment>("end"));
     return SMTExprs;
 }
@@ -184,12 +205,12 @@ vector<SMTRef> synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
     return PathExprs;
 }
 
-vector<SMTRef> mainSynchronizedPaths(PathMap PathMap1, PathMap PathMap2,
-                                     std::map<int, vector<string>> FreeVarsMap,
-                                     std::string FunName,
-                                     vector<SMTRef> &Declarations, Memory Heap,
-                                     bool Signed) {
-    vector<SMTRef> PathExprs;
+map<int, map<int, vector<function<SMTRef(SMTRef)>>>>
+mainSynchronizedPaths(PathMap PathMap1, PathMap PathMap2,
+                      std::map<int, vector<string>> FreeVarsMap,
+                      std::string FunName, vector<SMTRef> &Declarations,
+                      Memory Heap, bool Signed) {
+    map<int, map<int, vector<function<SMTRef(SMTRef)>>>> PathFuns;
     for (const auto &PathMapIt : PathMap1) {
         const int StartIndex = PathMapIt.first;
         if (StartIndex != ENTRY_MARK) {
@@ -213,18 +234,18 @@ vector<SMTRef> mainSynchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                         const auto Defs2 = assignmentsOnPath(
                             Path2, 2, FreeVarsMap.at(StartIndex),
                             EndIndex == EXIT_MARK, Heap, Signed);
-                        PathExprs.push_back(
-                            assertForall(interleaveAssignments(
-                                             EndInvariant, Defs1, Defs2, Heap),
-                                         FreeVarsMap.at(StartIndex), StartIndex,
-                                         Both, FunName, true));
+                        PathFuns[StartIndex][EndIndex].push_back(
+                            [=](SMTRef End) {
+                                return interleaveAssignments(End, Defs1, Defs2,
+                                                             Heap);
+                            });
                     }
                 }
             }
         }
     }
 
-    return PathExprs;
+    return PathFuns;
 }
 
 vector<SMTRef> forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
@@ -309,26 +330,26 @@ void nonmutualPaths(PathMap PathMap, vector<SMTRef> &PathExprs,
     }
 }
 
-vector<SMTRef> offByNPaths(PathMap PathMap1, PathMap PathMap2,
-                           std::map<int, vector<string>> FreeVarsMap,
-                           std::string FunName, bool Main, Memory Heap,
-                           bool Signed) {
+map<int, map<int, vector<function<SMTRef(SMTRef)>>>>
+offByNPaths(PathMap PathMap1, PathMap PathMap2,
+            std::map<int, vector<string>> FreeVarsMap, std::string FunName,
+            bool Main, Memory Heap, bool Signed) {
+    map<int, map<int, vector<function<SMTRef(SMTRef)>>>> PathFuns;
     vector<SMTRef> Paths;
     const auto FirstPaths = offByNPathsOneDir(
         PathMap1, PathMap2, FreeVarsMap, 1, First, FunName, Main, Heap, Signed);
     const auto SecondPaths =
         offByNPathsOneDir(PathMap2, PathMap1, FreeVarsMap, 2, Second, FunName,
                           Main, Heap, Signed);
-    Paths.insert(Paths.end(), FirstPaths.begin(), FirstPaths.end());
-    Paths.insert(Paths.end(), SecondPaths.begin(), SecondPaths.end());
-    return Paths;
+    return mergePathFuns(FirstPaths, SecondPaths);
 }
 
-vector<SMTRef> offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
-                                 std::map<int, vector<string>> FreeVarsMap,
-                                 int Program, SMTFor For, std::string FunName,
-                                 bool Main, Memory Heap, bool Signed) {
-    vector<SMTRef> Paths;
+map<int, map<int, vector<function<SMTRef(SMTRef)>>>>
+offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
+                  std::map<int, vector<string>> FreeVarsMap, int Program,
+                  SMTFor For, std::string FunName, bool Main, Memory Heap,
+                  bool Signed) {
+    map<int, map<int, vector<function<SMTRef(SMTRef)>>>> PathFuns;
     for (const auto &PathMapIt : PathMap_) {
         const int StartIndex = PathMapIt.first;
         for (const auto &InnerPathMapIt : PathMapIt.second) {
@@ -373,15 +394,15 @@ vector<SMTRef> offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
                     const auto Defs = assignmentsOnPath(
                         Path, Program, FreeVarsMap.at(EndIndex),
                         EndIndex == EXIT_MARK, Heap, Signed);
-                    Paths.push_back(assertForall(
-                        nonmutualSMT(DontLoopInvariant, Defs, For, Heap),
-                        FreeVarsMap.at(StartIndex), StartIndex, Both, FunName,
-                        Main));
+                    PathFuns[StartIndex][StartIndex].push_back([=](
+                        SMTRef /*unused*/) {
+                        return nonmutualSMT(DontLoopInvariant, Defs, For, Heap);
+                    });
                 }
             }
         }
     }
-    return Paths;
+    return PathFuns;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -405,7 +426,8 @@ vector<AssignmentCallBlock> assignmentsOnPath(Path Path, int Program,
     }
     AllDefs.push_back(AssignmentCallBlock(OldDefs, nullptr));
 
-    // First block of path, this is special, because we don’t have a previous
+    // First block of path, this is special, because we don’t have a
+    // previous
     // block so we can’t resolve phi nodes
     const auto StartDefs =
         blockAssignments(*Path.Start, nullptr, false, Program, Heap, Signed);
@@ -451,7 +473,8 @@ SMTRef interleaveAssignments(SMTRef EndClause,
     auto AssignmentIt1 = AssignmentBlocks1.rbegin();
     auto AssignmentIt2 = AssignmentBlocks2.rbegin();
 
-    // We step through the matched calls in reverse to build up the smt from the
+    // We step through the matched calls in reverse to build up the smt from
+    // the
     // bottom up
     for (InterleaveStep Step : makeReverse(InterleaveSteps)) {
         switch (Step) {
@@ -499,7 +522,8 @@ SMTRef interleaveAssignments(SMTRef EndClause,
             break;
         }
     }
-    // There is always one more block than there are calls, so we have to add it
+    // There is always one more block than there are calls, so we have to
+    // add it
     // separately at the end
     for (auto Assgns : makeReverse(*AssignmentIt2)) {
         Clause = nestLets(Clause, Assgns.Definitions);
@@ -607,8 +631,10 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
     auto Clause = EndInvariant;
 
     if (EndIndex != EXIT_MARK) {
-        // We require the result of another call to establish our invariant so
-        // make sure that it satisfies the invariant of the other call and then
+        // We require the result of another call to establish our invariant
+        // so
+        // make sure that it satisfies the invariant of the other call and
+        // then
         // assert our own invariant
         vector<SortedVar> ForallArgs;
         for (auto ResultArg : ResultArgs) {
@@ -1199,7 +1225,8 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
             // This is a heuristic to remove divisions by 4 of pointer
             // subtractions
             // Since we treat every int as a single value, we expect the
-            // division to return the number of elements and not the number of
+            // division to return the number of elements and not the number
+            // of
             // bytes
             if (const auto Instr =
                     llvm::dyn_cast<llvm::Instruction>(BinOp->getOperand(0))) {
@@ -1305,7 +1332,8 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
         const auto RetTy = Ext->getType();
         if (RetTy->isIntegerTy() && RetTy->getIntegerBitWidth() > 1 &&
             Operand->getType()->isIntegerTy(1)) {
-            // Extensions are usually noops, but when we convert a boolean (1bit
+            // Extensions are usually noops, but when we convert a boolean
+            // (1bit
             // integer) to something bigger it needs to be an explicit
             // conversion
             std::vector<SMTRef> Args;
@@ -1947,4 +1975,23 @@ vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *CallInst,
 
 shared_ptr<Assignment> makeAssignment(string Name, SMTRef Val) {
     return make_shared<Assignment>(Name, Val);
+}
+
+auto mergePathFuns(
+    std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>> A,
+    std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>> B)
+    -> std::map<int,
+                std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>> {
+    auto Merge = [](map<int, vector<function<SMTRef(SMTRef)>>> MapA,
+                    map<int, vector<function<SMTRef(SMTRef)>>> MapB)
+        -> map<int, vector<function<SMTRef(SMTRef)>>> {
+            return unionWith<int, vector<function<SMTRef(SMTRef)>>>(
+                MapA, MapB, [](vector<function<SMTRef(SMTRef)>> A,
+                               vector<function<SMTRef(SMTRef)>> B) {
+                    A.insert(A.end(), B.begin(), B.end());
+                    return A;
+                });
+        };
+    return unionWith<int, map<int, vector<function<SMTRef(SMTRef)>>>>(A, B,
+                                                                      Merge);
 }

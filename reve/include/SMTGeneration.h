@@ -105,7 +105,8 @@ auto mainSynchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                            std::map<int, std::vector<string>> FreeVarsMap,
                            std::string FunName,
                            std::vector<SMTRef> &Declarations, Memory Heap,
-                           bool Signed) -> std::vector<SMTRef>;
+                           bool Signed)
+    -> std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>>;
 auto forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
                     BidirBlockMarkMap Marked1, BidirBlockMarkMap Marked2,
                     std::map<int, std::vector<string>> FreeVarsMap, bool OffByN,
@@ -118,11 +119,12 @@ auto nonmutualPaths(PathMap PathMap, std::vector<SMTRef> &PathExprs,
 auto offByNPaths(PathMap PathMap1, PathMap PathMap2,
                  std::map<int, std::vector<string>> FreeVarsMap,
                  std::string FunName, bool Main, Memory Heap, bool Signed)
-    -> std::vector<SMTRef>;
+    -> std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>>;
 auto offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
                        std::map<int, std::vector<string>> FreeVarsMap,
                        int Program, SMTFor For, std::string FunName, bool Main,
-                       Memory Heap, bool Signed) -> std::vector<SMTRef>;
+                       Memory Heap, bool Signed)
+    -> std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>>;
 
 /* -------------------------------------------------------------------------- */
 // Functions for generating SMT for a single/mutual path
@@ -189,11 +191,12 @@ auto equalInputsEqualOutputs(std::vector<string> FunArgs,
 // Functions related to the conversion of single instructions/basic
 // blocks to SMT assignments
 
-auto blockAssignments(const llvm::BasicBlock &BB, const llvm::BasicBlock *PrevBB,
-                      bool OnlyPhis, int Program, Memory Heap, bool Signed)
+auto blockAssignments(const llvm::BasicBlock &BB,
+                      const llvm::BasicBlock *PrevBB, bool OnlyPhis,
+                      int Program, Memory Heap, bool Signed)
     -> std::vector<DefOrCallInfo>;
-auto instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
-                     int Program, bool Signed)
+auto instrAssignment(const llvm::Instruction &Instr,
+                     const llvm::BasicBlock *PrevBB, int Program, bool Signed)
     -> std::shared_ptr<std::pair<std::string, SMTRef>>;
 auto predicateName(const llvm::CmpInst::Predicate Pred) -> std::string;
 auto predicateFun(const llvm::CmpInst::CmpInst &Pred, bool Signed)
@@ -241,3 +244,7 @@ auto mapSubset(PathMap Map1, PathMap Map2) -> bool;
 auto memcpyIntrinsic(const llvm::CallInst *CallInst, int Program)
     -> std::vector<DefOrCallInfo>;
 auto isPtrDiff(const llvm::Instruction &Instr) -> bool;
+auto mergePathFuns(
+    std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>> A,
+    std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>> B)
+    -> std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>>;

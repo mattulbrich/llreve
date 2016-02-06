@@ -69,3 +69,16 @@ template <typename T> SMTRef resolveGEP(T &GEP) {
     }
     return std::make_shared<Op>("+", Args);
 }
+
+template <typename Key, typename Val>
+auto unionWith(std::map<Key, Val> MapA, std::map<Key, Val> MapB,
+               std::function<Val(Val, Val)> Combine) -> std::map<Key, Val> {
+    for (auto Pair : MapB) {
+        if (MapA.find(Pair.first) == MapA.end()) {
+            MapA.insert(Pair);
+        } else {
+            MapA.at(Pair.first) = Combine(MapA.at(Pair.first), Pair.second);
+        }
+    }
+    return MapA;
+}
