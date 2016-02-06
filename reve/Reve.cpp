@@ -44,7 +44,6 @@
 
 #include <fstream>
 #include <iostream>
-#include <tuple>
 
 using clang::CodeGenAction;
 using clang::CompilerInstance;
@@ -148,7 +147,7 @@ unique_ptr<Driver> initializeDriver(DiagnosticsEngine &Diags) {
 }
 
 /// This creates the compilations commands to compile to assembly
-ErrorOr<std::tuple<ArgStringList, ArgStringList>>
+ErrorOr<std::pair<ArgStringList, ArgStringList>>
 getCmd(Compilation &Comp, DiagnosticsEngine &Diags) {
     const JobList &Jobs = Comp.getJobs();
 
@@ -158,19 +157,19 @@ getCmd(Compilation &Comp, DiagnosticsEngine &Diags) {
         llvm::raw_svector_ostream OS(Msg);
         Jobs.Print(OS, "; ", true);
         Diags.Report(clang::diag::err_fe_expected_compiler_job) << OS.str();
-        return ErrorOr<std::tuple<ArgStringList, ArgStringList>>(
+        return ErrorOr<std::pair<ArgStringList, ArgStringList>>(
             std::error_code());
     }
 
-    return makeErrorOr(std::make_tuple(
-        Jobs.begin()->getArguments(), std::next(Jobs.begin())->getArguments()));
+    return makeErrorOr(std::make_pair(Jobs.begin()->getArguments(),
+                                      std::next(Jobs.begin())->getArguments()));
 }
 
 /// Wrapper function to allow inferenece of template parameters
 template <typename T> ErrorOr<T> makeErrorOr(T Arg) { return ErrorOr<T>(Arg); }
 
 /// Compile the inputs to llvm assembly and return those modules
-std::tuple<unique_ptr<clang::CodeGenAction>, unique_ptr<clang::CodeGenAction>>
+std::pair<unique_ptr<clang::CodeGenAction>, unique_ptr<clang::CodeGenAction>>
 getModule(const char *ExeName, string Input1, string Input2) {
     auto Diags = initializeDiagnostics();
     auto Driver = initializeDriver(*Diags);
@@ -178,22 +177,22 @@ getModule(const char *ExeName, string Input1, string Input2) {
 
     std::unique_ptr<Compilation> Comp(Driver->BuildCompilation(Args));
     if (!Comp) {
-        return std::make_tuple(nullptr, nullptr);
+        return std::make_pair(nullptr, nullptr);
     }
 
     auto CmdArgsOrError = getCmd(*Comp, *Diags);
     if (!CmdArgsOrError) {
-        return std::make_tuple(nullptr, nullptr);
+        return std::make_pair(nullptr, nullptr);
     }
     auto CmdArgs = CmdArgsOrError.get();
 
-    auto Act1 = getCodeGenAction(std::get<0>(CmdArgs), *Diags);
-    auto Act2 = getCodeGenAction(std::get<1>(CmdArgs), *Diags);
+    auto Act1 = getCodeGenAction(CmdArgs.first, *Diags);
+    auto Act2 = getCodeGenAction(CmdArgs.second, *Diags);
     if (!Act1 || !Act2) {
-        return std::make_tuple(nullptr, nullptr);
+        return std::make_pair(nullptr, nullptr);
     }
 
-    return std::make_tuple(std::move(Act1), std::move(Act2));
+    return std::make_pair(std::move(Act1), std::move(Act2));
 }
 
 /// Build the CodeGenAction corresponding to the arguments
@@ -258,9 +257,9 @@ int main(int Argc, const char **Argv) {
     // to pass those in here
     llvm::cl::ParseCommandLineOptions(Argc, Argv, "reve\n");
 
-    auto ActTuple = getModule(Argv[0], FileName1, FileName2);
-    const auto Act1 = std::move(std::get<0>(ActTuple));
-    const auto Act2 = std::move(std::get<1>(ActTuple));
+    auto ActPair = getModule(Argv[0], FileName1, FileName2);
+    const auto Act1 = std::move(ActPair.first);
+    const auto Act2 = std::move(ActPair.second);
     if (!Act1 || !Act2) {
         return 1;
     }
@@ -430,7 +429,8 @@ zipFunctions(llvm::Module &Mod1, llvm::Module &Mod2) {
         }
         auto Fun2 = Mod2.getFunction(Fun1.getName());
         if (!Fun2) {
-            logWarning("No corresponding function for " + Fun1.getName() + "\n");
+            logWarning("No corresponding function for " + Fun1.getName() +
+                       "\n");
             continue;
         }
         Funs.push_back(std::make_pair(&Fun1, Fun2));

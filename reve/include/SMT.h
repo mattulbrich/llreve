@@ -21,8 +21,8 @@ class SMTExpr {
     virtual SExprRef toSExpr() const = 0;
     virtual set<string> uses() const = 0;
     virtual shared_ptr<const SMTExpr> compressLets(
-        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs =
-            std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>>())
+        std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> Defs =
+            std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>>())
         const = 0;
     virtual ~SMTExpr();
     SMTExpr(const SMTExpr & /*unused*/) = default;
@@ -37,7 +37,7 @@ class SetLogic : public SMTExpr {
     SExprRef toSExpr() const override;
     set<string> uses() const override;
     shared_ptr<const SMTExpr> compressLets(
-        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> Defs)
         const override;
     std::string Logic;
 };
@@ -49,7 +49,7 @@ class Assert : public SMTExpr {
     SExprRef toSExpr() const override;
     set<string> uses() const override;
     shared_ptr<const SMTExpr> compressLets(
-        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> Defs)
         const override;
 };
 
@@ -62,7 +62,7 @@ class SortedVar : public SMTExpr {
     SExprRef toSExpr() const override;
     set<string> uses() const override;
     shared_ptr<const SMTExpr> compressLets(
-        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> Defs)
         const override;
 };
 
@@ -75,7 +75,7 @@ class Forall : public SMTExpr {
     SMTRef Expr;
     set<string> uses() const override;
     shared_ptr<const SMTExpr> compressLets(
-        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> Defs)
         const override;
 };
 
@@ -84,7 +84,7 @@ class CheckSat : public SMTExpr {
     SExprRef toSExpr() const override;
     set<string> uses() const override;
     shared_ptr<const SMTExpr> compressLets(
-        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> Defs)
         const override;
 };
 
@@ -93,20 +93,20 @@ class GetModel : public SMTExpr {
     SExprRef toSExpr() const override;
     set<string> uses() const override;
     shared_ptr<const SMTExpr> compressLets(
-        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> Defs)
         const override;
 };
 
 class Let : public SMTExpr {
   public:
     SExprRef toSExpr() const override;
-    std::vector<std::tuple<std::string, SMTRef>> Defs;
+    std::vector<std::pair<std::string, SMTRef>> Defs;
     SMTRef Expr;
-    Let(std::vector<std::tuple<std::string, SMTRef>> Defs, SMTRef Expr)
+    Let(std::vector<std::pair<std::string, SMTRef>> Defs, SMTRef Expr)
         : Defs(std::move(Defs)), Expr(std::move(Expr)) {}
     set<string> uses() const override;
     shared_ptr<const SMTExpr>
-    compressLets(std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>>
+    compressLets(std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>>
                      PassedDefs) const override;
 };
 
@@ -121,7 +121,7 @@ template <typename T> class Primitive : public SMTExpr {
     const T Val;
     set<string> uses() const override { return set<string>(); }
     shared_ptr<const SMTExpr> compressLets(
-        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> Defs)
         const override;
 };
 
@@ -134,7 +134,7 @@ class Op : public SMTExpr {
     SExprRef toSExpr() const override;
     set<string> uses() const override;
     shared_ptr<const SMTExpr> compressLets(
-        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> Defs)
         const override;
 };
 
@@ -159,7 +159,7 @@ class FunDecl : public SMTExpr {
     SExprRef toSExpr() const override;
     set<string> uses() const override;
     shared_ptr<const SMTExpr> compressLets(
-        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> Defs)
         const override;
 };
 
@@ -176,7 +176,7 @@ class FunDef : public SMTExpr {
     SExprRef toSExpr() const override;
     set<string> uses() const override;
     shared_ptr<const SMTExpr> compressLets(
-        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> Defs)
         const override;
 };
 
@@ -188,9 +188,9 @@ class Comment : public SMTExpr {
     SExprRef toSExpr() const override;
     set<string> uses() const override;
     shared_ptr<const SMTExpr> compressLets(
-        std::vector<std::tuple<std::string, shared_ptr<const SMTExpr>>> Defs)
+        std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> Defs)
         const override;
 };
 
-auto nestLets(SMTRef Clause, std::vector<std::tuple<std::string, SMTRef>> Defs)
+auto nestLets(SMTRef Clause, std::vector<std::pair<std::string, SMTRef>> Defs)
     -> SMTRef;

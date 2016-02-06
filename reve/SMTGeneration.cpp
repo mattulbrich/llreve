@@ -1153,19 +1153,16 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
                                        Defs.end());
                 } else {
                     if (Heap & HEAP_MASK) {
-                        Definitions.push_back(DefOrCallInfo(
-                            std::make_shared<std::tuple<string, SMTRef>>(
-                                "HEAP$" + std::to_string(Program),
-                                name("HEAP$" + std::to_string(Program)))));
+                        Definitions.push_back(DefOrCallInfo(makeAssignment(
+                            "HEAP$" + std::to_string(Program),
+                            name("HEAP$" + std::to_string(Program)))));
                     }
                     Definitions.push_back(DefOrCallInfo(
                         toCallInfo(CallInst->getName(), Program, *CallInst)));
                     if (Heap & HEAP_MASK) {
-                        Definitions.push_back(DefOrCallInfo(
-                            std::make_shared<std::tuple<string, SMTRef>>(
-                                "HEAP$" + std::to_string(Program),
-                                name("HEAP$" + std::to_string(Program) +
-                                     "_res"))));
+                        Definitions.push_back(DefOrCallInfo(makeAssignment(
+                            "HEAP$" + std::to_string(Program),
+                            name("HEAP$" + std::to_string(Program) + "_res"))));
                     }
                 }
             } else {
@@ -1182,21 +1179,19 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
             RetName =
                 instrNameOrVal(RetInst->getReturnValue(), RetInst->getType());
         }
-        Definitions.push_back(
-            DefOrCallInfo(make_shared<std::tuple<string, SMTRef>>(
-                "result$" + std::to_string(Program), RetName)));
+        Definitions.push_back(DefOrCallInfo(
+            makeAssignment("result$" + std::to_string(Program), RetName)));
         if (Heap & HEAP_MASK) {
-            Definitions.push_back(
-                DefOrCallInfo(make_shared<std::tuple<string, SMTRef>>(
-                    "HEAP$" + std::to_string(Program) + "_res",
-                    name("HEAP$" + std::to_string(Program)))));
+            Definitions.push_back(DefOrCallInfo(
+                makeAssignment("HEAP$" + std::to_string(Program) + "_res",
+                               name("HEAP$" + std::to_string(Program)))));
         }
     }
     return Definitions;
 }
 
 /// Convert a single instruction to an assignment
-std::shared_ptr<std::tuple<string, SMTRef>>
+std::shared_ptr<std::pair<string, SMTRef>>
 instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
                 int Program, bool Signed) {
     if (const auto BinOp = llvm::dyn_cast<llvm::BinaryOperator>(&Instr)) {
@@ -1211,7 +1206,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
                 if (const auto ConstInt = llvm::dyn_cast<llvm::ConstantInt>(
                         BinOp->getOperand(1))) {
                     if (ConstInt->getSExtValue() == 4 && isPtrDiff(*Instr)) {
-                        return make_shared<std::tuple<string, SMTRef>>(
+                        return makeAssignment(
                             BinOp->getName(),
                             instrNameOrVal(BinOp->getOperand(0),
                                            BinOp->getOperand(0)->getType()));
@@ -1233,7 +1228,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
                     *BinOp);
             }
         }
-        return make_shared<std::tuple<string, SMTRef>>(
+        return makeAssignment(
             BinOp->getName(),
             combineOp (*BinOp)(
                 opName(*BinOp), instrNameOrVal(BinOp->getOperand(0),
@@ -1249,13 +1244,13 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
                                          CmpInst->getOperand(0)->getType())),
                       Fun(instrNameOrVal(CmpInst->getOperand(1),
                                          CmpInst->getOperand(0)->getType())));
-        return make_shared<std::tuple<string, SMTRef>>(CmpInst->getName(), Cmp);
+        return makeAssignment(CmpInst->getName(), Cmp);
     }
     if (const auto PhiInst = llvm::dyn_cast<llvm::PHINode>(&Instr)) {
         const auto Val = PhiInst->getIncomingValueForBlock(PrevBB);
         assert(Val);
-        return make_shared<std::tuple<string, SMTRef>>(
-            PhiInst->getName(), instrNameOrVal(Val, Val->getType()));
+        return makeAssignment(PhiInst->getName(),
+                              instrNameOrVal(Val, Val->getType()));
     }
     if (const auto SelectInst = llvm::dyn_cast<llvm::SelectInst>(&Instr)) {
         const auto Cond = SelectInst->getCondition();
@@ -1265,27 +1260,25 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
             instrNameOrVal(Cond, Cond->getType()),
             instrNameOrVal(TrueVal, TrueVal->getType()),
             instrNameOrVal(FalseVal, FalseVal->getType())};
-        return make_shared<std::tuple<string, SMTRef>>(
-            SelectInst->getName(), std::make_shared<class Op>("ite", Args));
+        return makeAssignment(SelectInst->getName(),
+                              std::make_shared<class Op>("ite", Args));
     }
     if (const auto PtrToIntInst = llvm::dyn_cast<llvm::PtrToIntInst>(&Instr)) {
-        return make_shared<std::tuple<string, SMTRef>>(
-            PtrToIntInst->getName(),
-            instrNameOrVal(PtrToIntInst->getPointerOperand(),
-                           PtrToIntInst->getType()));
+        return makeAssignment(PtrToIntInst->getName(),
+                              instrNameOrVal(PtrToIntInst->getPointerOperand(),
+                                             PtrToIntInst->getType()));
     }
     if (const auto GetElementPtrInst =
             llvm::dyn_cast<llvm::GetElementPtrInst>(&Instr)) {
-        return make_shared<std::tuple<string, SMTRef>>(
-            GetElementPtrInst->getName(), resolveGEP(*GetElementPtrInst));
+        return makeAssignment(GetElementPtrInst->getName(),
+                              resolveGEP(*GetElementPtrInst));
     }
     if (const auto LoadInst = llvm::dyn_cast<llvm::LoadInst>(&Instr)) {
         SMTRef Pointer = instrNameOrVal(LoadInst->getOperand(0),
                                         LoadInst->getOperand(0)->getType());
         const auto Load = makeBinOp(
             "select", name("HEAP$" + std::to_string(Program)), Pointer);
-        return make_shared<std::tuple<string, SMTRef>>(LoadInst->getName(),
-                                                       Load);
+        return makeAssignment(LoadInst->getName(), Load);
     }
     if (const auto StoreInst = llvm::dyn_cast<llvm::StoreInst>(&Instr)) {
         string Heap = "HEAP$" + std::to_string(Program);
@@ -1297,14 +1290,12 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
                            StoreInst->getPointerOperand()->getType());
         const std::vector<SMTRef> Args = {name(Heap), Pointer, Val};
         const auto Store = make_shared<Op>("store", Args);
-        return make_shared<std::tuple<string, SMTRef>>(
-            "HEAP$" + std::to_string(Program), Store);
+        return makeAssignment("HEAP$" + std::to_string(Program), Store);
     }
     if (const auto TruncInst = llvm::dyn_cast<llvm::TruncInst>(&Instr)) {
         const auto Val = instrNameOrVal(TruncInst->getOperand(0),
                                         TruncInst->getOperand(0)->getType());
-        return make_shared<std::tuple<string, SMTRef>>(TruncInst->getName(),
-                                                       Val);
+        return makeAssignment(TruncInst->getName(), Val);
     }
     const llvm::Instruction *Ext = nullptr;
     if ((Ext = llvm::dyn_cast<llvm::ZExtInst>(&Instr)) ||
@@ -1321,19 +1312,18 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
             Args.push_back(Val);
             Args.push_back(name("1"));
             Args.push_back(name("0"));
-            return make_shared<std::tuple<string, SMTRef>>(
-                Ext->getName(), make_shared<Op>("ite", Args));
+            return makeAssignment(Ext->getName(), make_shared<Op>("ite", Args));
         } else {
-            return make_shared<std::tuple<string, SMTRef>>(Ext->getName(), Val);
+            return makeAssignment(Ext->getName(), Val);
         }
     }
     if (const auto BitCast = llvm::dyn_cast<llvm::CastInst>(&Instr)) {
         const auto Val = instrNameOrVal(BitCast->getOperand(0),
                                         BitCast->getOperand(0)->getType());
-        return make_shared<std::tuple<string, SMTRef>>(BitCast->getName(), Val);
+        return makeAssignment(BitCast->getName(), Val);
     }
     if (const auto AllocaInst = llvm::dyn_cast<llvm::AllocaInst>(&Instr)) {
-        return make_shared<std::tuple<string, SMTRef>>(
+        return makeAssignment(
             AllocaInst->getName(),
             name(llvm::cast<llvm::MDString>(
                      AllocaInst->getMetadata("reve.stack_pointer")
@@ -1341,8 +1331,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
                      ->getString()));
     }
     logErrorData("Couldn’t convert instruction to def\n", Instr);
-    return make_shared<std::tuple<string, SMTRef>>("UNKNOWN INSTRUCTION",
-                                                   name("UNKNOWN ARGS"));
+    return makeAssignment("UNKNOWN INSTRUCTION", name("UNKNOWN ARGS"));
 }
 
 /// Convert an LLVM predicate to an SMT predicate
@@ -1939,9 +1928,7 @@ vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *CallInst,
                                              name(std::to_string(i))),
                         Select};
                     const SMTRef Store = make_shared<Op>("store", Args);
-                    Definitions.push_back(
-                        make_shared<std::tuple<string, SMTRef>>(HeapNameStore,
-                                                                Store));
+                    Definitions.push_back(makeAssignment(HeapNameStore, Store));
                     ++i;
                 }
             }
@@ -1956,4 +1943,8 @@ vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *CallInst,
         exit(1);
     }
     return Definitions;
+}
+
+shared_ptr<Assignment> makeAssignment(string Name, SMTRef Val) {
+    return make_shared<Assignment>(Name, Val);
 }

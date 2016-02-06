@@ -22,10 +22,10 @@ auto preprocessFunction(llvm::Function &Fun, std::string Prefix)
     -> std::shared_ptr<llvm::FunctionAnalysisManager>;
 auto getCmd(clang::driver::Compilation &Comp, clang::DiagnosticsEngine &Diags)
     -> llvm::ErrorOr<
-        std::tuple<llvm::opt::ArgStringList, llvm::opt::ArgStringList>>;
+        std::pair<llvm::opt::ArgStringList, llvm::opt::ArgStringList>>;
 template <typename T> auto makeErrorOr(T Arg) -> llvm::ErrorOr<T>;
 auto getModule(const char *ExeName, std::string Input1, std::string Input2)
-    -> std::tuple<std::unique_ptr<clang::CodeGenAction>,
+    -> std::pair<std::unique_ptr<clang::CodeGenAction>,
                   std::unique_ptr<clang::CodeGenAction>>;
 auto getCodeGenAction(const llvm::opt::ArgStringList &CCArgs,
                       clang::DiagnosticsEngine &Diags)

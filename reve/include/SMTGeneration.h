@@ -20,7 +20,9 @@ enum InterleaveStep { StepBoth, StepFirst, StepSecond };
 
 using Memory = uint8_t;
 
-using Assignment = std::tuple<std::string, SMTRef>;
+using Assignment = std::pair<std::string, SMTRef>;
+
+auto makeAssignment(string Name, SMTRef Val) -> std::shared_ptr<Assignment>;
 
 const std::regex HEAP_REGEX =
     std::regex("^(HEAP|STACK)\\$(1|2)(_old)?$", std::regex::ECMAScript);
@@ -192,7 +194,7 @@ auto blockAssignments(const llvm::BasicBlock &BB, const llvm::BasicBlock *PrevBB
     -> std::vector<DefOrCallInfo>;
 auto instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *PrevBB,
                      int Program, bool Signed)
-    -> std::shared_ptr<std::tuple<std::string, SMTRef>>;
+    -> std::shared_ptr<std::pair<std::string, SMTRef>>;
 auto predicateName(const llvm::CmpInst::Predicate Pred) -> std::string;
 auto predicateFun(const llvm::CmpInst::CmpInst &Pred, bool Signed)
     -> std::function<SMTRef(SMTRef)>;
