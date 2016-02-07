@@ -363,19 +363,20 @@ offByNPaths(PathMap PathMap1, PathMap PathMap2,
     map<int, map<int, vector<function<SMTRef(SMTRef)>>>> PathFuns;
     vector<SMTRef> Paths;
     const auto FirstPaths =
-        offByNPathsOneDir(PathMap1, PathMap2, FreeVarsMap, 1, Program::First,
+        offByNPathsOneDir(PathMap1, PathMap2, FreeVarsMap, Program::First,
                           FunName, Main, Heap, Signed);
     const auto SecondPaths =
-        offByNPathsOneDir(PathMap2, PathMap1, FreeVarsMap, 2, Program::Second,
+        offByNPathsOneDir(PathMap2, PathMap1, FreeVarsMap, Program::Second,
                           FunName, Main, Heap, Signed);
     return mergePathFuns(FirstPaths, SecondPaths);
 }
 
 map<int, map<int, vector<function<SMTRef(SMTRef)>>>>
 offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
-                  std::map<int, vector<string>> FreeVarsMap, int Program,
-                  Program For, std::string FunName, bool Main, Memory Heap,
-                  bool Signed) {
+                  std::map<int, vector<string>> FreeVarsMap, Program For,
+                  std::string FunName, bool Main, Memory Heap, bool Signed) {
+    assert(For != Program::Both);
+    const int Program = For == Program::First ? 1 : 2;
     map<int, map<int, vector<function<SMTRef(SMTRef)>>>> PathFuns;
     for (const auto &PathMapIt : PathMap_) {
         const int StartIndex = PathMapIt.first;
@@ -416,7 +417,6 @@ offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
                     }
                     const auto DontLoopInvariant = dontLoopInvariant(
                         EndInvariant, StartIndex, OtherPathMap, FreeVarsMap,
-                        swapIndex(Program),
                         For == Program::First ? Program::Second
                                               : Program::First,
                         Heap, Signed);
@@ -779,8 +779,10 @@ string invariantName(int Index, Program For, std::string FunName,
 }
 
 SMTRef dontLoopInvariant(SMTRef EndClause, int StartIndex, PathMap PathMap,
-                         std::map<int, vector<string>> FreeVars, int Program,
-                         Program For, Memory Heap, bool Signed) {
+                         std::map<int, vector<string>> FreeVars, Program For,
+                         Memory Heap, bool Signed) {
+    assert(For != Program::Both);
+    const int Program = For == Program::First ? 1 : 2;
     auto Clause = EndClause;
     vector<Path> DontLoopPaths;
     for (auto PathMapIt : PathMap.at(StartIndex)) {
@@ -2012,23 +2014,4 @@ vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *CallInst,
 
 shared_ptr<Assignment> makeAssignment(string Name, SMTRef Val) {
     return make_shared<Assignment>(Name, Val);
-}
-
-auto mergePathFuns(
-    std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>> A,
-    std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>> B)
-    -> std::map<int,
-                std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>> {
-    auto Merge = [](map<int, vector<function<SMTRef(SMTRef)>>> MapA,
-                    map<int, vector<function<SMTRef(SMTRef)>>> MapB)
-        -> map<int, vector<function<SMTRef(SMTRef)>>> {
-            return unionWith<int, vector<function<SMTRef(SMTRef)>>>(
-                MapA, MapB, [](vector<function<SMTRef(SMTRef)>> A,
-                               vector<function<SMTRef(SMTRef)>> B) {
-                    A.insert(A.end(), B.begin(), B.end());
-                    return A;
-                });
-        };
-    return unionWith<int, map<int, vector<function<SMTRef(SMTRef)>>>>(A, B,
-                                                                      Merge);
 }

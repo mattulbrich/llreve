@@ -93,3 +93,23 @@ auto transpose(std::map<KeyA, std::map<KeyB, Val>> Map) -> std::map<KeyB, std::m
     }
     return MapResult;
 }
+
+template <typename T>
+auto mergePathFuns(
+    std::map<int, std::map<int, std::vector<T>>> A,
+    std::map<int, std::map<int, std::vector<T>>> B)
+    -> std::map<int,
+                std::map<int, std::vector<T>>> {
+    auto Merge = [](std::map<int, std::vector<T>> MapA,
+                    std::map<int, std::vector<T>> MapB)
+        -> std::map<int, std::vector<T>> {
+            return unionWith<int, std::vector<T>>(
+                MapA, MapB, [](std::vector<T> A,
+                               std::vector<T> B) {
+                    A.insert(A.end(), B.begin(), B.end());
+                    return A;
+                });
+        };
+    return unionWith<int, std::map<int, std::vector<T>>>(A, B,
+                                                                      Merge);
+}

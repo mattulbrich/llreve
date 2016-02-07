@@ -125,8 +125,8 @@ auto offByNPaths(PathMap PathMap1, PathMap PathMap2,
     -> std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>>;
 auto offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
                        std::map<int, std::vector<string>> FreeVarsMap,
-                       int Program, Program For, std::string FunName, bool Main,
-                       Memory Heap, bool Signed)
+                       Program For, std::string FunName, bool Main, Memory Heap,
+                       bool Signed)
     -> std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>>;
 
 /* -------------------------------------------------------------------------- */
@@ -161,8 +161,7 @@ auto invariantName(int Index, Program For, std::string FunName,
                    uint32_t VarArgs = 0) -> std::string;
 auto dontLoopInvariant(SMTRef EndClause, int StartIndex, PathMap PathMap,
                        std::map<int, std::vector<string>> FreeVarsMap,
-                       int Program, Program For, Memory Heap, bool Signed)
-    -> SMTRef;
+                       Program For, Memory Heap, bool Signed) -> SMTRef;
 
 /* -------------------------------------------------------------------------- */
 // Functions to generate various foralls
@@ -247,7 +246,3 @@ auto mapSubset(PathMap Map1, PathMap Map2) -> bool;
 auto memcpyIntrinsic(const llvm::CallInst *CallInst, int Program)
     -> std::vector<DefOrCallInfo>;
 auto isPtrDiff(const llvm::Instruction &Instr) -> bool;
-auto mergePathFuns(
-    std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>> A,
-    std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>> B)
-    -> std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>>;
