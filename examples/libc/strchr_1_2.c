@@ -20,11 +20,6 @@ char *strchr(register const char *t, int c) {
         if (!*t)
             return 0;
         ++t;
-        if (*t == ch)
-            break;
-        if (!*t)
-            return 0;
-        ++t;
     }
     return (char *)t;
 }
