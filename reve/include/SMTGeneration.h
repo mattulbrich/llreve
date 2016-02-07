@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PathAnalysis.h"
+#include "Program.h"
 #include "SMT.h"
 
 #include "llvm/IR/Instructions.h"
@@ -82,9 +83,6 @@ struct AssignmentBlock {
     AssignmentBlock(std::vector<Assignment> Definitions, SMTRef Condition)
         : Definitions(Definitions), Condition(Condition) {}
 };
-
-enum class ProgramSelection { First, Second, Both };
-enum class Program { First, Second };
 
 auto convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
                   std::shared_ptr<llvm::FunctionAnalysisManager> Fam1,
@@ -248,6 +246,3 @@ auto mapSubset(PathMap Map1, PathMap Map2) -> bool;
 auto memcpyIntrinsic(const llvm::CallInst *CallInst, Program Prog)
     -> std::vector<DefOrCallInfo>;
 auto isPtrDiff(const llvm::Instruction &Instr) -> bool;
-auto asSelection(Program Prog) -> ProgramSelection;
-auto programIndex(Program Prog) -> int;
-auto swapProgram(Program Prog) -> Program;

@@ -1,9 +1,9 @@
 #include "SMTGeneration.h"
 
+#include "AnnotStackPass.h"
 #include "Compat.h"
 #include "Helper.h"
 #include "MarkAnalysis.h"
-#include "AnnotStackPass.h"
 
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Operator.h"
@@ -2032,15 +2032,4 @@ vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *CallInst,
 
 shared_ptr<Assignment> makeAssignment(string Name, SMTRef Val) {
     return make_shared<Assignment>(Name, Val);
-}
-
-ProgramSelection asSelection(Program Prog) {
-    return Prog == Program::First ? ProgramSelection::First
-                                  : ProgramSelection::Second;
-}
-
-int programIndex(Program Prog) { return Prog == Program::First ? 1 : 2; }
-
-Program swapProgram(Program Prog) {
-    return Prog == Program::First ? Program::Second : Program::First;
 }
