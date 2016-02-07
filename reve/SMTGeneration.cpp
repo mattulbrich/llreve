@@ -99,7 +99,8 @@ vector<SMTRef> mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
                              shared_ptr<llvm::FunctionAnalysisManager> Fam1,
                              shared_ptr<llvm::FunctionAnalysisManager> Fam2,
                              bool OffByN, vector<SMTRef> &Declarations,
-                             bool OnlyRec, Memory Heap, bool Signed) {
+                             bool OnlyRec, Memory Heap, bool Signed,
+                             bool DontNest) {
     const auto PathMap1 = Fam1->getResult<PathAnalysis>(Fun1);
     const auto PathMap2 = Fam2->getResult<PathAnalysis>(Fun2);
     checkPathMaps(PathMap1, PathMap2);
@@ -139,7 +140,7 @@ vector<SMTRef> mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
     }
     auto TransposedPaths = transpose(SynchronizedPaths);
     // remove cycles
-    for (auto& It : TransposedPaths) {
+    for (auto &It : TransposedPaths) {
         It.second.erase(It.first);
     }
     for (auto It : SynchronizedPaths) {
@@ -156,7 +157,8 @@ vector<SMTRef> mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
         auto Clause = forallStartingAt(
             make_shared<Op>("and", PathsStartingHere),
             FreeVarsMap.at(StartIndex), StartIndex, Both, FunName, true);
-        if (TransposedPaths.find(StartIndex) != TransposedPaths.end()) {
+        if (!DontNest &&
+            (TransposedPaths.find(StartIndex) != TransposedPaths.end())) {
             if (TransposedPaths.at(StartIndex).size() == 1) {
                 auto It = TransposedPaths.at(StartIndex).begin();
                 const int ComingFrom = It->first;

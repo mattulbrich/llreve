@@ -95,6 +95,8 @@ static llvm::cl::opt<string> Include("I", llvm::cl::desc("Include path"));
 static llvm::cl::opt<bool>
     Signed("signed",
            llvm::cl::desc("Treat all operations as signed operatons"));
+static llvm::cl::opt<bool> DontNest("dont-nest",
+                                    llvm::cl::desc("Don’t nest clauses"));
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
@@ -321,7 +323,7 @@ int main(int Argc, const char **Argv) {
             auto NewSMTExprs =
                 mainAssertion(*FunPair.first.first, *FunPair.first.second,
                               FunPair.second.first, FunPair.second.second,
-                              OffByN, Declarations, OnlyRec, Mem, Signed);
+                              OffByN, Declarations, OnlyRec, Mem, Signed, DontNest);
             Assertions.insert(Assertions.end(), NewSMTExprs.begin(),
                               NewSMTExprs.end());
         }

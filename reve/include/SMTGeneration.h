@@ -92,7 +92,7 @@ auto mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
                    std::shared_ptr<llvm::FunctionAnalysisManager> Fam1,
                    std::shared_ptr<llvm::FunctionAnalysisManager> Fam2,
                    bool OffByN, std::vector<SMTRef> &Declarations, bool OnlyRec,
-                   Memory Heap, bool Signed) -> std::vector<SMTRef>;
+                   Memory Heap, bool Signed, bool DontNest) -> std::vector<SMTRef>;
 
 /* -------------------------------------------------------------------------- */
 // Generate SMT for all paths
