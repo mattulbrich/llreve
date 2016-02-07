@@ -16,7 +16,7 @@ using llvm::Instruction;
 const uint8_t HEAP_MASK = 0x01;
 const uint8_t STACK_MASK = 0x02;
 
-enum InterleaveStep { StepBoth, StepFirst, StepSecond };
+enum class InterleaveStep { StepBoth, StepFirst, StepSecond };
 
 using Memory = uint8_t;
 
@@ -54,16 +54,16 @@ struct CallInfo {
     }
 };
 
-enum DefOrCallInfoTag { Call, Def };
+enum class DefOrCallInfoTag { Call, Def };
 
 struct DefOrCallInfo {
     std::shared_ptr<Assignment> Definition;
     std::shared_ptr<CallInfo> CallInfo_;
     enum DefOrCallInfoTag Tag;
     DefOrCallInfo(std::shared_ptr<Assignment> Definition)
-        : Definition(Definition), CallInfo_(nullptr), Tag(Def) {}
+        : Definition(Definition), CallInfo_(nullptr), Tag(DefOrCallInfoTag::Def) {}
     DefOrCallInfo(std::shared_ptr<struct CallInfo> CallInfo_)
-        : Definition(nullptr), CallInfo_(CallInfo_), Tag(Call) {}
+        : Definition(nullptr), CallInfo_(CallInfo_), Tag(DefOrCallInfoTag::Call) {}
 };
 
 struct AssignmentCallBlock {
@@ -81,7 +81,7 @@ struct AssignmentBlock {
         : Definitions(Definitions), Condition(Condition) {}
 };
 
-enum SMTFor { First, Second, Both };
+enum class SMTFor { First, Second, Both };
 
 auto convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
                   std::shared_ptr<llvm::FunctionAnalysisManager> Fam1,
