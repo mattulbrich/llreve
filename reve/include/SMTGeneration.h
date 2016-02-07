@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Helper.h"
+#include "Memory.h"
 #include "PathAnalysis.h"
 #include "Program.h"
 #include "SMT.h"
@@ -14,21 +16,11 @@
 using std::make_shared;
 using llvm::Instruction;
 
-const uint8_t HEAP_MASK = 0x01;
-const uint8_t STACK_MASK = 0x02;
-
 enum class InterleaveStep { StepBoth, StepFirst, StepSecond };
-
-using Memory = uint8_t;
 
 using Assignment = std::pair<std::string, SMTRef>;
 
 auto makeAssignment(string Name, SMTRef Val) -> std::shared_ptr<Assignment>;
-
-const std::regex HEAP_REGEX =
-    std::regex("^(HEAP|STACK)\\$(1|2)(_old)?$", std::regex::ECMAScript);
-const std::regex INDEX_REGEX =
-    std::regex("^i(1|2)(_res|_old|_stack)?$", std::regex::ECMAScript);
 
 struct CallInfo {
     std::string AssignedTo;
@@ -144,26 +136,6 @@ auto nonmutualSMT(SMTRef EndClause,
                   Memory Heap) -> SMTRef;
 
 /* -------------------------------------------------------------------------- */
-// Functions related to generating invariants
-
-auto invariant(int StartIndex, int EndIndex, std::vector<std::string> InputArgs,
-               std::vector<std::string> EndArgs, ProgramSelection SMTFor,
-               std::string FunName, Memory Heap) -> SMTRef;
-auto mainInvariant(int EndIndex, std::vector<string> FreeVars, string FunName,
-                   Memory Heap) -> SMTRef;
-auto invariantDeclaration(int BlockIndex, std::vector<std::string> FreeVars,
-                          ProgramSelection For, std::string FunName,
-                          Memory Heap) -> std::pair<SMTRef, SMTRef>;
-auto mainInvariantDeclaration(int BlockIndex, std::vector<string> FreeVars,
-                              ProgramSelection For, std::string FunName)
-    -> SMTRef;
-auto invariantName(int Index, ProgramSelection For, std::string FunName,
-                   uint32_t VarArgs = 0) -> std::string;
-auto dontLoopInvariant(SMTRef EndClause, int StartIndex, PathMap PathMap,
-                       std::map<int, std::vector<string>> FreeVarsMap,
-                       Program Prog, Memory Heap, bool Signed) -> SMTRef;
-
-/* -------------------------------------------------------------------------- */
 // Functions to generate various foralls
 
 auto mutualRecursiveForall(SMTRef Clause, CallInfo Call1, CallInfo Call2,
@@ -220,22 +192,13 @@ auto freeVars(PathMap Map1, PathMap Map2, std::vector<string> FunArgs,
 
 auto functionArgs(const llvm::Function &Fun1, const llvm::Function &Fun2)
     -> std::pair<std::vector<std::string>, std::vector<std::string>>;
-auto filterVars(int Program, std::vector<std::string> Vars)
-    -> std::vector<std::string>;
 auto swapIndex(int I) -> int;
 auto splitAssignments(std::vector<AssignmentCallBlock>)
     -> std::pair<std::vector<std::vector<AssignmentBlock>>,
                  std::vector<CallInfo>>;
 auto toCallInfo(std::string AssignedTo, Program Prog,
                 const llvm::CallInst &CallInst) -> std::shared_ptr<CallInfo>;
-auto resolveHeapReferences(std::vector<std::string> Args, std::string Suffix,
-                           Memory &Heap) -> std::vector<std::string>;
-auto wrapHeap(SMTRef Inv, Memory Heap, std::vector<std::string> FreeVars)
-    -> SMTRef;
-auto adaptSizeToHeap(unsigned long Size, std::vector<string> FreeVars)
-    -> unsigned long;
 auto isStackOp(const llvm::Instruction &Inst) -> bool;
-auto argSort(std::string Arg) -> std::string;
 auto stringConstants(const llvm::Module &Mod, string Heap)
     -> std::vector<SMTRef>;
 auto matchFunCalls(std::vector<CallInfo> CallInfos1,
@@ -246,3 +209,7 @@ auto mapSubset(PathMap Map1, PathMap Map2) -> bool;
 auto memcpyIntrinsic(const llvm::CallInst *CallInst, Program Prog)
     -> std::vector<DefOrCallInfo>;
 auto isPtrDiff(const llvm::Instruction &Instr) -> bool;
+
+auto dontLoopInvariant(SMTRef EndClause, int StartIndex, PathMap PathMap,
+                       std::map<int, std::vector<string>> FreeVarsMap,
+                       Program Prog, Memory Heap, bool Signed) -> SMTRef;

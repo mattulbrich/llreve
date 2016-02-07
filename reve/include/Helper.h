@@ -113,3 +113,8 @@ auto mergePathFuns(
     return unionWith<int, std::map<int, std::vector<T>>>(A, B,
                                                                       Merge);
 }
+
+auto filterVars(int Program, std::vector<std::string> Vars)
+    -> std::vector<std::string>;
+
+auto argSort(std::string Arg) -> std::string;

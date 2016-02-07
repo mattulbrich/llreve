@@ -9,6 +9,7 @@
 #include "PathAnalysis.h"
 #include "InlinePass.h"
 #include "InstCombine.h"
+#include "Invariant.h"
 #include "RemoveMarkPass.h"
 #include "RemoveMarkRefsPass.h"
 #include "SExpr.h"

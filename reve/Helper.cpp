@@ -1,5 +1,9 @@
 #include "Helper.h"
 
+#include "Memory.h"
+
+#include <regex>
+
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Operator.h"
@@ -70,4 +74,25 @@ int typeSize(llvm::Type *Ty) {
     }
     logErrorData("Couldn’t calculate size of type\n", *Ty);
     return 0;
+}
+
+/// Filter vars to only include the ones from Program
+std::vector<string> filterVars(int Program, std::vector<string> Vars) {
+    std::vector<string> FilteredVars;
+    const string ProgramName = std::to_string(Program);
+    for (auto Var : Vars) {
+        const auto Pos = Var.rfind("$");
+        if (Var.substr(Pos + 1, ProgramName.length()) == ProgramName) {
+            FilteredVars.push_back(Var);
+        }
+    }
+    return FilteredVars;
+}
+
+string argSort(string Arg) {
+    if (std::regex_match(Arg, HEAP_REGEX) || Arg == "HEAP$1_res" ||
+        Arg == "HEAP$2_res") {
+        return "(Array Int Int)";
+    }
+    return "Int";
 }
