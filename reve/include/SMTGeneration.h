@@ -83,7 +83,8 @@ struct AssignmentBlock {
         : Definitions(Definitions), Condition(Condition) {}
 };
 
-enum class Program { First, Second, Both };
+enum class ProgramSelection { First, Second, Both };
+enum class Program { First, Second };
 
 auto convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
                   std::shared_ptr<llvm::FunctionAnalysisManager> Fam1,
@@ -125,14 +126,14 @@ auto offByNPaths(PathMap PathMap1, PathMap PathMap2,
     -> std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>>;
 auto offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
                        std::map<int, std::vector<string>> FreeVarsMap,
-                       Program For, std::string FunName, bool Main, Memory Heap,
-                       bool Signed)
+                       Program Prog, std::string FunName, bool Main,
+                       Memory Heap, bool Signed)
     -> std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>>;
 
 /* -------------------------------------------------------------------------- */
 // Functions for generating SMT for a single/mutual path
 
-auto assignmentsOnPath(Path Path, int Program,
+auto assignmentsOnPath(Path Path, Program Prog,
                        std::vector<std::string> FreeVars, bool ToEnd,
                        Memory Heap, bool Signed)
     -> std::vector<AssignmentCallBlock>;
@@ -141,37 +142,38 @@ auto interleaveAssignments(SMTRef EndClause,
                            std::vector<AssignmentCallBlock> Assignments2,
                            Memory Heap) -> SMTRef;
 auto nonmutualSMT(SMTRef EndClause,
-                  std::vector<AssignmentCallBlock> Assignments, Program For,
+                  std::vector<AssignmentCallBlock> Assignments, Program Prog,
                   Memory Heap) -> SMTRef;
 
 /* -------------------------------------------------------------------------- */
 // Functions related to generating invariants
 
 auto invariant(int StartIndex, int EndIndex, std::vector<std::string> InputArgs,
-               std::vector<std::string> EndArgs, Program SMTFor,
+               std::vector<std::string> EndArgs, ProgramSelection SMTFor,
                std::string FunName, Memory Heap) -> SMTRef;
 auto mainInvariant(int EndIndex, std::vector<string> FreeVars, string FunName,
                    Memory Heap) -> SMTRef;
 auto invariantDeclaration(int BlockIndex, std::vector<std::string> FreeVars,
-                          Program For, std::string FunName, Memory Heap)
-    -> std::pair<SMTRef, SMTRef>;
+                          ProgramSelection For, std::string FunName,
+                          Memory Heap) -> std::pair<SMTRef, SMTRef>;
 auto mainInvariantDeclaration(int BlockIndex, std::vector<string> FreeVars,
-                              Program For, std::string FunName) -> SMTRef;
-auto invariantName(int Index, Program For, std::string FunName,
+                              ProgramSelection For, std::string FunName)
+    -> SMTRef;
+auto invariantName(int Index, ProgramSelection For, std::string FunName,
                    uint32_t VarArgs = 0) -> std::string;
 auto dontLoopInvariant(SMTRef EndClause, int StartIndex, PathMap PathMap,
                        std::map<int, std::vector<string>> FreeVarsMap,
-                       Program For, Memory Heap, bool Signed) -> SMTRef;
+                       Program Prog, Memory Heap, bool Signed) -> SMTRef;
 
 /* -------------------------------------------------------------------------- */
 // Functions to generate various foralls
 
 auto mutualRecursiveForall(SMTRef Clause, CallInfo Call1, CallInfo Call2,
                            Memory Heap) -> SMTRef;
-auto nonmutualRecursiveForall(SMTRef Clause, CallInfo Call, Program For,
+auto nonmutualRecursiveForall(SMTRef Clause, CallInfo Call, Program Prog,
                               Memory Heap) -> SMTRef;
 auto forallStartingAt(SMTRef Clause, std::vector<std::string> FreeVars,
-                      int BlockIndex, Program For, std::string FunName,
+                      int BlockIndex, ProgramSelection For, std::string FunName,
                       bool Main) -> SMTRef;
 
 /* -------------------------------------------------------------------------- */
@@ -195,10 +197,10 @@ auto equalInputsEqualOutputs(std::vector<string> FunArgs,
 
 auto blockAssignments(const llvm::BasicBlock &BB,
                       const llvm::BasicBlock *PrevBB, bool OnlyPhis,
-                      int Program, Memory Heap, bool Signed)
+                      Program Prog, Memory Heap, bool Signed)
     -> std::vector<DefOrCallInfo>;
 auto instrAssignment(const llvm::Instruction &Instr,
-                     const llvm::BasicBlock *PrevBB, int Program, bool Signed)
+                     const llvm::BasicBlock *PrevBB, Program Prog, bool Signed)
     -> std::shared_ptr<std::pair<std::string, SMTRef>>;
 auto predicateName(const llvm::CmpInst::Predicate Pred) -> std::string;
 auto predicateFun(const llvm::CmpInst::CmpInst &Pred, bool Signed)
@@ -226,7 +228,7 @@ auto swapIndex(int I) -> int;
 auto splitAssignments(std::vector<AssignmentCallBlock>)
     -> std::pair<std::vector<std::vector<AssignmentBlock>>,
                  std::vector<CallInfo>>;
-auto toCallInfo(std::string AssignedTo, int Program,
+auto toCallInfo(std::string AssignedTo, Program Prog,
                 const llvm::CallInst &CallInst) -> std::shared_ptr<CallInfo>;
 auto resolveHeapReferences(std::vector<std::string> Args, std::string Suffix,
                            Memory &Heap) -> std::vector<std::string>;
@@ -243,6 +245,9 @@ auto matchFunCalls(std::vector<CallInfo> CallInfos1,
     -> std::vector<InterleaveStep>;
 auto checkPathMaps(PathMap Map1, PathMap Map2) -> void;
 auto mapSubset(PathMap Map1, PathMap Map2) -> bool;
-auto memcpyIntrinsic(const llvm::CallInst *CallInst, int Program)
+auto memcpyIntrinsic(const llvm::CallInst *CallInst, Program Prog)
     -> std::vector<DefOrCallInfo>;
 auto isPtrDiff(const llvm::Instruction &Instr) -> bool;
+auto asSelection(Program Prog) -> ProgramSelection;
+auto programIndex(Program Prog) -> int;
+auto swapProgram(Program Prog) -> Program;
