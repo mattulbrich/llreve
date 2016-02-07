@@ -472,7 +472,7 @@ void externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
                         Args.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
                     }
                     std::string FunName = invariantName(
-                        ENTRY_MARK, SMTFor::Both, Fun1.getName().str(), ArgNum);
+                        ENTRY_MARK, Program::Both, Fun1.getName().str(), ArgNum);
                     Args.push_back(SortedVar("res1", "Int"));
                     Args.push_back(SortedVar("res2", "Int"));
                     if (Mem & HEAP_MASK) {
@@ -582,7 +582,7 @@ std::vector<SMTRef> externFunDecl(llvm::Function &Fun, int Program,
         Args.push_back(SortedVar("res", "Int"));
         Args.push_back(SortedVar("HEAP_res", "(Array Int Int)"));
         std::string FunName = invariantName(
-            ENTRY_MARK, Program == 1 ? SMTFor::First : SMTFor::Second,
+            ENTRY_MARK, Program == 1 ? Program::First : Program::Second,
             Fun.getName().str(), ArgNum);
         SMTRef Body = name("true");
         Decls.push_back(make_shared<FunDef>(FunName, Args, "Bool", Body));

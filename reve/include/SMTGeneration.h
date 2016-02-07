@@ -61,9 +61,11 @@ struct DefOrCallInfo {
     std::shared_ptr<CallInfo> CallInfo_;
     enum DefOrCallInfoTag Tag;
     DefOrCallInfo(std::shared_ptr<Assignment> Definition)
-        : Definition(Definition), CallInfo_(nullptr), Tag(DefOrCallInfoTag::Def) {}
+        : Definition(Definition), CallInfo_(nullptr),
+          Tag(DefOrCallInfoTag::Def) {}
     DefOrCallInfo(std::shared_ptr<struct CallInfo> CallInfo_)
-        : Definition(nullptr), CallInfo_(CallInfo_), Tag(DefOrCallInfoTag::Call) {}
+        : Definition(nullptr), CallInfo_(CallInfo_),
+          Tag(DefOrCallInfoTag::Call) {}
 };
 
 struct AssignmentCallBlock {
@@ -81,7 +83,7 @@ struct AssignmentBlock {
         : Definitions(Definitions), Condition(Condition) {}
 };
 
-enum class SMTFor { First, Second, Both };
+enum class Program { First, Second, Both };
 
 auto convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
                   std::shared_ptr<llvm::FunctionAnalysisManager> Fam1,
@@ -92,7 +94,8 @@ auto mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
                    std::shared_ptr<llvm::FunctionAnalysisManager> Fam1,
                    std::shared_ptr<llvm::FunctionAnalysisManager> Fam2,
                    bool OffByN, std::vector<SMTRef> &Declarations, bool OnlyRec,
-                   Memory Heap, bool Signed, bool DontNest) -> std::vector<SMTRef>;
+                   Memory Heap, bool Signed, bool DontNest)
+    -> std::vector<SMTRef>;
 
 /* -------------------------------------------------------------------------- */
 // Generate SMT for all paths
@@ -113,7 +116,7 @@ auto forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
                     std::string FunName, bool Main, Memory Heap, bool Signed)
     -> std::vector<SMTRef>;
 auto nonmutualPaths(PathMap PathMap, std::vector<SMTRef> &PathExprs,
-                    std::map<int, std::vector<string>> FreeVarsMap, SMTFor For,
+                    std::map<int, std::vector<string>> FreeVarsMap, Program For,
                     std::string FunName, std::vector<SMTRef> &Declarations,
                     Memory Heap, bool Signed) -> void;
 auto offByNPaths(PathMap PathMap1, PathMap PathMap2,
@@ -122,7 +125,7 @@ auto offByNPaths(PathMap PathMap1, PathMap PathMap2,
     -> std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>>;
 auto offByNPathsOneDir(PathMap PathMap_, PathMap OtherPathMap,
                        std::map<int, std::vector<string>> FreeVarsMap,
-                       int Program, SMTFor For, std::string FunName, bool Main,
+                       int Program, Program For, std::string FunName, bool Main,
                        Memory Heap, bool Signed)
     -> std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>>;
 
@@ -138,27 +141,27 @@ auto interleaveAssignments(SMTRef EndClause,
                            std::vector<AssignmentCallBlock> Assignments2,
                            Memory Heap) -> SMTRef;
 auto nonmutualSMT(SMTRef EndClause,
-                  std::vector<AssignmentCallBlock> Assignments, SMTFor For,
+                  std::vector<AssignmentCallBlock> Assignments, Program For,
                   Memory Heap) -> SMTRef;
 
 /* -------------------------------------------------------------------------- */
 // Functions related to generating invariants
 
 auto invariant(int StartIndex, int EndIndex, std::vector<std::string> InputArgs,
-               std::vector<std::string> EndArgs, SMTFor SMTFor,
+               std::vector<std::string> EndArgs, Program SMTFor,
                std::string FunName, Memory Heap) -> SMTRef;
 auto mainInvariant(int EndIndex, std::vector<string> FreeVars, string FunName,
                    Memory Heap) -> SMTRef;
 auto invariantDeclaration(int BlockIndex, std::vector<std::string> FreeVars,
-                          SMTFor For, std::string FunName, Memory Heap)
+                          Program For, std::string FunName, Memory Heap)
     -> std::pair<SMTRef, SMTRef>;
 auto mainInvariantDeclaration(int BlockIndex, std::vector<string> FreeVars,
-                              SMTFor For, std::string FunName) -> SMTRef;
-auto invariantName(int Index, SMTFor For, std::string FunName,
+                              Program For, std::string FunName) -> SMTRef;
+auto invariantName(int Index, Program For, std::string FunName,
                    uint32_t VarArgs = 0) -> std::string;
 auto dontLoopInvariant(SMTRef EndClause, int StartIndex, PathMap PathMap,
                        std::map<int, std::vector<string>> FreeVarsMap,
-                       int Program, SMTFor For, Memory Heap, bool Signed)
+                       int Program, Program For, Memory Heap, bool Signed)
     -> SMTRef;
 
 /* -------------------------------------------------------------------------- */
@@ -166,10 +169,10 @@ auto dontLoopInvariant(SMTRef EndClause, int StartIndex, PathMap PathMap,
 
 auto mutualRecursiveForall(SMTRef Clause, CallInfo Call1, CallInfo Call2,
                            Memory Heap) -> SMTRef;
-auto nonmutualRecursiveForall(SMTRef Clause, CallInfo Call, SMTFor For,
+auto nonmutualRecursiveForall(SMTRef Clause, CallInfo Call, Program For,
                               Memory Heap) -> SMTRef;
 auto forallStartingAt(SMTRef Clause, std::vector<std::string> FreeVars,
-                      int BlockIndex, SMTFor For, std::string FunName,
+                      int BlockIndex, Program For, std::string FunName,
                       bool Main) -> SMTRef;
 
 /* -------------------------------------------------------------------------- */
