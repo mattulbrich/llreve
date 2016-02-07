@@ -82,3 +82,14 @@ auto unionWith(std::map<Key, Val> MapA, std::map<Key, Val> MapB,
     }
     return MapA;
 }
+
+template <typename KeyA, typename KeyB, typename Val>
+auto transpose(std::map<KeyA, std::map<KeyB, Val>> Map) -> std::map<KeyB, std::map<KeyA, Val>> {
+    std::map<KeyB, std::map<KeyA, Val>> MapResult;
+    for (auto It : Map) {
+        for (auto InnerIt : It.second) {
+            MapResult[InnerIt.first][It.first] = InnerIt.second;
+        }
+    }
+    return MapResult;
+}

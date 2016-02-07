@@ -6,7 +6,7 @@
 #include "llvm/CodeGen/IntrinsicLowering.h"
 
 llvm::PreservedAnalyses InlinePass::run(llvm::Function &Fun,
-                                        llvm::FunctionAnalysisManager *AM) {
+                                        llvm::FunctionAnalysisManager */*unused*/) {
     std::vector<llvm::Instruction*> ToDelete;
     std::vector<llvm::CallInst*> Inline;
     for (auto &BB : Fun) {

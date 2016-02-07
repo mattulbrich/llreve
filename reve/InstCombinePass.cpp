@@ -3,7 +3,7 @@
 #include "llvm/IR/Constants.h"
 
 llvm::PreservedAnalyses
-InstCombinePass::run(llvm::Function &Fun, llvm::FunctionAnalysisManager *AM) {
+InstCombinePass::run(llvm::Function &Fun, llvm::FunctionAnalysisManager */*unused*/) {
     for (auto &BB : Fun) {
         for (auto &Instr : BB) {
             // Casting a i1 to an i32 and then comparing to 0 is a noop

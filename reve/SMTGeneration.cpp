@@ -82,9 +82,9 @@ vector<SMTRef> convertToSMT(llvm::Function &Fun1, llvm::Function &Fun2,
             int StartIndex = It.first;
             for (auto It2 : It.second) {
                 for (auto PathFun : It2.second) {
-                    PathExprs.push_back(assertForall(
+                    PathExprs.push_back(make_shared<Assert>(forallStartingAt(
                         PathFun(nullptr), FreeVarsMap.at(StartIndex),
-                        StartIndex, Both, FunName, false));
+                        StartIndex, Both, FunName, false)));
                 }
             }
         }
@@ -137,18 +137,38 @@ vector<SMTRef> mainAssertion(llvm::Function &Fun1, llvm::Function &Fun2,
                                              FunName, true, Heap, Signed);
         SynchronizedPaths = mergePathFuns(SynchronizedPaths, OffByNPaths);
     }
+    auto TransposedPaths = transpose(SynchronizedPaths);
+    // remove cycles
+    for (auto& It : TransposedPaths) {
+        It.second.erase(It.first);
+    }
     for (auto It : SynchronizedPaths) {
-        int StartIndex = It.first;
+        const int StartIndex = It.first;
+        std::vector<SMTRef> PathsStartingHere;
         for (auto It2 : It.second) {
-            int EndIndex = It2.first;
+            const int EndIndex = It2.first;
             auto EndInvariant = mainInvariant(
                 EndIndex, FreeVarsMap.at(EndIndex), FunName, Heap);
             for (auto PathFun : It2.second) {
-                SMTExprs.push_back(assertForall(
-                    PathFun(EndInvariant), FreeVarsMap.at(StartIndex),
-                    StartIndex, Both, FunName, true));
+                PathsStartingHere.push_back(PathFun(EndInvariant));
             }
         }
+        auto Clause = forallStartingAt(
+            make_shared<Op>("and", PathsStartingHere),
+            FreeVarsMap.at(StartIndex), StartIndex, Both, FunName, true);
+        if (TransposedPaths.find(StartIndex) != TransposedPaths.end()) {
+            if (TransposedPaths.at(StartIndex).size() == 1) {
+                auto It = TransposedPaths.at(StartIndex).begin();
+                const int ComingFrom = It->first;
+                if (It->second.size() == 1) {
+                    const auto NestFun = It->second.at(0);
+                    Clause = forallStartingAt(NestFun(Clause),
+                                              FreeVarsMap.at(ComingFrom),
+                                              ComingFrom, Both, FunName, true);
+                }
+            }
+        }
+        SMTExprs.push_back(make_shared<Assert>(Clause));
     }
     SMTExprs.push_back(make_shared<Comment>("forbidden main"));
     SMTExprs.insert(SMTExprs.end(), ForbiddenPaths.begin(),
@@ -189,10 +209,10 @@ vector<SMTRef> synchronizedPaths(PathMap PathMap1, PathMap PathMap2,
                     const auto Defs2 =
                         assignmentsOnPath(Path2, 2, FreeVarsMap.at(StartIndex),
                                           EndIndex == EXIT_MARK, Heap, Signed);
-                    PathExprs.push_back(assertForall(
+                    PathExprs.push_back(make_shared<Assert>(forallStartingAt(
                         interleaveAssignments(EndInvariant, Defs1, Defs2, Heap),
                         FreeVarsMap.at(StartIndex), StartIndex, Both, FunName,
-                        false));
+                        false)));
                 }
             }
         }
@@ -285,9 +305,10 @@ vector<SMTRef> forbiddenPaths(PathMap PathMap1, PathMap PathMap2,
                                 // extern functions are not matched
                                 const auto SMT = interleaveAssignments(
                                     name("false"), Smt1, Smt2, Heap);
-                                PathExprs.push_back(assertForall(
-                                    SMT, FreeVarsMap.at(StartIndex), StartIndex,
-                                    Both, FunName, Main));
+                                PathExprs.push_back(
+                                    make_shared<Assert>(forallStartingAt(
+                                        SMT, FreeVarsMap.at(StartIndex),
+                                        StartIndex, Both, FunName, Main)));
                             }
                         }
                     }
@@ -321,10 +342,10 @@ void nonmutualPaths(PathMap PathMap, vector<SMTRef> &PathExprs,
                 const auto Defs =
                     assignmentsOnPath(Path, Program, FreeVarsMap.at(StartIndex),
                                       EndIndex == EXIT_MARK, Heap, Signed);
-                PathExprs.push_back(assertForall(
+                PathExprs.push_back(make_shared<Assert>(forallStartingAt(
                     nonmutualSMT(EndInvariant1, Defs, For, Heap),
                     filterVars(Program, FreeVarsMap.at(StartIndex)), StartIndex,
-                    For, FunName, false));
+                    For, FunName, false)));
             }
         }
     }
@@ -944,8 +965,8 @@ SMTRef nonmutualRecursiveForall(SMTRef Clause, CallInfo Call, SMTFor For,
 }
 
 /// Wrap the clause in a forall
-SMTRef assertForall(SMTRef Clause, vector<string> FreeVars, int BlockIndex,
-                    SMTFor For, std::string FunName, bool Main) {
+SMTRef forallStartingAt(SMTRef Clause, vector<string> FreeVars, int BlockIndex,
+                        SMTFor For, std::string FunName, bool Main) {
     vector<SortedVar> Vars;
     vector<string> PreVars;
     Memory Heap = 0;
@@ -968,7 +989,7 @@ SMTRef assertForall(SMTRef Clause, vector<string> FreeVars, int BlockIndex,
     }
 
     if (Vars.empty()) {
-        return make_shared<Assert>(Clause);
+        return Clause;
     }
 
     SMTRef PreInv;
@@ -986,7 +1007,7 @@ SMTRef assertForall(SMTRef Clause, vector<string> FreeVars, int BlockIndex,
         Clause = makeBinOp("=>", PreInv, Clause);
     }
 
-    return make_shared<Assert>(make_shared<Forall>(Vars, Clause));
+    return make_shared<Forall>(Vars, Clause);
 }
 
 /* -------------------------------------------------------------------------- */

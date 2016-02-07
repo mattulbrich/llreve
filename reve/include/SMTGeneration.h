@@ -168,9 +168,9 @@ auto mutualRecursiveForall(SMTRef Clause, CallInfo Call1, CallInfo Call2,
                            Memory Heap) -> SMTRef;
 auto nonmutualRecursiveForall(SMTRef Clause, CallInfo Call, SMTFor For,
                               Memory Heap) -> SMTRef;
-auto assertForall(SMTRef Clause, std::vector<std::string> FreeVars,
-                  int BlockIndex, SMTFor For, std::string FunName, bool Main)
-    -> SMTRef;
+auto forallStartingAt(SMTRef Clause, std::vector<std::string> FreeVars,
+                      int BlockIndex, SMTFor For, std::string FunName,
+                      bool Main) -> SMTRef;
 
 /* -------------------------------------------------------------------------- */
 // Functions forcing arguments to be equal
