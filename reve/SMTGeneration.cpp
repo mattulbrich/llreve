@@ -489,6 +489,17 @@ vector<AssignmentCallBlock> assignmentsOnPath(Path path, Program prog,
     return allDefs;
 }
 
+SMTRef addAssignments(const SMTRef end, std::vector<AssignmentBlock> assignments) {
+    SMTRef clause = end;
+    for (auto assgns : makeReverse(assignments)) {
+        clause = nestLets(clause, assgns.definitions);
+        if (assgns.condition) {
+            clause = makeBinOp("=>", assgns.condition, clause);
+        }
+    }
+    return clause;
+}
+
 SMTRef interleaveAssignments(SMTRef endClause,
                              vector<AssignmentCallBlock> AssignmentCallBlocks1,
                              vector<AssignmentCallBlock> AssignmentCallBlocks2,
@@ -496,22 +507,22 @@ SMTRef interleaveAssignments(SMTRef endClause,
     SMTRef clause = endClause;
     const auto splitAssignments1 = splitAssignments(AssignmentCallBlocks1);
     const auto splitAssignments2 = splitAssignments(AssignmentCallBlocks2);
-    const auto AssignmentBlocks1 = splitAssignments1.first;
-    const auto AssignmentBlocks2 = splitAssignments2.first;
-    const auto CallInfo1 = splitAssignments1.second;
-    const auto CallInfo2 = splitAssignments2.second;
+    const auto assignmentBlocks1 = splitAssignments1.first;
+    const auto assignmentBlocks2 = splitAssignments2.first;
+    const auto callInfo1 = splitAssignments1.second;
+    const auto callInfo2 = splitAssignments2.second;
 
-    const auto interleaveSteps = matchFunCalls(CallInfo1, CallInfo2);
+    const auto interleaveSteps = matchFunCalls(callInfo1, callInfo2);
 
-    assert(AssignmentBlocks1.size() == CallInfo1.size() + 1);
-    assert(AssignmentBlocks2.size() == CallInfo2.size() + 1);
+    assert(assignmentBlocks1.size() == callInfo1.size() + 1);
+    assert(assignmentBlocks2.size() == callInfo2.size() + 1);
     assert(AssignmentCallBlocks1.size() >= 1);
     assert(AssignmentCallBlocks2.size() >= 1);
 
-    auto CallIt1 = CallInfo1.rbegin();
-    auto CallIt2 = CallInfo2.rbegin();
-    auto AssignmentIt1 = AssignmentBlocks1.rbegin();
-    auto AssignmentIt2 = AssignmentBlocks2.rbegin();
+    auto callIt1 = callInfo1.rbegin();
+    auto callIt2 = callInfo2.rbegin();
+    auto assignmentIt1 = assignmentBlocks1.rbegin();
+    auto assignmentIt2 = assignmentBlocks2.rbegin();
 
     // We step through the matched calls in reverse to build up the smt from
     // the
@@ -519,73 +530,43 @@ SMTRef interleaveAssignments(SMTRef endClause,
     for (InterleaveStep step : makeReverse(interleaveSteps)) {
         switch (step) {
         case InterleaveStep::StepFirst:
-            for (auto assgns : makeReverse(*AssignmentIt1)) {
-                clause = nestLets(clause, assgns.definitions);
-                if (assgns.condition) {
-                    clause = makeBinOp("=>", assgns.condition, clause);
-                }
-            }
-            clause = nonmutualRecursiveForall(clause, *CallIt1, Program::First,
+            clause = addAssignments(clause, *assignmentIt1);
+            clause = nonmutualRecursiveForall(clause, *callIt1, Program::First,
                                               heap);
-            ++CallIt1;
-            ++AssignmentIt1;
+            ++callIt1;
+            ++assignmentIt1;
             break;
         case InterleaveStep::StepSecond:
-            for (auto assgns : makeReverse(*AssignmentIt2)) {
-                clause = nestLets(clause, assgns.definitions);
-                if (assgns.condition) {
-                    clause = makeBinOp("=>", assgns.condition, clause);
-                }
-            }
-            clause = nonmutualRecursiveForall(clause, *CallIt2, Program::Second,
+            clause = addAssignments(clause, *assignmentIt2);
+            clause = nonmutualRecursiveForall(clause, *callIt2, Program::Second,
                                               heap);
-            ++CallIt2;
-            ++AssignmentIt2;
+            ++callIt2;
+            ++assignmentIt2;
             break;
         case InterleaveStep::StepBoth:
-            assert(CallIt1->callName == CallIt2->callName);
-            for (auto assgns : makeReverse(*AssignmentIt2)) {
-                clause = nestLets(clause, assgns.definitions);
-                if (assgns.condition) {
-                    clause = makeBinOp("=>", assgns.condition, clause);
-                }
-            }
-            for (auto assgns : makeReverse(*AssignmentIt1)) {
-                clause = nestLets(clause, assgns.definitions);
-                if (assgns.condition) {
-                    clause = makeBinOp("=>", assgns.condition, clause);
-                }
-            }
-            clause = mutualRecursiveForall(clause, *CallIt1, *CallIt2, heap);
-            ++CallIt1;
-            ++CallIt2;
-            ++AssignmentIt1;
-            ++AssignmentIt2;
+            assert(callIt1->callName == callIt2->callName);
+            clause = addAssignments(clause, *assignmentIt2);
+            clause = addAssignments(clause, *assignmentIt1);
+            clause = mutualRecursiveForall(clause, *callIt1, *callIt2, heap);
+            ++callIt1;
+            ++callIt2;
+            ++assignmentIt1;
+            ++assignmentIt2;
             break;
         }
     }
     // There is always one more block than there are calls, so we have to
     // add it
     // separately at the end
-    for (auto assgns : makeReverse(*AssignmentIt2)) {
-        clause = nestLets(clause, assgns.definitions);
-        if (assgns.condition) {
-            clause = makeBinOp("=>", assgns.condition, clause);
-        }
-    }
-    for (auto assgns : makeReverse(*AssignmentIt1)) {
-        clause = nestLets(clause, assgns.definitions);
-        if (assgns.condition) {
-            clause = makeBinOp("=>", assgns.condition, clause);
-        }
-    }
-    ++AssignmentIt1;
-    ++AssignmentIt2;
+    clause = addAssignments(clause, *assignmentIt2);
+    clause = addAssignments(clause, *assignmentIt1);
+    ++assignmentIt1;
+    ++assignmentIt2;
 
-    assert(CallIt1 == CallInfo1.rend());
-    assert(CallIt2 == CallInfo2.rend());
-    assert(AssignmentIt1 == AssignmentBlocks1.rend());
-    assert(AssignmentIt2 == AssignmentBlocks2.rend());
+    assert(callIt1 == callInfo1.rend());
+    assert(callIt2 == callInfo2.rend());
+    assert(assignmentIt1 == assignmentBlocks1.rend());
+    assert(assignmentIt2 == assignmentBlocks2.rend());
 
     return clause;
 }
@@ -595,24 +576,19 @@ SMTRef nonmutualSMT(SMTRef endClause,
                     Program prog, Memory heap) {
     SMTRef clause = endClause;
     const auto splittedAssignments = splitAssignments(assignmentCallBlocks);
-    const auto AssignmentBlocks = splittedAssignments.first;
-    const auto CallInfos = splittedAssignments.second;
-    assert(AssignmentBlocks.size() == CallInfos.size() + 1);
+    const auto assignmentBlocks = splittedAssignments.first;
+    const auto callInfos = splittedAssignments.second;
+    assert(assignmentBlocks.size() == callInfos.size() + 1);
     bool first = true;
-    auto callIt = CallInfos.rbegin();
-    for (auto assgnsVec : makeReverse(AssignmentBlocks)) {
+    auto callIt = callInfos.rbegin();
+    for (auto assgnsVec : makeReverse(assignmentBlocks)) {
         if (first) {
             first = false;
         } else {
             clause = nonmutualRecursiveForall(clause, *callIt, prog, heap);
             ++callIt;
         }
-        for (auto assgns : makeReverse(assgnsVec)) {
-            clause = nestLets(clause, assgns.definitions);
-            if (assgns.condition) {
-                clause = makeBinOp("=>", assgns.condition, clause);
-            }
-        }
+        clause = addAssignments(clause, assgnsVec);
     }
     return clause;
 }

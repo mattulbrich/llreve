@@ -150,3 +150,5 @@ auto getDontLoopInvariant(SMTRef endClause, int startIndex, PathMap pathMap,
                           std::map<int, std::vector<string>> freeVarsMap,
                           Program prog, Memory heap, bool everythingSigned)
     -> SMTRef;
+auto addAssignments(const SMTRef end, std::vector<AssignmentBlock> assignments)
+    -> SMTRef;
