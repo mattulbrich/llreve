@@ -1,5 +1,6 @@
 #pragma once
 
+#include "MonoPair.h"
 #include "PathAnalysis.h"
 #include "SMT.h"
 
@@ -12,7 +13,7 @@
 
 auto main(int argc, const char **argv) -> int;
 auto zipFunctions(llvm::Module &mod1, llvm::Module &mod2) -> llvm::ErrorOr<
-    std::vector<std::pair<llvm::Function *, llvm::Function *>>>;
+    std::vector<MonoPair<llvm::Function *>>>;
 auto initializeArgs(const char *exeName, std::string input1, std::string input2)
     -> std::vector<const char *>;
 auto initializeDiagnostics(void) -> std::unique_ptr<clang::DiagnosticsEngine>;
@@ -22,16 +23,15 @@ auto preprocessFunction(llvm::Function &fun, std::string prefix)
     -> std::shared_ptr<llvm::FunctionAnalysisManager>;
 auto getCmd(clang::driver::Compilation &comp, clang::DiagnosticsEngine &diags)
     -> llvm::ErrorOr<
-        std::pair<llvm::opt::ArgStringList, llvm::opt::ArgStringList>>;
+    MonoPair<llvm::opt::ArgStringList>>;
 template <typename T> auto makeErrorOr(T Arg) -> llvm::ErrorOr<T>;
 auto getModule(const char *exeName, std::string input1, std::string input2)
-    -> std::pair<std::unique_ptr<clang::CodeGenAction>,
-                  std::unique_ptr<clang::CodeGenAction>>;
+    -> MonoPair<std::unique_ptr<clang::CodeGenAction>>;
 auto getCodeGenAction(const llvm::opt::ArgStringList &ccArgs,
                       clang::DiagnosticsEngine &diags)
     -> std::unique_ptr<clang::CodeGenAction>;
 auto parseInOutInvs(std::string fileName1, std::string fileName2)
-    -> std::pair<SMTRef, SMTRef>;
+    -> MonoPair<SMTRef>;
 auto processFile(std::string file, SMTRef &in, SMTRef &out) -> void;
 auto externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                         std::vector<SMTRef> &declarations, uint8_t mem,

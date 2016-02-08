@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Memory.h"
+#include "MonoPair.h"
 #include "PathAnalysis.h"
 #include "Program.h"
 #include "SMT.h"
@@ -12,7 +13,7 @@ auto mainInvariant(int EndIndex, std::vector<string> FreeVars, string FunName,
                    Memory Heap) -> SMTRef;
 auto invariantDeclaration(int BlockIndex, std::vector<std::string> FreeVars,
                           ProgramSelection For, std::string FunName,
-                          Memory Heap) -> std::pair<SMTRef, SMTRef>;
+                          Memory Heap) -> MonoPair<SMTRef>;
 auto mainInvariantDeclaration(int BlockIndex, std::vector<string> FreeVars,
                               ProgramSelection For, std::string FunName)
     -> SMTRef;

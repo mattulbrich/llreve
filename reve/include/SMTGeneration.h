@@ -3,6 +3,7 @@
 #include "Assignment.h"
 #include "Helper.h"
 #include "Memory.h"
+#include "MonoPair.h"
 #include "PathAnalysis.h"
 #include "Program.h"
 #include "SMT.h"
@@ -16,6 +17,8 @@
 
 using std::make_shared;
 using llvm::Instruction;
+
+using FAMRef = shared_ptr<llvm::FunctionAnalysisManager>;
 
 enum class InterleaveStep { StepBoth, StepFirst, StepSecond };
 
@@ -34,14 +37,11 @@ struct AssignmentBlock {
         : definitions(definitions), condition(condition) {}
 };
 
-auto convertToSMT(llvm::Function &fun1, llvm::Function &fun2,
-                  std::shared_ptr<llvm::FunctionAnalysisManager> fam1,
-                  std::shared_ptr<llvm::FunctionAnalysisManager> fam2,
+auto convertToSMT(MonoPair<llvm::Function *> funs,
+                  MonoPair<std::shared_ptr<llvm::FunctionAnalysisManager>> fams,
                   bool offByN, std::vector<SMTRef> &declarations, Memory memory,
                   bool everythingSigned) -> std::vector<SMTRef>;
-auto mainAssertion(llvm::Function &fun1, llvm::Function &fun2,
-                   std::shared_ptr<llvm::FunctionAnalysisManager> fam1,
-                   std::shared_ptr<llvm::FunctionAnalysisManager> fam2,
+auto mainAssertion(MonoPair<llvm::Function *> funs, MonoPair<FAMRef> fams,
                    bool offByN, std::vector<SMTRef> &declarations, bool onlyRec,
                    Memory memory, bool everythingSigned, bool dontNest)
     -> std::vector<SMTRef>;
@@ -63,8 +63,9 @@ auto mainSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
 auto getForbiddenPaths(PathMap pathMap1, PathMap pathMap2,
                        BidirBlockMarkMap marked1, BidirBlockMarkMap marked2,
                        std::map<int, std::vector<string>> freeVarsMap,
-                       bool offByN, std::string funName, bool main, Memory memory,
-                       bool everythingSigned) -> std::vector<SMTRef>;
+                       bool offByN, std::string funName, bool main,
+                       Memory memory, bool everythingSigned)
+    -> std::vector<SMTRef>;
 auto nonmutualPaths(PathMap pathMap, std::vector<SMTRef> &pathExprs,
                     std::map<int, std::vector<string>> freeVarsMap,
                     Program prog, std::string funName,
@@ -134,7 +135,7 @@ auto freeVars(PathMap map1, PathMap map2, std::vector<string> funArgs,
 // Miscellanous helper functions that don't really belong anywhere
 
 auto functionArgs(const llvm::Function &fun1, const llvm::Function &fun2)
-    -> std::pair<std::vector<std::string>, std::vector<std::string>>;
+    -> MonoPair<std::vector<std::string>>;
 auto swapIndex(int i) -> int;
 auto splitAssignments(std::vector<AssignmentCallBlock>)
     -> std::pair<std::vector<std::vector<AssignmentBlock>>,

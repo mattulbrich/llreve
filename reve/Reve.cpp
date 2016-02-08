@@ -139,8 +139,8 @@ unique_ptr<Driver> initializeDriver(DiagnosticsEngine &diags) {
 }
 
 /// This creates the compilations commands to compile to assembly
-ErrorOr<std::pair<ArgStringList, ArgStringList>>
-getCmd(Compilation &comp, DiagnosticsEngine &diags) {
+ErrorOr<MonoPair<ArgStringList>> getCmd(Compilation &comp,
+                                        DiagnosticsEngine &diags) {
     const JobList &jobs = comp.getJobs();
 
     // there should be exactly two jobs
@@ -149,19 +149,18 @@ getCmd(Compilation &comp, DiagnosticsEngine &diags) {
         llvm::raw_svector_ostream os(msg);
         jobs.Print(os, "; ", true);
         diags.Report(clang::diag::err_fe_expected_compiler_job) << os.str();
-        return ErrorOr<std::pair<ArgStringList, ArgStringList>>(
-            std::error_code());
+        return ErrorOr<MonoPair<ArgStringList>>(std::error_code());
     }
 
-    return makeErrorOr(std::make_pair(jobs.begin()->getArguments(),
-                                      std::next(jobs.begin())->getArguments()));
+    return makeErrorOr(makeMonoPair(jobs.begin()->getArguments(),
+                                    std::next(jobs.begin())->getArguments()));
 }
 
 /// Wrapper function to allow inferenece of template parameters
 template <typename T> ErrorOr<T> makeErrorOr(T Arg) { return ErrorOr<T>(Arg); }
 
 /// Compile the inputs to llvm assembly and return those modules
-std::pair<unique_ptr<clang::CodeGenAction>, unique_ptr<clang::CodeGenAction>>
+MonoPair<unique_ptr<clang::CodeGenAction>>
 getModule(const char *exeName, string input1, string input2) {
     auto diags = initializeDiagnostics();
     auto driver = initializeDriver(*diags);
@@ -169,22 +168,23 @@ getModule(const char *exeName, string input1, string input2) {
 
     std::unique_ptr<Compilation> comp(driver->BuildCompilation(args));
     if (!comp) {
-        return std::make_pair(nullptr, nullptr);
+        return makeMonoPair<unique_ptr<clang::CodeGenAction>>(
+            std::move(nullptr), std::move(nullptr));
     }
 
     auto cmdArgsOrError = getCmd(*comp, *diags);
     if (!cmdArgsOrError) {
-        return std::make_pair(nullptr, nullptr);
+        return makeMonoPair<unique_ptr<clang::CodeGenAction>>(nullptr, nullptr);
     }
     auto cmdArgs = cmdArgsOrError.get();
 
     auto act1 = getCodeGenAction(cmdArgs.first, *diags);
     auto act2 = getCodeGenAction(cmdArgs.second, *diags);
     if (!act1 || !act2) {
-        return std::make_pair(nullptr, nullptr);
+        return makeMonoPair<unique_ptr<clang::CodeGenAction>>(nullptr, nullptr);
     }
 
-    return std::make_pair(std::move(act1), std::move(act2));
+    return makeMonoPair(std::move(act1), std::move(act2));
 }
 
 /// Build the CodeGenAction corresponding to the arguments
@@ -209,8 +209,7 @@ getCodeGenAction(const ArgStringList &ccArgs, clang::DiagnosticsEngine &diags) {
     return act;
 }
 
-std::pair<SMTRef, SMTRef> parseInOutInvs(std::string fileName1,
-                                         std::string fileName2) {
+MonoPair<SMTRef> parseInOutInvs(std::string fileName1, std::string fileName2) {
     SMTRef in = nullptr;
     SMTRef out = nullptr;
     std::ifstream fileStream1(fileName1);
@@ -223,7 +222,7 @@ std::pair<SMTRef, SMTRef> parseInOutInvs(std::string fileName1,
     processFile(fileString1, in, out);
     processFile(fileString2, in, out);
 
-    return std::make_pair(in, out);
+    return makeMonoPair(in, out);
 }
 
 void processFile(std::string file, SMTRef &in, SMTRef &out) {
@@ -262,8 +261,7 @@ int main(int argc, const char **argv) {
         return 1;
     }
 
-    ErrorOr<std::vector<std::pair<llvm::Function *, llvm::Function *>>> funs =
-        zipFunctions(*mod1, *mod2);
+    auto funs = zipFunctions(*mod1, *mod2);
 
     if (!funs) {
         errs() << "Couldn't find matching functions\n";
@@ -275,12 +273,11 @@ int main(int argc, const char **argv) {
     std::vector<SMTRef> smtExprs;
     smtExprs.push_back(std::make_shared<SetLogic>("HORN"));
 
-    std::vector<std::pair<std::shared_ptr<llvm::FunctionAnalysisManager>,
-                          std::shared_ptr<llvm::FunctionAnalysisManager>>> fams;
+    std::vector<MonoPair<FAMRef>> fams;
     for (auto funPair : funs.get()) {
         auto fam1 = preprocessFunction(*funPair.first, "1");
         auto fam2 = preprocessFunction(*funPair.second, "2");
-        fams.push_back(make_pair(fam1, fam2));
+        fams.push_back(makeMonoPair(fam1, fam2));
     }
 
     Memory mem = 0;
@@ -291,7 +288,7 @@ int main(int argc, const char **argv) {
         mem |= STACK_MASK;
     }
 
-    std::pair<SMTRef, SMTRef> inOutInvs = parseInOutInvs(fileName1, fileName2);
+    MonoPair<SMTRef> inOutInvs = parseInOutInvs(fileName1, fileName2);
 
     auto funCondMap = collectFunConds();
 
@@ -309,10 +306,9 @@ int main(int argc, const char **argv) {
                 inInvariant(*funPair.first.first, *funPair.first.second,
                             inOutInvs.first, mem, *mod1, *mod2, strings));
             smtExprs.push_back(outInvariant(inOutInvs.second, mem));
-            auto newSmtExprs = mainAssertion(
-                *funPair.first.first, *funPair.first.second,
-                funPair.second.first, funPair.second.second, offByN,
-                declarations, onlyRec, mem, EverythingSigned, dontNest);
+            auto newSmtExprs = mainAssertion(funPair.first, funPair.second,
+                                             offByN, declarations, onlyRec, mem,
+                                             EverythingSigned, dontNest);
             assertions.insert(assertions.end(), newSmtExprs.begin(),
                               newSmtExprs.end());
         }
@@ -321,9 +317,8 @@ int main(int argc, const char **argv) {
                doesNotRecurse(*funPair.first.second)) ||
              onlyRec)) {
             auto newSmtExprs =
-                convertToSMT(*funPair.first.first, *funPair.first.second,
-                             funPair.second.first, funPair.second.second,
-                             offByN, declarations, mem, EverythingSigned);
+                convertToSMT(funPair.first, funPair.second, offByN,
+                             declarations, mem, EverythingSigned);
             assertions.insert(assertions.end(), newSmtExprs.begin(),
                               newSmtExprs.end());
         }
@@ -396,9 +391,9 @@ preprocessFunction(llvm::Function &fun, string prefix) {
     return fam;
 }
 
-ErrorOr<std::vector<std::pair<llvm::Function *, llvm::Function *>>>
+ErrorOr<std::vector<MonoPair<llvm::Function *>>>
 zipFunctions(llvm::Module &mod1, llvm::Module &mod2) {
-    std::vector<std::pair<llvm::Function *, llvm::Function *>> funs;
+    std::vector<MonoPair<llvm::Function *>> funs;
     int size1 = 0;
     int size2 = 0;
     for (auto &fun : mod1) {
@@ -424,10 +419,9 @@ zipFunctions(llvm::Module &mod1, llvm::Module &mod2) {
                        "\n");
             continue;
         }
-        funs.push_back(std::make_pair(&Fun1, fun2));
+        funs.push_back(makeMonoPair(&Fun1, fun2));
     }
-    return ErrorOr<std::vector<std::pair<llvm::Function *, llvm::Function *>>>(
-        funs);
+    return ErrorOr<std::vector<MonoPair<llvm::Function *>>>(funs);
 }
 
 void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,

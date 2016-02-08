@@ -119,9 +119,9 @@ SMTRef mainInvariant(int EndIndex, vector<string> FreeVars, string FunName,
 }
 
 /// Declare an invariant
-std::pair<SMTRef, SMTRef>
-invariantDeclaration(int BlockIndex, vector<string> FreeVars,
-                     ProgramSelection For, std::string FunName, Memory Heap) {
+MonoPair<SMTRef> invariantDeclaration(int BlockIndex, vector<string> FreeVars,
+                                      ProgramSelection For, std::string FunName,
+                                      Memory Heap) {
     // + 1 for each result
     auto NumArgs =
         FreeVars.size() + 1 + (For == ProgramSelection::Both ? 1 : 0);
@@ -140,7 +140,7 @@ invariantDeclaration(int BlockIndex, vector<string> FreeVars,
             (Heap ? (For == ProgramSelection::Both ? 4 : 2) : 0),
         "Int");
 
-    return std::make_pair(
+    return makeMonoPair<SMTRef>(
         std::make_shared<class FunDecl>(invariantName(BlockIndex, For, FunName),
                                         Args, "Bool"),
         std::make_shared<class FunDecl>(

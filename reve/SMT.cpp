@@ -2,7 +2,6 @@
 
 #include <iostream>
 
-using llvm::make_unique;
 using std::make_shared;
 using sexpr::Apply;
 using sexpr::Value;
@@ -13,24 +12,24 @@ SMTExpr::~SMTExpr() = default;
 
 SExprRef SetLogic::toSExpr() const {
     std::vector<SExprRef> args;
-    SExprRef logicPtr = make_unique<const Value<std::string>>(logic);
+    SExprRef logicPtr = llvm::make_unique<const Value<std::string>>(logic);
 
     args.push_back(std::move(logicPtr));
-    return make_unique<Apply<std::string>>("set-logic", std::move(args));
+    return llvm::make_unique<Apply<std::string>>("set-logic", std::move(args));
 }
 
 set<string> SetLogic::uses() const { return set<string>(); }
 
 SExprRef CheckSat::toSExpr() const {
     std::vector<SExprRef> args;
-    return make_unique<Apply<std::string>>("check-sat", std::move(args));
+    return llvm::make_unique<Apply<std::string>>("check-sat", std::move(args));
 }
 
 set<string> CheckSat::uses() const { return set<string>(); }
 
 SExprRef GetModel::toSExpr() const {
     std::vector<SExprRef> args;
-    return make_unique<Apply<std::string>>("get-model", std::move(args));
+    return llvm::make_unique<Apply<std::string>>("get-model", std::move(args));
 }
 
 set<string> GetModel::uses() const { return set<string>(); }
@@ -38,7 +37,7 @@ set<string> GetModel::uses() const { return set<string>(); }
 SExprRef Assert::toSExpr() const {
     std::vector<SExprRef> args;
     args.push_back(expr->toSExpr());
-    return make_unique<Apply<std::string>>("assert", std::move(args));
+    return llvm::make_unique<Apply<std::string>>("assert", std::move(args));
 }
 
 set<string> Assert::uses() const { return expr->uses(); }
@@ -49,17 +48,17 @@ SExprRef Forall::toSExpr() const {
     for (auto &sortedVar : vars) {
         sortedVars.push_back(sortedVar.toSExpr());
     }
-    args.push_back(make_unique<List<std::string>>(std::move(sortedVars)));
+    args.push_back(llvm::make_unique<List<std::string>>(std::move(sortedVars)));
     args.push_back(expr->toSExpr());
-    return make_unique<Apply<std::string>>("forall", std::move(args));
+    return llvm::make_unique<Apply<std::string>>("forall", std::move(args));
 }
 
 set<string> Forall::uses() const { return expr->uses(); }
 
 SExprRef SortedVar::toSExpr() const {
     std::vector<SExprRef> typeSExpr;
-    typeSExpr.push_back(make_unique<const Value<std::string>>(type));
-    return make_unique<Apply<std::string>>(name, std::move(typeSExpr));
+    typeSExpr.push_back(llvm::make_unique<const Value<std::string>>(type));
+    return llvm::make_unique<Apply<std::string>>(name, std::move(typeSExpr));
 }
 
 set<string> SortedVar::uses() const {
@@ -74,11 +73,11 @@ SExprRef Let::toSExpr() const {
         std::vector<SExprRef> argSExprs;
         argSExprs.push_back(def.second->toSExpr());
         defSExprs.push_back(
-            make_unique<Apply<std::string>>(def.first, std::move(argSExprs)));
+            llvm::make_unique<Apply<std::string>>(def.first, std::move(argSExprs)));
     }
-    args.push_back(make_unique<List<std::string>>(std::move(defSExprs)));
+    args.push_back(llvm::make_unique<List<std::string>>(std::move(defSExprs)));
     args.push_back(expr->toSExpr());
-    return make_unique<Apply<std::string>>("let", std::move(args));
+    return llvm::make_unique<Apply<std::string>>("let", std::move(args));
 }
 
 set<string> Let::uses() const {
@@ -98,12 +97,12 @@ SExprRef Op::toSExpr() const {
     std::vector<SExprRef> argSExprs;
     // Special case for emty and
     if (opName == "and" && args.empty()) {
-        return make_unique<Value<string>>("true");
+        return llvm::make_unique<Value<string>>("true");
     }
     for (auto &arg : args) {
         argSExprs.push_back(arg->toSExpr());
     }
-    return make_unique<Apply<std::string>>(opName, std::move(argSExprs));
+    return llvm::make_unique<Apply<std::string>>(opName, std::move(argSExprs));
 }
 
 set<string> Op::uses() const {
@@ -121,30 +120,30 @@ std::shared_ptr<Op> makeBinOp(std::string opName, std::string arg1,
     std::vector<SMTRef> args;
     args.push_back(name(arg1));
     args.push_back(name(arg2));
-    return make_unique<Op>(opName, args);
+    return llvm::make_unique<Op>(opName, args);
 }
 
 std::shared_ptr<Op> makeBinOp(std::string opName, SMTRef arg1, SMTRef arg2) {
     std::vector<SMTRef> args;
     args.push_back(arg1);
     args.push_back(arg2);
-    return make_unique<Op>(opName, args);
+    return llvm::make_unique<Op>(opName, args);
 }
 
 std::shared_ptr<Op> makeUnaryOp(std::string opName, std::string arg) {
     std::vector<SMTRef> args;
     args.push_back(name(arg));
-    return make_unique<Op>(opName, args);
+    return llvm::make_unique<Op>(opName, args);
 }
 
 std::shared_ptr<Op> makeUnaryOp(std::string opName, SMTRef arg) {
     std::vector<SMTRef> args;
     args.push_back(arg);
-    return make_unique<Op>(opName, args);
+    return llvm::make_unique<Op>(opName, args);
 }
 
 SMTRef name(std::string name) {
-    return make_unique<Primitive<std::string>>(name);
+    return llvm::make_unique<Primitive<std::string>>(name);
 }
 
 SMTRef makeOp(std::string opName, std::vector<std::string> args) {
@@ -152,7 +151,7 @@ SMTRef makeOp(std::string opName, std::vector<std::string> args) {
     for (auto arg : args) {
         smtArgs.push_back(name(arg));
     }
-    return make_unique<Op>(opName, smtArgs);
+    return llvm::make_unique<Op>(opName, smtArgs);
 }
 
 SExprRef FunDecl::toSExpr() const {
@@ -162,9 +161,9 @@ SExprRef FunDecl::toSExpr() const {
     }
     std::vector<SExprRef> args;
     args.push_back(name(funName)->toSExpr());
-    args.push_back(make_unique<List<std::string>>(std::move(inTypeSExprs)));
+    args.push_back(llvm::make_unique<List<std::string>>(std::move(inTypeSExprs)));
     args.push_back(name(outType)->toSExpr());
-    return make_unique<Apply<std::string>>("declare-fun", std::move(args));
+    return llvm::make_unique<Apply<std::string>>("declare-fun", std::move(args));
 }
 
 SExprRef FunDef::toSExpr() const {
@@ -174,10 +173,10 @@ SExprRef FunDef::toSExpr() const {
     }
     std::vector<SExprRef> args;
     args.push_back(name(funName)->toSExpr());
-    args.push_back(make_unique<List<std::string>>(std::move(argSExprs)));
+    args.push_back(llvm::make_unique<List<std::string>>(std::move(argSExprs)));
     args.push_back(name(outType)->toSExpr());
     args.push_back(body->toSExpr());
-    return make_unique<Apply<std::string>>("define-fun", std::move(args));
+    return llvm::make_unique<Apply<std::string>>("define-fun", std::move(args));
 }
 
 set<string> FunDecl::uses() const { return set<string>(); }
