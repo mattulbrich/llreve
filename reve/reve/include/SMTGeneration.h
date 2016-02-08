@@ -158,3 +158,5 @@ auto getDontLoopInvariant(SMTRef endClause, int startIndex, PathMap pathMap,
     -> SMTRef;
 auto addAssignments(const SMTRef end, std::vector<AssignmentBlock> assignments)
     -> SMTRef;
+auto addMemory(std::vector<SMTRef>& implArgs, Memory memory)
+    -> std::function<void(CallInfo call, int index)>;

@@ -647,22 +647,7 @@ SMTRef mutualRecursiveForall(SMTRef clause, MonoPair<CallInfo> callPair,
         clause = makeBinOp("=>", postInvariant, clause);
         return make_shared<Forall>(args, clause);
     } else {
-        callPair.indexedForEach([&implArgs, memory](CallInfo call, int index) {
-            string indexString = std::to_string(index);
-            for (auto arg : call.args) {
-                implArgs.push_back(arg);
-            }
-            if (memory & HEAP_MASK) {
-                implArgs.push_back(name("i" + indexString));
-                implArgs.push_back(makeBinOp("select", "HEAP$" + indexString,
-                                             "i" + indexString));
-            }
-            if (memory & STACK_MASK) {
-                implArgs.push_back(name("i" + indexString + "_stack"));
-                implArgs.push_back(makeBinOp("select", "STACK$" + indexString,
-                                             "i" + indexString + "_stack"));
-            }
-        });
+        callPair.indexedForEach(addMemory(implArgs, memory));
         preArgs.insert(preArgs.end(), implArgs.begin(), implArgs.end());
 
         implArgs.push_back(name(callPair.first.assignedTo));
@@ -724,18 +709,8 @@ SMTRef nonmutualRecursiveForall(SMTRef clause, CallInfo call, Program prog,
         clause = makeBinOp("=>", endInvariant, clause);
         return make_shared<Forall>(forallArgs, clause);
     } else {
-        if (memory & HEAP_MASK) {
-            call.args.push_back(name("i" + programS));
-            call.args.push_back(
-                makeBinOp("select", "HEAP$" + programS, "i" + programS));
-        }
-        if (memory & STACK_MASK) {
-            call.args.push_back(name("i" + programS + "_stack"));
-            call.args.push_back(
-                makeBinOp("select", "STACK$" + programS, "i" + programS));
-        }
-        implArgs.insert(implArgs.end(), call.args.begin(), call.args.end());
-        preArgs.insert(preArgs.end(), call.args.begin(), call.args.end());
+        addMemory(implArgs, memory)(call, progIndex);
+        preArgs = implArgs;
 
         implArgs.push_back(name(call.assignedTo));
         if (memory & HEAP_MASK) {
@@ -1137,6 +1112,18 @@ std::map<int, vector<string>> freeVars(PathMap map1, PathMap map2,
         }
     }
 
+    const auto addMemoryArrays = [memory](vector<string> vars,
+                                    int index) -> vector<string> {
+        string stringIndex = std::to_string(index);
+        if (memory & HEAP_MASK) {
+            vars.push_back("HEAP$" + stringIndex);
+        }
+        if (memory & STACK_MASK) {
+            vars.push_back("STACK$" + stringIndex);
+        }
+        return vars;
+    };
+
     for (auto it : freeVarsMap) {
         const int index = it.first;
         vector<string> varsVect;
@@ -1145,33 +1132,13 @@ std::map<int, vector<string>> freeVars(PathMap map1, PathMap map2,
         }
         const auto argPair =
             makeMonoPair(filterVars(1, varsVect), filterVars(2, varsVect))
-                .indexedMap<vector<string>>(
-                    [memory](vector<string> vars, int index) -> vector<string> {
-                        string stringIndex = std::to_string(index);
-                        if (memory & HEAP_MASK) {
-                            vars.push_back("HEAP$" + stringIndex);
-                        }
-                        if (memory & STACK_MASK) {
-                            vars.push_back("STACK$" + stringIndex);
-                        }
-                        return vars;
-                    });
+                .indexedMap<vector<string>>(addMemoryArrays);
         freeVarsMapVect[index] = concat(argPair);
     }
+
     const auto argPair =
         makeMonoPair(filterVars(1, funArgs), filterVars(2, funArgs))
-            .indexedMap<vector<string>>(
-                [memory](vector<string> args, int index) -> vector<string> {
-                    string stringIndex = std::to_string(index);
-                    if (memory & HEAP_MASK) {
-                        args.push_back("HEAP$" + stringIndex);
-                    }
-                    if (memory & STACK_MASK) {
-                        args.push_back("STACK$" + stringIndex);
-                    }
-                    return args;
-                });
-
+            .indexedMap<vector<string>>(addMemoryArrays);
     freeVarsMapVect[ENTRY_MARK] = concat(argPair);
 
     return freeVarsMapVect;
@@ -1344,4 +1311,24 @@ SMTRef getDontLoopInvariant(SMTRef endClause, int startIndex, PathMap pathMap,
         clause = makeBinOp("=>", andExpr, clause);
     }
     return clause;
+}
+
+auto addMemory(std::vector<SMTRef> &implArgs, Memory memory)
+    -> std::function<void(CallInfo call, int index)> {
+    return [&implArgs, memory](CallInfo call, int index) {
+        string indexString = std::to_string(index);
+        for (auto arg : call.args) {
+            implArgs.push_back(arg);
+        }
+        if (memory & HEAP_MASK) {
+            implArgs.push_back(name("i" + indexString));
+            implArgs.push_back(
+                makeBinOp("select", "HEAP$" + indexString, "i" + indexString));
+        }
+        if (memory & STACK_MASK) {
+            implArgs.push_back(name("i" + indexString + "_stack"));
+            implArgs.push_back(makeBinOp("select", "STACK$" + indexString,
+                                         "i" + indexString + "_stack"));
+        }
+    };
 }
