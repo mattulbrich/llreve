@@ -37,13 +37,13 @@ struct AssignmentBlock {
 auto convertToSMT(llvm::Function &fun1, llvm::Function &fun2,
                   std::shared_ptr<llvm::FunctionAnalysisManager> fam1,
                   std::shared_ptr<llvm::FunctionAnalysisManager> fam2,
-                  bool offByN, std::vector<SMTRef> &declarations, Memory heap,
+                  bool offByN, std::vector<SMTRef> &declarations, Memory memory,
                   bool everythingSigned) -> std::vector<SMTRef>;
 auto mainAssertion(llvm::Function &fun1, llvm::Function &fun2,
                    std::shared_ptr<llvm::FunctionAnalysisManager> fam1,
                    std::shared_ptr<llvm::FunctionAnalysisManager> fam2,
                    bool offByN, std::vector<SMTRef> &declarations, bool onlyRec,
-                   Memory heap, bool everythingSigned, bool dontNest)
+                   Memory memory, bool everythingSigned, bool dontNest)
     -> std::vector<SMTRef>;
 
 /* -------------------------------------------------------------------------- */
@@ -52,33 +52,33 @@ auto mainAssertion(llvm::Function &fun1, llvm::Function &fun2,
 auto getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
                           std::map<int, std::vector<string>> freeVarsMap,
                           std::string funName,
-                          std::vector<SMTRef> &declarations, Memory heap,
+                          std::vector<SMTRef> &declarations, Memory memory,
                           bool everythingSigned) -> std::vector<SMTRef>;
 auto mainSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
                            std::map<int, std::vector<string>> freeVarsMap,
                            std::string funName,
-                           std::vector<SMTRef> &declarations, Memory heap,
+                           std::vector<SMTRef> &declarations, Memory memory,
                            bool everythingSigned)
     -> std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>>;
 auto getForbiddenPaths(PathMap pathMap1, PathMap pathMap2,
                        BidirBlockMarkMap marked1, BidirBlockMarkMap marked2,
                        std::map<int, std::vector<string>> freeVarsMap,
-                       bool offByN, std::string funName, bool main, Memory heap,
+                       bool offByN, std::string funName, bool main, Memory memory,
                        bool everythingSigned) -> std::vector<SMTRef>;
 auto nonmutualPaths(PathMap pathMap, std::vector<SMTRef> &pathExprs,
                     std::map<int, std::vector<string>> freeVarsMap,
                     Program prog, std::string funName,
-                    std::vector<SMTRef> &declarations, Memory heap,
+                    std::vector<SMTRef> &declarations, Memory memory,
                     bool everythingSigned) -> void;
 auto getOffByNPaths(PathMap pathMap1, PathMap pathMap2,
                     std::map<int, std::vector<string>> freeVarsMap,
-                    std::string funName, bool main, Memory heap,
+                    std::string funName, bool main, Memory memory,
                     bool everythingSigned)
     -> std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>>;
 auto offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
                        std::map<int, std::vector<string>> freeVarsMap,
                        Program prog, std::string funName, bool main,
-                       Memory heap, bool everythingSigned)
+                       Memory memory, bool everythingSigned)
     -> std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>>;
 
 /* -------------------------------------------------------------------------- */
@@ -86,23 +86,23 @@ auto offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
 
 auto assignmentsOnPath(Path path, Program prog,
                        std::vector<std::string> freeVars, bool toEnd,
-                       Memory heap, bool everythingSigned)
+                       Memory memory, bool everythingSigned)
     -> std::vector<AssignmentCallBlock>;
 auto interleaveAssignments(SMTRef endClause,
                            std::vector<AssignmentCallBlock> assignments1,
                            std::vector<AssignmentCallBlock> assignments2,
-                           Memory heap) -> SMTRef;
+                           Memory memory) -> SMTRef;
 auto nonmutualSMT(SMTRef endClause,
                   std::vector<AssignmentCallBlock> assignments, Program prog,
-                  Memory heap) -> SMTRef;
+                  Memory memory) -> SMTRef;
 
 /* -------------------------------------------------------------------------- */
 // Functions to generate various foralls
 
 auto mutualRecursiveForall(SMTRef clause, CallInfo call1, CallInfo call2,
-                           Memory heap) -> SMTRef;
+                           Memory memory) -> SMTRef;
 auto nonmutualRecursiveForall(SMTRef clause, CallInfo call, Program prog,
-                              Memory heap) -> SMTRef;
+                              Memory memory) -> SMTRef;
 auto forallStartingAt(SMTRef clause, std::vector<std::string> freeVars,
                       int blockIndex, ProgramSelection prog,
                       std::string funName, bool main) -> SMTRef;
@@ -114,13 +114,13 @@ auto makeFunArgsEqual(SMTRef clause, SMTRef preClause,
                       std::vector<std::string> args1,
                       std::vector<std::string> args2) -> SMTRef;
 auto inInvariant(const llvm::Function &fun1, const llvm::Function &fun2,
-                 SMTRef body, Memory heap, const llvm::Module &mod1,
+                 SMTRef body, Memory memory, const llvm::Module &mod1,
                  const llvm::Module &mod2, bool strings) -> SMTRef;
-auto outInvariant(SMTRef body, Memory heap) -> SMTRef;
+auto outInvariant(SMTRef body, Memory memory) -> SMTRef;
 auto equalInputsEqualOutputs(std::vector<string> funArgs,
                              std::vector<string> funArgs1,
                              std::vector<string> funArgs2, std::string funName,
-                             Memory heap) -> SMTRef;
+                             Memory memory) -> SMTRef;
 
 /* -------------------------------------------------------------------------- */
 // Functions related to the search for free variables
@@ -128,7 +128,7 @@ auto equalInputsEqualOutputs(std::vector<string> funArgs,
 auto freeVarsForBlock(std::map<int, Paths> pathMap)
     -> std::pair<std::set<std::string>, std::map<int, std::set<std::string>>>;
 auto freeVars(PathMap map1, PathMap map2, std::vector<string> funArgs,
-              Memory heap) -> std::map<int, std::vector<std::string>>;
+              Memory memory) -> std::map<int, std::vector<std::string>>;
 
 /* -------------------------------------------------------------------------- */
 // Miscellanous helper functions that don't really belong anywhere
@@ -148,7 +148,7 @@ auto checkPathMaps(PathMap map1, PathMap map2) -> void;
 auto mapSubset(PathMap map1, PathMap map2) -> bool;
 auto getDontLoopInvariant(SMTRef endClause, int startIndex, PathMap pathMap,
                           std::map<int, std::vector<string>> freeVarsMap,
-                          Program prog, Memory heap, bool everythingSigned)
+                          Program prog, Memory memory, bool everythingSigned)
     -> SMTRef;
 auto addAssignments(const SMTRef end, std::vector<AssignmentBlock> assignments)
     -> SMTRef;

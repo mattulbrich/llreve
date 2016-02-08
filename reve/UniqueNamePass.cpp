@@ -1,10 +1,6 @@
 #include "UniqueNamePass.h"
 
-#include "llvm/IR/Function.h"
-#include "llvm/IR/PassManager.h"
-
 #include <iostream>
-#include <map>
 
 using std::string;
 

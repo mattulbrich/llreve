@@ -4,7 +4,6 @@
 
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Operator.h"
-#include "llvm/IR/Constants.h"
 #include "llvm/IR/Metadata.h"
 
 using std::vector;

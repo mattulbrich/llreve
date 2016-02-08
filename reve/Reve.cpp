@@ -6,40 +6,30 @@
 #include "Compat.h"
 #include "ConstantProp.h"
 #include "Helper.h"
-#include "PathAnalysis.h"
 #include "InlinePass.h"
 #include "InstCombine.h"
 #include "Invariant.h"
 #include "RemoveMarkPass.h"
 #include "RemoveMarkRefsPass.h"
-#include "SExpr.h"
-#include "SMT.h"
 #include "SMTGeneration.h"
 #include "SplitEntryBlockPass.h"
 #include "UnifyFunctionExitNodes.h"
 #include "UniqueNamePass.h"
 
 #include "clang/Driver/Compilation.h"
-#include "clang/Driver/Driver.h"
 #include "clang/Driver/Tool.h"
 #include "clang/Frontend/CompilerInstance.h"
-#include "clang/Frontend/CompilerInvocation.h"
 #include "clang/Frontend/FrontendDiagnostic.h"
 #include "clang/Frontend/TextDiagnosticPrinter.h"
 
-#include "llvm/ADT/SmallString.h"
 #include "llvm/Analysis/AssumptionCache.h"
-#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/Verifier.h"
-#include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/ManagedStatic.h"
-#include "llvm/Support/Path.h"
 #include "llvm/Support/TargetSelect.h"
-#include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
 
@@ -268,7 +258,7 @@ int main(int argc, const char **argv) {
 
     const auto mod1 = act1->takeModule();
     const auto mod2 = act2->takeModule();
-    if (!mod2 || !mod2) {
+    if (!mod1 || !mod2) {
         return 1;
     }
 

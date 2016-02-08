@@ -1,7 +1,6 @@
 #include "InlinePass.h"
 #include "Helper.h"
 #include "llvm/Transforms/Utils/Cloning.h"
-#include "llvm/IR/Instructions.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/CodeGen/IntrinsicLowering.h"
 

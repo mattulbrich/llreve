@@ -22,10 +22,7 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/ConstantFolding.h"
-#include "llvm/IR/Constant.h"
 #include "llvm/IR/InstIterator.h"
-#include "llvm/IR/Instruction.h"
-#include "llvm/Pass.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include <set>
 
@@ -35,7 +32,6 @@ llvm::PreservedAnalyses ConstantProp::run(llvm::Function &F,
     for (llvm::inst_iterator i = inst_begin(F), e = inst_end(F); i != e; ++i) {
         WorkList.insert(&*i);
     }
-    bool Changed = false;
     const llvm::DataLayout &DL = F.getParent()->getDataLayout();
     llvm::TargetLibraryInfo TLI =
         AM->getResult<llvm::TargetLibraryAnalysis>(F);

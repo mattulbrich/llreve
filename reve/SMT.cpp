@@ -1,11 +1,6 @@
 #include "SMT.h"
 
-#include "SExpr.h"
-
 #include <iostream>
-#include <sstream>
-#include <string>
-#include <vector>
 
 using llvm::make_unique;
 using std::make_shared;

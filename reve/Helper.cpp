@@ -2,10 +2,7 @@
 
 #include "Memory.h"
 
-#include <regex>
-
 #include "llvm/IR/Constants.h"
-#include "llvm/IR/Instructions.h"
 #include "llvm/IR/Operator.h"
 
 /// Get the name of the instruction or a string representation of the value if
