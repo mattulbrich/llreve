@@ -9,24 +9,24 @@
 ;  (and (>= i 2) (>= s 0)))
 
 ; Starting in the beginning and reaching the mark
-(assert 
+(assert
  (forall ((n Int))
   (let ((i0 2))
   (let ((sum0 0))
   (let ((v2 (<= i0 n)))
-  (=> 
+  (=>
    (and
     (= 1 1) ; precondition
     v2) ; path condition
    (INV n i0 sum0)))))))
 
 ; Starting in the beginning and reaching the end
-(assert 
+(assert
  (forall ((n Int))
   (let ((i0 2))
   (let ((sum0 0))
   (let ((v2 (<= i0 n)))
-  (=> 
+  (=>
    (and
     (= 1 1)
     (not v2))
@@ -40,10 +40,10 @@
   (let ((i0$ v6))
   (let ((sum0$ v4))
   (let ((v2 (<= i0$ n)))
-  (=> 
+  (=>
    (and
     (INV n i0 sum0)
-    v2) 
+    v2)
    (INV n i0$ sum0$)))))))))
 
 ; Starting at the mark and reaching the end of the program
@@ -54,13 +54,10 @@
   (let ((i0$ v6))
   (let ((sum0$ v4))
   (let ((v2 (<= i0$ n)))
-  (=> 
+  (=>
    (and
     (INV n i0 sum0)
     (not v2))
    (>= sum0$ 0)))))))))
 
 (check-sat)
-
-
-

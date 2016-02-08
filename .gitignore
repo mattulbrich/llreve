@@ -1,6 +1,6 @@
-/reve/build/
-/reve-test-suite/build/
+/reve/reve/build/
+/reve/reve-test-suite/build/
 .stack-work/
 *.dot
 *~
-/reve/.idea/
+/reve/reve/.idea/

@@ -14,6 +14,6 @@ a_n.mr.ll  is the readable version of the above obtained by "llv-dis".
 a_1.manual.smt2 is the manual translation of the llvm-program into a CHC. The "__mark" function is used as an indicator where the loop invariant should be placed.
 This proof obligation is NOT relational but functional for the contract "pre: true; post: \result >= 0"
 
-a_1.source.smt2 is the manual translation of the source a_1.c into CHC for the same property. 
+a_1.source.smt2 is the manual translation of the source a_1.c into CHC for the same property.
 
 Unfortunately, both smt files cannot be discharged by either Z3 or eldarica. ;(
