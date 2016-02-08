@@ -8,7 +8,7 @@ using sexpr::Value;
 using sexpr::List;
 
 // Avoid out-of-line warning by defining function here
-SMTExpr::~SMTExpr() = default;
+SMTExpr::~SMTExpr(){}
 
 SExprRef SetLogic::toSExpr() const {
     std::vector<SExprRef> args;

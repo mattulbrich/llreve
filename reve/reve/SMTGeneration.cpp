@@ -4,8 +4,8 @@
 #include "Invariant.h"
 
 #include "llvm/IR/Constants.h"
-#include "llvm/IR/Operator.h"
 #include "llvm/IR/Intrinsics.h"
+#include "llvm/IR/Operator.h"
 
 using llvm::CmpInst;
 
@@ -31,7 +31,8 @@ vector<SMTRef> convertToSMT(MonoPair<llvm::Function *> funs,
     const std::string funName = funs.first->getName();
     const auto funArgsPair = functionArgs(*funs.first, *funs.second);
     const auto funArgs = funArgsPair.foldl<vector<string>>(
-        {}, [](vector<string> acc, vector<string> args) -> vector<string> {
+        {},
+        [](vector<string> acc, vector<string> args) -> vector<string> {
             acc.insert(acc.end(), args.begin(), args.end());
             return acc;
         });
@@ -115,7 +116,8 @@ vector<SMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
     const auto funArgsPair = functionArgs(*funs.first, *funs.second);
 
     auto funArgs = funArgsPair.foldl<vector<string>>(
-        {}, [](vector<string> acc, vector<string> args) {
+        {},
+        [](vector<string> acc, vector<string> args) {
             acc.insert(acc.end(), args.begin(), args.end());
             return acc;
         });
@@ -556,7 +558,8 @@ SMTRef interleaveAssignments(
             assert(callIt1->callName == callIt2->callName);
             clause = addAssignments(clause, *assignmentIt2);
             clause = addAssignments(clause, *assignmentIt1);
-            clause = mutualRecursiveForall(clause, *callIt1, *callIt2, memory);
+            clause = mutualRecursiveForall(
+                clause, makeMonoPair(*callIt1, *callIt2), memory);
             ++callIt1;
             ++callIt2;
             ++assignmentIt1;
@@ -606,13 +609,14 @@ SMTRef nonmutualSMT(SMTRef endClause,
 /* -------------------------------------------------------------------------- */
 // Functions to generate various foralls
 
-SMTRef mutualRecursiveForall(SMTRef clause, CallInfo call1, CallInfo call2,
+SMTRef mutualRecursiveForall(SMTRef clause, MonoPair<CallInfo> callPair,
                              Memory memory) {
-    const uint32_t varArgs = static_cast<uint32_t>(call1.args.size()) -
-                             call1.fun.getFunctionType()->getNumParams();
+    const uint32_t varArgs =
+        static_cast<uint32_t>(callPair.first.args.size()) -
+        callPair.first.fun.getFunctionType()->getNumParams();
     vector<SortedVar> args;
-    args.push_back(SortedVar(call1.assignedTo, "Int"));
-    args.push_back(SortedVar(call2.assignedTo, "Int"));
+    args.push_back(SortedVar(callPair.first.assignedTo, "Int"));
+    args.push_back(SortedVar(callPair.second.assignedTo, "Int"));
     if (memory & HEAP_MASK) {
         args.push_back(SortedVar("HEAP$1_res", "(Array Int Int)"));
         args.push_back(SortedVar("HEAP$2_res", "(Array Int Int)"));
@@ -620,59 +624,49 @@ SMTRef mutualRecursiveForall(SMTRef clause, CallInfo call1, CallInfo call2,
     vector<SMTRef> implArgs;
     vector<SMTRef> preArgs;
 
-    if (call1.externFun) {
-        for (auto arg : call1.args) {
-            implArgs.push_back(arg);
-        }
-        if (memory & HEAP_MASK) {
-            implArgs.push_back(name("HEAP$1"));
-        }
-        for (auto arg : call2.args) {
-            implArgs.push_back(arg);
-        }
-        if (memory & HEAP_MASK) {
-            implArgs.push_back(name("HEAP$2"));
-        }
-        implArgs.push_back(name(call1.assignedTo));
-        implArgs.push_back(name(call2.assignedTo));
+    if (callPair.first.externFun) {
+        callPair.indexedForEach([&implArgs, memory](CallInfo call, int index) {
+            for (auto arg : call.args) {
+                implArgs.push_back(arg);
+            }
+            if (memory & HEAP_MASK) {
+                implArgs.push_back(name("HEAP$" + std::to_string(index)));
+            }
+        });
+        implArgs.push_back(name(callPair.first.assignedTo));
+        implArgs.push_back(name(callPair.second.assignedTo));
         if (memory & HEAP_MASK) {
             implArgs.push_back(name("HEAP$1_res"));
             implArgs.push_back(name("HEAP$2_res"));
         }
 
         const SMTRef postInvariant = std::make_shared<Op>(
-            invariantName(ENTRY_MARK, ProgramSelection::Both, call1.callName,
-                          varArgs),
+            invariantName(ENTRY_MARK, ProgramSelection::Both,
+                          callPair.first.callName, varArgs),
             implArgs);
         clause = makeBinOp("=>", postInvariant, clause);
         return make_shared<Forall>(args, clause);
     } else {
-        for (auto arg : call1.args) {
-            implArgs.push_back(arg);
-        }
-        if (memory & HEAP_MASK) {
-            implArgs.push_back(name("i1"));
-            implArgs.push_back(makeBinOp("select", "HEAP$1", "i1"));
-        }
-        if (memory & STACK_MASK) {
-            implArgs.push_back(name("i1_stack"));
-            implArgs.push_back(makeBinOp("select", "STACK$1", "i1_stack"));
-        }
-        for (auto arg : call2.args) {
-            implArgs.push_back(arg);
-        }
-        if (memory & HEAP_MASK) {
-            implArgs.push_back(name("i2"));
-            implArgs.push_back(makeBinOp("select", "HEAP$2", "i2"));
-        }
-        if (memory & STACK_MASK) {
-            implArgs.push_back(name("i2_stack"));
-            implArgs.push_back(makeBinOp("select", "STACK$2", "i2_stack"));
-        }
+        callPair.indexedForEach([&implArgs, memory](CallInfo call, int index) {
+            string indexString = std::to_string(index);
+            for (auto arg : call.args) {
+                implArgs.push_back(arg);
+            }
+            if (memory & HEAP_MASK) {
+                implArgs.push_back(name("i" + indexString));
+                implArgs.push_back(makeBinOp("select", "HEAP$" + indexString,
+                                             "i" + indexString));
+            }
+            if (memory & STACK_MASK) {
+                implArgs.push_back(name("i" + indexString + "_stack"));
+                implArgs.push_back(makeBinOp("select", "STACK$" + indexString,
+                                             "i" + indexString + "_stack"));
+            }
+        });
         preArgs.insert(preArgs.end(), implArgs.begin(), implArgs.end());
 
-        implArgs.push_back(name(call1.assignedTo));
-        implArgs.push_back(name(call2.assignedTo));
+        implArgs.push_back(name(callPair.first.assignedTo));
+        implArgs.push_back(name(callPair.second.assignedTo));
         if (memory & HEAP_MASK) {
             implArgs.push_back(name("i1_res"));
             implArgs.push_back(makeBinOp("select", "HEAP$1_res", "i1_res"));
@@ -680,7 +674,8 @@ SMTRef mutualRecursiveForall(SMTRef clause, CallInfo call1, CallInfo call2,
             implArgs.push_back(makeBinOp("select", "HEAP$2_res", "i2_res"));
         }
         SMTRef postInvariant = std::make_shared<Op>(
-            invariantName(ENTRY_MARK, ProgramSelection::Both, call1.callName),
+            invariantName(ENTRY_MARK, ProgramSelection::Both,
+                          callPair.first.callName),
             implArgs);
         postInvariant = wrapHeap(postInvariant, memory,
                                  {"i1", "i2", "i1_res", "i2_res", "i1_stack",
@@ -690,7 +685,7 @@ SMTRef mutualRecursiveForall(SMTRef clause, CallInfo call1, CallInfo call2,
         const auto preInv = wrapHeap(
             std::make_shared<Op>(invariantName(ENTRY_MARK,
                                                ProgramSelection::Both,
-                                               call1.callName) +
+                                               callPair.first.callName) +
                                      "_PRE",
                                  preArgs),
             memory, {"i1", "i2", "i1_stack", "i2_stack", "STACK$1", "STACK$2"});
@@ -846,46 +841,46 @@ SMTRef makeFunArgsEqual(SMTRef clause, SMTRef preClause, vector<string> Args1,
     return makeBinOp("=>", inInv, makeBinOp("and", clause, preClause));
 }
 
-SMTRef inInvariant(const llvm::Function &fun1, const llvm::Function &fun2,
-                   SMTRef body, Memory memory, const llvm::Module &mod1,
+SMTRef inInvariant(MonoPair<const llvm::Function *> funs, SMTRef body,
+                   Memory memory, const llvm::Module &mod1,
                    const llvm::Module &mod2, bool strings) {
 
     vector<SMTRef> args;
-    const auto funArgsPair = functionArgs(fun1, fun2);
+    const auto funArgsPair =
+        functionArgs(*funs.first, *funs.second)
+            .indexedMap<vector<string>>(
+                [memory](vector<string> args, int index) -> vector<string> {
+                    string indexString = std::to_string(index);
+                    if (memory & HEAP_MASK) {
+                        args.push_back("HEAP$" + indexString);
+                    }
+                    if (memory & STACK_MASK) {
+                        args.push_back("STACK$" + indexString);
+                    }
+                    return args;
+                });
     vector<string> Args1 = funArgsPair.first;
     vector<string> Args2 = funArgsPair.second;
-    if (memory & HEAP_MASK) {
-        Args1.push_back("HEAP$1");
-    }
-    if (memory & STACK_MASK) {
-        Args1.push_back("STACK$1");
-    }
-    if (memory & HEAP_MASK) {
-        Args2.push_back("HEAP$2");
-    }
-    if (memory & STACK_MASK) {
-        Args2.push_back("STACK$2");
-    }
+
     assert(Args1.size() == Args2.size());
-    vector<SortedVar> funArgs;
     vector<string> pointers;
     vector<string> unsignedVariables;
-    for (auto &arg : fun1.args()) {
-        if (arg.getType()->isPointerTy()) {
-            pointers.push_back(arg.getName());
+    funs.forEach([&pointers](const llvm::Function *fun) {
+        for (auto &arg : fun->args()) {
+            if (arg.getType()->isPointerTy()) {
+                pointers.push_back(arg.getName());
+            }
         }
-    }
-    for (auto &arg : fun2.args()) {
-        if (arg.getType()->isPointerTy()) {
-            pointers.push_back(arg.getName());
-        }
-    }
-    for (auto arg : Args1) {
-        funArgs.push_back(SortedVar(arg, argSort(arg)));
-    }
-    for (auto arg : Args2) {
-        funArgs.push_back(SortedVar(arg, argSort(arg)));
-    }
+    });
+
+    vector<SortedVar> funArgs = concat(funArgsPair.map<vector<SortedVar>>(
+        [](vector<string> args) -> vector<SortedVar> {
+            vector<SortedVar> varArgs;
+            for (auto arg : args) {
+                varArgs.push_back(SortedVar(arg, argSort(arg)));
+            }
+            return varArgs;
+        }));
     for (auto argPair : makeZip(Args1, Args2)) {
         const vector<SortedVar> forallArgs = {SortedVar("i", "Int")};
         if (argPair.first == "HEAP$1") {
@@ -897,14 +892,16 @@ SMTRef inInvariant(const llvm::Function &fun1, const llvm::Function &fun2,
         }
     }
     if (strings) {
-        const auto stringConstants1 = stringConstants(mod1, "HEAP$1");
-        if (!stringConstants1.empty()) {
-            args.push_back(make_shared<Op>("and", stringConstants1));
-        }
-        const auto stringConstants2 = stringConstants(mod2, "HEAP$2");
-        if (!stringConstants2.empty()) {
-            args.push_back(make_shared<Op>("and", stringConstants2));
-        }
+        makeMonoPair(&mod1, &mod2)
+            .indexedMap<vector<SMTRef>>([&args](const llvm::Module *mod,
+                                                int index) -> vector<SMTRef> {
+                return stringConstants(*mod, "HEAP$" + std::to_string(index));
+            })
+            .forEach([&args](vector<SMTRef> constants) {
+                if (!constants.empty()) {
+                    args.push_back(make_shared<Op>("and", constants));
+                }
+            });
     }
     if (body == nullptr) {
         body = make_shared<Op>("and", args);
@@ -1146,42 +1143,36 @@ std::map<int, vector<string>> freeVars(PathMap map1, PathMap map2,
         for (auto var : it.second) {
             varsVect.push_back(var);
         }
-        const vector<string> vars1 = filterVars(1, varsVect);
-        const vector<string> vars2 = filterVars(2, varsVect);
-        vector<string> vars;
-        vars.insert(vars.end(), vars1.begin(), vars1.end());
-        if (memory & HEAP_MASK) {
-            vars.push_back("HEAP$1");
-        }
-        if (memory & STACK_MASK) {
-            vars.push_back("STACK$1");
-        }
-        vars.insert(vars.end(), vars2.begin(), vars2.end());
-        if (memory & HEAP_MASK) {
-            vars.push_back("HEAP$2");
-        }
-        if (memory & STACK_MASK) {
-            vars.push_back("STACK$2");
-        }
-        freeVarsMapVect[index] = vars;
+        const auto argPair =
+            makeMonoPair(filterVars(1, varsVect), filterVars(2, varsVect))
+                .indexedMap<vector<string>>(
+                    [memory](vector<string> vars, int index) -> vector<string> {
+                        string stringIndex = std::to_string(index);
+                        if (memory & HEAP_MASK) {
+                            vars.push_back("HEAP$" + stringIndex);
+                        }
+                        if (memory & STACK_MASK) {
+                            vars.push_back("STACK$" + stringIndex);
+                        }
+                        return vars;
+                    });
+        freeVarsMapVect[index] = concat(argPair);
     }
-    auto args1 = filterVars(1, funArgs);
-    auto args2 = filterVars(2, funArgs);
-    if (memory & HEAP_MASK) {
-        args1.push_back("HEAP$1");
-    }
-    if (memory & STACK_MASK) {
-        args1.push_back("STACK$1");
-    }
-    if (memory & HEAP_MASK) {
-        args2.push_back("HEAP$2");
-    }
-    if (memory & STACK_MASK) {
-        args2.push_back("STACK$2");
-    }
-    args1.insert(args1.end(), args2.begin(), args2.end());
+    const auto argPair =
+        makeMonoPair(filterVars(1, funArgs), filterVars(2, funArgs))
+            .indexedMap<vector<string>>(
+                [memory](vector<string> args, int index) -> vector<string> {
+                    string stringIndex = std::to_string(index);
+                    if (memory & HEAP_MASK) {
+                        args.push_back("HEAP$" + stringIndex);
+                    }
+                    if (memory & STACK_MASK) {
+                        args.push_back("STACK$" + stringIndex);
+                    }
+                    return args;
+                });
 
-    freeVarsMapVect[ENTRY_MARK] = args1;
+    freeVarsMapVect[ENTRY_MARK] = concat(argPair);
 
     return freeVarsMapVect;
 }

@@ -24,9 +24,9 @@
 
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/Verifier.h"
-#include "llvm/IR/Constants.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/TargetSelect.h"
@@ -302,9 +302,10 @@ int main(int argc, const char **argv) {
 
     for (auto funPair : makeZip(funs.get(), fams)) {
         if (funPair.first.first->getName() == fun) {
-            smtExprs.push_back(
-                inInvariant(*funPair.first.first, *funPair.first.second,
-                            inOutInvs.first, mem, *mod1, *mod2, strings));
+            smtExprs.push_back(inInvariant(
+                rewrapMonoPair<llvm::Function *, const llvm::Function *>(
+                    funPair.first),
+                inOutInvs.first, mem, *mod1, *mod2, strings));
             smtExprs.push_back(outInvariant(inOutInvs.second, mem));
             auto newSmtExprs = mainAssertion(funPair.first, funPair.second,
                                              offByN, declarations, onlyRec, mem,

@@ -26,6 +26,7 @@ class SMTExpr {
         const = 0;
     virtual ~SMTExpr();
     SMTExpr(const SMTExpr & /*unused*/) = default;
+    SMTExpr &operator=(SMTExpr &) = delete;
     SMTExpr() = default;
 };
 
@@ -57,12 +58,18 @@ class SortedVar : public SMTExpr {
   public:
     SortedVar(std::string name, std::string type)
         : name(std::move(name)), type(std::move(type)) {}
-    const std::string name;
-    const std::string type;
+    std::string name;
+    std::string type;
     SExprRef toSExpr() const override;
     set<string> uses() const override;
     shared_ptr<const SMTExpr>
     compressLets(std::vector<Assignment> defs) const override;
+    SortedVar &operator=(const SortedVar other) {
+        name = other.name;
+        type = other.type;
+        return *this;
+    }
+    SortedVar(const SortedVar &other) : name(other.name), type(other.type) {}
 };
 
 class Forall : public SMTExpr {

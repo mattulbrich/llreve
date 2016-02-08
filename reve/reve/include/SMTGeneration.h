@@ -12,8 +12,8 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PassManager.h"
 
-#include <tuple>
 #include <regex>
+#include <tuple>
 
 using std::make_shared;
 using llvm::Instruction;
@@ -99,7 +99,7 @@ auto nonmutualSMT(SMTRef endClause,
 /* -------------------------------------------------------------------------- */
 // Functions to generate various foralls
 
-auto mutualRecursiveForall(SMTRef clause, CallInfo call1, CallInfo call2,
+auto mutualRecursiveForall(SMTRef clause, MonoPair<CallInfo> callPair,
                            Memory memory) -> SMTRef;
 auto nonmutualRecursiveForall(SMTRef clause, CallInfo call, Program prog,
                               Memory memory) -> SMTRef;
@@ -113,8 +113,8 @@ auto forallStartingAt(SMTRef clause, std::vector<std::string> freeVars,
 auto makeFunArgsEqual(SMTRef clause, SMTRef preClause,
                       std::vector<std::string> args1,
                       std::vector<std::string> args2) -> SMTRef;
-auto inInvariant(const llvm::Function &fun1, const llvm::Function &fun2,
-                 SMTRef body, Memory memory, const llvm::Module &mod1,
+auto inInvariant(MonoPair<const llvm::Function *> funs, SMTRef body,
+                 Memory memory, const llvm::Module &mod1,
                  const llvm::Module &mod2, bool strings) -> SMTRef;
 auto outInvariant(SMTRef body, Memory memory) -> SMTRef;
 auto equalInputsEqualOutputs(std::vector<string> funArgs,
