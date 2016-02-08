@@ -60,8 +60,8 @@ auto mainSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
                            std::vector<SMTRef> &declarations, Memory memory,
                            bool everythingSigned)
     -> std::map<int, std::map<int, std::vector<std::function<SMTRef(SMTRef)>>>>;
-auto getForbiddenPaths(PathMap pathMap1, PathMap pathMap2,
-                       BidirBlockMarkMap marked1, BidirBlockMarkMap marked2,
+auto getForbiddenPaths(MonoPair<PathMap> pathMaps,
+                       MonoPair<BidirBlockMarkMap> marked,
                        std::map<int, std::vector<string>> freeVarsMap,
                        bool offByN, std::string funName, bool main,
                        Memory memory, bool everythingSigned)
@@ -89,10 +89,9 @@ auto assignmentsOnPath(Path path, Program prog,
                        std::vector<std::string> freeVars, bool toEnd,
                        Memory memory, bool everythingSigned)
     -> std::vector<AssignmentCallBlock>;
-auto interleaveAssignments(SMTRef endClause,
-                           std::vector<AssignmentCallBlock> assignments1,
-                           std::vector<AssignmentCallBlock> assignments2,
-                           Memory memory) -> SMTRef;
+auto interleaveAssignments(
+    SMTRef endClause, MonoPair<std::vector<AssignmentCallBlock>> assignments,
+    Memory memory) -> SMTRef;
 auto nonmutualSMT(SMTRef endClause,
                   std::vector<AssignmentCallBlock> assignments, Program prog,
                   Memory memory) -> SMTRef;
@@ -137,9 +136,15 @@ auto freeVars(PathMap map1, PathMap map2, std::vector<string> funArgs,
 auto functionArgs(const llvm::Function &fun1, const llvm::Function &fun2)
     -> MonoPair<std::vector<std::string>>;
 auto swapIndex(int i) -> int;
-auto splitAssignments(std::vector<AssignmentCallBlock>)
-    -> std::pair<std::vector<std::vector<AssignmentBlock>>,
-                 std::vector<CallInfo>>;
+
+struct SplitAssignments {
+    std::vector<std::vector<AssignmentBlock>> assignments;
+    std::vector<CallInfo> callInfos;
+};
+
+auto splitAssignmentsFromCalls(std::vector<AssignmentCallBlock>)
+    -> SplitAssignments;
+
 auto stringConstants(const llvm::Module &mod, string heap)
     -> std::vector<SMTRef>;
 auto matchFunCalls(std::vector<CallInfo> callInfos1,

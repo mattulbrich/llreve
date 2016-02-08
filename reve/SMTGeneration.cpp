@@ -67,9 +67,9 @@ vector<SMTRef> convertToSMT(MonoPair<llvm::Function *> funs,
 
     // generate forbidden paths
     pathExprs.push_back(make_shared<Comment>("FORBIDDEN PATHS"));
-    const auto forbiddenPaths = getForbiddenPaths(
-        pathMaps.first, pathMaps.second, marked.first, marked.second,
-        freeVarsMap, offByN, funName, false, memory, everythingSigned);
+    const auto forbiddenPaths =
+        getForbiddenPaths(pathMaps, marked, freeVarsMap, offByN, funName, false,
+                          memory, everythingSigned);
     pathExprs.insert(pathExprs.end(), forbiddenPaths.begin(),
                      forbiddenPaths.end());
 
@@ -133,9 +133,9 @@ vector<SMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
     auto synchronizedPaths =
         mainSynchronizedPaths(pathMaps.first, pathMaps.second, freeVarsMap,
                               funName, declarations, memory, everythingSigned);
-    const auto forbiddenPaths = getForbiddenPaths(
-        pathMaps.first, pathMaps.second, marked.first, marked.second,
-        freeVarsMap, offByN, funName, true, memory, everythingSigned);
+    const auto forbiddenPaths =
+        getForbiddenPaths(pathMaps, marked, freeVarsMap, offByN, funName, true,
+                          memory, everythingSigned);
     if (offByN) {
         smtExprs.push_back(make_shared<Comment>("offbyn main"));
         const auto offByNPaths =
@@ -220,8 +220,8 @@ vector<SMTRef> getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
                         path2, Program::Second, freeVarsMap.at(startIndex),
                         endIndex == EXIT_MARK, memory, everythingSigned);
                     pathExprs.push_back(make_shared<Assert>(forallStartingAt(
-                        interleaveAssignments(endInvariant, defs1, defs2,
-                                              memory),
+                        interleaveAssignments(
+                            endInvariant, makeMonoPair(defs1, defs2), memory),
                         freeVarsMap.at(startIndex), startIndex,
                         ProgramSelection::Both, funName, false)));
                 }
@@ -269,8 +269,8 @@ mainSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
                             endIndex == EXIT_MARK, memory, everythingSigned);
                         pathFuns[startIndex][endIndex].push_back(
                             [=](SMTRef end) {
-                                return interleaveAssignments(end, defs1, defs2,
-                                                             memory);
+                                return interleaveAssignments(
+                                    end, makeMonoPair(defs1, defs2), memory);
                             });
                     }
                 }
@@ -281,32 +281,37 @@ mainSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
     return pathFuns;
 }
 
-vector<SMTRef> getForbiddenPaths(PathMap pathMap1, PathMap pathMap2,
-                                 BidirBlockMarkMap marked1,
-                                 BidirBlockMarkMap marked2,
+vector<SMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
+                                 MonoPair<BidirBlockMarkMap> marked,
                                  std::map<int, vector<string>> freeVarsMap,
                                  bool offByN, std::string funName, bool main,
                                  Memory memory, bool everythingSigned) {
     vector<SMTRef> pathExprs;
-    for (const auto &pathMapIt : pathMap1) {
+    for (const auto &pathMapIt : pathMaps.first) {
         const int startIndex = pathMapIt.first;
         for (const auto &innerPathMapIt1 : pathMapIt.second) {
             const int endIndex1 = innerPathMapIt1.first;
-            for (auto &innerPathMapIt2 : pathMap2.at(startIndex)) {
+            for (auto &innerPathMapIt2 : pathMaps.second.at(startIndex)) {
                 const auto endIndex2 = innerPathMapIt2.first;
                 if (endIndex1 != endIndex2) {
                     for (const auto &path1 : innerPathMapIt1.second) {
                         for (const auto &path2 : innerPathMapIt2.second) {
-                            const auto endBlock1 = lastBlock(path1);
-                            const auto endBlock2 = lastBlock(path2);
-                            const auto endIndices1 =
-                                marked1.BlockToMarksMap[endBlock1];
-                            const auto endIndices2 =
-                                marked2.BlockToMarksMap[endBlock2];
+                            const auto endBlocks =
+                                makeMonoPair(path1, path2)
+                                    .map<llvm::BasicBlock *>(lastBlock);
+                            const auto endIndices =
+                                zipWith<BidirBlockMarkMap, llvm::BasicBlock *,
+                                        set<int>>(
+                                    marked, endBlocks,
+                                    [](BidirBlockMarkMap marks,
+                                       llvm::BasicBlock *endBlock) -> set<int> {
+                                        return marks.BlockToMarksMap[endBlock];
+                                    });
                             if (!offByN ||
                                 ((startIndex != endIndex1 && // no circles
                                   startIndex != endIndex2) &&
-                                 intersection(endIndices1, endIndices2)
+                                 intersection(endIndices.first,
+                                              endIndices.second)
                                      .empty())) {
                                 const auto smt2 = assignmentsOnPath(
                                     path2, Program::Second,
@@ -321,7 +326,8 @@ vector<SMTRef> getForbiddenPaths(PathMap pathMap1, PathMap pathMap2,
                                 // We need to interleave here, because otherwise
                                 // extern functions are not matched
                                 const auto smt = interleaveAssignments(
-                                    name("false"), smt1, smt2, memory);
+                                    name("false"), makeMonoPair(smt1, smt2),
+                                    memory);
                                 pathExprs.push_back(
                                     make_shared<Assert>(forallStartingAt(
                                         smt, freeVarsMap.at(startIndex),
@@ -348,8 +354,8 @@ void nonmutualPaths(PathMap pathMap, vector<SMTRef> &pathExprs,
             const auto invariants = invariantDeclaration(
                 startIndex, filterVars(progIndex, freeVarsMap.at(startIndex)),
                 asSelection(prog), funName, memory);
-            declarations.push_back(invariants.first);
-            declarations.push_back(invariants.second);
+            invariants.forEach(
+                [&declarations](SMTRef inv) { declarations.push_back(inv); });
         }
         for (const auto &innerPathMapIt : pathMapIt.second) {
             const int endIndex = innerPathMapIt.first;
@@ -504,24 +510,23 @@ SMTRef addAssignments(const SMTRef end,
     return clause;
 }
 
-SMTRef interleaveAssignments(SMTRef endClause,
-                             vector<AssignmentCallBlock> AssignmentCallBlocks1,
-                             vector<AssignmentCallBlock> AssignmentCallBlocks2,
-                             Memory memory) {
+SMTRef interleaveAssignments(
+    SMTRef endClause,
+    MonoPair<vector<AssignmentCallBlock>> AssignmentCallBlocks, Memory memory) {
     SMTRef clause = endClause;
-    const auto splitAssignments1 = splitAssignments(AssignmentCallBlocks1);
-    const auto splitAssignments2 = splitAssignments(AssignmentCallBlocks2);
-    const auto assignmentBlocks1 = splitAssignments1.first;
-    const auto assignmentBlocks2 = splitAssignments2.first;
-    const auto callInfo1 = splitAssignments1.second;
-    const auto callInfo2 = splitAssignments2.second;
+    const auto splitAssignments =
+        AssignmentCallBlocks.map<SplitAssignments>(splitAssignmentsFromCalls);
+    const auto assignmentBlocks1 = splitAssignments.first.assignments;
+    const auto assignmentBlocks2 = splitAssignments.second.assignments;
+    const auto callInfo1 = splitAssignments.first.callInfos;
+    const auto callInfo2 = splitAssignments.second.callInfos;
 
     const auto interleaveSteps = matchFunCalls(callInfo1, callInfo2);
 
     assert(assignmentBlocks1.size() == callInfo1.size() + 1);
     assert(assignmentBlocks2.size() == callInfo2.size() + 1);
-    assert(AssignmentCallBlocks1.size() >= 1);
-    assert(AssignmentCallBlocks2.size() >= 1);
+    assert(AssignmentCallBlocks.first.size() >= 1);
+    assert(AssignmentCallBlocks.second.size() >= 1);
 
     auto callIt1 = callInfo1.rbegin();
     auto callIt2 = callInfo2.rbegin();
@@ -579,9 +584,10 @@ SMTRef nonmutualSMT(SMTRef endClause,
                     vector<AssignmentCallBlock> assignmentCallBlocks,
                     Program prog, Memory memory) {
     SMTRef clause = endClause;
-    const auto splittedAssignments = splitAssignments(assignmentCallBlocks);
-    const auto assignmentBlocks = splittedAssignments.first;
-    const auto callInfos = splittedAssignments.second;
+    const auto splitAssignments =
+        splitAssignmentsFromCalls(assignmentCallBlocks);
+    const auto assignmentBlocks = splitAssignments.assignments;
+    const auto callInfos = splitAssignments.callInfos;
     assert(assignmentBlocks.size() == callInfos.size() + 1);
     bool first = true;
     auto callIt = callInfos.rbegin();
@@ -1203,8 +1209,8 @@ int swapIndex(int I) {
 }
 
 /// Split the assignment blocks on each call
-std::pair<vector<vector<AssignmentBlock>>, vector<CallInfo>>
-splitAssignments(vector<AssignmentCallBlock> assignmentCallBlocks) {
+SplitAssignments
+splitAssignmentsFromCalls(vector<AssignmentCallBlock> assignmentCallBlocks) {
     vector<vector<AssignmentBlock>> assignmentBlocks;
     vector<CallInfo> callInfos;
     vector<struct AssignmentBlock> currentAssignmentsList;
@@ -1228,7 +1234,7 @@ splitAssignments(vector<AssignmentCallBlock> assignmentCallBlocks) {
             AssignmentBlock(currentDefinitions, condition));
     }
     assignmentBlocks.push_back(currentAssignmentsList);
-    return make_pair(assignmentBlocks, callInfos);
+    return {assignmentBlocks, callInfos};
 }
 
 vector<SMTRef> stringConstants(const llvm::Module &mod, string memory) {

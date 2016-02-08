@@ -25,8 +25,8 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
         // Ignore phi nodes if we are in a loop as they're bound in a
         // forall quantifier
         if (!ignorePhis && llvm::isa<llvm::PHINode>(instr)) {
-            definitions.push_back(
-                DefOrCallInfo(instrAssignment(*instr, prevBb, prog, everythingSigned)));
+            definitions.push_back(DefOrCallInfo(
+                instrAssignment(*instr, prevBb, prog, everythingSigned)));
         }
         if (!onlyPhis && !llvm::isa<llvm::PHINode>(instr)) {
             if (const auto CallInst = llvm::dyn_cast<llvm::CallInst>(instr)) {
@@ -81,9 +81,10 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
 }
 
 /// Convert a single instruction to an assignment
-std::shared_ptr<std::pair<string, SMTRef>>
-instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
-                Program prog, bool everythingSigned) {
+std::shared_ptr<Assignment> instrAssignment(const llvm::Instruction &Instr,
+                                            const llvm::BasicBlock *prevBb,
+                                            Program prog,
+                                            bool everythingSigned) {
     const int progIndex = programIndex(prog);
     if (const auto BinOp = llvm::dyn_cast<llvm::BinaryOperator>(&Instr)) {
         if (BinOp->getOpcode() == Instruction::SDiv) {
@@ -255,7 +256,9 @@ string predicateName(llvm::CmpInst::Predicate pred) {
 std::function<SMTRef(SMTRef)> predicateFun(const llvm::CmpInst::CmpInst &cmp,
                                            bool everythingSigned) {
     if (cmp.isUnsigned() && !everythingSigned) {
-        return [](SMTRef everythingSigned) { return makeUnaryOp("abs", everythingSigned); };
+        return [](SMTRef everythingSigned) {
+            return makeUnaryOp("abs", everythingSigned);
+        };
     }
     return [](SMTRef everythingSigned) { return everythingSigned; };
 }
