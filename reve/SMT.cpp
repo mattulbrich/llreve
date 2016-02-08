@@ -72,8 +72,8 @@ SExprRef Let::toSExpr() const {
     for (auto &def : defs) {
         std::vector<SExprRef> argSExprs;
         argSExprs.push_back(def.second->toSExpr());
-        defSExprs.push_back(
-            llvm::make_unique<Apply<std::string>>(def.first, std::move(argSExprs)));
+        defSExprs.push_back(llvm::make_unique<Apply<std::string>>(
+            def.first, std::move(argSExprs)));
     }
     args.push_back(llvm::make_unique<List<std::string>>(std::move(defSExprs)));
     args.push_back(expr->toSExpr());
@@ -161,9 +161,11 @@ SExprRef FunDecl::toSExpr() const {
     }
     std::vector<SExprRef> args;
     args.push_back(name(funName)->toSExpr());
-    args.push_back(llvm::make_unique<List<std::string>>(std::move(inTypeSExprs)));
+    args.push_back(
+        llvm::make_unique<List<std::string>>(std::move(inTypeSExprs)));
     args.push_back(name(outType)->toSExpr());
-    return llvm::make_unique<Apply<std::string>>("declare-fun", std::move(args));
+    return llvm::make_unique<Apply<std::string>>("declare-fun",
+                                                 std::move(args));
 }
 
 SExprRef FunDef::toSExpr() const {
@@ -189,45 +191,36 @@ template <> set<string> Primitive<string>::uses() const {
     return uses;
 }
 
-SMTRef SetLogic::compressLets(
-    std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> defs) const {
+SMTRef SetLogic::compressLets(std::vector<Assignment> defs) const {
     return nestLets(make_shared<SetLogic>(logic), defs);
 }
 
-SMTRef Assert::compressLets(
-    std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> defs) const {
+SMTRef Assert::compressLets(std::vector<Assignment> defs) const {
     return nestLets(make_shared<Assert>(expr->compressLets()), defs);
 }
 
-SMTRef SortedVar::compressLets(
-    std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> defs) const {
+SMTRef SortedVar::compressLets(std::vector<Assignment> defs) const {
     return nestLets(make_shared<SortedVar>(name, type), defs);
 }
 
-SMTRef Forall::compressLets(
-    std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> defs) const {
+SMTRef Forall::compressLets(std::vector<Assignment> defs) const {
     return nestLets(make_shared<Forall>(vars, expr->compressLets()), defs);
 }
 
-SMTRef CheckSat::compressLets(
-    std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> defs) const {
+SMTRef CheckSat::compressLets(std::vector<Assignment> defs) const {
     return nestLets(make_shared<CheckSat>(), defs);
 }
 
-SMTRef GetModel::compressLets(
-    std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> defs) const {
+SMTRef GetModel::compressLets(std::vector<Assignment> defs) const {
     return nestLets(make_shared<GetModel>(), defs);
 }
 
-SMTRef Let::compressLets(
-    std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> passedDefs)
-    const {
+SMTRef Let::compressLets(std::vector<Assignment> passedDefs) const {
     passedDefs.insert(passedDefs.end(), defs.begin(), defs.end());
     return expr->compressLets(passedDefs);
 }
 
-SMTRef Op::compressLets(
-    std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> defs) const {
+SMTRef Op::compressLets(std::vector<Assignment> defs) const {
     std::vector<SMTRef> compressedArgs;
     for (auto arg : args) {
         compressedArgs.push_back(arg->compressLets());
@@ -235,31 +228,28 @@ SMTRef Op::compressLets(
     return nestLets(make_shared<Op>(opName, compressedArgs), defs);
 }
 
-SMTRef FunDecl::compressLets(
-    std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> defs) const {
+SMTRef FunDecl::compressLets(std::vector<Assignment> defs) const {
     return nestLets(make_shared<FunDecl>(funName, inTypes, outType), defs);
 }
 
-SMTRef FunDef::compressLets(
-    std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> defs) const {
+SMTRef FunDef::compressLets(std::vector<Assignment> defs) const {
     return nestLets(make_shared<FunDef>(funName, args, outType, body), defs);
 }
 
 template <typename T>
-SMTRef Primitive<T>::compressLets(
-    std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> defs) const {
+SMTRef Primitive<T>::compressLets(std::vector<Assignment> defs) const {
     return nestLets(make_shared<Primitive<T>>(val), defs);
 }
 
-SMTRef nestLets(SMTRef clause, std::vector<std::pair<string, SMTRef>> defs) {
+SMTRef nestLets(SMTRef clause, std::vector<Assignment> defs) {
     SMTRef lets = clause;
     set<string> uses;
-    std::vector<std::pair<string, SMTRef>> defsAccum;
+    std::vector<Assignment> defsAccum;
     for (auto i = defs.rbegin(), e = defs.rend(); i != e; ++i) {
         if (uses.find(i->first) != uses.end()) {
             lets = llvm::make_unique<const Let>(defsAccum, lets);
             uses = set<string>();
-            defsAccum = std::vector<std::pair<string, SMTRef>>();
+            defsAccum = std::vector<Assignment>();
         }
         defsAccum.insert(defsAccum.begin(), *i);
         for (auto use : i->second->uses()) {
@@ -272,8 +262,7 @@ SMTRef nestLets(SMTRef clause, std::vector<std::pair<string, SMTRef>> defs) {
     return lets;
 }
 
-SMTRef Comment::compressLets(
-    std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> defs) const {
+SMTRef Comment::compressLets(std::vector<Assignment> defs) const {
     return nestLets(make_shared<Comment>(val), defs);
 }
 
@@ -282,3 +271,7 @@ SExprRef Comment::toSExpr() const {
 }
 
 std::set<std::string> Comment::uses() const { return std::set<std::string>(); }
+
+shared_ptr<Assignment> makeAssignment(string name, SMTRef val) {
+    return make_shared<Assignment>(name, val);
+}

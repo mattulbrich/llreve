@@ -415,7 +415,3 @@ bool isPtrDiff(const llvm::Instruction &instr) {
 bool isStackOp(const llvm::Instruction &inst) {
     return inst.getMetadata("reve.stackop");
 }
-
-shared_ptr<Assignment> makeAssignment(string name, SMTRef val) {
-    return make_shared<Assignment>(name, val);
-}

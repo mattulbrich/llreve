@@ -9,10 +9,6 @@
 // Functions related to the conversion of single instructions/basic
 // blocks to SMT assignments
 
-using Assignment = std::pair<std::string, SMTRef>;
-
-auto makeAssignment(string name, SMTRef val) -> std::shared_ptr<Assignment>;
-
 struct CallInfo {
     std::string assignedTo;
     std::string callName;
@@ -60,7 +56,7 @@ auto blockAssignments(const llvm::BasicBlock &bb,
 auto instrAssignment(const llvm::Instruction &instr,
                      const llvm::BasicBlock *prevBb, Program prog,
                      bool everythingSigned)
-    -> std::shared_ptr<std::pair<std::string, SMTRef>>;
+    -> std::shared_ptr<Assignment>;
 auto predicateName(const llvm::CmpInst::Predicate pred) -> std::string;
 auto predicateFun(const llvm::CmpInst::CmpInst &pred, bool everythingSigned)
     -> std::function<SMTRef(SMTRef)>;
