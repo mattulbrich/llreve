@@ -11,29 +11,30 @@
 
 using Assignment = std::pair<std::string, SMTRef>;
 
-auto makeAssignment(string Name, SMTRef Val) -> std::shared_ptr<Assignment>;
+auto makeAssignment(string name, SMTRef val) -> std::shared_ptr<Assignment>;
 
 struct CallInfo {
-    std::string AssignedTo;
-    std::string CallName;
-    std::vector<SMTRef> Args;
-    bool Extern;
-    const llvm::Function &Fun;
-    CallInfo(std::string AssignedTo, std::string CallName,
-             std::vector<SMTRef> Args, bool Extern, const llvm::Function &Fun)
-        : AssignedTo(AssignedTo), CallName(CallName), Args(Args),
-          Extern(Extern), Fun(Fun) {}
-    bool operator==(const CallInfo &Other) const {
-        bool Result = CallName == Other.CallName;
-        if (!Extern) {
-            return Result;
+    std::string assignedTo;
+    std::string callName;
+    std::vector<SMTRef> args;
+    bool externFun;
+    const llvm::Function &fun;
+    CallInfo(std::string assignedTo, std::string callName,
+             std::vector<SMTRef> args, bool externFun,
+             const llvm::Function &fun)
+        : assignedTo(assignedTo), callName(callName), args(args),
+          externFun(externFun), fun(fun) {}
+    bool operator==(const CallInfo &other) const {
+        bool result = callName == other.callName;
+        if (!externFun) {
+            return result;
         } else {
             // We don’t have a useful abstraction for extern functions which
             // don’t have the same number of arguments so we only want to couple
             // those that have one
-            return Result &&
-                   Fun.getFunctionType()->getNumParams() ==
-                       Other.Fun.getFunctionType()->getNumParams();
+            return result &&
+                   fun.getFunctionType()->getNumParams() ==
+                       other.fun.getFunctionType()->getNumParams();
         }
     }
 };
@@ -41,33 +42,34 @@ struct CallInfo {
 enum class DefOrCallInfoTag { Call, Def };
 
 struct DefOrCallInfo {
-    std::shared_ptr<Assignment> Definition;
-    std::shared_ptr<CallInfo> CallInfo_;
-    enum DefOrCallInfoTag Tag;
-    DefOrCallInfo(std::shared_ptr<Assignment> Definition)
-        : Definition(Definition), CallInfo_(nullptr),
-          Tag(DefOrCallInfoTag::Def) {}
-    DefOrCallInfo(std::shared_ptr<struct CallInfo> CallInfo_)
-        : Definition(nullptr), CallInfo_(CallInfo_),
-          Tag(DefOrCallInfoTag::Call) {}
+    std::shared_ptr<Assignment> definition;
+    std::shared_ptr<CallInfo> callInfo;
+    enum DefOrCallInfoTag tag;
+    DefOrCallInfo(std::shared_ptr<Assignment> definition)
+        : definition(definition), callInfo(nullptr),
+          tag(DefOrCallInfoTag::Def) {}
+    DefOrCallInfo(std::shared_ptr<struct CallInfo> callInfo)
+        : definition(nullptr), callInfo(callInfo), tag(DefOrCallInfoTag::Call) {
+    }
 };
 
-auto blockAssignments(const llvm::BasicBlock &BB,
-                      const llvm::BasicBlock *PrevBB, bool OnlyPhis,
-                      Program Prog, Memory Heap, bool Signed)
+auto blockAssignments(const llvm::BasicBlock &bb,
+                      const llvm::BasicBlock *prevBb, bool onlyPhis,
+                      Program prog, Memory heap, bool everythingSigned)
     -> std::vector<DefOrCallInfo>;
-auto instrAssignment(const llvm::Instruction &Instr,
-                     const llvm::BasicBlock *PrevBB, Program Prog, bool Signed)
+auto instrAssignment(const llvm::Instruction &instr,
+                     const llvm::BasicBlock *prevBb, Program prog,
+                     bool everythingSigned)
     -> std::shared_ptr<std::pair<std::string, SMTRef>>;
-auto predicateName(const llvm::CmpInst::Predicate Pred) -> std::string;
-auto predicateFun(const llvm::CmpInst::CmpInst &Pred, bool Signed)
+auto predicateName(const llvm::CmpInst::Predicate pred) -> std::string;
+auto predicateFun(const llvm::CmpInst::CmpInst &pred, bool everythingSigned)
     -> std::function<SMTRef(SMTRef)>;
-auto opName(const llvm::BinaryOperator &Op) -> std::string;
-auto combineOp(const llvm::BinaryOperator &Op)
+auto opName(const llvm::BinaryOperator &op) -> std::string;
+auto combineOp(const llvm::BinaryOperator &op)
     -> std::function<SMTRef(string, SMTRef, SMTRef)>;
-auto memcpyIntrinsic(const llvm::CallInst *CallInst, Program Prog)
+auto memcpyIntrinsic(const llvm::CallInst *callInst, Program prog)
     -> std::vector<DefOrCallInfo>;
-auto toCallInfo(std::string AssignedTo, Program Prog,
-                const llvm::CallInst &CallInst) -> std::shared_ptr<CallInfo>;
-auto isPtrDiff(const llvm::Instruction &Instr) -> bool;
-auto isStackOp(const llvm::Instruction &Inst) -> bool;
+auto toCallInfo(std::string assignedTo, Program prog,
+                const llvm::CallInst &callInst) -> std::shared_ptr<CallInfo>;
+auto isPtrDiff(const llvm::Instruction &instr) -> bool;
+auto isStackOp(const llvm::Instruction &inst) -> bool;

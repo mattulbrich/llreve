@@ -10,41 +10,41 @@
 
 /// Get the name of the instruction or a string representation of the value if
 /// it's a constant
-SMTRef instrNameOrVal(const llvm::Value *Val, const llvm::Type *Ty) {
-    if (const auto ConstInt = llvm::dyn_cast<llvm::ConstantInt>(Val)) {
-        const auto ApInt = ConstInt->getValue();
-        if (ApInt.isIntN(1) && Ty->isIntegerTy(1)) {
-            return name(ApInt.getBoolValue() ? "true" : "false");
+SMTRef instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) {
+    if (const auto constInt = llvm::dyn_cast<llvm::ConstantInt>(val)) {
+        const auto apInt = constInt->getValue();
+        if (apInt.isIntN(1) && ty->isIntegerTy(1)) {
+            return name(apInt.getBoolValue() ? "true" : "false");
         }
-        if (ApInt.isNegative()) {
+        if (apInt.isNegative()) {
             return makeUnaryOp(
-                "-", name(ApInt.toString(10, true).substr(1, string::npos)));
+                "-", name(apInt.toString(10, true).substr(1, string::npos)));
         }
-        return name(ApInt.toString(10, true));
+        return name(apInt.toString(10, true));
     }
-    if (llvm::isa<llvm::ConstantPointerNull>(Val)) {
+    if (llvm::isa<llvm::ConstantPointerNull>(val)) {
         return name("0");
     }
-    if (const auto GEP = llvm::dyn_cast<llvm::GEPOperator>(Val)) {
-        if (!llvm::isa<llvm::Instruction>(Val)) {
-            return resolveGEP(*GEP);
+    if (const auto gep = llvm::dyn_cast<llvm::GEPOperator>(val)) {
+        if (!llvm::isa<llvm::Instruction>(val)) {
+            return resolveGEP(*gep);
         }
     }
 
-    if (const auto ConstExpr = llvm::dyn_cast<llvm::ConstantExpr>(Val)) {
-        if (ConstExpr->getOpcode() == llvm::Instruction::IntToPtr) {
-            return instrNameOrVal(ConstExpr->getOperand(0),
-                                  ConstExpr->getOperand(0)->getType());
+    if (const auto constExpr = llvm::dyn_cast<llvm::ConstantExpr>(val)) {
+        if (constExpr->getOpcode() == llvm::Instruction::IntToPtr) {
+            return instrNameOrVal(constExpr->getOperand(0),
+                                  constExpr->getOperand(0)->getType());
         }
     }
-    if (llvm::isa<llvm::GlobalValue>(Val)) {
-        return name(Val->getName());
+    if (llvm::isa<llvm::GlobalValue>(val)) {
+        return name(val->getName());
     }
-    if (Val->getName().empty()) {
-        logErrorData("Unnamed variable\n", *Val);
+    if (val->getName().empty()) {
+        logErrorData("Unnamed variable\n", *val);
         exit(1);
     }
-    return name(Val->getName());
+    return name(val->getName());
 }
 
 int typeSize(llvm::Type *Ty) {
@@ -58,16 +58,16 @@ int typeSize(llvm::Type *Ty) {
     if (Ty->isDoubleTy()) {
         return 1;
     }
-    if (auto StructTy = llvm::dyn_cast<llvm::StructType>(Ty)) {
-        int Size = 0;
-        for (auto ElTy : StructTy->elements()) {
-            Size += typeSize(ElTy);
+    if (auto structTy = llvm::dyn_cast<llvm::StructType>(Ty)) {
+        int size = 0;
+        for (auto elTy : structTy->elements()) {
+            size += typeSize(elTy);
         }
-        return Size;
+        return size;
     }
-    if (auto ArrayTy = llvm::dyn_cast<llvm::ArrayType>(Ty)) {
-        return static_cast<int>(ArrayTy->getNumElements()) *
-               typeSize(ArrayTy->getElementType());
+    if (auto arrayTy = llvm::dyn_cast<llvm::ArrayType>(Ty)) {
+        return static_cast<int>(arrayTy->getNumElements()) *
+               typeSize(arrayTy->getElementType());
     }
     if (llvm::isa<llvm::PointerType>(Ty)) {
         return 1;
@@ -77,21 +77,21 @@ int typeSize(llvm::Type *Ty) {
 }
 
 /// Filter vars to only include the ones from Program
-std::vector<string> filterVars(int Program, std::vector<string> Vars) {
-    std::vector<string> FilteredVars;
-    const string ProgramName = std::to_string(Program);
-    for (auto Var : Vars) {
-        const auto Pos = Var.rfind("$");
-        if (Var.substr(Pos + 1, ProgramName.length()) == ProgramName) {
-            FilteredVars.push_back(Var);
+std::vector<string> filterVars(int program, std::vector<string> vars) {
+    std::vector<string> filteredVars;
+    const string programName = std::to_string(program);
+    for (auto var : vars) {
+        const auto pos = var.rfind("$");
+        if (var.substr(pos + 1, programName.length()) == programName) {
+            filteredVars.push_back(var);
         }
     }
-    return FilteredVars;
+    return filteredVars;
 }
 
-string argSort(string Arg) {
-    if (std::regex_match(Arg, HEAP_REGEX) || Arg == "HEAP$1_res" ||
-        Arg == "HEAP$2_res") {
+string argSort(string arg) {
+    if (std::regex_match(arg, HEAP_REGEX) || arg == "HEAP$1_res" ||
+        arg == "HEAP$2_res") {
         return "(Array Int Int)";
     }
     return "Int";

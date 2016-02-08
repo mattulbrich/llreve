@@ -3,71 +3,71 @@
 using std::vector;
 using std::make_shared;
 
-std::vector<std::string> resolveHeapReferences(std::vector<std::string> Args,
-                                               string Suffix, Memory &Heap) {
-    Heap = 0;
-    vector<string> Result;
-    for (auto Arg : Args) {
-        std::smatch MatchResult;
-        if (std::regex_match(Arg, MatchResult, HEAP_REGEX)) {
-            const string I = MatchResult[2];
-            string Index = "i" + I;
-            if (MatchResult[1] == "STACK") {
-                Index += "_stack";
+std::vector<std::string> resolveHeapReferences(std::vector<std::string> args,
+                                               string suffix, Memory &heap) {
+    heap = 0;
+    vector<string> result;
+    for (auto arg : args) {
+        std::smatch matchResult;
+        if (std::regex_match(arg, matchResult, HEAP_REGEX)) {
+            const string i = matchResult[2];
+            string index = "i" + i;
+            if (matchResult[1] == "STACK") {
+                index += "_stack";
             }
-            Result.push_back(Index);
-            Result.push_back("(select " + Arg + Suffix + " " + Index + ")");
-            Heap |= HEAP_MASK;
-        } else if (Arg == "HEAP$1_res" || Arg == "HEAP$2_res") {
-            const string Index = "i" + Arg.substr(5, 6);
-            Result.push_back(Index);
-            Result.push_back("(select " + Arg + " " + Index + ")");
-            Heap |= HEAP_MASK;
+            result.push_back(index);
+            result.push_back("(select " + arg + suffix + " " + index + ")");
+            heap |= HEAP_MASK;
+        } else if (arg == "HEAP$1_res" || arg == "HEAP$2_res") {
+            const string index = "i" + arg.substr(5, 6);
+            result.push_back(index);
+            result.push_back("(select " + arg + " " + index + ")");
+            heap |= HEAP_MASK;
         } else {
-            if (Arg == "result$1" || Arg == "result$2") {
-                Result.push_back(Arg);
+            if (arg == "result$1" || arg == "result$2") {
+                result.push_back(arg);
             } else {
-                Result.push_back(Arg + Suffix);
+                result.push_back(arg + suffix);
             }
         }
     }
-    return Result;
+    return result;
 }
 
 
 
-SMTRef wrapHeap(SMTRef Inv, Memory Heap, vector<string> FreeVars) {
-    if (!Heap) {
-        return Inv;
+SMTRef wrapHeap(SMTRef inv, Memory heap, vector<string> freeVars) {
+    if (!heap) {
+        return inv;
     }
-    std::vector<SortedVar> Args;
-    for (auto Var : FreeVars) {
-        if (std::regex_match(Var, INDEX_REGEX)) {
-            Args.push_back(SortedVar(Var, "Int"));
+    std::vector<SortedVar> args;
+    for (auto var : freeVars) {
+        if (std::regex_match(var, INDEX_REGEX)) {
+            args.push_back(SortedVar(var, "Int"));
         }
-        if (Var == "STACK$1" || Var == "STACK$2") {
-            Args.push_back(SortedVar(Var, "(Array Int Int)"));
+        if (var == "STACK$1" || var == "STACK$2") {
+            args.push_back(SortedVar(var, "(Array Int Int)"));
         }
     }
-    return make_shared<Forall>(Args, Inv);
+    return make_shared<Forall>(args, inv);
 }
 
-unsigned long adaptSizeToHeap(unsigned long Size, vector<string> FreeVars) {
-    if (std::find(FreeVars.begin(), FreeVars.end(), "HEAP$1") !=
-        FreeVars.end()) {
-        Size++;
+unsigned long adaptSizeToHeap(unsigned long size, vector<string> freeVars) {
+    if (std::find(freeVars.begin(), freeVars.end(), "HEAP$1") !=
+        freeVars.end()) {
+        size++;
     }
-    if (std::find(FreeVars.begin(), FreeVars.end(), "STACK$1") !=
-        FreeVars.end()) {
-        Size++;
+    if (std::find(freeVars.begin(), freeVars.end(), "STACK$1") !=
+        freeVars.end()) {
+        size++;
     }
-    if (std::find(FreeVars.begin(), FreeVars.end(), "HEAP$2") !=
-        FreeVars.end()) {
-        Size++;
+    if (std::find(freeVars.begin(), freeVars.end(), "HEAP$2") !=
+        freeVars.end()) {
+        size++;
     }
-    if (std::find(FreeVars.begin(), FreeVars.end(), "STACK$2") !=
-        FreeVars.end()) {
-        Size++;
+    if (std::find(freeVars.begin(), freeVars.end(), "STACK$2") !=
+        freeVars.end()) {
+        size++;
     }
-    return Size;
+    return size;
 }

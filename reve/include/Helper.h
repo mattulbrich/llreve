@@ -15,106 +15,106 @@
     logWarningData_(Message, El, __FILE__, __LINE__)
 
 template <typename Str>
-auto logError_(Str Message, const char *File, int Line) -> void {
+auto logError_(Str message, const char *file, int line) -> void {
     if (isatty(fileno(stdout))) {
-        llvm::errs() << "\x1b[31;1mERROR\x1b[0m\x1b[1m (" << File << ":" << Line
-                     << "): " << Message << "\x1b[0m";
+        llvm::errs() << "\x1b[31;1mERROR\x1b[0m\x1b[1m (" << file << ":" << line
+                     << "): " << message << "\x1b[0m";
     } else {
-        llvm::errs() << "ERROR: " << Message;
+        llvm::errs() << "ERROR: " << message;
     }
 }
 
 template <typename Str>
-auto logWarning_(Str Message, const char *File, int Line) -> void {
+auto logWarning_(Str message, const char *file, int line) -> void {
     if (isatty(fileno(stdout))) {
-        llvm::errs() << "\x1b[33;1mWARNING\x1b[0m\x1b[1m (" << File << ":"
-                     << Line << "): " << Message << "\x1b[0m";
+        llvm::errs() << "\x1b[33;1mWARNING\x1b[0m\x1b[1m (" << file << ":"
+                     << line << "): " << message << "\x1b[0m";
     } else {
-        llvm::errs() << "WARNING: " << Message;
+        llvm::errs() << "WARNING: " << message;
     }
 }
 
 template <typename Str, typename A>
-auto logErrorData_(Str Message, A &El, const char *File, int Line) -> void {
-    logError_(Message, File, Line);
-    El.print(llvm::errs());
+auto logErrorData_(Str message, A &el, const char *file, int line) -> void {
+    logError_(message, file, line);
+    el.print(llvm::errs());
     llvm::errs() << "\n";
 }
 
 template <typename Str, typename A>
-auto logWarningData_(Str Message, A &El, const char *File, int Line) -> void {
-    logWarning_(Message, File, Line);
-    El.print(llvm::errs());
+auto logWarningData_(Str message, A &el, const char *file, int line) -> void {
+    logWarning_(message, file, line);
+    el.print(llvm::errs());
     llvm::errs() << "\n";
 }
 
-auto instrNameOrVal(const llvm::Value *Val, const llvm::Type *Ty) -> SMTRef;
-auto typeSize(llvm::Type *Ty) -> int;
-template <typename T> SMTRef resolveGEP(T &GEP) {
-    std::vector<SMTRef> Args;
-    Args.push_back(instrNameOrVal(GEP.getPointerOperand(),
-                                  GEP.getPointerOperand()->getType()));
-    const auto Type = GEP.getSourceElementType();
-    std::vector<llvm::Value *> Indices;
-    for (auto Ix = GEP.idx_begin(), E = GEP.idx_end(); Ix != E; ++Ix) {
-        Indices.push_back(*Ix);
-        const auto Size = typeSize(llvm::GetElementPtrInst::getIndexedType(
-            Type, llvm::ArrayRef<llvm::Value *>(Indices)));
-        if (Size == 1) {
-            Args.push_back(instrNameOrVal(*Ix, (*Ix)->getType()));
+auto instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) -> SMTRef;
+auto typeSize(llvm::Type *ty) -> int;
+template <typename T> SMTRef resolveGEP(T &gep) {
+    std::vector<SMTRef> args;
+    args.push_back(instrNameOrVal(gep.getPointerOperand(),
+                                  gep.getPointerOperand()->getType()));
+    const auto type = gep.getSourceElementType();
+    std::vector<llvm::Value *> indices;
+    for (auto ix = gep.idx_begin(), e = gep.idx_end(); ix != e; ++ix) {
+        indices.push_back(*ix);
+        const auto size = typeSize(llvm::GetElementPtrInst::getIndexedType(
+            type, llvm::ArrayRef<llvm::Value *>(indices)));
+        if (size == 1) {
+            args.push_back(instrNameOrVal(*ix, (*ix)->getType()));
         } else {
-            Args.push_back(makeBinOp("*", name(std::to_string(Size)),
-                                     instrNameOrVal(*Ix, (*Ix)->getType())));
+            args.push_back(makeBinOp("*", name(std::to_string(size)),
+                                     instrNameOrVal(*ix, (*ix)->getType())));
         }
     }
-    return std::make_shared<Op>("+", Args);
+    return std::make_shared<Op>("+", args);
 }
 
 template <typename Key, typename Val>
-auto unionWith(std::map<Key, Val> MapA, std::map<Key, Val> MapB,
-               std::function<Val(Val, Val)> Combine) -> std::map<Key, Val> {
-    for (auto Pair : MapB) {
-        if (MapA.find(Pair.first) == MapA.end()) {
-            MapA.insert(Pair);
+auto unionWith(std::map<Key, Val> mapA, std::map<Key, Val> mapB,
+               std::function<Val(Val, Val)> combine) -> std::map<Key, Val> {
+    for (auto pair : mapB) {
+        if (mapA.find(pair.first) == mapA.end()) {
+            mapA.insert(pair);
         } else {
-            MapA.at(Pair.first) = Combine(MapA.at(Pair.first), Pair.second);
+            mapA.at(pair.first) = combine(mapA.at(pair.first), pair.second);
         }
     }
-    return MapA;
+    return mapA;
 }
 
 template <typename KeyA, typename KeyB, typename Val>
-auto transpose(std::map<KeyA, std::map<KeyB, Val>> Map) -> std::map<KeyB, std::map<KeyA, Val>> {
-    std::map<KeyB, std::map<KeyA, Val>> MapResult;
-    for (auto It : Map) {
-        for (auto InnerIt : It.second) {
-            MapResult[InnerIt.first][It.first] = InnerIt.second;
+auto transpose(std::map<KeyA, std::map<KeyB, Val>> map) -> std::map<KeyB, std::map<KeyA, Val>> {
+    std::map<KeyB, std::map<KeyA, Val>> mapResult;
+    for (auto it : map) {
+        for (auto innerIt : it.second) {
+            mapResult[innerIt.first][it.first] = innerIt.second;
         }
     }
-    return MapResult;
+    return mapResult;
 }
 
 template <typename T>
 auto mergePathFuns(
-    std::map<int, std::map<int, std::vector<T>>> A,
-    std::map<int, std::map<int, std::vector<T>>> B)
+    std::map<int, std::map<int, std::vector<T>>> a,
+    std::map<int, std::map<int, std::vector<T>>> b)
     -> std::map<int,
                 std::map<int, std::vector<T>>> {
-    auto Merge = [](std::map<int, std::vector<T>> MapA,
-                    std::map<int, std::vector<T>> MapB)
+    auto merge = [](std::map<int, std::vector<T>> mapA,
+                    std::map<int, std::vector<T>> mapB)
         -> std::map<int, std::vector<T>> {
             return unionWith<int, std::vector<T>>(
-                MapA, MapB, [](std::vector<T> A,
-                               std::vector<T> B) {
-                    A.insert(A.end(), B.begin(), B.end());
-                    return A;
+                mapA, mapB, [](std::vector<T> a,
+                               std::vector<T> b) {
+                    a.insert(a.end(), b.begin(), b.end());
+                    return a;
                 });
         };
-    return unionWith<int, std::map<int, std::vector<T>>>(A, B,
-                                                                      Merge);
+    return unionWith<int, std::map<int, std::vector<T>>>(a, b,
+                                                                      merge);
 }
 
-auto filterVars(int Program, std::vector<std::string> Vars)
+auto filterVars(int program, std::vector<std::string> vars)
     -> std::vector<std::string>;
 
-auto argSort(std::string Arg) -> std::string;
+auto argSort(std::string arg) -> std::string;

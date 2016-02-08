@@ -10,42 +10,42 @@
 #include "llvm/IR/PassManager.h"
 #include "llvm/Option/Option.h"
 
-auto main(int Argc, const char **Argv) -> int;
-auto zipFunctions(llvm::Module &Mod1, llvm::Module &Mod2) -> llvm::ErrorOr<
+auto main(int argc, const char **argv) -> int;
+auto zipFunctions(llvm::Module &mod1, llvm::Module &mod2) -> llvm::ErrorOr<
     std::vector<std::pair<llvm::Function *, llvm::Function *>>>;
-auto initializeArgs(const char *ExeName, std::string Input1, std::string Input2)
+auto initializeArgs(const char *exeName, std::string input1, std::string input2)
     -> std::vector<const char *>;
 auto initializeDiagnostics(void) -> std::unique_ptr<clang::DiagnosticsEngine>;
-auto initializeDriver(clang::DiagnosticsEngine &Diags)
+auto initializeDriver(clang::DiagnosticsEngine &diags)
     -> std::unique_ptr<clang::driver::Driver>;
-auto preprocessFunction(llvm::Function &Fun, std::string Prefix)
+auto preprocessFunction(llvm::Function &fun, std::string prefix)
     -> std::shared_ptr<llvm::FunctionAnalysisManager>;
-auto getCmd(clang::driver::Compilation &Comp, clang::DiagnosticsEngine &Diags)
+auto getCmd(clang::driver::Compilation &comp, clang::DiagnosticsEngine &diags)
     -> llvm::ErrorOr<
         std::pair<llvm::opt::ArgStringList, llvm::opt::ArgStringList>>;
 template <typename T> auto makeErrorOr(T Arg) -> llvm::ErrorOr<T>;
-auto getModule(const char *ExeName, std::string Input1, std::string Input2)
+auto getModule(const char *exeName, std::string input1, std::string input2)
     -> std::pair<std::unique_ptr<clang::CodeGenAction>,
                   std::unique_ptr<clang::CodeGenAction>>;
-auto getCodeGenAction(const llvm::opt::ArgStringList &CCArgs,
-                      clang::DiagnosticsEngine &Diags)
+auto getCodeGenAction(const llvm::opt::ArgStringList &ccArgs,
+                      clang::DiagnosticsEngine &diags)
     -> std::unique_ptr<clang::CodeGenAction>;
-auto parseInOutInvs(std::string FileName1, std::string FileName2)
+auto parseInOutInvs(std::string fileName1, std::string fileName2)
     -> std::pair<SMTRef, SMTRef>;
-auto processFile(std::string File, SMTRef &In, SMTRef &Out) -> void;
-auto externDeclarations(llvm::Module &Mod1, llvm::Module &Mod2,
-                        std::vector<SMTRef> &Declarations, uint8_t Mem,
-                        std::multimap<string, string> FunCondMap) -> void;
-auto funArgs(llvm::Function &Fun, std::string Prefix, uint32_t VarArgs)
+auto processFile(std::string file, SMTRef &in, SMTRef &out) -> void;
+auto externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
+                        std::vector<SMTRef> &declarations, uint8_t mem,
+                        std::multimap<string, string> funCondMap) -> void;
+auto funArgs(llvm::Function &fun, std::string prefix, uint32_t varArgs)
     -> std::vector<SortedVar>;
-auto varArgs(llvm::Function &Fun) -> std::set<uint32_t>;
-auto externFunDecl(llvm::Function &Fun, int Program, uint8_t Mem)
+auto getVarArgs(llvm::Function &fun) -> std::set<uint32_t>;
+auto externFunDecl(llvm::Function &fun, int program, uint8_t mem)
     -> std::vector<SMTRef>;
-auto doesNotRecurse(llvm::Function &Fun) -> bool;
-auto globalDeclarations(llvm::Module &Mod1, llvm::Module &Mod2)
+auto doesNotRecurse(llvm::Function &fun) -> bool;
+auto globalDeclarations(llvm::Module &mod1, llvm::Module &mod2)
     -> std::vector<SMTRef>;
-auto globalDeclarationsForMod(int GlobalPointer, llvm::Module &Mod,
-                              llvm::Module &OtherMod, int Program) -> std::vector<SMTRef>;
+auto globalDeclarationsForMod(int globalPointer, llvm::Module &mod,
+                              llvm::Module &otherMod, int program) -> std::vector<SMTRef>;
 auto collectFunConds() -> std::multimap<string, string>;
-auto collectFunCondsInFile(std::string File) -> std::multimap<string, string>;
-auto doesAccessMemory(const llvm::Module &Mod) -> bool;
+auto collectFunCondsInFile(std::string file) -> std::multimap<string, string>;
+auto doesAccessMemory(const llvm::Module &mod) -> bool;

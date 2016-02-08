@@ -49,7 +49,7 @@ CheckOptions:
   - key:             modernize-loop-convert.MinConfidence
     value:           reasonable
   - key:             modernize-loop-convert.NamingStyle
-    value:           CamelCase
+    value:           camelBack
   - key:             modernize-pass-by-value.IncludeStyle
     value:           llvm
   - key:             modernize-replace-auto-ptr.IncludeStyle
@@ -79,7 +79,7 @@ CheckOptions:
   - key:             readability-identifier-naming.ClassConstantSuffix
     value:           ''
   - key:             readability-identifier-naming.ClassMemberCase
-    value:           CamelCase
+    value:           camelBack
   - key:             readability-identifier-naming.ClassMemberPrefix
     value:           ''
   - key:             readability-identifier-naming.ClassMemberSuffix
@@ -97,13 +97,13 @@ CheckOptions:
   - key:             readability-identifier-naming.ConstantCase
     value:           UPPER_CASE
   - key:             readability-identifier-naming.ConstantMemberCase
-    value:           CamelCase
+    value:           camelBack
   - key:             readability-identifier-naming.ConstantMemberPrefix
     value:           ''
   - key:             readability-identifier-naming.ConstantMemberSuffix
     value:           ''
   - key:             readability-identifier-naming.ConstantParameterCase
-    value:           CamelCase
+    value:           camelBack
   - key:             readability-identifier-naming.ConstantParameterPrefix
     value:           ''
   - key:             readability-identifier-naming.ConstantParameterSuffix
@@ -125,7 +125,7 @@ CheckOptions:
   - key:             readability-identifier-naming.ConstexprMethodSuffix
     value:           ''
   - key:             readability-identifier-naming.ConstexprVariableCase
-    value:           CamelCase
+    value:           camelBack
   - key:             readability-identifier-naming.ConstexprVariablePrefix
     value:           ''
   - key:             readability-identifier-naming.ConstexprVariableSuffix
@@ -161,7 +161,7 @@ CheckOptions:
   - key:             readability-identifier-naming.GlobalFunctionSuffix
     value:           ''
   - key:             readability-identifier-naming.GlobalVariableCase
-    value:           CamelCase
+    value:           camelBack
   - key:             readability-identifier-naming.GlobalVariablePrefix
     value:           ''
   - key:             readability-identifier-naming.GlobalVariableSuffix
@@ -175,25 +175,25 @@ CheckOptions:
   - key:             readability-identifier-naming.InlineNamespaceSuffix
     value:           ''
   - key:             readability-identifier-naming.LocalConstantCase
-    value:           CamelCase
+    value:           camelBack
   - key:             readability-identifier-naming.LocalConstantPrefix
     value:           ''
   - key:             readability-identifier-naming.LocalConstantSuffix
     value:           ''
   - key:             readability-identifier-naming.LocalVariableCase
-    value:           CamelCase
+    value:           camelBack
   - key:             readability-identifier-naming.LocalVariablePrefix
     value:           ''
   - key:             readability-identifier-naming.LocalVariableSuffix
     value:           ''
   - key:             readability-identifier-naming.MemberCase
-    value:           CamelCase
+    value:           camelBack
   - key:             readability-identifier-naming.MemberPrefix
     value:           ''
   - key:             readability-identifier-naming.MemberSuffix
     value:           ''
   - key:             readability-identifier-naming.MethodCase
-    value:           camelCase
+    value:           camelBack
   - key:             readability-identifier-naming.MethodPrefix
     value:           ''
   - key:             readability-identifier-naming.MethodSuffix
@@ -205,9 +205,9 @@ CheckOptions:
   - key:             readability-identifier-naming.NamespaceSuffix
     value:           ''
   - key:             readability-identifier-naming.ParameterCase
-    value:           CamelCase
+    value:           camelBack
   - key:             readability-identifier-naming.ParameterPackCase
-    value:           CamelCase
+    value:           camelBack
   - key:             readability-identifier-naming.ParameterPackPrefix
     value:           ''
   - key:             readability-identifier-naming.ParameterPackSuffix
@@ -217,7 +217,7 @@ CheckOptions:
   - key:             readability-identifier-naming.ParameterSuffix
     value:           ''
   - key:             readability-identifier-naming.PrivateMemberCase
-    value:           CamelCase
+    value:           camelBack
   - key:             readability-identifier-naming.PrivateMemberPrefix
     value:           ''
   - key:             readability-identifier-naming.PrivateMemberSuffix
@@ -229,19 +229,19 @@ CheckOptions:
   - key:             readability-identifier-naming.PrivateMethodSuffix
     value:           ''
   - key:             readability-identifier-naming.ProtectedMemberCase
-    value:           CamelCase
+    value:           camelBack
   - key:             readability-identifier-naming.ProtectedMemberPrefix
     value:           ''
   - key:             readability-identifier-naming.ProtectedMemberSuffix
     value:           ''
   - key:             readability-identifier-naming.ProtectedMethodCase
-    value:           camelCase
+    value:           camelBack
   - key:             readability-identifier-naming.ProtectedMethodPrefix
     value:           ''
   - key:             readability-identifier-naming.ProtectedMethodSuffix
     value:           ''
   - key:             readability-identifier-naming.PublicMemberCase
-    value:           CamelCase
+    value:           camelBack
   - key:             readability-identifier-naming.PublicMemberPrefix
     value:           ''
   - key:             readability-identifier-naming.PublicMemberSuffix
@@ -259,7 +259,7 @@ CheckOptions:
   - key:             readability-identifier-naming.StaticConstantSuffix
     value:           ''
   - key:             readability-identifier-naming.StaticVariableCase
-    value:           CamelCase
+    value:           camelBack
   - key:             readability-identifier-naming.StaticVariablePrefix
     value:           ''
   - key:             readability-identifier-naming.StaticVariableSuffix
@@ -307,7 +307,7 @@ CheckOptions:
   - key:             readability-identifier-naming.ValueTemplateParameterSuffix
     value:           ''
   - key:             readability-identifier-naming.VariableCase
-    value:           CamelCase
+    value:           camelBack
   - key:             readability-identifier-naming.VariablePrefix
     value:           ''
   - key:             readability-identifier-naming.VariableSuffix
