@@ -233,14 +233,13 @@ vector<SMTRef> getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
                         makeMonoPair(std::make_pair(path1, Program::First),
                                      std::make_pair(path2, Program::Second))
                             .map<vector<AssignmentCallBlock>>(
-                                [=](std::pair<Path, Program> pair)
-                                    -> vector<AssignmentCallBlock> {
-                                        return assignmentsOnPath(
-                                            pair.first, pair.second,
-                                            freeVarsMap.at(startIndex),
-                                            endIndex == EXIT_MARK, memory,
-                                            everythingSigned);
-                                    });
+                                [=](std::pair<Path, Program> pair) {
+                                    return assignmentsOnPath(
+                                        pair.first, pair.second,
+                                        freeVarsMap.at(startIndex),
+                                        endIndex == EXIT_MARK, memory,
+                                        everythingSigned);
+                                });
                     pathExprs.push_back(make_shared<Assert>(forallStartingAt(
                         interleaveAssignments(endInvariant, defs, memory),
                         freeVarsMap.at(startIndex), startIndex,
@@ -888,7 +887,7 @@ SMTRef inInvariant(MonoPair<const llvm::Function *> funs, SMTRef body,
     if (strings) {
         makeMonoPair(&mod1, &mod2)
             .indexedMap<vector<SMTRef>>([&args](const llvm::Module *mod,
-                                                int index) -> vector<SMTRef> {
+                                                int index) {
                 return stringConstants(*mod, "HEAP$" + std::to_string(index));
             })
             .forEach([&args](vector<SMTRef> constants) {
