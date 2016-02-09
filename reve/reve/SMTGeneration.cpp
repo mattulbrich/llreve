@@ -215,15 +215,20 @@ vector<SMTRef> getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
                         startIndex, endIndex, freeVarsMap.at(startIndex),
                         freeVarsMap.at(endIndex), ProgramSelection::Both,
                         funName, memory);
-                    const auto defs1 = assignmentsOnPath(
-                        path1, Program::First, freeVarsMap.at(startIndex),
-                        endIndex == EXIT_MARK, memory, everythingSigned);
-                    const auto defs2 = assignmentsOnPath(
-                        path2, Program::Second, freeVarsMap.at(startIndex),
-                        endIndex == EXIT_MARK, memory, everythingSigned);
+                    auto defs =
+                        makeMonoPair(std::make_pair(path1, Program::First),
+                                     std::make_pair(path2, Program::Second))
+                            .map<vector<AssignmentCallBlock>>(
+                                [=](std::pair<Path, Program> pair)
+                                    -> vector<AssignmentCallBlock> {
+                                        return assignmentsOnPath(
+                                            pair.first, pair.second,
+                                            freeVarsMap.at(startIndex),
+                                            endIndex == EXIT_MARK, memory,
+                                            everythingSigned);
+                                    });
                     pathExprs.push_back(make_shared<Assert>(forallStartingAt(
-                        interleaveAssignments(
-                            endInvariant, makeMonoPair(defs1, defs2), memory),
+                        interleaveAssignments(endInvariant, defs, memory),
                         freeVarsMap.at(startIndex), startIndex,
                         ProgramSelection::Both, funName, false)));
                 }
@@ -1113,7 +1118,7 @@ std::map<int, vector<string>> freeVars(PathMap map1, PathMap map2,
     }
 
     const auto addMemoryArrays = [memory](vector<string> vars,
-                                    int index) -> vector<string> {
+                                          int index) -> vector<string> {
         string stringIndex = std::to_string(index);
         if (memory & HEAP_MASK) {
             vars.push_back("HEAP$" + stringIndex);
