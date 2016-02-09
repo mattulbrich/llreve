@@ -12,11 +12,11 @@
 struct CallInfo {
     std::string assignedTo;
     std::string callName;
-    std::vector<SMTRef> args;
+    std::vector<smt::SMTRef> args;
     bool externFun;
     const llvm::Function &fun;
     CallInfo(std::string assignedTo, std::string callName,
-             std::vector<SMTRef> args, bool externFun,
+             std::vector<smt::SMTRef> args, bool externFun,
              const llvm::Function &fun)
         : assignedTo(assignedTo), callName(callName), args(args),
           externFun(externFun), fun(fun) {}
@@ -38,10 +38,10 @@ struct CallInfo {
 enum class DefOrCallInfoTag { Call, Def };
 
 struct DefOrCallInfo {
-    std::shared_ptr<Assignment> definition;
+    std::shared_ptr<smt::Assignment> definition;
     std::shared_ptr<CallInfo> callInfo;
     enum DefOrCallInfoTag tag;
-    DefOrCallInfo(std::shared_ptr<Assignment> definition)
+    DefOrCallInfo(std::shared_ptr<smt::Assignment> definition)
         : definition(definition), callInfo(nullptr),
           tag(DefOrCallInfoTag::Def) {}
     DefOrCallInfo(std::shared_ptr<struct CallInfo> callInfo)
@@ -55,14 +55,13 @@ auto blockAssignments(const llvm::BasicBlock &bb,
     -> std::vector<DefOrCallInfo>;
 auto instrAssignment(const llvm::Instruction &instr,
                      const llvm::BasicBlock *prevBb, Program prog,
-                     bool everythingSigned)
-    -> std::shared_ptr<Assignment>;
+                     bool everythingSigned) -> std::shared_ptr<smt::Assignment>;
 auto predicateName(const llvm::CmpInst::Predicate pred) -> std::string;
 auto predicateFun(const llvm::CmpInst::CmpInst &pred, bool everythingSigned)
-    -> std::function<SMTRef(SMTRef)>;
+    -> std::function<smt::SMTRef(smt::SMTRef)>;
 auto opName(const llvm::BinaryOperator &op) -> std::string;
 auto combineOp(const llvm::BinaryOperator &op)
-    -> std::function<SMTRef(string, SMTRef, SMTRef)>;
+    -> std::function<smt::SMTRef(std::string, smt::SMTRef, smt::SMTRef)>;
 auto memcpyIntrinsic(const llvm::CallInst *callInst, Program prog)
     -> std::vector<DefOrCallInfo>;
 auto toCallInfo(std::string assignedTo, Program prog,

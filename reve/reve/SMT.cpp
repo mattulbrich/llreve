@@ -2,13 +2,17 @@
 
 #include <iostream>
 
+namespace smt {
 using std::make_shared;
+using std::shared_ptr;
 using sexpr::Apply;
 using sexpr::Value;
 using sexpr::List;
+using std::set;
+using std::string;
 
 // Avoid out-of-line warning by defining function here
-SMTExpr::~SMTExpr(){}
+SMTExpr::~SMTExpr() {}
 
 SExprRef SetLogic::toSExpr() const {
     std::vector<SExprRef> args;
@@ -274,4 +278,5 @@ std::set<std::string> Comment::uses() const { return std::set<std::string>(); }
 
 shared_ptr<Assignment> makeAssignment(string name, SMTRef val) {
     return make_shared<Assignment>(name, val);
+}
 }

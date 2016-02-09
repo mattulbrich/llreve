@@ -53,10 +53,23 @@ using llvm::errs;
 using llvm::Instruction;
 using llvm::IntrusiveRefCntPtr;
 
-using std::unique_ptr;
+using smt::SortedVar;
+using smt::SMTRef;
+using smt::name;
+using smt::SetLogic;
+using smt::CheckSat;
+using smt::GetModel;
+using smt::makeBinOp;
+using smt::FunDef;
+using smt::makeUnaryOp;
+using smt::Op;
+using smt::Forall;
+
+using std::shared_ptr;
 using std::make_shared;
 using std::string;
 using std::placeholders::_1;
+using std::set;
 using std::vector;
 
 static llvm::cl::opt<string> fileName1(llvm::cl::Positional,
@@ -117,7 +130,7 @@ std::vector<const char *> initializeArgs(const char *exeName, string input1,
 }
 
 /// Set up the diagnostics engine
-unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
+std::unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
     const IntrusiveRefCntPtr<clang::DiagnosticOptions> diagOpts =
         new clang::DiagnosticOptions();
     auto diagClient =
@@ -128,7 +141,7 @@ unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
 }
 
 /// Initialize the driver
-unique_ptr<Driver> initializeDriver(DiagnosticsEngine &diags) {
+std::unique_ptr<Driver> initializeDriver(DiagnosticsEngine &diags) {
     string tripleStr = llvm::sys::getProcessTriple();
     llvm::Triple triple(tripleStr);
     auto driver =
@@ -160,7 +173,7 @@ ErrorOr<MonoPair<ArgStringList>> getCmd(Compilation &comp,
 template <typename T> ErrorOr<T> makeErrorOr(T Arg) { return ErrorOr<T>(Arg); }
 
 /// Compile the inputs to llvm assembly and return those modules
-MonoPair<unique_ptr<clang::CodeGenAction>>
+MonoPair<std::unique_ptr<clang::CodeGenAction>>
 getModule(const char *exeName, string input1, string input2) {
     auto diags = initializeDiagnostics();
     auto driver = initializeDriver(*diags);
@@ -168,20 +181,20 @@ getModule(const char *exeName, string input1, string input2) {
 
     std::unique_ptr<Compilation> comp(driver->BuildCompilation(args));
     if (!comp) {
-        return makeMonoPair<unique_ptr<clang::CodeGenAction>>(
+        return makeMonoPair<std::unique_ptr<clang::CodeGenAction>>(
             std::move(nullptr), std::move(nullptr));
     }
 
     auto cmdArgsOrError = getCmd(*comp, *diags);
     if (!cmdArgsOrError) {
-        return makeMonoPair<unique_ptr<clang::CodeGenAction>>(nullptr, nullptr);
+        return makeMonoPair<std::unique_ptr<clang::CodeGenAction>>(nullptr, nullptr);
     }
     auto cmdArgs = cmdArgsOrError.get();
 
     auto act1 = getCodeGenAction(cmdArgs.first, *diags);
     auto act2 = getCodeGenAction(cmdArgs.second, *diags);
     if (!act1 || !act2) {
-        return makeMonoPair<unique_ptr<clang::CodeGenAction>>(nullptr, nullptr);
+        return makeMonoPair<std::unique_ptr<clang::CodeGenAction>>(nullptr, nullptr);
     }
 
     return makeMonoPair(std::move(act1), std::move(act2));

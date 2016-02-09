@@ -4,9 +4,9 @@
 
 #include <string>
 
-#include <unistd.h>
-#include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/Support/raw_ostream.h"
+#include <unistd.h>
 
 #define logError(Message) logError_(Message, __FILE__, __LINE__)
 #define logWarning(Message) logWarning_(Message, __FILE__, __LINE__)
@@ -48,10 +48,11 @@ auto logWarningData_(Str message, A &el, const char *file, int line) -> void {
     llvm::errs() << "\n";
 }
 
-auto instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) -> SMTRef;
+auto instrNameOrVal(const llvm::Value *val, const llvm::Type *ty)
+    -> smt::SMTRef;
 auto typeSize(llvm::Type *ty) -> int;
-template <typename T> SMTRef resolveGEP(T &gep) {
-    std::vector<SMTRef> args;
+template <typename T> smt::SMTRef resolveGEP(T &gep) {
+    std::vector<smt::SMTRef> args;
     args.push_back(instrNameOrVal(gep.getPointerOperand(),
                                   gep.getPointerOperand()->getType()));
     const auto type = gep.getSourceElementType();
@@ -63,11 +64,12 @@ template <typename T> SMTRef resolveGEP(T &gep) {
         if (size == 1) {
             args.push_back(instrNameOrVal(*ix, (*ix)->getType()));
         } else {
-            args.push_back(makeBinOp("*", name(std::to_string(size)),
-                                     instrNameOrVal(*ix, (*ix)->getType())));
+            args.push_back(
+                smt::makeBinOp("*", smt::name(std::to_string(size)),
+                               instrNameOrVal(*ix, (*ix)->getType())));
         }
     }
-    return std::make_shared<Op>("+", args);
+    return std::make_shared<smt::Op>("+", args);
 }
 
 template <typename Key, typename Val>
@@ -84,7 +86,8 @@ auto unionWith(std::map<Key, Val> mapA, std::map<Key, Val> mapB,
 }
 
 template <typename KeyA, typename KeyB, typename Val>
-auto transpose(std::map<KeyA, std::map<KeyB, Val>> map) -> std::map<KeyB, std::map<KeyA, Val>> {
+auto transpose(std::map<KeyA, std::map<KeyB, Val>> map)
+    -> std::map<KeyB, std::map<KeyA, Val>> {
     std::map<KeyB, std::map<KeyA, Val>> mapResult;
     for (auto it : map) {
         for (auto innerIt : it.second) {
@@ -95,23 +98,19 @@ auto transpose(std::map<KeyA, std::map<KeyB, Val>> map) -> std::map<KeyB, std::m
 }
 
 template <typename T>
-auto mergePathFuns(
-    std::map<int, std::map<int, std::vector<T>>> a,
-    std::map<int, std::map<int, std::vector<T>>> b)
-    -> std::map<int,
-                std::map<int, std::vector<T>>> {
-    auto merge = [](std::map<int, std::vector<T>> mapA,
-                    std::map<int, std::vector<T>> mapB)
-        -> std::map<int, std::vector<T>> {
-            return unionWith<int, std::vector<T>>(
-                mapA, mapB, [](std::vector<T> a,
-                               std::vector<T> b) {
-                    a.insert(a.end(), b.begin(), b.end());
-                    return a;
-                });
-        };
-    return unionWith<int, std::map<int, std::vector<T>>>(a, b,
-                                                                      merge);
+auto mergePathFuns(std::map<int, std::map<int, std::vector<T>>> a,
+                   std::map<int, std::map<int, std::vector<T>>> b)
+    -> std::map<int, std::map<int, std::vector<T>>> {
+    auto merge = [](
+        std::map<int, std::vector<T>> mapA,
+        std::map<int, std::vector<T>> mapB) -> std::map<int, std::vector<T>> {
+        return unionWith<int, std::vector<T>>(
+            mapA, mapB, [](std::vector<T> a, std::vector<T> b) {
+                a.insert(a.end(), b.begin(), b.end());
+                return a;
+            });
+    };
+    return unionWith<int, std::map<int, std::vector<T>>>(a, b, merge);
 }
 
 auto filterVars(int program, std::vector<std::string> vars)

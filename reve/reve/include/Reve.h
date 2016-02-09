@@ -31,21 +31,21 @@ auto getCodeGenAction(const llvm::opt::ArgStringList &ccArgs,
                       clang::DiagnosticsEngine &diags)
     -> std::unique_ptr<clang::CodeGenAction>;
 auto parseInOutInvs(std::string fileName1, std::string fileName2)
-    -> MonoPair<SMTRef>;
-auto processFile(std::string file, SMTRef &in, SMTRef &out) -> void;
+    -> MonoPair<smt::SMTRef>;
+auto processFile(std::string file, smt::SMTRef &in, smt::SMTRef &out) -> void;
 auto externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
-                        std::vector<SMTRef> &declarations, uint8_t mem,
-                        std::multimap<string, string> funCondMap) -> void;
+                        std::vector<smt::SMTRef> &declarations, uint8_t mem,
+                        std::multimap<std::string, std::string> funCondMap) -> void;
 auto funArgs(llvm::Function &fun, std::string prefix, uint32_t varArgs)
-    -> std::vector<SortedVar>;
+    -> std::vector<smt::SortedVar>;
 auto getVarArgs(llvm::Function &fun) -> std::set<uint32_t>;
 auto externFunDecl(llvm::Function &fun, int program, uint8_t mem)
-    -> std::vector<SMTRef>;
+    -> std::vector<smt::SMTRef>;
 auto doesNotRecurse(llvm::Function &fun) -> bool;
 auto globalDeclarations(llvm::Module &mod1, llvm::Module &mod2)
-    -> std::vector<SMTRef>;
+    -> std::vector<smt::SMTRef>;
 auto globalDeclarationsForMod(int globalPointer, llvm::Module &mod,
-                              llvm::Module &otherMod, int program) -> std::vector<SMTRef>;
-auto collectFunConds() -> std::multimap<string, string>;
-auto collectFunCondsInFile(std::string file) -> std::multimap<string, string>;
+                              llvm::Module &otherMod, int program) -> std::vector<smt::SMTRef>;
+auto collectFunConds() -> std::multimap<std::string, std::string>;
+auto collectFunCondsInFile(std::string file) -> std::multimap<std::string, std::string>;
 auto doesAccessMemory(const llvm::Module &mod) -> bool;

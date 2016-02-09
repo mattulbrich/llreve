@@ -7,6 +7,10 @@
 #include "llvm/IR/Constants.h"
 
 using std::make_shared;
+using smt::Op;
+using smt::name;
+using std::set;
+using smt::SMTRef;
 
 char PathAnalysis::PassID;
 

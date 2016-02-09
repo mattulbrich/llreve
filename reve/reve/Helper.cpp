@@ -5,6 +5,10 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Operator.h"
 
+using smt::SMTRef;
+using smt::name;
+using std::string;
+
 /// Get the name of the instruction or a string representation of the value if
 /// it's a constant
 SMTRef instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) {

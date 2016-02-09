@@ -10,6 +10,11 @@ using std::vector;
 using std::make_shared;
 using llvm::Instruction;
 using llvm::CmpInst;
+using smt::Assignment;
+using smt::name;
+using smt::SMTRef;
+using smt::Op;
+using std::string;
 
 /// Convert a basic block to a list of assignments
 vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,

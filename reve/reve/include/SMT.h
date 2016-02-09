@@ -8,21 +8,18 @@
 #include <sstream>
 #include <string>
 
-using std::set;
-using std::string;
-using std::shared_ptr;
-using std::unique_ptr;
+namespace smt {
 
 using SExpr = const sexpr::SExpr<std::string>;
-using SExprRef = unique_ptr<SExpr>;
+using SExprRef = std::unique_ptr<SExpr>;
 
 class SMTExpr {
   public:
     virtual SExprRef toSExpr() const = 0;
-    virtual set<string> uses() const = 0;
-    virtual shared_ptr<const SMTExpr> compressLets(
-        std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>> defs =
-            std::vector<std::pair<std::string, shared_ptr<const SMTExpr>>>())
+    virtual std::set<std::string> uses() const = 0;
+    virtual std::shared_ptr<const SMTExpr> compressLets(
+        std::vector<std::pair<std::string, std::shared_ptr<const SMTExpr>>> defs =
+            std::vector<std::pair<std::string, std::shared_ptr<const SMTExpr>>>())
         const = 0;
     virtual ~SMTExpr();
     SMTExpr(const SMTExpr & /*unused*/) = default;
@@ -30,16 +27,16 @@ class SMTExpr {
     SMTExpr() = default;
 };
 
-using SMTRef = shared_ptr<const SMTExpr>;
+using SMTRef = std::shared_ptr<const SMTExpr>;
 using Assignment = std::pair<std::string, SMTRef>;
-auto makeAssignment(string name, SMTRef val) -> std::shared_ptr<Assignment>;
+auto makeAssignment(std::string name, SMTRef val) -> std::shared_ptr<Assignment>;
 
 class SetLogic : public SMTExpr {
   public:
     explicit SetLogic(std::string logic) : logic(std::move(logic)) {}
     SExprRef toSExpr() const override;
-    set<string> uses() const override;
-    shared_ptr<const SMTExpr>
+    std::set<std::string> uses() const override;
+    std::shared_ptr<const SMTExpr>
     compressLets(std::vector<Assignment> defs) const override;
     std::string logic;
 };
@@ -49,8 +46,8 @@ class Assert : public SMTExpr {
     explicit Assert(SMTRef expr) : expr(std::move(expr)) {}
     SMTRef expr;
     SExprRef toSExpr() const override;
-    set<string> uses() const override;
-    shared_ptr<const SMTExpr>
+    std::set<std::string> uses() const override;
+    std::shared_ptr<const SMTExpr>
     compressLets(std::vector<Assignment> defs) const override;
 };
 
@@ -61,8 +58,8 @@ class SortedVar : public SMTExpr {
     std::string name;
     std::string type;
     SExprRef toSExpr() const override;
-    set<string> uses() const override;
-    shared_ptr<const SMTExpr>
+    std::set<std::string> uses() const override;
+    std::shared_ptr<const SMTExpr>
     compressLets(std::vector<Assignment> defs) const override;
     SortedVar &operator=(const SortedVar other) {
         name = other.name;
@@ -79,24 +76,24 @@ class Forall : public SMTExpr {
     SExprRef toSExpr() const override;
     std::vector<SortedVar> vars;
     SMTRef expr;
-    set<string> uses() const override;
-    shared_ptr<const SMTExpr>
+    std::set<std::string> uses() const override;
+    std::shared_ptr<const SMTExpr>
     compressLets(std::vector<Assignment> defs) const override;
 };
 
 class CheckSat : public SMTExpr {
   public:
     SExprRef toSExpr() const override;
-    set<string> uses() const override;
-    shared_ptr<const SMTExpr>
+    std::set<std::string> uses() const override;
+    std::shared_ptr<const SMTExpr>
     compressLets(std::vector<Assignment> defs) const override;
 };
 
 class GetModel : public SMTExpr {
   public:
     SExprRef toSExpr() const override;
-    set<string> uses() const override;
-    shared_ptr<const SMTExpr>
+    std::set<std::string> uses() const override;
+    std::shared_ptr<const SMTExpr>
     compressLets(std::vector<Assignment> defs) const override;
 };
 
@@ -107,8 +104,8 @@ class Let : public SMTExpr {
     SMTRef expr;
     Let(std::vector<Assignment> defs, SMTRef expr)
         : defs(std::move(defs)), expr(std::move(expr)) {}
-    set<string> uses() const override;
-    shared_ptr<const SMTExpr>
+    std::set<std::string> uses() const override;
+    std::shared_ptr<const SMTExpr>
     compressLets(std::vector<Assignment> passedDefs) const override;
 };
 
@@ -121,8 +118,8 @@ template <typename T> class Primitive : public SMTExpr {
         return llvm::make_unique<sexpr::Value<std::string>>(sStream.str());
     }
     const T val;
-    set<string> uses() const override { return set<string>(); }
-    shared_ptr<const SMTExpr>
+    std::set<std::string> uses() const override { return std::set<std::string>(); }
+    std::shared_ptr<const SMTExpr>
     compressLets(std::vector<Assignment> defs) const override;
 };
 
@@ -133,8 +130,8 @@ class Op : public SMTExpr {
     std::string opName;
     std::vector<SMTRef> args;
     SExprRef toSExpr() const override;
-    set<string> uses() const override;
-    shared_ptr<const SMTExpr>
+    std::set<std::string> uses() const override;
+    std::shared_ptr<const SMTExpr>
     compressLets(std::vector<Assignment> defs) const override;
 };
 
@@ -157,8 +154,8 @@ class FunDecl : public SMTExpr {
     std::vector<std::string> inTypes;
     std::string outType;
     SExprRef toSExpr() const override;
-    set<string> uses() const override;
-    shared_ptr<const SMTExpr>
+    std::set<std::string> uses() const override;
+    std::shared_ptr<const SMTExpr>
     compressLets(std::vector<Assignment> defs) const override;
 };
 
@@ -173,8 +170,8 @@ class FunDef : public SMTExpr {
     std::string outType;
     SMTRef body;
     SExprRef toSExpr() const override;
-    set<string> uses() const override;
-    shared_ptr<const SMTExpr>
+    std::set<std::string> uses() const override;
+    std::shared_ptr<const SMTExpr>
     compressLets(std::vector<Assignment> defs) const override;
 };
 
@@ -183,9 +180,10 @@ class Comment : public SMTExpr {
     Comment(std::string val) : val(std::move(val)) {}
     std::string val;
     SExprRef toSExpr() const override;
-    set<string> uses() const override;
-    shared_ptr<const SMTExpr>
+    std::set<std::string> uses() const override;
+    std::shared_ptr<const SMTExpr>
     compressLets(std::vector<Assignment> defs) const override;
 };
 
 auto nestLets(SMTRef clause, std::vector<Assignment> defs) -> SMTRef;
+}

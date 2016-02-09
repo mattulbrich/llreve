@@ -7,13 +7,27 @@
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Operator.h"
 
-using llvm::CmpInst;
-
 #include <iostream>
 
+using llvm::CmpInst;
 using std::vector;
 using std::map;
 using std::function;
+using std::string;
+using smt::SMTRef;
+using smt::Assert;
+using smt::Op;
+using smt::name;
+using smt::Assignment;
+using smt::SortedVar;
+using smt::makeBinOp;
+using smt::Forall;
+using smt::makeOp;
+using smt::FunDef;
+using smt::Comment;
+using std::make_shared;
+using std::set;
+using std::string;
 
 vector<SMTRef> convertToSMT(MonoPair<llvm::Function *> funs,
                             MonoPair<FAMRef> fams, bool offByN,

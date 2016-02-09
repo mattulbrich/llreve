@@ -4,6 +4,13 @@
 
 using std::vector;
 using std::make_shared;
+using std::string;
+using smt::makeOp;
+using smt::name;
+using smt::SMTRef;
+using smt::SortedVar;
+using smt::Forall;
+using smt::FunDecl;
 
 /* -------------------------------------------------------------------------- */
 // Functions related to generating invariants

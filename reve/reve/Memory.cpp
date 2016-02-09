@@ -2,6 +2,10 @@
 
 using std::vector;
 using std::make_shared;
+using std::string;
+using smt::SMTRef;
+using smt::SortedVar;
+using smt::Forall;
 
 std::vector<std::string> resolveHeapReferences(std::vector<std::string> args,
                                                string suffix, Memory &heap) {
@@ -33,8 +37,6 @@ std::vector<std::string> resolveHeapReferences(std::vector<std::string> args,
     }
     return result;
 }
-
-
 
 SMTRef wrapHeap(SMTRef inv, Memory heap, vector<string> freeVars) {
     if (!heap) {

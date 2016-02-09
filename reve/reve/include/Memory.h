@@ -11,9 +11,9 @@ const uint8_t STACK_MASK = 0x02;
 
 auto resolveHeapReferences(std::vector<std::string> args, std::string suffix,
                            Memory &heap) -> std::vector<std::string>;
-auto wrapHeap(SMTRef inv, Memory heap, std::vector<std::string> freeVars)
-    -> SMTRef;
-auto adaptSizeToHeap(unsigned long size, std::vector<string> freeVars)
+auto wrapHeap(smt::SMTRef inv, Memory heap, std::vector<std::string> freeVars)
+    -> smt::SMTRef;
+auto adaptSizeToHeap(unsigned long size, std::vector<std::string> freeVars)
     -> unsigned long;
 
 const std::regex HEAP_REGEX =
