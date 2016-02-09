@@ -22,20 +22,19 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Transforms/Scalar.h"
-using namespace llvm;
 
 #define DEBUG_TYPE "adce"
 
 STATISTIC(NumRemoved, "Number of instructions removed");
 
-static bool aggressiveDCE(Function& F) {
-  SmallPtrSet<Instruction*, 32> Alive;
-  SmallVector<Instruction*, 128> Worklist;
+static bool aggressiveDCE(llvm::Function& F) {
+  llvm::SmallPtrSet<llvm::Instruction*, 32> Alive;
+  llvm::SmallVector<llvm::Instruction*, 128> Worklist;
 
   // Collect the set of "root" instructions that are known live.
   for (auto &BB : F) {
-      for (Instruction &I : BB) {
-          if (isa<TerminatorInst>(I) || isa<DbgInfoIntrinsic>(I) ||
+      for (llvm::Instruction &I : BB) {
+          if (llvm::isa<llvm::TerminatorInst>(I) || llvm::isa<llvm::DbgInfoIntrinsic>(I) ||
               I.mayHaveSideEffects()) {
               Alive.insert(&I);
               Worklist.push_back(&I);
@@ -45,9 +44,9 @@ static bool aggressiveDCE(Function& F) {
 
   // Propagate liveness backwards to operands.
   while (!Worklist.empty()) {
-    Instruction *Curr = Worklist.pop_back_val();
-    for (Use &OI : Curr->operands()) {
-      if (Instruction *Inst = dyn_cast<Instruction>(OI))
+    llvm::Instruction *Curr = Worklist.pop_back_val();
+    for (llvm::Use &OI : Curr->operands()) {
+      if (llvm::Instruction *Inst = llvm::dyn_cast<llvm::Instruction>(OI))
         if (Alive.insert(Inst).second)
           Worklist.push_back(Inst);
     }
@@ -58,7 +57,7 @@ static bool aggressiveDCE(Function& F) {
   // value of the function, and may therefore be deleted safely.
   // NOTE: We reuse the Worklist vector here for memory efficiency.
   for (auto &BB : F) {
-      for (Instruction &I : BB) {
+      for (llvm::Instruction &I : BB) {
           if (!Alive.count(&I)) {
               Worklist.push_back(&I);
               I.dropAllReferences();
@@ -66,7 +65,7 @@ static bool aggressiveDCE(Function& F) {
       }
   }
 
-  for (Instruction *&I : Worklist) {
+  for (llvm::Instruction *&I : Worklist) {
     ++NumRemoved;
     I->eraseFromParent();
   }
@@ -74,8 +73,8 @@ static bool aggressiveDCE(Function& F) {
   return !Worklist.empty();
 }
 
-PreservedAnalyses ADCEPass::run(Function &F) {
+llvm::PreservedAnalyses ADCEPass::run(llvm::Function &F) {
   if (aggressiveDCE(F))
-    return PreservedAnalyses::none();
-  return PreservedAnalyses::all();
+    return llvm::PreservedAnalyses::none();
+  return llvm::PreservedAnalyses::all();
 }
