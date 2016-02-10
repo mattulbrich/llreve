@@ -1,8 +1,8 @@
 #include "InlinePass.h"
 #include "Helper.h"
-#include "llvm/Transforms/Utils/Cloning.h"
-#include "llvm/IR/Constants.h"
 #include "llvm/CodeGen/IntrinsicLowering.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/Transforms/Utils/Cloning.h"
 
 llvm::PreservedAnalyses
 InlinePass::run(llvm::Function &fun,
@@ -13,8 +13,7 @@ InlinePass::run(llvm::Function &fun,
         for (auto &instr : bb) {
             if (auto inlineCall = llvm::dyn_cast<llvm::CallInst>(&instr)) {
                 auto fun = inlineCall->getCalledFunction();
-                if (fun->getName() == "__inlineCall" ||
-                    fun->hasFnAttribute(llvm::Attribute::AlwaysInline)) {
+                if (fun->getName() == "__inlineCall") {
                     if (auto callInst = llvm::dyn_cast<llvm::CallInst>(
                             inlineCall->getOperand(0))) {
                         for (auto user : inlineCall->users()) {
@@ -23,6 +22,9 @@ InlinePass::run(llvm::Function &fun,
                         toDelete.push_back(inlineCall);
                         toBeInlined.push_back(callInst);
                     }
+                }
+                if (fun->hasFnAttribute(llvm::Attribute::AlwaysInline)) {
+                    toBeInlined.push_back(inlineCall);
                 }
             }
         }
