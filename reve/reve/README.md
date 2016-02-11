@@ -1,53 +1,46 @@
-### Reve
+# Reve
 
-#### Prerequisites
+## Prerequisites
 
-LLVM and Clang 3.7.0 are required, other version probably won't work,
+LLVM and Clang 3.7.1 are required, other version probably won't work,
 so make sure you have the right one.
 
-##### Ubuntu 14.04
+## Ubuntu 14.04
 
-The following instructions assume you are root, if you are not prepend
-sudo as necessary.
-
-First we install some basic tools
+### Compile llvm/clang against libc++
 
 ```
-apt-get install cmake wget
+wget http://llvm.org/releases/3.7.1/clang+llvm-3.7.1-x86_64-linux-gnu-ubuntu-14.04.tar.xz
+tar xvf clang+llvm-3.7.1-x86_64-linux-gnu-ubuntu-14.04.tar.xz
+sudo cp -r clang+llvm-3.7.1-x86_64-linux-gnu-ubuntu-14.04/* /usr/local/
+wget http://llvm.org/releases/3.7.1/llvm-3.7.1.src.tar.xz
+tar xvf llvm-3.7.1.src.tar.xz
+wget http://llvm.org/releases/3.7.1/cfe-3.7.1.src.tar.xz
+tar xvf cfe-3.7.1.src.tar.xz
+mv cfe-3.7.1.src llvm-3.7.1.src/tools/clang
+sudo apt-get install cmake libstdc++-4.8-dev
+export CC=clang
+export CXX=clang++
+cd llvm-3.7.1.src
+mkdir build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local/  -DLLVM_ENABLE_LIBCXX=ON -DLLVM_ENABLE_LIBCXXABI=ON ..
+sudo make install
 ```
 
-Now we need to add a repository for llvm
+### Building reve against the correct llvm
+
+Make sure that /usr/local/bin is in your path and that `which clang++`
+points to `/usr/local/bin/clang++`.
+
+Then run
 
 ```
-echo 'deb http://llvm.org/apt/trusty/ llvm-toolchain-trusty-3.7 main' >> /etc/apt/sources.list
-echo 'deb-src http://llvm.org/apt/trusty/ llvm-toolchain-trusty-3.7 main' >> /etc/apt/sources.list
-wget -O - http://llvm.org/apt/llvm-snapshot.gpg.key|apt-key add -
-apt-get update
+export CC=clang
+export CXX=clang++
 ```
 
-Then we install clang
-
-```
-apt-get install clang-3.7 libclang-3.7-dev
-ln -s /usr/bin/clang++-3.7 /usr/bin/clang++ # cmake looks for clang++
-```
-
-Finally we need two other dependencies, which are probably installed
-on most systems, but for the sake of completeness
-
-```
-apt-get install libz-dev libedit-dev
-```
-
-##### Archlinux
-
-Install clang and llvm using
-
-```
-pacman -S clang llvm llvm-libs
-```
-
-#### Build
+Then the usual build process aka
 
 ```
 mkdir build
@@ -56,7 +49,29 @@ cmake ..
 make
 ```
 
-#### Usage
+should work™. Make sure that you see the following line when running cmake
+```
+Using LLVMConfig.cmake in: /usr/local/share/llvm/cmake
+```
+
+## Archlinux
+
+Install clang and llvm using
+
+```
+pacman -S clang llvm llvm-libs
+```
+
+## Build
+
+```
+mkdir build
+cd build
+cmake ..
+make
+```
+
+## Usage
 
 Run using
 
