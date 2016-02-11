@@ -4,3 +4,5 @@
 *.dot
 *~
 /reve/reve/.idea/
+/reve/ubuntu/
+!/reve/ubuntu/Vagrantfile

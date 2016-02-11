@@ -4,7 +4,7 @@ set(CMAKE_CXX_COMPILER "clang++")
 set(CXX_WARNINGS_FLAGS "-Weverything -Wno-c++98-compat -Wno-exit-time-destructors -Wno-global-constructors -Wno-padded -Wno-switch-enum -Wno-shadow")
 set(CXX_OTHER_FLAGS "--system-header-prefix=llvm --system-header-prefix=clang")
 set(CXX_STANDARD_FLAGS "-std=c++11 -stdlib=libc++ -fno-rtti")
-set(CMAKE_CXX_FLAGS "${CXX_WARNINGS_FLAGS} ${CXX_STANDARD_FLAGS} ${CXX_OTHER_FLAGS}")
+set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
 
 find_package(LLVM 3.7 REQUIRED CONFIG)
 
@@ -28,40 +28,41 @@ llvm_map_components_to_libnames(llvm_libs
   x86codegen
   )
 
-ADD_LIBRARY(clangFrontend STATIC IMPORTED)
-SET_TARGET_PROPERTIES(clangFrontend PROPERTIES
+add_library(clangFrontend STATIC IMPORTED)
+set_target_properties(clangFrontend PROPERTIES
     IMPORTED_LOCATION /usr/local/lib/libclangFrontend.a)
-ADD_LIBRARY(clangDriver STATIC IMPORTED)
-SET_TARGET_PROPERTIES(clangDriver PROPERTIES
+add_library(clangDriver STATIC IMPORTED)
+set_target_properties(clangDriver PROPERTIES
     IMPORTED_LOCATION /usr/local/lib/libclangDriver.a)
-ADD_LIBRARY(clangSerialization STATIC IMPORTED)
-SET_TARGET_PROPERTIES(clangSerialization PROPERTIES
+add_library(clangSerialization STATIC IMPORTED)
+set_target_properties(clangSerialization PROPERTIES
     IMPORTED_LOCATION /usr/local/lib/libclangSerialization.a)
-ADD_LIBRARY(clangCodeGen STATIC IMPORTED)
-SET_TARGET_PROPERTIES(clangCodeGen PROPERTIES
+add_library(clangCodeGen STATIC IMPORTED)
+set_target_properties(clangCodeGen PROPERTIES
     IMPORTED_LOCATION /usr/local/lib/libclangCodeGen.a)
-ADD_LIBRARY(clangParse STATIC IMPORTED)
-SET_TARGET_PROPERTIES(clangParse PROPERTIES
+add_library(clangParse STATIC IMPORTED)
+set_target_properties(clangParse PROPERTIES
     IMPORTED_LOCATION /usr/local/lib/libclangParse.a)
-ADD_LIBRARY(clangSema STATIC IMPORTED)
-SET_TARGET_PROPERTIES(clangSema PROPERTIES
+add_library(clangSema STATIC IMPORTED)
+set_target_properties(clangSema PROPERTIES
     IMPORTED_LOCATION /usr/local/lib/libclangSema.a)
-ADD_LIBRARY(clangAST STATIC IMPORTED)
-SET_TARGET_PROPERTIES(clangAST PROPERTIES
+add_library(clangAST STATIC IMPORTED)
+set_target_properties(clangAST PROPERTIES
     IMPORTED_LOCATION /usr/local/lib/libclangAST.a)
-ADD_LIBRARY(clangAnalysis STATIC IMPORTED)
-SET_TARGET_PROPERTIES(clangAnalysis PROPERTIES
+add_library(clangAnalysis STATIC IMPORTED)
+set_target_properties(clangAnalysis PROPERTIES
     IMPORTED_LOCATION /usr/local/lib/libclangAnalysis.a)
-ADD_LIBRARY(clangBasic STATIC IMPORTED)
-SET_TARGET_PROPERTIES(clangBasic PROPERTIES
+add_library(clangBasic STATIC IMPORTED)
+set_target_properties(clangBasic PROPERTIES
     IMPORTED_LOCATION /usr/local/lib/libclangBasic.a)
-ADD_LIBRARY(clangEdit STATIC IMPORTED)
-SET_TARGET_PROPERTIES(clangEdit PROPERTIES
+add_library(clangEdit STATIC IMPORTED)
+set_target_properties(clangEdit PROPERTIES
     IMPORTED_LOCATION /usr/local/lib/libclangEdit.a)
-ADD_LIBRARY(clangLex STATIC IMPORTED)
-SET_TARGET_PROPERTIES(clangLex PROPERTIES
+add_library(clangLex STATIC IMPORTED)
+set_target_properties(clangLex PROPERTIES
     IMPORTED_LOCATION /usr/local/lib/libclangLex.a)
 target_link_libraries(reve
+  c++
   c++abi
   clangFrontend
   clangDriver
