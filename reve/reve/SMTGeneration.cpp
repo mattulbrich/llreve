@@ -884,20 +884,23 @@ SMTRef inInvariant(MonoPair<const llvm::Function *> funs, SMTRef body,
             args.push_back(makeBinOp("=", argPair.first, argPair.second));
         }
     }
+    if (body == nullptr) {
+        body = make_shared<Op>("and", args);
+    }
     if (strings) {
+        // Add values of static arrays, strings and similar things
+        vector<SMTRef> smtArgs = { body };
         makeMonoPair(&mod1, &mod2)
             .indexedMap<vector<SMTRef>>([&args](const llvm::Module *mod,
                                                 int index) {
                 return stringConstants(*mod, "HEAP$" + std::to_string(index));
             })
-            .forEach([&args](vector<SMTRef> constants) {
+            .forEach([&smtArgs](vector<SMTRef> constants) {
                 if (!constants.empty()) {
-                    args.push_back(make_shared<Op>("and", constants));
+                    smtArgs.push_back(make_shared<Op>("and", constants));
                 }
             });
-    }
-    if (body == nullptr) {
-        body = make_shared<Op>("and", args);
+        body = make_shared<Op>("and", smtArgs);
     }
 
     return make_shared<FunDef>("IN_INV", funArgs, "Bool", body);
