@@ -10,11 +10,11 @@ ignored-files:
   - heap/findmax_1.c
   - heap/fib_1.c
   - argon2/fill_memory_blocks_1.c
-  - libc/strncasecmp_1_1.c
 z3-files:
   - rec/rec_while.smt2
   - rec/cocome1.smt2
   - rec/triangular.smt2
+  - libc/strncasecmp_1.smt2
 custom-args:
   rec/rec_while.smt2: []
   rec/cocome1.smt2:
@@ -34,3 +34,9 @@ custom-args:
   libc/strcspn.smt2:
     - -dont-nest
   libc/swab.smt2: []
+  libc/strncasecmp_1.smt2:
+    - -signed
+    - -strings
+    - -dont-nest
+  misc/lookuptable.smt2:
+    - -strings

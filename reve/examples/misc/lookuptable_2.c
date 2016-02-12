@@ -1,26 +1,13 @@
 /* openbsd */
 #include <stddef.h>
 extern int __mark(int);
-/*@ rel_in
-(and
-         (= s1$1_0 s1$2_0)
-         (= s2$1_0 s2$2_0)
-         (= len$1_0 len$2_0)
-         (forall
-            ((i Int))
-            (and
-                (= (select HEAP$1 i) (select HEAP$2 i))
-                (>= (select HEAP$1 i) 0)
-                (< (select HEAP$1 i) 256))))
-@*/
-typedef unsigned char u_char;
 
 /*
  * This array is designed for mapping upper and lower case letter
  * together for a case independent comparison.  The mappings are
  * based upon ascii character sequences.
  */
-const u_char charmap[] = {
+const unsigned char charmap[] = {
     '\000', '\001', '\002', '\003', '\004', '\005', '\006', '\007',
     '\010', '\011', '\012', '\013', '\014', '\015', '\016', '\017',
     '\020', '\021', '\022', '\023', '\024', '\025', '\026', '\027',
@@ -55,39 +42,6 @@ const u_char charmap[] = {
     '\370', '\371', '\372', '\373', '\374', '\375', '\376', '\377'
 };
 
-/* int strncasecmp(const char *s1, const char *s2, size_t n) { */
-/*     if (n != 0) { */
-/*         const u_char *cm = charmap; */
-/*         const u_char *us1 = (const u_char *)s1; */
-/*         const u_char *us2 = (const u_char *)s2; */
-
-/*         do { */
-/*             if (cm[*us1] != cm[*us2++]) */
-/*                 return (cm[*us1] - cm[*--us2]); */
-/*             if (*us1++ == '\0') */
-/*                 break; */
-/*         } while ((--n != 0) && __mark(0)); */
-/*     } */
-/*     return (0); */
-/* } */
-
-int strncasecmp(const char *s1, const char *s2, size_t len) {
-    register unsigned int x2 = 0;
-    register unsigned int x1 = 0;
-    register const char *end = s1 + len;
-
-    while (__mark(0) & 1) {
-        if (s1 >= end)
-            return 0;
-        x1 = charmap[*s1];
-        x2 = charmap[*s2];
-        s1++;
-        s2++;
-        if (x2 != x1)
-            break;
-        if (x1 == (unsigned int)-'A')
-            break;
-    }
-
-    return x1 - x2;
+int strncasecmp(const int *s1) {
+    return charmap[*s1];
 }
