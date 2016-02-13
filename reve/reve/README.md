@@ -50,9 +50,19 @@ make
 ```
 
 should work™. Make sure that you see the following line when running cmake
+
 ```
 Using LLVMConfig.cmake in: /usr/local/share/llvm/cmake
 ```
+
+## OpenSuse 13.2
+
+Take a look at the reve/opensuse directory.
+There is a vagrantfile which downloads the correct immage, however you still need to manually install llvm inside of that. Take a look at `bootstrap.sh` for the commands you need for that.
+
+Now you can simply run `./build.sh` and a static binary will be
+built. You can then just copy `reve/build/reve` to a more convenient
+place. Repeat that every time you want a new binary.
 
 ## Archlinux
 

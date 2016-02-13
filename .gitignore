@@ -6,3 +6,5 @@
 /reve/reve/.idea/
 /reve/ubuntu/
 !/reve/ubuntu/Vagrantfile
+.vagrant
+/reve/opensuse/reve
