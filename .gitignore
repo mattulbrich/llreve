@@ -8,3 +8,5 @@
 !/reve/ubuntu/Vagrantfile
 .vagrant
 /reve/opensuse/reve
+/reve/reve.pdf
+/reve/reve.tex
