@@ -1,7 +1,7 @@
 #include "AnnotStackPass.h"
 
-#include "MarkAnalysis.h"
 #include "Helper.h"
+#include "MarkAnalysis.h"
 
 #include <iostream>
 
@@ -14,7 +14,9 @@ llvm::PreservedAnalyses AnnotStackPass::run(llvm::Function &F,
         for (auto &Inst : Block) {
             if (auto AllocaInst = llvm::dyn_cast<llvm::AllocaInst>(&Inst)) {
                 StackOps.insert(AllocaInst);
-                StackIndex -= typeSize(AllocaInst->getAllocatedType());
+                StackIndex -=
+                    typeSize(AllocaInst->getAllocatedType(),
+                             AllocaInst->getModule()->getDataLayout());
                 markStackInstruction(*AllocaInst, "reve.stack_pointer",
                                      StackIndex);
             } else if (auto GetElementPtr =

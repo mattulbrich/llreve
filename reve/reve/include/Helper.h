@@ -1,12 +1,14 @@
 #pragma once
 
+#include "Opts.h"
 #include "SMT.h"
 
 #include <string>
+#include <unistd.h>
 
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
-#include <unistd.h>
 
 #define logError(Message) logError_(Message, __FILE__, __LINE__)
 #define logWarning(Message) logWarning_(Message, __FILE__, __LINE__)
@@ -50,7 +52,7 @@ auto logWarningData_(Str message, A &el, const char *file, int line) -> void {
 
 auto instrNameOrVal(const llvm::Value *val, const llvm::Type *ty)
     -> smt::SMTRef;
-auto typeSize(llvm::Type *ty) -> int;
+auto typeSize(llvm::Type *ty, const llvm::DataLayout &layout) -> int;
 template <typename T> smt::SMTRef resolveGEP(T &gep) {
     std::vector<smt::SMTRef> args;
     args.push_back(instrNameOrVal(gep.getPointerOperand(),
@@ -59,8 +61,22 @@ template <typename T> smt::SMTRef resolveGEP(T &gep) {
     std::vector<llvm::Value *> indices;
     for (auto ix = gep.idx_begin(), e = gep.idx_end(); ix != e; ++ix) {
         indices.push_back(*ix);
-        const auto size = typeSize(llvm::GetElementPtrInst::getIndexedType(
-            type, llvm::ArrayRef<llvm::Value *>(indices)));
+        // Try several ways of finding the module
+        const llvm::Module *mod = nullptr;
+        if (auto instr = llvm::dyn_cast<llvm::Instruction>(&gep)) {
+            mod = instr->getModule();
+        }
+        if (auto global =
+                llvm::dyn_cast<llvm::GlobalValue>(gep.getPointerOperand())) {
+            mod = global->getParent();
+        }
+        if (mod == nullptr) {
+            logErrorData("Couldn’t cast gep to an instruction:\n", gep);
+        }
+        const auto size =
+            typeSize(llvm::GetElementPtrInst::getIndexedType(
+                         type, llvm::ArrayRef<llvm::Value *>(indices)),
+                     mod->getDataLayout());
         if (size == 1) {
             args.push_back(instrNameOrVal(*ix, (*ix)->getType()));
         } else {

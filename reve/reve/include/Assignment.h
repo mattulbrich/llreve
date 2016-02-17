@@ -51,13 +51,12 @@ struct DefOrCallInfo {
 
 auto blockAssignments(const llvm::BasicBlock &bb,
                       const llvm::BasicBlock *prevBb, bool onlyPhis,
-                      Program prog, Memory heap, bool everythingSigned)
-    -> std::vector<DefOrCallInfo>;
+                      Program prog, Memory heap) -> std::vector<DefOrCallInfo>;
 auto instrAssignment(const llvm::Instruction &instr,
-                     const llvm::BasicBlock *prevBb, Program prog,
-                     bool everythingSigned) -> std::shared_ptr<smt::Assignment>;
+                     const llvm::BasicBlock *prevBb, Program prog)
+    -> std::shared_ptr<smt::Assignment>;
 auto predicateName(const llvm::CmpInst::Predicate pred) -> std::string;
-auto predicateFun(const llvm::CmpInst::CmpInst &pred, bool everythingSigned)
+auto predicateFun(const llvm::CmpInst::CmpInst &pred)
     -> std::function<smt::SMTRef(smt::SMTRef)>;
 auto opName(const llvm::BinaryOperator &op) -> std::string;
 auto combineOp(const llvm::BinaryOperator &op)

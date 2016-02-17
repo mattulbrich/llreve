@@ -1,10 +1,12 @@
 #include "Assignment.h"
 
 #include "Helper.h"
+#include "Opts.h"
 
 #include "llvm/IR/Intrinsics.h"
-#include "llvm/IR/Operator.h"
 #include "llvm/IR/Metadata.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Operator.h"
 
 using std::vector;
 using std::make_shared;
@@ -19,8 +21,8 @@ using std::string;
 /// Convert a basic block to a list of assignments
 vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
                                        const llvm::BasicBlock *prevBb,
-                                       bool onlyPhis, Program prog, Memory heap,
-                                       bool everythingSigned) {
+                                       bool onlyPhis, Program prog,
+                                       Memory heap) {
     const int progIndex = programIndex(prog);
     vector<DefOrCallInfo> definitions;
     assert(BB.size() >= 1); // There should be at least a terminator instruction
@@ -30,8 +32,8 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
         // Ignore phi nodes if we are in a loop as they're bound in a
         // forall quantifier
         if (!ignorePhis && llvm::isa<llvm::PHINode>(instr)) {
-            definitions.push_back(DefOrCallInfo(
-                instrAssignment(*instr, prevBb, prog, everythingSigned)));
+            definitions.push_back(
+                DefOrCallInfo(instrAssignment(*instr, prevBb, prog)));
         }
         if (!onlyPhis && !llvm::isa<llvm::PHINode>(instr)) {
             if (const auto CallInst = llvm::dyn_cast<llvm::CallInst>(instr)) {
@@ -61,8 +63,8 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
                     }
                 }
             } else {
-                definitions.push_back(DefOrCallInfo(
-                    instrAssignment(*instr, prevBb, prog, everythingSigned)));
+                definitions.push_back(
+                    DefOrCallInfo(instrAssignment(*instr, prevBb, prog)));
             }
         }
     }
@@ -88,11 +90,10 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
 /// Convert a single instruction to an assignment
 std::shared_ptr<Assignment> instrAssignment(const llvm::Instruction &Instr,
                                             const llvm::BasicBlock *prevBb,
-                                            Program prog,
-                                            bool everythingSigned) {
+                                            Program prog) {
     const int progIndex = programIndex(prog);
     if (const auto BinOp = llvm::dyn_cast<llvm::BinaryOperator>(&Instr)) {
-        if (BinOp->getOpcode() == Instruction::SDiv) {
+        if (NoByteHeapFlag && BinOp->getOpcode() == Instruction::SDiv) {
             // This is a heuristic to remove divisions by 4 of pointer
             // subtractions
             // Since we treat every int as a single value, we expect the
@@ -128,14 +129,14 @@ std::shared_ptr<Assignment> instrAssignment(const llvm::Instruction &Instr,
         }
         return makeAssignment(
             BinOp->getName(),
-            combineOp (*BinOp)(
-                opName(*BinOp), instrNameOrVal(BinOp->getOperand(0),
-                                               BinOp->getOperand(0)->getType()),
-                instrNameOrVal(BinOp->getOperand(1),
-                               BinOp->getOperand(1)->getType())));
+            combineOp(*BinOp)(opName(*BinOp),
+                              instrNameOrVal(BinOp->getOperand(0),
+                                             BinOp->getOperand(0)->getType()),
+                              instrNameOrVal(BinOp->getOperand(1),
+                                             BinOp->getOperand(1)->getType())));
     }
     if (const auto cmpInst = llvm::dyn_cast<llvm::CmpInst>(&Instr)) {
-        auto fun = predicateFun(*cmpInst, everythingSigned);
+        auto fun = predicateFun(*cmpInst);
         const auto cmp =
             makeBinOp(predicateName(cmpInst->getPredicate()),
                       fun(instrNameOrVal(cmpInst->getOperand(0),
@@ -258,9 +259,8 @@ string predicateName(llvm::CmpInst::Predicate pred) {
 }
 
 /// A function that is abblied to the arguments of a predicate
-std::function<SMTRef(SMTRef)> predicateFun(const llvm::CmpInst::CmpInst &cmp,
-                                           bool everythingSigned) {
-    if (cmp.isUnsigned() && !everythingSigned) {
+std::function<SMTRef(SMTRef)> predicateFun(const llvm::CmpInst::CmpInst &cmp) {
+    if (cmp.isUnsigned() && !EverythingSignedFlag) {
         return [](SMTRef everythingSigned) {
             return makeUnaryOp("abs", everythingSigned);
         };
@@ -364,7 +364,9 @@ vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *callInst,
             for (const auto elTy : StructTy0->elements()) {
                 const SMTRef heapSelect = name(heapNameSelect);
                 const SMTRef heapStore = name(heapNameStore);
-                for (int j = 0; j < typeSize(elTy); ++j) {
+                for (int j = 0;
+                     j < typeSize(elTy, callInst->getModule()->getDataLayout());
+                     ++j) {
                     const SMTRef select =
                         makeBinOp("select", heapSelect,
                                   makeBinOp("+", basePointerSrc,

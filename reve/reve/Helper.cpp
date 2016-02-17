@@ -1,6 +1,7 @@
 #include "Helper.h"
 
 #include "Memory.h"
+#include "Opts.h"
 
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Operator.h"
@@ -48,7 +49,10 @@ SMTRef instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) {
     return name(val->getName());
 }
 
-int typeSize(llvm::Type *Ty) {
+int typeSize(llvm::Type *Ty, const llvm::DataLayout &layout) {
+    if (!NoByteHeapFlag) {
+        return static_cast<int>(layout.getTypeAllocSize(Ty));
+    }
     if (auto IntTy = llvm::dyn_cast<llvm::IntegerType>(Ty)) {
         if (IntTy->getBitWidth() <= 64) {
             return 1;
@@ -62,16 +66,19 @@ int typeSize(llvm::Type *Ty) {
     if (auto structTy = llvm::dyn_cast<llvm::StructType>(Ty)) {
         int size = 0;
         for (auto elTy : structTy->elements()) {
-            size += typeSize(elTy);
+            size += typeSize(elTy, layout);
         }
         return size;
     }
     if (auto arrayTy = llvm::dyn_cast<llvm::ArrayType>(Ty)) {
         return static_cast<int>(arrayTy->getNumElements()) *
-               typeSize(arrayTy->getElementType());
+               typeSize(arrayTy->getElementType(), layout);
     }
     if (llvm::isa<llvm::PointerType>(Ty)) {
-        return 1;
+        logWarning("pointer size: " +
+                   std::to_string(Ty->getPrimitiveSizeInBits()) + "\n");
+        // TODO: This should come from a DataLayout
+        return 4;
     }
     logErrorData("Couldn’t calculate size of type\n", *Ty);
     return 0;

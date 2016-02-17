@@ -9,6 +9,7 @@
 #include "InlinePass.h"
 #include "InstCombine.h"
 #include "Invariant.h"
+#include "Opts.h"
 #include "RemoveMarkPass.h"
 #include "RemoveMarkRefsPass.h"
 #include "SMTGeneration.h"
@@ -96,10 +97,18 @@ static llvm::cl::opt<bool> strings("strings",
 static llvm::cl::opt<string>
     fun("fun", llvm::cl::desc("Function which should be verified"));
 static llvm::cl::opt<string> include("I", llvm::cl::desc("Include path"));
-static llvm::cl::opt<bool> EverythingSigned(
-    "signed", llvm::cl::desc("Treat all operations as signed operatons"));
+bool EverythingSignedFlag;
+static llvm::cl::opt<bool, true>
+    EverythingSigned("signed",
+                     llvm::cl::desc("Treat all operations as signed operatons"),
+                     llvm::cl::location(EverythingSignedFlag));
 static llvm::cl::opt<bool> dontNest("dont-nest",
                                     llvm::cl::desc("Don’t nest clauses"));
+bool NoByteHeapFlag;
+static llvm::cl::opt<bool, true>
+    NoByteHeap("no-byte-heap",
+               llvm::cl::desc("Treat each type as a single array entry"),
+               llvm::cl::location(NoByteHeapFlag));
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
@@ -187,14 +196,16 @@ getModule(const char *exeName, string input1, string input2) {
 
     auto cmdArgsOrError = getCmd(*comp, *diags);
     if (!cmdArgsOrError) {
-        return makeMonoPair<std::unique_ptr<clang::CodeGenAction>>(nullptr, nullptr);
+        return makeMonoPair<std::unique_ptr<clang::CodeGenAction>>(nullptr,
+                                                                   nullptr);
     }
     auto cmdArgs = cmdArgsOrError.get();
 
     auto act1 = getCodeGenAction(cmdArgs.first, *diags);
     auto act2 = getCodeGenAction(cmdArgs.second, *diags);
     if (!act1 || !act2) {
-        return makeMonoPair<std::unique_ptr<clang::CodeGenAction>>(nullptr, nullptr);
+        return makeMonoPair<std::unique_ptr<clang::CodeGenAction>>(nullptr,
+                                                                   nullptr);
     }
 
     return makeMonoPair(std::move(act1), std::move(act2));
@@ -320,9 +331,9 @@ int main(int argc, const char **argv) {
                     funPair.first),
                 inOutInvs.first, mem, *mod1, *mod2, strings));
             smtExprs.push_back(outInvariant(inOutInvs.second, mem));
-            auto newSmtExprs = mainAssertion(funPair.first, funPair.second,
-                                             offByN, declarations, onlyRec, mem,
-                                             EverythingSigned, dontNest);
+            auto newSmtExprs =
+                mainAssertion(funPair.first, funPair.second, offByN,
+                              declarations, onlyRec, mem, dontNest);
             assertions.insert(assertions.end(), newSmtExprs.begin(),
                               newSmtExprs.end());
         }
@@ -330,9 +341,8 @@ int main(int argc, const char **argv) {
             (!(doesNotRecurse(*funPair.first.first) &&
                doesNotRecurse(*funPair.first.second)) ||
              onlyRec)) {
-            auto newSmtExprs =
-                convertToSMT(funPair.first, funPair.second, offByN,
-                             declarations, mem, EverythingSigned);
+            auto newSmtExprs = convertToSMT(funPair.first, funPair.second,
+                                            offByN, declarations, mem);
             assertions.insert(assertions.end(), newSmtExprs.begin(),
                               newSmtExprs.end());
         }
@@ -629,9 +639,11 @@ vector<SMTRef> globalDeclarationsForMod(int globalPointer, llvm::Module &mod,
             // pointing to them
             if (const auto pointerTy =
                     llvm::dyn_cast<llvm::PointerType>(global1.getType())) {
-                globalPointer += typeSize(pointerTy->getElementType());
+                globalPointer +=
+                    typeSize(pointerTy->getElementType(), mod.getDataLayout());
             } else {
-                globalPointer += typeSize(global1.getType());
+                globalPointer +=
+                    typeSize(global1.getType(), mod.getDataLayout());
             }
             std::vector<SortedVar> empty;
             auto constDef1 = make_shared<FunDef>(
@@ -654,9 +666,11 @@ std::vector<SMTRef> globalDeclarations(llvm::Module &mod1, llvm::Module &mod2) {
             // pointing to them
             if (const auto pointerTy =
                     llvm::dyn_cast<llvm::PointerType>(global1.getType())) {
-                globalPointer += typeSize(pointerTy->getElementType());
+                globalPointer +=
+                    typeSize(pointerTy->getElementType(), mod1.getDataLayout());
             } else {
-                globalPointer += typeSize(global1.getType());
+                globalPointer +=
+                    typeSize(global1.getType(), mod1.getDataLayout());
             }
             std::vector<SortedVar> empty;
             auto constDef1 = make_shared<FunDef>(
