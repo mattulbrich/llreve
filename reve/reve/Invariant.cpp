@@ -1,6 +1,7 @@
 #include "Invariant.h"
 
 #include "Helper.h"
+#include "Opts.h"
 
 using std::vector;
 using std::make_shared;
@@ -84,7 +85,7 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
             Memory Heap = 0;
             UsingArgsVect = resolveHeapReferences(UsingArgsVect, "", Heap);
             const auto PreInv =
-                makeOp(invariantName(EndIndex, SMTFor, FunName) + "_PRE",
+                makeOp(invariantName(EndIndex, SMTFor, FunName, "_PRE"),
                        UsingArgsVect);
             UsingArgsVect.insert(UsingArgsVect.end(), ResultArgs.begin(),
                                  ResultArgs.end());
@@ -118,11 +119,10 @@ SMTRef mainInvariant(int EndIndex, vector<string> FreeVars, string FunName,
         return name("true");
     }
     FreeVars = resolveHeapReferences(FreeVars, "", Heap);
-    return wrapHeap(
-        makeOp(invariantName(EndIndex, ProgramSelection::Both, FunName) +
-                   "_MAIN",
-               FreeVars),
-        Heap, FreeVars);
+    return wrapHeap(makeOp(invariantName(EndIndex, ProgramSelection::Both,
+                                         FunName, "_MAIN"),
+                           FreeVars),
+                    Heap, FreeVars);
 }
 
 /// Declare an invariant
@@ -161,12 +161,12 @@ SMTRef mainInvariantDeclaration(int BlockIndex, vector<string> FreeVars,
     const vector<string> Args(NumArgs, "Int");
 
     return std::make_shared<class FunDecl>(
-        invariantName(BlockIndex, For, FunName) + "_MAIN", Args, "Bool");
+        invariantName(BlockIndex, For, FunName, "_MAIN"), Args, "Bool");
 }
 
 /// Return the invariant name, special casing the entry block
 string invariantName(int Index, ProgramSelection For, std::string FunName,
-                     uint32_t VarArgs) {
+                     std::string Suffix, uint32_t VarArgs) {
     string Name;
     if (Index == ENTRY_MARK) {
         Name = "INV_REC_" + FunName;
@@ -177,10 +177,10 @@ string invariantName(int Index, ProgramSelection For, std::string FunName,
         Name += "_" + std::to_string(VarArgs) + "varargs";
     }
     if (For == ProgramSelection::First) {
-        return Name + "__1";
+        Name += "__1";
+    } else if (For == ProgramSelection::Second) {
+        Name += "__2";
     }
-    if (For == ProgramSelection::Second) {
-        return Name + "__2";
-    }
+    Name += Suffix;
     return Name;
 }

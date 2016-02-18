@@ -109,6 +109,11 @@ static llvm::cl::opt<bool, true>
     NoByteHeap("no-byte-heap",
                llvm::cl::desc("Treat each type as a single array entry"),
                llvm::cl::location(NoByteHeapFlag));
+bool SingleInvariantFlag;
+static llvm::cl::opt<bool, true> SingleInvariant(
+    "single-invariant",
+    llvm::cl::desc("Use a single invariant indexed by the mark"),
+    llvm::cl::location(SingleInvariantFlag));
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
@@ -480,7 +485,7 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                     }
                     std::string funName =
                         invariantName(ENTRY_MARK, ProgramSelection::Both,
-                                      fun1.getName().str(), argNum);
+                                      fun1.getName().str(), "", argNum);
                     args.push_back(SortedVar("res1", "Int"));
                     args.push_back(SortedVar("res2", "Int"));
                     if (mem & HEAP_MASK) {
@@ -592,7 +597,7 @@ std::vector<SMTRef> externFunDecl(llvm::Function &fun, int program,
         std::string funName =
             invariantName(ENTRY_MARK, program == 1 ? ProgramSelection::First
                                                    : ProgramSelection::Second,
-                          fun.getName().str(), argNum);
+                          fun.getName().str(), "", argNum);
         SMTRef body = name("true");
         decls.push_back(make_shared<FunDef>(funName, args, "Bool", body));
     }

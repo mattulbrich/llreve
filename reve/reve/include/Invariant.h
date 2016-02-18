@@ -17,5 +17,5 @@ auto invariantDeclaration(int BlockIndex, std::vector<std::string> FreeVars,
 auto mainInvariantDeclaration(int BlockIndex, std::vector<std::string> FreeVars,
                               ProgramSelection For, std::string FunName)
     -> smt::SMTRef;
-auto invariantName(int Index, ProgramSelection For, std::string FunName,
+auto invariantName(int Index, ProgramSelection For, std::string FunName, std::string Suffix = "",
                    uint32_t VarArgs = 0) -> std::string;
