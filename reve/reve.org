@@ -1,20 +1,19 @@
 #+latex_header: \usepackage{algorithm}
 #+latex_header: \usepackage{algpseudocode}
+\MakeRobust{\Call}
 * Pseudocode
-  #+begin_latex
   \begin{algorithm}
     \begin{algorithmic}[1]
       \For{$start,end\gets marks$}
-        \For{$path1,path2\gets paths1[start,end]\times paths2[start,end]$}
-          \State $assignments1\gets \Call{AssignmentsOnPath}{paths1}}$
+        \For{$path1,path2\gets paths1[start,end]\times paths2[start,end]}$
+          \State $assignments1\gets \Call{AssignmentsOnPath}{paths1}$
           \State $assignments2\gets \Call{AssignmentsOnPath}{paths2}$
           \State $combinedPath\gets \Call{Interleave}{assignments1,assignments2}$
-          \State \Call{Assert}{\{\Call{Invariant}{start}\}combinedPath\{\Call{Invariant}{end}\}}
+          \State $\Call{Assert}{ \{ \Call{Invariant}{start} \} combinedPath \{ \Call{Invariant}{end} \} }$
         \EndFor
       \EndFor
     \end{algorithmic}
   \end{algorithm}
-#+end_latex
 * Why LLVM?
 - No need to do any parsing ourselves
 - Relatively low number of instructions, in particular CFG instructions
