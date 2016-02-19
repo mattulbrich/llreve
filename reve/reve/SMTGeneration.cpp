@@ -66,7 +66,9 @@ vector<SMTRef> convertToSMT(MonoPair<llvm::Function *> funs,
         invariantDeclaration(ENTRY_MARK, filterVars(2, freeVarsMap[ENTRY_MARK]),
                              ProgramSelection::Second, funName, memory);
     auto addInvariant = [&](SMTRef invariant) {
-        declarations.push_back(invariant);
+        if (!SingleInvariantFlag) {
+            declarations.push_back(invariant);
+        }
     };
     invariants.forEach(addInvariant);
     invariants1.forEach(addInvariant);
@@ -144,6 +146,11 @@ vector<SMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
         return smtExprs;
     }
 
+    if (SingleInvariantFlag) {
+        declarations.push_back(
+            singleInvariant(freeVarsMap, memory, ProgramSelection::Both));
+    }
+
     auto synchronizedPaths =
         mainSynchronizedPaths(pathMaps.first, pathMaps.second, freeVarsMap,
                               funName, declarations, memory);
@@ -209,7 +216,7 @@ vector<SMTRef> getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
     vector<SMTRef> pathExprs;
     for (auto &pathMapIt : pathMap1) {
         const int startIndex = pathMapIt.first;
-        if (startIndex != ENTRY_MARK) {
+        if (startIndex != ENTRY_MARK && !SingleInvariantFlag) {
             // ignore entry node
             const auto invariants =
                 invariantDeclaration(startIndex, freeVarsMap.at(startIndex),
@@ -260,7 +267,7 @@ mainSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
     map<int, map<int, vector<function<SMTRef(SMTRef)>>>> pathFuns;
     for (const auto &pathMapIt : pathMap1) {
         const int startIndex = pathMapIt.first;
-        if (startIndex != ENTRY_MARK) {
+        if (startIndex != ENTRY_MARK && !SingleInvariantFlag) {
             // ignore entry node
             const auto invariant =
                 mainInvariantDeclaration(startIndex, freeVarsMap.at(startIndex),
@@ -364,7 +371,7 @@ void nonmutualPaths(PathMap pathMap, vector<SMTRef> &pathExprs,
     const int progIndex = programIndex(prog);
     for (const auto &pathMapIt : pathMap) {
         const int startIndex = pathMapIt.first;
-        if (startIndex != ENTRY_MARK) {
+        if (startIndex != ENTRY_MARK && !SingleInvariantFlag) {
             const auto invariants = invariantDeclaration(
                 startIndex, filterVars(progIndex, freeVarsMap.at(startIndex)),
                 asSelection(prog), funName, memory);

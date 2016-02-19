@@ -330,6 +330,7 @@ int main(int argc, const char **argv) {
     smtExprs.insert(smtExprs.end(), globalDecls.begin(), globalDecls.end());
 
     for (auto funPair : makeZip(funs.get(), fams)) {
+        // Main function
         if (funPair.first.first->getName() == fun) {
             smtExprs.push_back(inInvariant(
                 rewrapMonoPair<llvm::Function *, const llvm::Function *>(
@@ -342,6 +343,8 @@ int main(int argc, const char **argv) {
             assertions.insert(assertions.end(), newSmtExprs.begin(),
                               newSmtExprs.end());
         }
+        // Other functions used by the main function or the main function if
+        // it’s recursive
         if (funPair.first.first->getName() != fun ||
             (!(doesNotRecurse(*funPair.first.first) &&
                doesNotRecurse(*funPair.first.second)) ||
