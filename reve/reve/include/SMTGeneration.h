@@ -107,7 +107,9 @@ auto nonmutualRecursiveForall(smt::SMTRef clause, CallInfo call, Program prog,
                               Memory memory) -> smt::SMTRef;
 auto forallStartingAt(smt::SMTRef clause, std::vector<std::string> freeVars,
                       int blockIndex, ProgramSelection prog,
-                      std::string funName, bool main) -> smt::SMTRef;
+                      std::string funName, bool main,
+                      std::map<int, std::vector<std::string>> freeVarsMap,
+                      Memory memory) -> smt::SMTRef;
 
 /* -------------------------------------------------------------------------- */
 // Functions forcing arguments to be equal
@@ -119,10 +121,11 @@ auto inInvariant(MonoPair<const llvm::Function *> funs, smt::SMTRef body,
                  Memory memory, const llvm::Module &mod1,
                  const llvm::Module &mod2, bool strings) -> smt::SMTRef;
 auto outInvariant(smt::SMTRef body, Memory memory) -> smt::SMTRef;
-auto equalInputsEqualOutputs(std::vector<std::string> funArgs,
-                             std::vector<std::string> funArgs1,
-                             std::vector<std::string> funArgs2,
-                             std::string funName, Memory memory) -> smt::SMTRef;
+auto equalInputsEqualOutputs(
+    std::vector<std::string> funArgs, std::vector<std::string> funArgs1,
+    std::vector<std::string> funArgs2, std::string funName,
+    std::map<int, std::vector<std::string>> freeVarsMap, Memory memory)
+    -> smt::SMTRef;
 
 /* -------------------------------------------------------------------------- */
 // Functions related to the search for free variables
