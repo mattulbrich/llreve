@@ -148,7 +148,7 @@ vector<SMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
 
     if (SingleInvariantFlag) {
         declarations.push_back(
-            singleInvariant(freeVarsMap, memory, ProgramSelection::Both));
+            singleMainInvariant(freeVarsMap, memory, ProgramSelection::Both));
     }
 
     auto synchronizedPaths =
@@ -658,7 +658,8 @@ SMTRef mutualRecursiveForall(SMTRef clause, MonoPair<CallInfo> callPair,
 
         const SMTRef postInvariant = std::make_shared<Op>(
             invariantName(ENTRY_MARK, ProgramSelection::Both,
-                          callPair.first.callName, "", varArgs),
+                          callPair.first.callName, InvariantAttr::NONE,
+                          varArgs),
             implArgs);
         clause = makeBinOp("=>", postInvariant, clause);
         return make_shared<Forall>(args, clause);
@@ -684,10 +685,10 @@ SMTRef mutualRecursiveForall(SMTRef clause, MonoPair<CallInfo> callPair,
         clause = makeBinOp("=>", postInvariant, clause);
         clause = make_shared<Forall>(args, clause);
         const auto preInv = wrapHeap(
-            std::make_shared<Op>(invariantName(ENTRY_MARK,
-                                               ProgramSelection::Both,
-                                               callPair.first.callName, "_PRE"),
-                                 preArgs),
+            std::make_shared<Op>(
+                invariantName(ENTRY_MARK, ProgramSelection::Both,
+                              callPair.first.callName, InvariantAttr::PRE),
+                preArgs),
             memory, {"i1", "i2", "i1_stack", "i2_stack", "STACK$1", "STACK$2"});
         return makeBinOp("and", preInv, clause);
     }
@@ -717,10 +718,10 @@ SMTRef nonmutualRecursiveForall(SMTRef clause, CallInfo call, Program prog,
         if (memory & HEAP_MASK) {
             call.args.push_back(name("HEAP$" + programS + "_res"));
         }
-        const SMTRef endInvariant =
-            make_shared<Op>(invariantName(ENTRY_MARK, asSelection(prog),
-                                          call.callName, "", varArgs),
-                            call.args);
+        const SMTRef endInvariant = make_shared<Op>(
+            invariantName(ENTRY_MARK, asSelection(prog), call.callName,
+                          InvariantAttr::NONE, varArgs),
+            call.args);
         clause = makeBinOp("=>", endInvariant, clause);
         return make_shared<Forall>(forallArgs, clause);
     } else {
@@ -754,7 +755,8 @@ SMTRef nonmutualRecursiveForall(SMTRef clause, CallInfo call, Program prog,
         clause = makeBinOp("=>", endInvariant, clause);
         clause = make_shared<Forall>(forallArgs, clause);
         const auto preInv = std::make_shared<Op>(
-            invariantName(ENTRY_MARK, asSelection(prog), call.callName, "_PRE"),
+            invariantName(ENTRY_MARK, asSelection(prog), call.callName,
+                          InvariantAttr::PRE),
             preArgs);
         if (memory & STACK_MASK) {
             return makeBinOp(
@@ -805,9 +807,9 @@ SMTRef forallStartingAt(SMTRef clause, vector<string> freeVars, int blockIndex,
         }
         clause = makeBinOp("=>", makeOp("IN_INV", args), clause);
     } else {
-        auto preInv = makeOp(
-            invariantName(blockIndex, prog, funName, main ? "_MAIN" : "_PRE"),
-            preVars);
+        InvariantAttr attr = main ? InvariantAttr::MAIN : InvariantAttr::PRE;
+        auto preInv =
+            makeOp(invariantName(blockIndex, prog, funName, attr), preVars);
         preInv = wrapHeap(preInv, memory, preVars);
         clause = makeBinOp("=>", preInv, clause);
     }
@@ -969,7 +971,7 @@ SMTRef equalInputsEqualOutputs(vector<string> funArgs, vector<string> funArgs1,
     preInvArgs = resolveHeapReferences(preInvArgs, "", memory);
     const auto preInv =
         wrapHeap(makeOp(invariantName(ENTRY_MARK, ProgramSelection::Both,
-                                      funName, "_PRE"),
+                                      funName, InvariantAttr::PRE),
                         preInvArgs),
                  memory, preInvArgs);
 

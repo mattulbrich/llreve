@@ -86,9 +86,9 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
                                  FilteredEndArgs.end());
             Memory Heap = 0;
             UsingArgsVect = resolveHeapReferences(UsingArgsVect, "", Heap);
-            const auto PreInv =
-                makeOp(invariantName(EndIndex, SMTFor, FunName, "_PRE"),
-                       UsingArgsVect);
+            const auto PreInv = makeOp(
+                invariantName(EndIndex, SMTFor, FunName, InvariantAttr::PRE),
+                UsingArgsVect);
             UsingArgsVect.insert(UsingArgsVect.end(), ResultArgs.begin(),
                                  ResultArgs.end());
             UsingArgsVect = resolveHeapReferences(UsingArgsVect, "", Heap);
@@ -122,7 +122,7 @@ SMTRef mainInvariant(int EndIndex, vector<string> FreeVars, string FunName,
     }
     FreeVars = resolveHeapReferences(FreeVars, "", Heap);
     return wrapHeap(makeOp(invariantName(EndIndex, ProgramSelection::Both,
-                                         FunName, "_MAIN"),
+                                         FunName, InvariantAttr::MAIN),
                            FreeVars),
                     Heap, FreeVars);
 }
@@ -142,7 +142,8 @@ MonoPair<SMTRef> invariantDeclaration(int BlockIndex, vector<string> FreeVars,
         std::make_shared<class FunDecl>(invariantName(BlockIndex, For, FunName),
                                         Args, "Bool"),
         std::make_shared<class FunDecl>(
-            invariantName(BlockIndex, For, FunName) + "_PRE", PreArgs, "Bool"));
+            invariantName(BlockIndex, For, FunName, InvariantAttr::PRE),
+            PreArgs, "Bool"));
 }
 
 size_t invariantArgs(vector<string> freeVars, Memory memory,
@@ -164,8 +165,8 @@ size_t invariantArgs(vector<string> freeVars, Memory memory,
     return adaptSizeToHeap(numArgs, freeVars);
 }
 
-SMTRef singleInvariant(map<int, vector<string>> freeVarsMap, Memory memory,
-                       ProgramSelection prog) {
+SMTRef singleMainInvariant(map<int, vector<string>> freeVarsMap, Memory memory,
+                           ProgramSelection prog) {
     size_t maxArgs = 0;
     for (auto It : freeVarsMap) {
         size_t numArgs = invariantArgs(It.second, memory, prog, true);
@@ -185,21 +186,27 @@ SMTRef mainInvariantDeclaration(int BlockIndex, vector<string> FreeVars,
     const vector<string> Args(NumArgs, "Int");
 
     return std::make_shared<class FunDecl>(
-        invariantName(BlockIndex, For, FunName, "_MAIN"), Args, "Bool");
+        invariantName(BlockIndex, For, FunName, InvariantAttr::MAIN), Args,
+        "Bool");
 }
 
 /// Return the invariant name, special casing the entry block
 string invariantName(int Index, ProgramSelection For, std::string FunName,
-                     std::string Suffix, uint32_t VarArgs) {
+                     InvariantAttr attr, uint32_t VarArgs) {
     string Name;
-    if (Index == ENTRY_MARK) {
-        Name = "INV_REC_" + FunName;
-    } else {
-        Name = "INV";
+    if (attr == InvariantAttr::MAIN) {
+        Name = "INV_MAIN";
         if (!SingleInvariantFlag) {
             Name += "_" + std::to_string(Index);
         }
+    } else {
+        if (SingleInvariantFlag || Index == ENTRY_MARK) {
+            Name = "INV_REC_" + FunName;
+        } else {
+            Name = "INV_" + std::to_string(Index);
+        }
     }
+
     if (VarArgs > 0) {
         Name += "_" + std::to_string(VarArgs) + "varargs";
     }
@@ -208,9 +215,15 @@ string invariantName(int Index, ProgramSelection For, std::string FunName,
     } else if (For == ProgramSelection::Second) {
         Name += "__2";
     }
-    Name += Suffix;
+    if (attr == InvariantAttr::PRE) {
+        Name += "_PRE";
+    }
     if (SingleInvariantFlag) {
-        Name += " " + std::to_string(Index);
+        string indexString = std::to_string(abs(Index));
+        if (Index < 0) {
+            indexString = "(- " + indexString + ")";
+        }
+        Name += " " + indexString;
     }
     return Name;
 }
