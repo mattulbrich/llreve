@@ -73,47 +73,61 @@ using std::placeholders::_1;
 using std::set;
 using std::vector;
 
+static llvm::cl::OptionCategory ReveCategory("Reve options",
+                                             "Options for controlling reve.");
 static llvm::cl::opt<string> fileName1(llvm::cl::Positional,
-                                       llvm::cl::desc("Input file 1"),
-                                       llvm::cl::Required);
+                                       llvm::cl::desc("FILE1"),
+                                       llvm::cl::Required,
+                                       llvm::cl::cat(ReveCategory));
 static llvm::cl::opt<string> fileName2(llvm::cl::Positional,
-                                       llvm::cl::desc("Input file 2"),
-                                       llvm::cl::Required);
+                                       llvm::cl::desc("FILE2"),
+                                       llvm::cl::Required,
+                                       llvm::cl::cat(ReveCategory));
 static llvm::cl::opt<string>
     outputFileName("o", llvm::cl::desc("SMT output filename"),
-                   llvm::cl::value_desc("filename"));
-static llvm::cl::opt<bool> showCfg("show-cfg", llvm::cl::desc("Show cfg"));
+                   llvm::cl::value_desc("filename"),
+                   llvm::cl::cat(ReveCategory));
+static llvm::cl::opt<bool> showCfg("show-cfg", llvm::cl::desc("Show cfg"),
+                                   llvm::cl::cat(ReveCategory));
 static llvm::cl::opt<bool>
     showMarkedCfg("show-marked-cfg",
-                  llvm::cl::desc("Show cfg before mark removal"));
+                  llvm::cl::desc("Show cfg before mark removal"),
+                  llvm::cl::cat(ReveCategory));
 static llvm::cl::opt<bool>
-    offByN("off-by-n", llvm::cl::desc("Allow loops to be off by n iterations"));
+    offByN("off-by-n", llvm::cl::desc("Allow loops to be off by n iterations"),
+           llvm::cl::cat(ReveCategory));
 static llvm::cl::opt<bool>
-    onlyRec("only-rec", llvm::cl::desc("Only generate recursive invariants"));
-static llvm::cl::opt<bool> heap("heap", llvm::cl::desc("Enable heaps"));
-static llvm::cl::opt<bool> stack("stack", llvm::cl::desc("Enable stacks"));
+    onlyRec("only-rec", llvm::cl::desc("Only generate recursive invariants"),
+            llvm::cl::cat(ReveCategory));
+static llvm::cl::opt<bool> heap("heap", llvm::cl::desc("Enable heap"),
+                                llvm::cl::cat(ReveCategory));
+static llvm::cl::opt<bool> stack("stack", llvm::cl::desc("Enable stack"),
+                                 llvm::cl::cat(ReveCategory));
 static llvm::cl::opt<bool> strings("strings",
-                                   llvm::cl::desc("Enable string constants"));
+                                   llvm::cl::desc("Set global constants"),
+                                   llvm::cl::cat(ReveCategory));
 static llvm::cl::opt<string>
-    fun("fun", llvm::cl::desc("Function which should be verified"));
-static llvm::cl::opt<string> include("I", llvm::cl::desc("Include path"));
+    fun("fun", llvm::cl::desc("Name of the function which should be verified"),
+        llvm::cl::cat(ReveCategory));
+static llvm::cl::opt<string> include("I", llvm::cl::desc("Include path"),
+                                     llvm::cl::cat(ReveCategory));
 bool EverythingSignedFlag;
-static llvm::cl::opt<bool, true>
-    EverythingSigned("signed",
-                     llvm::cl::desc("Treat all operations as signed operatons"),
-                     llvm::cl::location(EverythingSignedFlag));
+static llvm::cl::opt<bool, true> EverythingSigned(
+    "signed", llvm::cl::desc("Treat all operations as signed operatons"),
+    llvm::cl::location(EverythingSignedFlag), llvm::cl::cat(ReveCategory));
 static llvm::cl::opt<bool> dontNest("dont-nest",
-                                    llvm::cl::desc("Don’t nest clauses"));
+                                    llvm::cl::desc("Don’t nest clauses"),
+                                    llvm::cl::cat(ReveCategory));
 bool NoByteHeapFlag;
-static llvm::cl::opt<bool, true>
-    NoByteHeap("no-byte-heap",
-               llvm::cl::desc("Treat each type as a single array entry"),
-               llvm::cl::location(NoByteHeapFlag));
+static llvm::cl::opt<bool, true> NoByteHeap(
+    "no-byte-heap",
+    llvm::cl::desc("Treat each primitive type as a single array entry"),
+    llvm::cl::location(NoByteHeapFlag), llvm::cl::cat(ReveCategory));
 bool SingleInvariantFlag;
 static llvm::cl::opt<bool, true> SingleInvariant(
     "single-invariant",
     llvm::cl::desc("Use a single invariant indexed by the mark"),
-    llvm::cl::location(SingleInvariantFlag));
+    llvm::cl::location(SingleInvariantFlag), llvm::cl::cat(ReveCategory));
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
@@ -275,6 +289,7 @@ void processFile(std::string file, SMTRef &in, SMTRef &out) {
 int main(int argc, const char **argv) {
     // The actual arguments are declared statically so we don't need
     // to pass those in here
+    llvm::cl::HideUnrelatedOptions(ReveCategory);
     llvm::cl::ParseCommandLineOptions(argc, argv, "reve\n");
 
     auto actPair = getModule(argv[0], fileName1, fileName2);
