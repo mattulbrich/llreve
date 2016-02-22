@@ -50,7 +50,7 @@ vector<SMTRef> convertToSMT(MonoPair<llvm::Function *> funs,
             acc.insert(acc.end(), args.begin(), args.end());
             return acc;
         });
-    std::map<int, vector<string>> freeVarsMap =
+    FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, memory);
     vector<SMTRef> smtExprs;
     vector<SMTRef> pathExprs;
@@ -167,7 +167,7 @@ vector<SMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
             return acc;
         });
 
-    std::map<int, vector<string>> freeVarsMap =
+    FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, memory);
 
     if (onlyRec) {
@@ -245,7 +245,7 @@ vector<SMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
 
 map<int, map<int, vector<function<SMTRef(SMTRef)>>>>
 getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
-                     std::map<int, vector<string>> freeVarsMap, Memory memory) {
+                     FreeVarsMap freeVarsMap, Memory memory) {
     map<int, map<int, vector<function<SMTRef(SMTRef)>>>> pathFuns;
     for (const auto &pathMapIt : pathMap1) {
         const int startIndex = pathMapIt.first;
@@ -280,7 +280,7 @@ getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
 }
 
 vector<SMTRef> mainDeclarations(PathMap pathMap, string funName,
-                                map<int, vector<string>> freeVarsMap) {
+                                FreeVarsMap freeVarsMap) {
     vector<SMTRef> declarations;
     for (const auto &pathMapIt : pathMap) {
         const int startIndex = pathMapIt.first;
@@ -296,8 +296,7 @@ vector<SMTRef> mainDeclarations(PathMap pathMap, string funName,
 }
 
 vector<SMTRef> recDeclarations(PathMap pathMap, string funName,
-                               map<int, vector<string>> freeVarsMap,
-                               Memory memory) {
+                               FreeVarsMap freeVarsMap, Memory memory) {
     vector<SMTRef> declarations;
     for (const auto &pathMapIt : pathMap) {
         const int startIndex = pathMapIt.first;
@@ -315,8 +314,8 @@ vector<SMTRef> recDeclarations(PathMap pathMap, string funName,
 
 vector<SMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
                                  MonoPair<BidirBlockMarkMap> marked,
-                                 std::map<int, vector<string>> freeVarsMap,
-                                 bool offByN, std::string funName, bool main,
+                                 FreeVarsMap freeVarsMap, bool offByN,
+                                 std::string funName, bool main,
                                  Memory memory) {
     vector<SMTRef> pathExprs;
     for (const auto &pathMapIt : pathMaps.first) {
@@ -374,9 +373,8 @@ vector<SMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
 }
 
 void nonmutualPaths(PathMap pathMap, vector<SMTRef> &pathExprs,
-                    std::map<int, vector<string>> freeVarsMap, Program prog,
-                    std::string funName, vector<SMTRef> &declarations,
-                    Memory memory) {
+                    FreeVarsMap freeVarsMap, Program prog, std::string funName,
+                    vector<SMTRef> &declarations, Memory memory) {
     const int progIndex = programIndex(prog);
     for (const auto &pathMapIt : pathMap) {
         const int startIndex = pathMapIt.first;
@@ -408,9 +406,8 @@ void nonmutualPaths(PathMap pathMap, vector<SMTRef> &pathExprs,
 }
 
 map<int, map<int, vector<function<SMTRef(SMTRef)>>>>
-getOffByNPaths(PathMap pathMap1, PathMap pathMap2,
-               std::map<int, vector<string>> freeVarsMap, std::string funName,
-               bool main, Memory memory) {
+getOffByNPaths(PathMap pathMap1, PathMap pathMap2, FreeVarsMap freeVarsMap,
+               std::string funName, bool main, Memory memory) {
     map<int, map<int, vector<function<SMTRef(SMTRef)>>>> pathFuns;
     vector<SMTRef> paths;
     const auto firstPaths = offByNPathsOneDir(
@@ -423,8 +420,8 @@ getOffByNPaths(PathMap pathMap1, PathMap pathMap2,
 
 map<int, map<int, vector<function<SMTRef(SMTRef)>>>>
 offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
-                  std::map<int, vector<string>> freeVarsMap, Program prog,
-                  std::string funName, bool main, Memory memory) {
+                  FreeVarsMap freeVarsMap, Program prog, std::string funName,
+                  bool main, Memory memory) {
     const int progIndex = programIndex(prog);
     map<int, map<int, vector<function<SMTRef(SMTRef)>>>> pathFuns;
     for (const auto &pathMapIt : pathMap) {
@@ -785,7 +782,7 @@ SMTRef nonmutualRecursiveForall(SMTRef clause, CallInfo call, Program prog,
 /// Wrap the clause in a forall
 SMTRef forallStartingAt(SMTRef clause, vector<string> freeVars, int blockIndex,
                         ProgramSelection prog, std::string funName, bool main,
-                        map<int, vector<string>> freeVarsMap, Memory memory) {
+                        FreeVarsMap freeVarsMap, Memory memory) {
     vector<SortedVar> vars;
     vector<string> preVars;
     for (const auto &arg : freeVars) {
@@ -943,8 +940,7 @@ SMTRef outInvariant(SMTRef body, Memory memory) {
 /// arguments are equal the outputs are equal
 SMTRef equalInputsEqualOutputs(vector<string> funArgs, vector<string> funArgs1,
                                vector<string> funArgs2, std::string funName,
-                               map<int, vector<string>> freeVarsMap,
-                               Memory memory) {
+                               FreeVarsMap freeVarsMap, Memory memory) {
     vector<SortedVar> forallArgs;
     vector<string> args;
     vector<string> preInvArgs;
@@ -1099,10 +1095,10 @@ freeVarsForBlock(std::map<int, Paths> pathMap) {
     return std::make_pair(freeVars, constructedIntersection);
 }
 
-std::map<int, vector<string>> freeVars(PathMap map1, PathMap map2,
-                                       vector<string> funArgs, Memory memory) {
+FreeVarsMap freeVars(PathMap map1, PathMap map2, vector<string> funArgs,
+                     Memory memory) {
     std::map<int, set<string>> freeVarsMap;
-    std::map<int, vector<string>> freeVarsMapVect;
+    FreeVarsMap freeVarsMapVect;
     std::map<int, std::map<int, set<string>>> constructed;
     for (const auto &it : map1) {
         const int index = it.first;
@@ -1321,8 +1317,7 @@ bool mapSubset(PathMap map1, PathMap map2) {
 }
 
 SMTRef getDontLoopInvariant(SMTRef endClause, int startIndex, PathMap pathMap,
-                            std::map<int, vector<string>> freeVars,
-                            Program prog, Memory memory) {
+                            FreeVarsMap freeVars, Program prog, Memory memory) {
     auto clause = endClause;
     vector<Path> dontLoopPaths;
     for (auto pathMapIt : pathMap.at(startIndex)) {
