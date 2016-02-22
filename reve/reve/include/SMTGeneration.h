@@ -49,17 +49,16 @@ auto mainAssertion(MonoPair<llvm::Function *> funs, MonoPair<FAMRef> fams,
 
 auto getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
                           std::map<int, std::vector<std::string>> freeVarsMap,
-                          std::string funName,
-                          std::vector<smt::SMTRef> &declarations, Memory memory)
-    -> std::vector<smt::SMTRef>;
-auto mainSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
-                           std::map<int, std::vector<std::string>> freeVarsMap,
-                           std::string funName,
-                           std::vector<smt::SMTRef> &declarations,
-                           Memory memory)
+                          Memory memory)
     -> std::map<
         int,
         std::map<int, std::vector<std::function<smt::SMTRef(smt::SMTRef)>>>>;
+auto mainDeclarations(PathMap pathMap, std::string funName,
+                      std::map<int, std::vector<std::string>> freeVarsMap)
+    -> std::vector<smt::SMTRef>;
+auto recDeclarations(PathMap pathMap, std::string funName,
+                     std::map<int, std::vector<std::string>> freeVarsMap,
+                     Memory memory) -> std::vector<smt::SMTRef>;
 auto getForbiddenPaths(MonoPair<PathMap> pathMaps,
                        MonoPair<BidirBlockMarkMap> marked,
                        std::map<int, std::vector<std::string>> freeVarsMap,

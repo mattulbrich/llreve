@@ -86,13 +86,31 @@ vector<SMTRef> convertToSMT(MonoPair<llvm::Function *> funs,
         invariants2.forEach(addInvariant);
     }
 
-    const auto synchronizedPaths =
-        getSynchronizedPaths(pathMaps.first, pathMaps.second, freeVarsMap,
-                             funName, declarations, memory);
-
-    // add actual path smts
-    pathExprs.insert(pathExprs.end(), synchronizedPaths.begin(),
-                     synchronizedPaths.end());
+    const auto synchronizedPaths = getSynchronizedPaths(
+        pathMaps.first, pathMaps.second, freeVarsMap, memory);
+    const auto recDecls =
+        recDeclarations(pathMaps.first, funName, freeVarsMap, memory);
+    declarations.insert(declarations.end(), recDecls.begin(), recDecls.end());
+    for (auto it : synchronizedPaths) {
+        const int startIndex = it.first;
+        for (auto it2 : it.second) {
+            const int endIndex = it2.first;
+            const auto endInvariant =
+                invariant(startIndex, endIndex, freeVarsMap.at(startIndex),
+                          freeVarsMap.at(endIndex), ProgramSelection::Both,
+                          funName, memory, freeVarsMap);
+            for (auto pathFun : it2.second) {
+                pathExprs.push_back(make_shared<Assert>(forallStartingAt(
+                    pathFun(endInvariant), freeVarsMap.at(startIndex),
+                    startIndex, ProgramSelection::Both, funName, false,
+                    freeVarsMap, memory)));
+            }
+        }
+    }
+    nonmutualPaths(pathMaps.first, pathExprs, freeVarsMap, Program::First,
+                   funName, declarations, memory);
+    nonmutualPaths(pathMaps.second, pathExprs, freeVarsMap, Program::Second,
+                   funName, declarations, memory);
 
     // generate forbidden paths
     pathExprs.push_back(make_shared<Comment>("FORBIDDEN PATHS"));
@@ -165,9 +183,11 @@ vector<SMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
             singleMainInvariant(freeVarsMap, memory, ProgramSelection::Both));
     }
 
-    auto synchronizedPaths =
-        mainSynchronizedPaths(pathMaps.first, pathMaps.second, freeVarsMap,
-                              funName, declarations, memory);
+    auto synchronizedPaths = getSynchronizedPaths(
+        pathMaps.first, pathMaps.second, freeVarsMap, memory);
+    const auto mainDecls =
+        mainDeclarations(pathMaps.first, funName, freeVarsMap);
+    declarations.insert(declarations.end(), mainDecls.begin(), mainDecls.end());
     const auto forbiddenPaths = getForbiddenPaths(
         pathMaps, marked, freeVarsMap, offByN, funName, true, memory);
     if (offByN) {
@@ -223,13 +243,63 @@ vector<SMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
 /* -------------------------------------------------------------------------- */
 // Generate SMT for all paths
 
-vector<SMTRef> getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
-                                    std::map<int, vector<string>> freeVarsMap,
-                                    std::string funName,
-                                    vector<SMTRef> &declarations,
-                                    Memory memory) {
-    vector<SMTRef> pathExprs;
-    for (auto &pathMapIt : pathMap1) {
+map<int, map<int, vector<function<SMTRef(SMTRef)>>>>
+getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
+                     std::map<int, vector<string>> freeVarsMap, Memory memory) {
+    map<int, map<int, vector<function<SMTRef(SMTRef)>>>> pathFuns;
+    for (const auto &pathMapIt : pathMap1) {
+        const int startIndex = pathMapIt.first;
+        for (const auto &innerPathMapIt : pathMapIt.second) {
+            const int endIndex = innerPathMapIt.first;
+            if (pathMap2.at(startIndex).find(endIndex) !=
+                pathMap2.at(startIndex).end()) {
+                const auto paths = pathMap2.at(startIndex).at(endIndex);
+                for (const auto &path1 : innerPathMapIt.second) {
+                    for (const auto &path2 : paths) {
+                        auto defs =
+                            makeMonoPair(std::make_pair(path1, Program::First),
+                                         std::make_pair(path2, Program::Second))
+                                .map<vector<AssignmentCallBlock>>(
+                                    [=](std::pair<Path, Program> pair) {
+                                        return assignmentsOnPath(
+                                            pair.first, pair.second,
+                                            freeVarsMap.at(startIndex),
+                                            endIndex == EXIT_MARK, memory);
+                                    });
+                        pathFuns[startIndex][endIndex].push_back(
+                            [=](SMTRef end) {
+                                return interleaveAssignments(end, defs, memory);
+                            });
+                    }
+                }
+            }
+        }
+    }
+
+    return pathFuns;
+}
+
+vector<SMTRef> mainDeclarations(PathMap pathMap, string funName,
+                                map<int, vector<string>> freeVarsMap) {
+    vector<SMTRef> declarations;
+    for (const auto &pathMapIt : pathMap) {
+        const int startIndex = pathMapIt.first;
+        if (startIndex != ENTRY_MARK && !SingleInvariantFlag) {
+            // ignore entry node
+            const auto invariant =
+                mainInvariantDeclaration(startIndex, freeVarsMap.at(startIndex),
+                                         ProgramSelection::Both, funName);
+            declarations.push_back(invariant);
+        }
+    }
+    return declarations;
+}
+
+vector<SMTRef> recDeclarations(PathMap pathMap, string funName,
+                               map<int, vector<string>> freeVarsMap,
+                               Memory memory) {
+    vector<SMTRef> declarations;
+    for (const auto &pathMapIt : pathMap) {
         const int startIndex = pathMapIt.first;
         if (startIndex != ENTRY_MARK && !SingleInvariantFlag) {
             // ignore entry node
@@ -239,85 +309,8 @@ vector<SMTRef> getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
             declarations.push_back(invariants.first);
             declarations.push_back(invariants.second);
         }
-        for (auto &innerPathMapIt : pathMapIt.second) {
-            const int endIndex = innerPathMapIt.first;
-            const auto paths = pathMap2.at(startIndex).at(endIndex);
-            for (auto &path1 : innerPathMapIt.second) {
-                for (auto &path2 : paths) {
-                    const auto endInvariant = invariant(
-                        startIndex, endIndex, freeVarsMap.at(startIndex),
-                        freeVarsMap.at(endIndex), ProgramSelection::Both,
-                        funName, memory, freeVarsMap);
-                    auto defs =
-                        makeMonoPair(std::make_pair(path1, Program::First),
-                                     std::make_pair(path2, Program::Second))
-                            .map<vector<AssignmentCallBlock>>(
-                                [=](std::pair<Path, Program> pair) {
-                                    return assignmentsOnPath(
-                                        pair.first, pair.second,
-                                        freeVarsMap.at(startIndex),
-                                        endIndex == EXIT_MARK, memory);
-                                });
-                    pathExprs.push_back(make_shared<Assert>(forallStartingAt(
-                        interleaveAssignments(endInvariant, defs, memory),
-                        freeVarsMap.at(startIndex), startIndex,
-                        ProgramSelection::Both, funName, false, freeVarsMap,
-                        memory)));
-                }
-            }
-        }
     }
-    nonmutualPaths(pathMap1, pathExprs, freeVarsMap, Program::First, funName,
-                   declarations, memory);
-    nonmutualPaths(pathMap2, pathExprs, freeVarsMap, Program::Second, funName,
-                   declarations, memory);
-
-    return pathExprs;
-}
-
-map<int, map<int, vector<function<SMTRef(SMTRef)>>>>
-mainSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
-                      std::map<int, vector<string>> freeVarsMap,
-                      std::string funName, vector<SMTRef> &declarations,
-                      Memory memory) {
-    map<int, map<int, vector<function<SMTRef(SMTRef)>>>> pathFuns;
-    for (const auto &pathMapIt : pathMap1) {
-        const int startIndex = pathMapIt.first;
-        if (startIndex != ENTRY_MARK && !SingleInvariantFlag) {
-            // ignore entry node
-            const auto invariant =
-                mainInvariantDeclaration(startIndex, freeVarsMap.at(startIndex),
-                                         ProgramSelection::Both, funName);
-            declarations.push_back(invariant);
-        }
-        for (const auto &innerPathMapIt : pathMapIt.second) {
-            const int endIndex = innerPathMapIt.first;
-            if (pathMap2.at(startIndex).find(endIndex) !=
-                pathMap2.at(startIndex).end()) {
-                const auto paths = pathMap2.at(startIndex).at(endIndex);
-                for (const auto &path1 : innerPathMapIt.second) {
-                    for (const auto &path2 : paths) {
-                        const auto endInvariant =
-                            mainInvariant(endIndex, freeVarsMap.at(endIndex),
-                                          funName, memory);
-                        const auto defs1 = assignmentsOnPath(
-                            path1, Program::First, freeVarsMap.at(startIndex),
-                            endIndex == EXIT_MARK, memory);
-                        const auto defs2 = assignmentsOnPath(
-                            path2, Program::Second, freeVarsMap.at(startIndex),
-                            endIndex == EXIT_MARK, memory);
-                        pathFuns[startIndex][endIndex].push_back(
-                            [=](SMTRef end) {
-                                return interleaveAssignments(
-                                    end, makeMonoPair(defs1, defs2), memory);
-                            });
-                    }
-                }
-            }
-        }
-    }
-
-    return pathFuns;
+    return declarations;
 }
 
 vector<SMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
