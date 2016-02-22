@@ -17,8 +17,9 @@ include_directories(${LLVM_INCLUDE_DIRS} include)
 add_definitions(${LLVM_DEFINITIONS})
 
 file(GLOB sources *.cpp)
+file(GLOB headers include/*.h)
 
-add_executable(reve ${sources})
+add_executable(reve ${sources} ${headers})
 
 llvm_map_components_to_libnames(llvm_libs
   bitwriter

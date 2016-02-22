@@ -4,6 +4,8 @@ import ycm_core
 flags = []
 database = ycm_core.CompilationDatabase('build')
 
+SOURCE_EXTENSIONS = [ '.cpp' ]
+
 def DirectoryOfThisScript():
   return os.path.dirname( os.path.abspath( __file__ ) )
 
