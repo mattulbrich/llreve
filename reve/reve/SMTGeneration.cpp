@@ -31,9 +31,9 @@ using std::make_pair;
 using std::set;
 using std::string;
 
-vector<SMTRef> convertToSMT(MonoPair<llvm::Function *> funs,
-                            MonoPair<FAMRef> fams, bool offByN,
-                            vector<SMTRef> &declarations, Memory memory) {
+vector<SMTRef> functionAssertion(MonoPair<llvm::Function *> funs,
+                                 MonoPair<FAMRef> fams, bool offByN,
+                                 vector<SMTRef> &declarations, Memory memory) {
     const auto pathMaps = zipWith<llvm::Function *, FAMRef, PathMap>(
         funs, fams, [](llvm::Function *fun, FAMRef fam) -> PathMap {
             return fam->getResult<PathAnalysis>(*fun);
@@ -61,7 +61,6 @@ vector<SMTRef> convertToSMT(MonoPair<llvm::Function *> funs,
 
     };
     if (!SingleInvariantFlag) {
-        // we only need pre invariants for mutual invariants
         const auto invariants =
             invariantDeclaration(ENTRY_MARK, freeVarsMap[ENTRY_MARK],
                                  ProgramSelection::Both, funName, memory);
@@ -75,7 +74,6 @@ vector<SMTRef> convertToSMT(MonoPair<llvm::Function *> funs,
         invariants1.forEach(addInvariant);
         invariants2.forEach(addInvariant);
     } else {
-
         const auto invariants = singleInvariantDeclaration(
             freeVarsMap, memory, ProgramSelection::Both, funName);
         const auto invariants1 = singleInvariantDeclaration(
@@ -108,6 +106,8 @@ vector<SMTRef> convertToSMT(MonoPair<llvm::Function *> funs,
             }
         }
     }
+    // these are needed for calls that can’t be matched with the same call in
+    // the other program
     nonmutualPaths(pathMaps.first, pathExprs, freeVarsMap, Program::First,
                    funName, declarations, memory);
     nonmutualPaths(pathMaps.second, pathExprs, freeVarsMap, Program::Second,
@@ -144,6 +144,8 @@ vector<SMTRef> convertToSMT(MonoPair<llvm::Function *> funs,
     return smtExprs;
 }
 
+// the main function that we want to check doesn’t need the output parameters in
+// the assertions since it is never called
 vector<SMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
                              MonoPair<FAMRef> fams, bool offByN,
                              vector<SMTRef> &declarations, bool onlyRec,
@@ -157,11 +159,9 @@ vector<SMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
         funs, fams, [](llvm::Function *fun, FAMRef fam) -> BidirBlockMarkMap {
             return fam->getResult<MarkAnalysis>(*fun);
         });
-    vector<SMTRef> smtExprs;
     const string funName = funs.first->getName();
     const auto funArgsPair = functionArgs(*funs.first, *funs.second);
-
-    auto funArgs = funArgsPair.foldl<vector<string>>(
+    const auto funArgs = funArgsPair.foldl<vector<string>>(
         {},
         [](vector<string> acc, vector<string> args) {
             acc.insert(acc.end(), args.begin(), args.end());
@@ -170,6 +170,7 @@ vector<SMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
 
     FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, memory);
+    vector<SMTRef> smtExprs;
 
     if (onlyRec) {
         smtExprs.push_back(equalInputsEqualOutputs(

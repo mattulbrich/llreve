@@ -364,7 +364,7 @@ int main(int argc, const char **argv) {
             (!(doesNotRecurse(*funPair.first.first) &&
                doesNotRecurse(*funPair.first.second)) ||
              onlyRec)) {
-            auto newSmtExprs = convertToSMT(funPair.first, funPair.second,
+            auto newSmtExprs = functionAssertion(funPair.first, funPair.second,
                                             offByN, declarations, mem);
             assertions.insert(assertions.end(), newSmtExprs.begin(),
                               newSmtExprs.end());
