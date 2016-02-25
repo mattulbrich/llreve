@@ -186,3 +186,8 @@ auto addAssignments(const smt::SMTRef end,
                     std::vector<AssignmentBlock> assignments) -> smt::SMTRef;
 auto addMemory(std::vector<smt::SMTRef> &implArgs, Memory memory)
     -> std::function<void(CallInfo call, int index)>;
+/// Declare required variables globally
+/**
+This is used when MuZFlag is enabled
+ */
+auto declareVariables(FreeVarsMap freeVarsMap) -> std::vector<smt::SMTRef>;

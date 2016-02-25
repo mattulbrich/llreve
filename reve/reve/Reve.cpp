@@ -128,6 +128,10 @@ static llvm::cl::opt<bool, true> SingleInvariant(
     "single-invariant",
     llvm::cl::desc("Use a single invariant indexed by the mark"),
     llvm::cl::location(SingleInvariantFlag), llvm::cl::cat(ReveCategory));
+bool MuZFlag;
+static llvm::cl::opt<bool, true>
+    MuZ("muz", llvm::cl::desc("Create smt intended for conversion to muz"),
+        llvm::cl::location(MuZFlag), llvm::cl::cat(ReveCategory));
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
@@ -313,9 +317,15 @@ int main(int argc, const char **argv) {
     }
 
     std::vector<SMTRef> declarations;
+    if (MuZFlag) {
+        vector<string> args;
+        declarations.push_back(make_shared<smt::FunDecl>("END_QUERY", args, "Bool"));
+    }
     std::vector<SMTRef> assertions;
     std::vector<SMTRef> smtExprs;
-    smtExprs.push_back(std::make_shared<SetLogic>("HORN"));
+    if (!MuZFlag) {
+        smtExprs.push_back(std::make_shared<SetLogic>("HORN"));
+    }
 
     std::vector<MonoPair<FAMRef>> fams;
     for (auto funPair : funs.get()) {
@@ -365,15 +375,19 @@ int main(int argc, const char **argv) {
                doesNotRecurse(*funPair.first.second)) ||
              onlyRec)) {
             auto newSmtExprs = functionAssertion(funPair.first, funPair.second,
-                                            offByN, declarations, mem);
+                                                 offByN, declarations, mem);
             assertions.insert(assertions.end(), newSmtExprs.begin(),
                               newSmtExprs.end());
         }
     }
     smtExprs.insert(smtExprs.end(), declarations.begin(), declarations.end());
     smtExprs.insert(smtExprs.end(), assertions.begin(), assertions.end());
-    smtExprs.push_back(make_shared<CheckSat>());
-    smtExprs.push_back(make_shared<GetModel>());
+    if (MuZFlag) {
+        smtExprs.push_back(makeUnaryOp("query", {"END_QUERY"}));
+    } else {
+        smtExprs.push_back(make_shared<CheckSat>());
+        smtExprs.push_back(make_shared<GetModel>());
+    }
 
     // write to file or to stdout
     std::streambuf *buf;

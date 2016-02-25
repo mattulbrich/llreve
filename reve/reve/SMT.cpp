@@ -1,4 +1,5 @@
 #include "SMT.h"
+#include "Opts.h"
 
 #include <iostream>
 
@@ -22,26 +23,23 @@ SExprRef SetLogic::toSExpr() const {
     return llvm::make_unique<Apply<std::string>>("set-logic", std::move(args));
 }
 
-set<string> SetLogic::uses() const { return set<string>(); }
+set<string> SMTExpr::uses() const { return {}; }
 
 SExprRef CheckSat::toSExpr() const {
     std::vector<SExprRef> args;
     return llvm::make_unique<Apply<std::string>>("check-sat", std::move(args));
 }
 
-set<string> CheckSat::uses() const { return set<string>(); }
-
 SExprRef GetModel::toSExpr() const {
     std::vector<SExprRef> args;
     return llvm::make_unique<Apply<std::string>>("get-model", std::move(args));
 }
 
-set<string> GetModel::uses() const { return set<string>(); }
-
 SExprRef Assert::toSExpr() const {
     std::vector<SExprRef> args;
     args.push_back(expr->toSExpr());
-    return llvm::make_unique<Apply<std::string>>("assert", std::move(args));
+    const string keyword = MuZFlag ? "rule" : "assert";
+    return llvm::make_unique<Apply<std::string>>(keyword, std::move(args));
 }
 
 set<string> Assert::uses() const { return expr->uses(); }
@@ -167,9 +165,11 @@ SExprRef FunDecl::toSExpr() const {
     args.push_back(name(funName)->toSExpr());
     args.push_back(
         llvm::make_unique<List<std::string>>(std::move(inTypeSExprs)));
-    args.push_back(name(outType)->toSExpr());
-    return llvm::make_unique<Apply<std::string>>("declare-fun",
-                                                 std::move(args));
+    if (!MuZFlag) {
+        args.push_back(name(outType)->toSExpr());
+    }
+    const string keyword = MuZFlag ? "declare-rel" : "declare-fun";
+    return llvm::make_unique<Apply<std::string>>(keyword, std::move(args));
 }
 
 SExprRef FunDef::toSExpr() const {
@@ -185,18 +185,14 @@ SExprRef FunDef::toSExpr() const {
     return llvm::make_unique<Apply<std::string>>("define-fun", std::move(args));
 }
 
-set<string> FunDecl::uses() const { return set<string>(); }
-
-set<string> FunDef::uses() const { return set<string>(); }
-
 template <> set<string> Primitive<string>::uses() const {
     set<string> uses;
     uses.insert(val);
     return uses;
 }
 
-SMTRef SetLogic::compressLets(std::vector<Assignment> defs) const {
-    return nestLets(make_shared<SetLogic>(logic), defs);
+SMTRef SetLogic::compressLets(std::vector<Assignment> /* unused*/) const {
+    return make_shared<SetLogic>(logic);
 }
 
 SMTRef Assert::compressLets(std::vector<Assignment> defs) const {
@@ -274,9 +270,19 @@ SExprRef Comment::toSExpr() const {
     return llvm::make_unique<class sexpr::Comment<std::string>>(val);
 }
 
-std::set<std::string> Comment::uses() const { return std::set<std::string>(); }
-
 shared_ptr<Assignment> makeAssignment(string name, SMTRef val) {
     return make_shared<Assignment>(name, val);
+}
+
+SExprRef VarDecl::toSExpr() const {
+    std::vector<SExprRef> args;
+    args.push_back(name(varName)->toSExpr());
+    args.push_back(name(type)->toSExpr());
+    return llvm::make_unique<Apply<std::string>>("declare-var",
+                                                 std::move(args));
+}
+
+SMTRef VarDecl::compressLets(std::vector<Assignment> /* unused */) const {
+    return make_shared<VarDecl>(varName, type);
 }
 }

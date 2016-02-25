@@ -25,6 +25,7 @@ using smt::makeBinOp;
 using smt::Forall;
 using smt::makeOp;
 using smt::FunDef;
+using smt::VarDecl;
 using smt::Comment;
 using std::make_shared;
 using std::make_pair;
@@ -170,6 +171,11 @@ vector<SMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
 
     FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, memory);
+    if (MuZFlag) {
+        vector<SMTRef> variables = declareVariables(freeVarsMap);
+        declarations.insert(declarations.end(), variables.begin(),
+                            variables.end());
+    }
     vector<SMTRef> smtExprs;
 
     if (onlyRec) {
@@ -210,6 +216,10 @@ vector<SMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
             const int endIndex = it2.first;
             auto endInvariant = mainInvariant(
                 endIndex, freeVarsMap.at(endIndex), funName, memory);
+            if (MuZFlag && endIndex == EXIT_MARK) {
+                endInvariant = makeBinOp("=>", makeUnaryOp("not", endInvariant),
+                                         name("END_QUERY"));
+            }
             for (auto pathFun : it2.second) {
                 pathsStartingHere.push_back(pathFun(endInvariant));
             }
@@ -684,10 +694,15 @@ SMTRef mutualRecursiveForall(SMTRef clause, MonoPair<CallInfo> callPair,
         implArgs.push_back(name(callPair.first.assignedTo));
         implArgs.push_back(name(callPair.second.assignedTo));
         if (memory & HEAP_MASK) {
-            implArgs.push_back(name("i1_res"));
-            implArgs.push_back(makeBinOp("select", "HEAP$1_res", "i1_res"));
-            implArgs.push_back(name("i2_res"));
-            implArgs.push_back(makeBinOp("select", "HEAP$2_res", "i2_res"));
+            if (MuZFlag) {
+                implArgs.push_back(name("HEAP$1_res"));
+                implArgs.push_back(name("HEAP$2_res"));
+            } else {
+                implArgs.push_back(name("i1_res"));
+                implArgs.push_back(makeBinOp("select", "HEAP$1_res", "i1_res"));
+                implArgs.push_back(name("i2_res"));
+                implArgs.push_back(makeBinOp("select", "HEAP$2_res", "i2_res"));
+            }
         }
         SMTRef postInvariant =
             make_shared<Op>(invariantName(ENTRY_MARK, ProgramSelection::Both,
@@ -789,19 +804,27 @@ SMTRef nonmutualRecursiveForall(SMTRef clause, CallInfo call, Program prog,
 SMTRef forallStartingAt(SMTRef clause, vector<string> freeVars, int blockIndex,
                         ProgramSelection prog, string funName, bool main,
                         FreeVarsMap freeVarsMap, Memory memory) {
+    if (MuZFlag) {
+        // Rules are implicitly universally quantified
+        return clause;
+    }
     vector<SortedVar> vars;
     vector<string> preVars;
     for (const auto &arg : freeVars) {
         std::smatch matchResult;
         if (std::regex_match(arg, matchResult, HEAP_REGEX)) {
             vars.push_back(SortedVar(arg + "_old", "(Array Int Int)"));
-            const string i = matchResult[2];
-            string index = "i" + i;
-            if (matchResult[1] == "STACK") {
-                index += "_stack";
+            if (MuZFlag) {
+                preVars.push_back(arg + "_old");
+            } else {
+                const string i = matchResult[2];
+                string index = "i" + i;
+                if (matchResult[1] == "STACK") {
+                    index += "_stack";
+                }
+                preVars.push_back(index);
+                preVars.push_back("(select " + arg + "_old " + index + ")");
             }
-            preVars.push_back(index);
-            preVars.push_back("(select " + arg + "_old " + index + ")");
         } else {
             vars.push_back(SortedVar(arg + "_old", "Int"));
             preVars.push_back(arg + "_old");
@@ -868,15 +891,6 @@ SMTRef inInvariant(MonoPair<const llvm::Function *> funs, SMTRef body,
     vector<string> Args2 = funArgsPair.second;
 
     assert(Args1.size() == Args2.size());
-    vector<string> pointers;
-    vector<string> unsignedVariables;
-    funs.forEach([&pointers](const llvm::Function *fun) {
-        for (auto &arg : fun->args()) {
-            if (arg.getType()->isPointerTy()) {
-                pointers.push_back(arg.getName());
-            }
-        }
-    });
 
     vector<SortedVar> funArgs = concat(funArgsPair.map<vector<SortedVar>>(
         [](vector<string> args) -> vector<SortedVar> {
@@ -887,8 +901,8 @@ SMTRef inInvariant(MonoPair<const llvm::Function *> funs, SMTRef body,
             return varArgs;
         }));
     for (auto argPair : makeZip(Args1, Args2)) {
-        const vector<SortedVar> forallArgs = {SortedVar("i", "Int")};
-        if (argPair.first == "HEAP$1") {
+        if (argPair.first == "HEAP$1" && !MuZFlag) {
+            const vector<SortedVar> forallArgs = {SortedVar("i", "Int")};
             args.push_back(make_shared<Forall>(
                 forallArgs, makeBinOp("=", makeBinOp("select", "HEAP$1", "i"),
                                       makeBinOp("select", "HEAP$2", "i"))));
@@ -926,16 +940,20 @@ SMTRef outInvariant(SMTRef body, Memory memory) {
         funArgs.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
     }
     if (body == nullptr) {
-        vector<SortedVar> forallArgs;
-        forallArgs.push_back(SortedVar("i", "Int"));
         body = makeBinOp("=", "result$1", "result$2");
         if (memory & HEAP_MASK) {
-            body =
-                makeBinOp("and", body,
-                          make_shared<Forall>(
-                              forallArgs,
-                              makeBinOp("=", makeBinOp("select", "HEAP$1", "i"),
-                                        makeBinOp("select", "HEAP$2", "i"))));
+            if (MuZFlag) {
+                body =
+                    makeBinOp("and", body, makeBinOp("=", "HEAP$1", "HEAP$2"));
+            } else {
+                vector<SortedVar> forallArgs = {SortedVar("i", "Int")};
+                body = makeBinOp(
+                    "and", body,
+                    make_shared<Forall>(
+                        forallArgs,
+                        makeBinOp("=", makeBinOp("select", "HEAP$1", "i"),
+                                  makeBinOp("select", "HEAP$2", "i"))));
+            }
         }
     }
 
@@ -1365,4 +1383,22 @@ auto addMemory(vector<SMTRef> &implArgs, Memory memory)
                                          "i" + indexString + "_stack"));
         }
     };
+}
+
+vector<SMTRef> declareVariables(FreeVarsMap freeVarsMap) {
+    set<string> uniqueVars;
+    for (auto it : freeVarsMap) {
+        for (const string &var : it.second) {
+            uniqueVars.insert(var);
+        }
+    }
+    vector<SMTRef> variables;
+    for (string var : uniqueVars) {
+        string type = "Int";
+        if (std::regex_match(var, HEAP_REGEX)) {
+            type = "(Array Int Int)";
+        }
+        variables.push_back(make_shared<VarDecl>(var + "_old", type));
+    }
+    return variables;
 }

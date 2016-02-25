@@ -1,4 +1,5 @@
 #include "Memory.h"
+#include "Opts.h"
 
 using std::vector;
 using std::make_shared;
@@ -13,7 +14,7 @@ std::vector<std::string> resolveHeapReferences(std::vector<std::string> args,
     vector<string> result;
     for (auto arg : args) {
         std::smatch matchResult;
-        if (std::regex_match(arg, matchResult, HEAP_REGEX)) {
+        if (std::regex_match(arg, matchResult, HEAP_REGEX) && !MuZFlag) {
             const string i = matchResult[2];
             string index = "i" + i;
             if (matchResult[1] == "STACK") {
@@ -22,7 +23,7 @@ std::vector<std::string> resolveHeapReferences(std::vector<std::string> args,
             result.push_back(index);
             result.push_back("(select " + arg + suffix + " " + index + ")");
             heap |= HEAP_MASK;
-        } else if (arg == "HEAP$1_res" || arg == "HEAP$2_res") {
+        } else if ((arg == "HEAP$1_res" || arg == "HEAP$2_res") && !MuZFlag) {
             const string index = "i" + arg.substr(5, 6);
             result.push_back(index);
             result.push_back("(select " + arg + " " + index + ")");
@@ -39,7 +40,7 @@ std::vector<std::string> resolveHeapReferences(std::vector<std::string> args,
 }
 
 SMTRef wrapHeap(SMTRef inv, Memory heap, vector<string> freeVars) {
-    if (!heap) {
+    if (!heap || MuZFlag) {
         return inv;
     }
     std::vector<SortedVar> args;
@@ -55,6 +56,9 @@ SMTRef wrapHeap(SMTRef inv, Memory heap, vector<string> freeVars) {
 }
 
 unsigned long adaptSizeToHeap(unsigned long size, vector<string> freeVars) {
+    if (MuZFlag) {
+        return size;
+    }
     if (std::find(freeVars.begin(), freeVars.end(), "HEAP$1") !=
         freeVars.end()) {
         size++;

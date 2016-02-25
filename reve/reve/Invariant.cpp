@@ -165,7 +165,6 @@ singleInvariantDeclaration(map<int, vector<string>> freeVarsMap, Memory memory,
     if (prog != ProgramSelection::Both) {
         string index = std::to_string(programIndex(asProgram(prog)));
         name += "__" + index;
-
     }
     const string preName = name + "_PRE";
 
@@ -216,9 +215,22 @@ size_t maxArgs(map<int, vector<string>> freeVarsMap, Memory memory,
 
 SMTRef mainInvariantDeclaration(int BlockIndex, vector<string> FreeVars,
                                 ProgramSelection For, std::string FunName) {
-    auto NumArgs = FreeVars.size();
-    NumArgs = adaptSizeToHeap(NumArgs, FreeVars);
-    const vector<string> Args(NumArgs, "Int");
+    vector<string> Args;
+    if (MuZFlag) {
+        for (const string &arg  : FreeVars) {
+            if (std::regex_match(arg, HEAP_REGEX)) {
+                Args.push_back("(Array Int Int)");
+            } else {
+                Args.push_back("Int");
+            }
+        }
+    } else {
+        size_t NumArgs = FreeVars.size();
+        NumArgs = adaptSizeToHeap(NumArgs, FreeVars);
+        for (size_t i = 0; i < NumArgs; ++i) {
+            Args.push_back("Int");
+        }
+    }
 
     return std::make_shared<class FunDecl>(
         invariantName(BlockIndex, For, FunName, InvariantAttr::MAIN), Args,
