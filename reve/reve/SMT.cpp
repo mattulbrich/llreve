@@ -12,9 +12,6 @@ using sexpr::List;
 using std::set;
 using std::string;
 
-// Avoid out-of-line warning by defining function here
-SMTExpr::~SMTExpr() {}
-
 SExprRef SetLogic::toSExpr() const {
     std::vector<SExprRef> args;
     SExprRef logicPtr = llvm::make_unique<const Value<std::string>>(logic);
@@ -23,7 +20,6 @@ SExprRef SetLogic::toSExpr() const {
     return llvm::make_unique<Apply<std::string>>("set-logic", std::move(args));
 }
 
-set<string> SMTExpr::uses() const { return {}; }
 
 SExprRef CheckSat::toSExpr() const {
     std::vector<SExprRef> args;
@@ -42,8 +38,6 @@ SExprRef Assert::toSExpr() const {
     return llvm::make_unique<Apply<std::string>>(keyword, std::move(args));
 }
 
-set<string> Assert::uses() const { return expr->uses(); }
-
 SExprRef Forall::toSExpr() const {
     std::vector<SExprRef> args;
     std::vector<SExprRef> sortedVars;
@@ -55,17 +49,10 @@ SExprRef Forall::toSExpr() const {
     return llvm::make_unique<Apply<std::string>>("forall", std::move(args));
 }
 
-set<string> Forall::uses() const { return expr->uses(); }
-
 SExprRef SortedVar::toSExpr() const {
     std::vector<SExprRef> typeSExpr;
     typeSExpr.push_back(llvm::make_unique<const Value<std::string>>(type));
     return llvm::make_unique<Apply<std::string>>(name, std::move(typeSExpr));
-}
-
-set<string> SortedVar::uses() const {
-    set<string> uses = {name};
-    return uses;
 }
 
 SExprRef Let::toSExpr() const {
@@ -82,6 +69,71 @@ SExprRef Let::toSExpr() const {
     return llvm::make_unique<Apply<std::string>>("let", std::move(args));
 }
 
+SExprRef Op::toSExpr() const {
+    std::vector<SExprRef> argSExprs;
+    // Special case for emty and
+    if (opName == "and" && args.empty()) {
+        return llvm::make_unique<Value<string>>("true");
+    }
+    for (auto &arg : args) {
+        argSExprs.push_back(arg->toSExpr());
+    }
+    return llvm::make_unique<Apply<std::string>>(opName, std::move(argSExprs));
+}
+
+SExprRef FunDecl::toSExpr() const {
+    std::vector<SExprRef> inTypeSExprs;
+    for (auto inType : inTypes) {
+        inTypeSExprs.push_back(name(inType)->toSExpr());
+    }
+    std::vector<SExprRef> args;
+    args.push_back(name(funName)->toSExpr());
+    args.push_back(
+        llvm::make_unique<List<std::string>>(std::move(inTypeSExprs)));
+    if (!MuZFlag) {
+        args.push_back(name(outType)->toSExpr());
+    }
+    const string keyword = MuZFlag ? "declare-rel" : "declare-fun";
+    return llvm::make_unique<Apply<std::string>>(keyword, std::move(args));
+}
+
+SExprRef FunDef::toSExpr() const {
+    std::vector<SExprRef> argSExprs;
+    for (auto arg : args) {
+        argSExprs.push_back(arg.toSExpr());
+    }
+    std::vector<SExprRef> args;
+    args.push_back(name(funName)->toSExpr());
+    args.push_back(llvm::make_unique<List<std::string>>(std::move(argSExprs)));
+    args.push_back(name(outType)->toSExpr());
+    args.push_back(body->toSExpr());
+    return llvm::make_unique<Apply<std::string>>("define-fun", std::move(args));
+}
+
+SExprRef Comment::toSExpr() const {
+    return llvm::make_unique<class sexpr::Comment<std::string>>(val);
+}
+
+SExprRef VarDecl::toSExpr() const {
+    std::vector<SExprRef> args;
+    args.push_back(name(varName)->toSExpr());
+    args.push_back(name(type)->toSExpr());
+    return llvm::make_unique<Apply<std::string>>("declare-var",
+                                                 std::move(args));
+}
+
+
+set<string> SMTExpr::uses() const { return {}; }
+
+set<string> Assert::uses() const { return expr->uses(); }
+
+set<string> Forall::uses() const { return expr->uses(); }
+
+set<string> SortedVar::uses() const {
+    set<string> uses = {name};
+    return uses;
+}
+
 set<string> Let::uses() const {
     set<string> uses;
     for (auto def : defs) {
@@ -95,18 +147,6 @@ set<string> Let::uses() const {
     return uses;
 }
 
-SExprRef Op::toSExpr() const {
-    std::vector<SExprRef> argSExprs;
-    // Special case for emty and
-    if (opName == "and" && args.empty()) {
-        return llvm::make_unique<Value<string>>("true");
-    }
-    for (auto &arg : args) {
-        argSExprs.push_back(arg->toSExpr());
-    }
-    return llvm::make_unique<Apply<std::string>>(opName, std::move(argSExprs));
-}
-
 set<string> Op::uses() const {
     set<string> uses;
     for (auto arg : args) {
@@ -115,6 +155,84 @@ set<string> Op::uses() const {
         }
     }
     return uses;
+}
+
+template <> set<string> Primitive<string>::uses() const {
+    set<string> uses;
+    uses.insert(val);
+    return uses;
+}
+
+
+SMTRef SMTExpr::compressLets(std::vector<Assignment> defs) const {
+    assert(defs.empty());
+    return shared_from_this();
+}
+
+SMTRef Assert::compressLets(std::vector<Assignment> defs) const {
+    assert(defs.empty());
+    return make_shared<Assert>(expr->compressLets());
+}
+
+SMTRef SortedVar::compressLets(std::vector<Assignment> defs) const {
+    assert(defs.empty());
+    return make_shared<SortedVar>(name, type);
+}
+
+SMTRef Forall::compressLets(std::vector<Assignment> defs) const {
+    return nestLets(make_shared<Forall>(vars, expr->compressLets()), defs);
+}
+
+SMTRef CheckSat::compressLets(std::vector<Assignment> defs) const {
+    assert(defs.empty());
+    return shared_from_this();
+}
+
+SMTRef GetModel::compressLets(std::vector<Assignment> defs) const {
+    assert(defs.empty());
+    return shared_from_this();
+}
+
+SMTRef Let::compressLets(std::vector<Assignment> passedDefs) const {
+    passedDefs.insert(passedDefs.end(), defs.begin(), defs.end());
+    return expr->compressLets(passedDefs);
+}
+
+SMTRef Op::compressLets(std::vector<Assignment> defs) const {
+    std::vector<SMTRef> compressedArgs;
+    for (auto arg : args) {
+        compressedArgs.push_back(arg->compressLets());
+    }
+    return nestLets(make_shared<Op>(opName, compressedArgs), defs);
+}
+
+template <typename T>
+SMTRef Primitive<T>::compressLets(std::vector<Assignment> defs) const {
+    return nestLets(make_shared<Primitive<T>>(val), defs);
+}
+
+
+const smt::SMTExpr *smt::SMTExpr::properHorn() const { return this; }
+
+SMTRef nestLets(SMTRef clause, std::vector<Assignment> defs) {
+    SMTRef lets = clause;
+    set<string> uses;
+    std::vector<Assignment> defsAccum;
+    for (auto i = defs.rbegin(), e = defs.rend(); i != e; ++i) {
+        if (uses.find(i->first) != uses.end()) {
+            lets = llvm::make_unique<const Let>(defsAccum, lets);
+            uses = set<string>();
+            defsAccum = std::vector<Assignment>();
+        }
+        defsAccum.insert(defsAccum.begin(), *i);
+        for (auto use : i->second->uses()) {
+            uses.insert(use);
+        }
+    }
+    if (!defsAccum.empty()) {
+        lets = llvm::make_unique<const Let>(defsAccum, lets);
+    }
+    return lets;
 }
 
 std::shared_ptr<Op> makeBinOp(std::string opName, std::string arg1,
@@ -156,133 +274,7 @@ SMTRef makeOp(std::string opName, std::vector<std::string> args) {
     return llvm::make_unique<Op>(opName, smtArgs);
 }
 
-SExprRef FunDecl::toSExpr() const {
-    std::vector<SExprRef> inTypeSExprs;
-    for (auto inType : inTypes) {
-        inTypeSExprs.push_back(name(inType)->toSExpr());
-    }
-    std::vector<SExprRef> args;
-    args.push_back(name(funName)->toSExpr());
-    args.push_back(
-        llvm::make_unique<List<std::string>>(std::move(inTypeSExprs)));
-    if (!MuZFlag) {
-        args.push_back(name(outType)->toSExpr());
-    }
-    const string keyword = MuZFlag ? "declare-rel" : "declare-fun";
-    return llvm::make_unique<Apply<std::string>>(keyword, std::move(args));
-}
-
-SExprRef FunDef::toSExpr() const {
-    std::vector<SExprRef> argSExprs;
-    for (auto arg : args) {
-        argSExprs.push_back(arg.toSExpr());
-    }
-    std::vector<SExprRef> args;
-    args.push_back(name(funName)->toSExpr());
-    args.push_back(llvm::make_unique<List<std::string>>(std::move(argSExprs)));
-    args.push_back(name(outType)->toSExpr());
-    args.push_back(body->toSExpr());
-    return llvm::make_unique<Apply<std::string>>("define-fun", std::move(args));
-}
-
-template <> set<string> Primitive<string>::uses() const {
-    set<string> uses;
-    uses.insert(val);
-    return uses;
-}
-
-SMTRef SetLogic::compressLets(std::vector<Assignment> /* unused*/) const {
-    return make_shared<SetLogic>(logic);
-}
-
-SMTRef Assert::compressLets(std::vector<Assignment> defs) const {
-    return nestLets(make_shared<Assert>(expr->compressLets()), defs);
-}
-
-SMTRef SortedVar::compressLets(std::vector<Assignment> defs) const {
-    return nestLets(make_shared<SortedVar>(name, type), defs);
-}
-
-SMTRef Forall::compressLets(std::vector<Assignment> defs) const {
-    return nestLets(make_shared<Forall>(vars, expr->compressLets()), defs);
-}
-
-SMTRef CheckSat::compressLets(std::vector<Assignment> defs) const {
-    return nestLets(make_shared<CheckSat>(), defs);
-}
-
-SMTRef GetModel::compressLets(std::vector<Assignment> defs) const {
-    return nestLets(make_shared<GetModel>(), defs);
-}
-
-SMTRef Let::compressLets(std::vector<Assignment> passedDefs) const {
-    passedDefs.insert(passedDefs.end(), defs.begin(), defs.end());
-    return expr->compressLets(passedDefs);
-}
-
-SMTRef Op::compressLets(std::vector<Assignment> defs) const {
-    std::vector<SMTRef> compressedArgs;
-    for (auto arg : args) {
-        compressedArgs.push_back(arg->compressLets());
-    }
-    return nestLets(make_shared<Op>(opName, compressedArgs), defs);
-}
-
-SMTRef FunDecl::compressLets(std::vector<Assignment> defs) const {
-    return nestLets(make_shared<FunDecl>(funName, inTypes, outType), defs);
-}
-
-SMTRef FunDef::compressLets(std::vector<Assignment> defs) const {
-    return nestLets(make_shared<FunDef>(funName, args, outType, body), defs);
-}
-
-template <typename T>
-SMTRef Primitive<T>::compressLets(std::vector<Assignment> defs) const {
-    return nestLets(make_shared<Primitive<T>>(val), defs);
-}
-
-SMTRef nestLets(SMTRef clause, std::vector<Assignment> defs) {
-    SMTRef lets = clause;
-    set<string> uses;
-    std::vector<Assignment> defsAccum;
-    for (auto i = defs.rbegin(), e = defs.rend(); i != e; ++i) {
-        if (uses.find(i->first) != uses.end()) {
-            lets = llvm::make_unique<const Let>(defsAccum, lets);
-            uses = set<string>();
-            defsAccum = std::vector<Assignment>();
-        }
-        defsAccum.insert(defsAccum.begin(), *i);
-        for (auto use : i->second->uses()) {
-            uses.insert(use);
-        }
-    }
-    if (!defsAccum.empty()) {
-        lets = llvm::make_unique<const Let>(defsAccum, lets);
-    }
-    return lets;
-}
-
-SMTRef Comment::compressLets(std::vector<Assignment> defs) const {
-    return nestLets(make_shared<Comment>(val), defs);
-}
-
-SExprRef Comment::toSExpr() const {
-    return llvm::make_unique<class sexpr::Comment<std::string>>(val);
-}
-
 shared_ptr<Assignment> makeAssignment(string name, SMTRef val) {
     return make_shared<Assignment>(name, val);
-}
-
-SExprRef VarDecl::toSExpr() const {
-    std::vector<SExprRef> args;
-    args.push_back(name(varName)->toSExpr());
-    args.push_back(name(type)->toSExpr());
-    return llvm::make_unique<Apply<std::string>>("declare-var",
-                                                 std::move(args));
-}
-
-SMTRef VarDecl::compressLets(std::vector<Assignment> /* unused */) const {
-    return make_shared<VarDecl>(varName, type);
 }
 }

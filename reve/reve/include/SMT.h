@@ -13,7 +13,7 @@ namespace smt {
 using SExpr = const sexpr::SExpr<std::string>;
 using SExprRef = std::unique_ptr<SExpr>;
 
-class SMTExpr {
+class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
   public:
     virtual SExprRef toSExpr() const = 0;
     virtual std::set<std::string> uses() const;
@@ -21,8 +21,12 @@ class SMTExpr {
         std::vector<std::pair<std::string, std::shared_ptr<const SMTExpr>>>
             defs = std::vector<
                 std::pair<std::string, std::shared_ptr<const SMTExpr>>>())
-        const = 0;
-    virtual ~SMTExpr();
+        const;
+    virtual const SMTExpr *properHorn() const;
+    /// This is for the case when we are in the negative position of an
+    /// implication
+    // virtual std::shared_ptr<const SMTExpr> properHornNegative() = 0;
+    virtual ~SMTExpr() = default;
     SMTExpr(const SMTExpr & /*unused*/) = default;
     SMTExpr &operator=(SMTExpr &) = delete;
     SMTExpr() = default;
@@ -37,8 +41,6 @@ class SetLogic : public SMTExpr {
   public:
     explicit SetLogic(std::string logic) : logic(std::move(logic)) {}
     SExprRef toSExpr() const override;
-    std::shared_ptr<const SMTExpr>
-    compressLets(std::vector<Assignment> defs) const override;
     std::string logic;
 };
 
@@ -155,8 +157,6 @@ class FunDecl : public SMTExpr {
     std::vector<std::string> inTypes;
     std::string outType;
     SExprRef toSExpr() const override;
-    std::shared_ptr<const SMTExpr>
-    compressLets(std::vector<Assignment> defs) const override;
 };
 
 class FunDef : public SMTExpr {
@@ -170,8 +170,6 @@ class FunDef : public SMTExpr {
     std::string outType;
     SMTRef body;
     SExprRef toSExpr() const override;
-    std::shared_ptr<const SMTExpr>
-    compressLets(std::vector<Assignment> defs) const override;
 };
 
 class Comment : public SMTExpr {
@@ -179,8 +177,6 @@ class Comment : public SMTExpr {
     Comment(std::string val) : val(std::move(val)) {}
     std::string val;
     SExprRef toSExpr() const override;
-    std::shared_ptr<const SMTExpr>
-    compressLets(std::vector<Assignment> defs) const override;
 };
 
 class VarDecl : public SMTExpr {
@@ -190,8 +186,6 @@ class VarDecl : public SMTExpr {
     std::string varName;
     std::string type;
     SExprRef toSExpr() const override;
-    std::shared_ptr<const SMTExpr>
-    compressLets(std::vector<Assignment> defs) const override;
 };
 
 auto nestLets(SMTRef clause, std::vector<Assignment> defs) -> SMTRef;
