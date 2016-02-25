@@ -215,25 +215,33 @@ vector<SMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
                 pathsStartingHere.push_back(pathFun(endInvariant));
             }
         }
-        auto clause = forallStartingAt(
-            make_shared<Op>("and", pathsStartingHere),
-            freeVarsMap.at(startIndex), startIndex, ProgramSelection::Both,
-            funName, true, freeVarsMap, memory);
-        if (!dontNest &&
-            (transposedPaths.find(startIndex) != transposedPaths.end())) {
-            if (transposedPaths.at(startIndex).size() == 1) {
-                auto it = transposedPaths.at(startIndex).begin();
-                const int comingFrom = it->first;
-                if (it->second.size() == 1) {
-                    const auto nestFun = it->second.at(0);
-                    clause = forallStartingAt(
-                        nestFun(clause), freeVarsMap.at(comingFrom), comingFrom,
-                        ProgramSelection::Both, funName, true, freeVarsMap,
-                        memory);
+        if (dontNest) {
+            for (auto path : pathsStartingHere) {
+                auto clause = forallStartingAt(
+                    path, freeVarsMap.at(startIndex), startIndex,
+                    ProgramSelection::Both, funName, true, freeVarsMap, memory);
+                smtExprs.push_back(make_shared<Assert>(clause));
+            }
+        } else {
+            auto clause = forallStartingAt(
+                make_shared<Op>("and", pathsStartingHere),
+                freeVarsMap.at(startIndex), startIndex, ProgramSelection::Both,
+                funName, true, freeVarsMap, memory);
+            if ((transposedPaths.find(startIndex) != transposedPaths.end())) {
+                if (transposedPaths.at(startIndex).size() == 1) {
+                    auto it = transposedPaths.at(startIndex).begin();
+                    const int comingFrom = it->first;
+                    if (it->second.size() == 1) {
+                        const auto nestFun = it->second.at(0);
+                        clause = forallStartingAt(
+                            nestFun(clause), freeVarsMap.at(comingFrom),
+                            comingFrom, ProgramSelection::Both, funName, true,
+                            freeVarsMap, memory);
+                    }
                 }
             }
+            smtExprs.push_back(make_shared<Assert>(clause));
         }
-        smtExprs.push_back(make_shared<Assert>(clause));
     }
     smtExprs.push_back(make_shared<Comment>("forbidden main"));
     smtExprs.insert(smtExprs.end(), forbiddenPaths.begin(),
