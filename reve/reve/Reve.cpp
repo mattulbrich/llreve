@@ -59,6 +59,7 @@ using smt::SMTRef;
 using smt::name;
 using smt::SetLogic;
 using smt::CheckSat;
+using smt::Query;
 using smt::GetModel;
 using smt::makeBinOp;
 using smt::FunDef;
@@ -319,7 +320,8 @@ int main(int argc, const char **argv) {
     std::vector<SMTRef> declarations;
     if (MuZFlag) {
         vector<string> args;
-        declarations.push_back(make_shared<smt::FunDecl>("END_QUERY", args, "Bool"));
+        declarations.push_back(
+            make_shared<smt::FunDecl>("END_QUERY", args, "Bool"));
     }
     std::vector<SMTRef> assertions;
     std::vector<SMTRef> smtExprs;
@@ -383,7 +385,7 @@ int main(int argc, const char **argv) {
     smtExprs.insert(smtExprs.end(), declarations.begin(), declarations.end());
     smtExprs.insert(smtExprs.end(), assertions.begin(), assertions.end());
     if (MuZFlag) {
-        smtExprs.push_back(makeUnaryOp("query", {"END_QUERY"}));
+        smtExprs.push_back(make_shared<Query>("END_QUERY"));
     } else {
         smtExprs.push_back(make_shared<CheckSat>());
         smtExprs.push_back(make_shared<GetModel>());
@@ -403,7 +405,11 @@ int main(int argc, const char **argv) {
     std::ostream outFile(buf);
 
     for (auto &smt : smtExprs) {
-        outFile << *smt->compressLets()->toSExpr();
+        if (MuZFlag) {
+            outFile << *smt->compressLets()->mergeImplications({})->toSExpr();
+        } else {
+            outFile << *smt->compressLets()->toSExpr();
+        }
         outFile << "\n";
     }
 

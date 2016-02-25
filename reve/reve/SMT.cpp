@@ -20,10 +20,17 @@ SExprRef SetLogic::toSExpr() const {
     return llvm::make_unique<Apply<std::string>>("set-logic", std::move(args));
 }
 
-
 SExprRef CheckSat::toSExpr() const {
     std::vector<SExprRef> args;
     return llvm::make_unique<Apply<std::string>>("check-sat", std::move(args));
+}
+
+SExprRef Query::toSExpr() const {
+    std::vector<SExprRef> args;
+    args.push_back(llvm::make_unique<Value<string>>(queryName));
+    args.push_back(llvm::make_unique<Value<string>>(":print-certificate"));
+    args.push_back(llvm::make_unique<Value<string>>("true"));
+    return llvm::make_unique<Apply<std::string>>("query", std::move(args));
 }
 
 SExprRef GetModel::toSExpr() const {
@@ -122,7 +129,6 @@ SExprRef VarDecl::toSExpr() const {
                                                  std::move(args));
 }
 
-
 set<string> SMTExpr::uses() const { return {}; }
 
 set<string> Assert::uses() const { return expr->uses(); }
@@ -162,7 +168,6 @@ template <> set<string> Primitive<string>::uses() const {
     uses.insert(val);
     return uses;
 }
-
 
 SMTRef SMTExpr::compressLets(std::vector<Assignment> defs) const {
     assert(defs.empty());
@@ -211,8 +216,34 @@ SMTRef Primitive<T>::compressLets(std::vector<Assignment> defs) const {
     return nestLets(make_shared<Primitive<T>>(val), defs);
 }
 
+SMTRef SMTExpr::mergeImplications(std::vector<SMTRef> conditions) const {
+    if (conditions.empty()) {
+        return shared_from_this();
+    } else {
+        return makeBinOp("=>", make_shared<Op>("and", conditions),
+                         shared_from_this());
+    }
+}
 
-const smt::SMTExpr *smt::SMTExpr::properHorn() const { return this; }
+SMTRef Assert::mergeImplications(std::vector<SMTRef> conditions) const {
+    assert(conditions.empty());
+    return make_shared<Assert>(expr->mergeImplications(conditions));
+}
+
+SMTRef Let::mergeImplications(std::vector<SMTRef> conditions) const {
+    return make_shared<Let>(defs, expr->mergeImplications(conditions));
+}
+
+SMTRef Op::mergeImplications(std::vector<SMTRef> conditions) const {
+    if (opName == "=>") {
+        assert(args.size() == 2);
+        conditions.push_back(args.at(0));
+        return args.at(1)->mergeImplications(conditions);
+    } else {
+        return makeBinOp("=>", make_shared<Op>("and", conditions),
+                         shared_from_this());
+    }
+}
 
 SMTRef nestLets(SMTRef clause, std::vector<Assignment> defs) {
     SMTRef lets = clause;

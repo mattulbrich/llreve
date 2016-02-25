@@ -22,7 +22,8 @@ class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
             defs = std::vector<
                 std::pair<std::string, std::shared_ptr<const SMTExpr>>>())
         const;
-    virtual const SMTExpr *properHorn() const;
+    virtual std::shared_ptr<const SMTExpr> mergeImplications(
+        std::vector<std::shared_ptr<const SMTExpr>> conditions) const;
     /// This is for the case when we are in the negative position of an
     /// implication
     // virtual std::shared_ptr<const SMTExpr> properHornNegative() = 0;
@@ -50,8 +51,8 @@ class Assert : public SMTExpr {
     SMTRef expr;
     SExprRef toSExpr() const override;
     std::set<std::string> uses() const override;
-    std::shared_ptr<const SMTExpr>
-    compressLets(std::vector<Assignment> defs) const override;
+    SMTRef compressLets(std::vector<Assignment> defs) const override;
+    SMTRef mergeImplications(std::vector<SMTRef> conditions) const override;
 };
 
 class SortedVar : public SMTExpr {
@@ -62,8 +63,7 @@ class SortedVar : public SMTExpr {
     std::string type;
     SExprRef toSExpr() const override;
     std::set<std::string> uses() const override;
-    std::shared_ptr<const SMTExpr>
-    compressLets(std::vector<Assignment> defs) const override;
+    SMTRef compressLets(std::vector<Assignment> defs) const override;
     SortedVar &operator=(const SortedVar other) {
         name = other.name;
         type = other.type;
@@ -80,22 +80,19 @@ class Forall : public SMTExpr {
     std::vector<SortedVar> vars;
     SMTRef expr;
     std::set<std::string> uses() const override;
-    std::shared_ptr<const SMTExpr>
-    compressLets(std::vector<Assignment> defs) const override;
+    SMTRef compressLets(std::vector<Assignment> defs) const override;
 };
 
 class CheckSat : public SMTExpr {
   public:
     SExprRef toSExpr() const override;
-    std::shared_ptr<const SMTExpr>
-    compressLets(std::vector<Assignment> defs) const override;
+    SMTRef compressLets(std::vector<Assignment> defs) const override;
 };
 
 class GetModel : public SMTExpr {
   public:
     SExprRef toSExpr() const override;
-    std::shared_ptr<const SMTExpr>
-    compressLets(std::vector<Assignment> defs) const override;
+    SMTRef compressLets(std::vector<Assignment> defs) const override;
 };
 
 class Let : public SMTExpr {
@@ -106,8 +103,8 @@ class Let : public SMTExpr {
     Let(std::vector<Assignment> defs, SMTRef expr)
         : defs(std::move(defs)), expr(std::move(expr)) {}
     std::set<std::string> uses() const override;
-    std::shared_ptr<const SMTExpr>
-    compressLets(std::vector<Assignment> passedDefs) const override;
+    SMTRef compressLets(std::vector<Assignment> passedDefs) const override;
+    SMTRef mergeImplications(std::vector<SMTRef> conditions) const override;
 };
 
 template <typename T> class Primitive : public SMTExpr {
@@ -122,8 +119,7 @@ template <typename T> class Primitive : public SMTExpr {
     std::set<std::string> uses() const override {
         return std::set<std::string>();
     }
-    std::shared_ptr<const SMTExpr>
-    compressLets(std::vector<Assignment> defs) const override;
+    SMTRef compressLets(std::vector<Assignment> defs) const override;
 };
 
 class Op : public SMTExpr {
@@ -134,8 +130,15 @@ class Op : public SMTExpr {
     std::vector<SMTRef> args;
     SExprRef toSExpr() const override;
     std::set<std::string> uses() const override;
-    std::shared_ptr<const SMTExpr>
-    compressLets(std::vector<Assignment> defs) const override;
+    SMTRef compressLets(std::vector<Assignment> defs) const override;
+    SMTRef mergeImplications(std::vector<SMTRef> conditions) const override;
+};
+
+class Query : public SMTExpr {
+  public:
+    Query(std::string queryName) : queryName(std::move(queryName)) {}
+    std::string queryName;
+    SExprRef toSExpr() const override;
 };
 
 auto makeBinOp(std::string opName, std::string arg1, std::string arg2)

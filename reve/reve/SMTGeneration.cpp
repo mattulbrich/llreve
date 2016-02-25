@@ -804,10 +804,6 @@ SMTRef nonmutualRecursiveForall(SMTRef clause, CallInfo call, Program prog,
 SMTRef forallStartingAt(SMTRef clause, vector<string> freeVars, int blockIndex,
                         ProgramSelection prog, string funName, bool main,
                         FreeVarsMap freeVarsMap, Memory memory) {
-    if (MuZFlag) {
-        // Rules are implicitly universally quantified
-        return clause;
-    }
     vector<SortedVar> vars;
     vector<string> preVars;
     for (const auto &arg : freeVars) {
@@ -851,6 +847,10 @@ SMTRef forallStartingAt(SMTRef clause, vector<string> freeVars, int blockIndex,
         clause = makeBinOp("=>", preInv, clause);
     }
 
+    if (MuZFlag) {
+        // μZ rules are implicitly universally quantified
+        return clause;
+    }
     return make_shared<Forall>(vars, clause);
 }
 

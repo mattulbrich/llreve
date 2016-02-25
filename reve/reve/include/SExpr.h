@@ -31,15 +31,16 @@ template <typename T> class Apply : public SExpr<T> {
     void serialize(std::ostream &os, size_t indent) const override {
         os << "(" << fun;
         std::vector<std::string> atomicOps = {
-            "+", "-",   "*",        "<=",     "<",     ">",  ">=",
+            "+", "-",   "*",        "<=",     "<",     ">",   ">=",
             "=", "not", "distinct", "select", "store", "ite", "div"};
-        std::vector<std::string> forceIndentOps = {"assert", "and"};
+        std::vector<std::string> forceIndentOps = {"assert", "and", "rule"};
         bool atomicOp = std::find(atomicOps.begin(), atomicOps.end(), fun) !=
                         atomicOps.end();
         bool simpleOp = args.size() <= 1 &&
                         std::find(forceIndentOps.begin(), forceIndentOps.end(),
                                   fun) == forceIndentOps.end();
-        bool inv = fun.substr(0, 3) == "INV";
+        bool inv =
+            fun.substr(0, 3) == "INV" || fun == "OUT_INV" || fun == "IN_INV";
         if (atomicOp || simpleOp || inv) {
             for (auto &arg : args) {
                 os << " ";
