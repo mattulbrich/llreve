@@ -193,7 +193,6 @@ vector<SMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
     const auto forbiddenPaths = getForbiddenPaths(
         pathMaps, marked, freeVarsMap, offByN, funName, true, memory);
     if (offByN) {
-        smtExprs.push_back(make_shared<Comment>("offbyn main"));
         const auto offByNPaths =
             getOffByNPaths(pathMaps.first, pathMaps.second, freeVarsMap,
                            funName, true, memory);
@@ -246,7 +245,6 @@ vector<SMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
     smtExprs.push_back(make_shared<Comment>("forbidden main"));
     smtExprs.insert(smtExprs.end(), forbiddenPaths.begin(),
                     forbiddenPaths.end());
-    smtExprs.push_back(make_shared<Comment>("end"));
     return smtExprs;
 }
 
