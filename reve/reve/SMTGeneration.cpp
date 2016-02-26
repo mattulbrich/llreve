@@ -694,31 +694,19 @@ SMTRef mutualRecursiveForall(SMTRef clause, MonoPair<CallInfo> callPair,
         implArgs.push_back(name(callPair.first.assignedTo));
         implArgs.push_back(name(callPair.second.assignedTo));
         if (memory & HEAP_MASK) {
-            if (MuZFlag) {
-                implArgs.push_back(name("HEAP$1_res"));
-                implArgs.push_back(name("HEAP$2_res"));
-            } else {
-                implArgs.push_back(name("i1_res"));
-                implArgs.push_back(makeBinOp("select", "HEAP$1_res", "i1_res"));
-                implArgs.push_back(name("i2_res"));
-                implArgs.push_back(makeBinOp("select", "HEAP$2_res", "i2_res"));
-            }
+            implArgs.push_back(name("HEAP$1_res"));
+            implArgs.push_back(name("HEAP$2_res"));
         }
         SMTRef postInvariant =
             make_shared<Op>(invariantName(ENTRY_MARK, ProgramSelection::Both,
                                           callPair.first.callName),
                             implArgs);
-        postInvariant = wrapHeap(postInvariant, memory,
-                                 {"i1", "i2", "i1_res", "i2_res", "i1_stack",
-                                  "i2_stack", "STACK$1", "STACK$2"});
         clause = makeBinOp("=>", postInvariant, clause);
         clause = make_shared<Forall>(args, clause);
-        const auto preInv = wrapHeap(
-            make_shared<Op>(invariantName(ENTRY_MARK, ProgramSelection::Both,
-                                          callPair.first.callName,
-                                          InvariantAttr::PRE),
-                            preArgs),
-            memory, {"i1", "i2", "i1_stack", "i2_stack", "STACK$1", "STACK$2"});
+        const auto preInv = make_shared<Op>(
+            invariantName(ENTRY_MARK, ProgramSelection::Both,
+                          callPair.first.callName, InvariantAttr::PRE),
+            preArgs);
         return makeBinOp("and", preInv, clause);
     }
 }
@@ -759,27 +747,14 @@ SMTRef nonmutualRecursiveForall(SMTRef clause, CallInfo call, Program prog,
 
         implArgs.push_back(name(call.assignedTo));
         if (memory & HEAP_MASK) {
-            if (call.externFun) {
-                implArgs.push_back(name("HEAP$" + programS + "_res"));
-            } else {
-                implArgs.push_back(name("i" + programS + "_res"));
-                implArgs.push_back(makeBinOp("select",
-                                             "HEAP$" + programS + "_res",
-                                             "i" + programS + "_res"));
-            }
+            implArgs.push_back(name("HEAP$" + programS + "_res"));
         }
 
         SMTRef endInvariant = make_shared<Op>(
             invariantName(ENTRY_MARK, asSelection(prog), call.callName),
             implArgs);
         if (memory & STACK_MASK) {
-            endInvariant =
-                wrapHeap(endInvariant, memory,
-                         {"i" + programS, "i" + programS + "_res",
-                          "i" + programS + "_stack", "STACK$" + programS});
-        } else {
-            endInvariant = wrapHeap(endInvariant, memory,
-                                    {"i" + programS, "i" + programS + "_res"});
+            // TODO We need to add the stack somewhere here
         }
         clause = makeBinOp("=>", endInvariant, clause);
         clause = make_shared<Forall>(forallArgs, clause);
@@ -788,14 +763,9 @@ SMTRef nonmutualRecursiveForall(SMTRef clause, CallInfo call, Program prog,
                                           call.callName, InvariantAttr::PRE),
                             preArgs);
         if (memory & STACK_MASK) {
-            return makeBinOp(
-                "and", wrapHeap(preInv, memory,
-                                {"i" + programS, "i" + programS + "_stack",
-                                 "STACK$" + programS}),
-                clause);
+            return makeBinOp("and", preInv, clause);
         } else {
-            return makeBinOp("and", wrapHeap(preInv, memory, {"i" + programS}),
-                             clause);
+            return makeBinOp("and", preInv, clause);
         }
     }
 }
@@ -810,17 +780,7 @@ SMTRef forallStartingAt(SMTRef clause, vector<string> freeVars, int blockIndex,
         std::smatch matchResult;
         if (std::regex_match(arg, matchResult, HEAP_REGEX)) {
             vars.push_back(SortedVar(arg + "_old", "(Array Int Int)"));
-            if (MuZFlag) {
-                preVars.push_back(arg + "_old");
-            } else {
-                const string i = matchResult[2];
-                string index = "i" + i;
-                if (matchResult[1] == "STACK") {
-                    index += "_stack";
-                }
-                preVars.push_back(index);
-                preVars.push_back("(select " + arg + "_old " + index + ")");
-            }
+            preVars.push_back(arg + "_old");
         } else {
             vars.push_back(SortedVar(arg + "_old", "Int"));
             preVars.push_back(arg + "_old");
@@ -843,7 +803,6 @@ SMTRef forallStartingAt(SMTRef clause, vector<string> freeVars, int blockIndex,
         preVars = fillUpArgs(preVars, freeVarsMap, memory, prog, attr);
         auto preInv =
             makeOp(invariantName(blockIndex, prog, funName, attr), preVars);
-        preInv = wrapHeap(preInv, memory, preVars);
         clause = makeBinOp("=>", preInv, clause);
     }
 
@@ -901,14 +860,7 @@ SMTRef inInvariant(MonoPair<const llvm::Function *> funs, SMTRef body,
             return varArgs;
         }));
     for (auto argPair : makeZip(Args1, Args2)) {
-        if (argPair.first == "HEAP$1" && !MuZFlag) {
-            const vector<SortedVar> forallArgs = {SortedVar("i", "Int")};
-            args.push_back(make_shared<Forall>(
-                forallArgs, makeBinOp("=", makeBinOp("select", "HEAP$1", "i"),
-                                      makeBinOp("select", "HEAP$2", "i"))));
-        } else {
-            args.push_back(makeBinOp("=", argPair.first, argPair.second));
-        }
+        args.push_back(makeBinOp("=", argPair.first, argPair.second));
     }
     if (body == nullptr) {
         body = make_shared<Op>("and", args);
@@ -942,18 +894,7 @@ SMTRef outInvariant(SMTRef body, Memory memory) {
     if (body == nullptr) {
         body = makeBinOp("=", "result$1", "result$2");
         if (memory & HEAP_MASK) {
-            if (MuZFlag) {
-                body =
-                    makeBinOp("and", body, makeBinOp("=", "HEAP$1", "HEAP$2"));
-            } else {
-                vector<SortedVar> forallArgs = {SortedVar("i", "Int")};
-                body = makeBinOp(
-                    "and", body,
-                    make_shared<Forall>(
-                        forallArgs,
-                        makeBinOp("=", makeBinOp("select", "HEAP$1", "i"),
-                                  makeBinOp("select", "HEAP$2", "i"))));
-            }
+            body = makeBinOp("and", body, makeBinOp("=", "HEAP$1", "HEAP$2"));
         }
     }
 
@@ -986,8 +927,6 @@ SMTRef equalInputsEqualOutputs(vector<string> funArgs, vector<string> funArgs1,
         args.push_back("HEAP$1_res");
         args.push_back("HEAP$2_res");
     }
-    memory = false;
-    args = resolveHeapReferences(args, "", memory);
     args = fillUpArgs(args, freeVarsMap, memory, ProgramSelection::Both,
                       InvariantAttr::NONE);
     vector<string> outArgs = {"result$1", "result$2"};
@@ -996,19 +935,14 @@ SMTRef equalInputsEqualOutputs(vector<string> funArgs, vector<string> funArgs1,
         outArgs.push_back("HEAP$2_res");
     }
     const auto equalResults = makeBinOp(
-        "=>", wrapHeap(makeOp(invariantName(ENTRY_MARK, ProgramSelection::Both,
-                                            funName),
-                              args),
-                       memory, args),
+        "=>", makeOp(invariantName(ENTRY_MARK, ProgramSelection::Both, funName),
+                     args),
         makeOp("OUT_INV", outArgs));
-    preInvArgs = resolveHeapReferences(preInvArgs, "", memory);
     preInvArgs = fillUpArgs(preInvArgs, freeVarsMap, memory,
                             ProgramSelection::Both, InvariantAttr::PRE);
-    const auto preInv =
-        wrapHeap(makeOp(invariantName(ENTRY_MARK, ProgramSelection::Both,
-                                      funName, InvariantAttr::PRE),
-                        preInvArgs),
-                 memory, preInvArgs);
+    const auto preInv = makeOp(invariantName(ENTRY_MARK, ProgramSelection::Both,
+                                             funName, InvariantAttr::PRE),
+                               preInvArgs);
 
     const auto equalArgs =
         makeFunArgsEqual(equalResults, preInv, funArgs1, funArgs2);
@@ -1373,14 +1307,10 @@ auto addMemory(vector<SMTRef> &implArgs, Memory memory)
             implArgs.push_back(arg);
         }
         if (memory & HEAP_MASK) {
-            implArgs.push_back(name("i" + indexString));
-            implArgs.push_back(
-                makeBinOp("select", "HEAP$" + indexString, "i" + indexString));
+            implArgs.push_back(name("HEAP$" + indexString));
         }
         if (memory & STACK_MASK) {
-            implArgs.push_back(name("i" + indexString + "_stack"));
-            implArgs.push_back(makeBinOp("select", "STACK$" + indexString,
-                                         "i" + indexString + "_stack"));
+            implArgs.push_back(name("STACK$" + indexString));
         }
     };
 }

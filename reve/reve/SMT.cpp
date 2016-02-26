@@ -1,4 +1,5 @@
 #include "SMT.h"
+#include "Memory.h"
 #include "Opts.h"
 
 #include <iostream>
@@ -243,6 +244,78 @@ SMTRef Op::mergeImplications(std::vector<SMTRef> conditions) const {
         return makeBinOp("=>", make_shared<Op>("and", conditions),
                          shared_from_this());
     }
+}
+
+SMTRef SMTExpr::instantiateArrays() const { return shared_from_this(); }
+
+SMTRef Assert::instantiateArrays() const {
+    return make_shared<Assert>(expr->instantiateArrays());
+}
+
+SMTRef Forall::instantiateArrays() const {
+    return make_shared<Forall>(vars, expr->instantiateArrays());
+}
+
+SMTRef Let::instantiateArrays() const {
+    return make_shared<Let>(defs, expr->instantiateArrays());
+}
+
+SMTRef Op::instantiateArrays() const {
+    if (opName.compare(0, 4, "INV_") == 0) {
+        std::vector<SortedVar> indices;
+        std::vector<SMTRef> newArgs;
+        for (const auto &arg : args) {
+            if (auto array = arg->heapInfo()) {
+                string index = "i" + array->index + array->suffix;
+                newArgs.push_back(name(index));
+                newArgs.push_back(makeBinOp("select", arg, name(index)));
+                indices.push_back(SortedVar(index, "Int"));
+            } else {
+                newArgs.push_back(arg);
+            }
+        }
+        return make_shared<Forall>(indices, make_shared<Op>(opName, newArgs));
+    } else if (opName == "=" && args.size() == 2 && args.at(0)->heapInfo()) {
+        std::vector<SortedVar> indices = {SortedVar("i", "Int")};
+        return make_shared<Forall>(
+            indices, makeBinOp("=", makeBinOp("select", args.at(0), name("i")),
+                               makeBinOp("select", args.at(1), name("i"))));
+    } else {
+        std::vector<SMTRef> newArgs;
+        for (const auto &arg : args) {
+            newArgs.push_back(arg->instantiateArrays());
+        }
+        return make_shared<Op>(opName, newArgs);
+    }
+}
+
+SMTRef FunDef::instantiateArrays() const {
+    return make_shared<FunDef>(funName, args, outType,
+                               body->instantiateArrays());
+}
+
+SMTRef FunDecl::instantiateArrays() const {
+    std::vector<string> newInTypes;
+    for (const string &type : inTypes) {
+        if (type == "(Array Int Int)") {
+            newInTypes.push_back("Int");
+            newInTypes.push_back("Int");
+        } else {
+            newInTypes.push_back("Int");
+        }
+    }
+    return make_shared<FunDecl>(funName, newInTypes, outType);
+}
+
+shared_ptr<const HeapInfo> SMTExpr::heapInfo() const { return nullptr; }
+
+template <> shared_ptr<const HeapInfo> Primitive<string>::heapInfo() const {
+    std::smatch matchResult;
+    if (std::regex_match(val, matchResult, HEAP_REGEX)) {
+        return make_shared<HeapInfo>(matchResult[1], matchResult[2],
+                                     matchResult[3]);
+    }
+    return nullptr;
 }
 
 SMTRef nestLets(SMTRef clause, std::vector<Assignment> defs) {

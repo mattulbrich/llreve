@@ -13,6 +13,14 @@ namespace smt {
 using SExpr = const sexpr::SExpr<std::string>;
 using SExprRef = std::unique_ptr<SExpr>;
 
+struct HeapInfo {
+    std::string arrayName;
+    std::string index;
+    std::string suffix;
+    HeapInfo(std::string arrayName, std::string index, std::string suffix)
+        : arrayName(arrayName), index(index), suffix(suffix) {}
+};
+
 class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
   public:
     virtual SExprRef toSExpr() const = 0;
@@ -24,6 +32,8 @@ class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
         const;
     virtual std::shared_ptr<const SMTExpr> mergeImplications(
         std::vector<std::shared_ptr<const SMTExpr>> conditions) const;
+    virtual std::shared_ptr<const SMTExpr> instantiateArrays() const;
+    virtual std::shared_ptr<const HeapInfo> heapInfo() const;
     /// This is for the case when we are in the negative position of an
     /// implication
     // virtual std::shared_ptr<const SMTExpr> properHornNegative() = 0;
@@ -53,6 +63,7 @@ class Assert : public SMTExpr {
     std::set<std::string> uses() const override;
     SMTRef compressLets(std::vector<Assignment> defs) const override;
     SMTRef mergeImplications(std::vector<SMTRef> conditions) const override;
+    SMTRef instantiateArrays() const override;
 };
 
 class SortedVar : public SMTExpr {
@@ -81,6 +92,7 @@ class Forall : public SMTExpr {
     SMTRef expr;
     std::set<std::string> uses() const override;
     SMTRef compressLets(std::vector<Assignment> defs) const override;
+    SMTRef instantiateArrays() const override;
 };
 
 class CheckSat : public SMTExpr {
@@ -105,6 +117,7 @@ class Let : public SMTExpr {
     std::set<std::string> uses() const override;
     SMTRef compressLets(std::vector<Assignment> passedDefs) const override;
     SMTRef mergeImplications(std::vector<SMTRef> conditions) const override;
+    SMTRef instantiateArrays() const override;
 };
 
 template <typename T> class Primitive : public SMTExpr {
@@ -120,6 +133,9 @@ template <typename T> class Primitive : public SMTExpr {
         return std::set<std::string>();
     }
     SMTRef compressLets(std::vector<Assignment> defs) const override;
+    std::shared_ptr<const HeapInfo> heapInfo() const override {
+        return nullptr;
+    }
 };
 
 class Op : public SMTExpr {
@@ -132,6 +148,7 @@ class Op : public SMTExpr {
     std::set<std::string> uses() const override;
     SMTRef compressLets(std::vector<Assignment> defs) const override;
     SMTRef mergeImplications(std::vector<SMTRef> conditions) const override;
+    SMTRef instantiateArrays() const override;
 };
 
 class Query : public SMTExpr {
@@ -160,6 +177,7 @@ class FunDecl : public SMTExpr {
     std::vector<std::string> inTypes;
     std::string outType;
     SExprRef toSExpr() const override;
+    SMTRef instantiateArrays() const override;
 };
 
 class FunDef : public SMTExpr {
@@ -173,6 +191,7 @@ class FunDef : public SMTExpr {
     std::string outType;
     SMTRef body;
     SExprRef toSExpr() const override;
+    SMTRef instantiateArrays() const override;
 };
 
 class Comment : public SMTExpr {

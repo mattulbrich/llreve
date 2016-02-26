@@ -408,7 +408,7 @@ int main(int argc, const char **argv) {
         if (MuZFlag) {
             outFile << *smt->compressLets()->mergeImplications({})->toSExpr();
         } else {
-            outFile << *smt->compressLets()->toSExpr();
+            outFile << *smt->compressLets()->instantiateArrays()->toSExpr();
         }
         outFile << "\n";
     }
@@ -534,13 +534,8 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                     }
                     SMTRef body = makeBinOp("=", "res1", "res2");
                     if (mem & HEAP_MASK) {
-                        std::vector<SortedVar> forallArgs = {
-                            SortedVar("i", "Int")};
-                        SMTRef heapOutEqual = make_shared<Forall>(
-                            forallArgs,
-                            makeBinOp("=",
-                                      makeBinOp("select", "HEAP$1_res", "i"),
-                                      makeBinOp("select", "HEAP$2_res", "i")));
+                        SMTRef heapOutEqual =
+                            makeBinOp("=", "HEAP$1_res", "HEAP$2_res");
                         body = makeBinOp("and", body, heapOutEqual);
                     }
                     std::vector<SMTRef> equalOut;
@@ -562,10 +557,7 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                     if (mem & HEAP_MASK) {
                         std::vector<SortedVar> forallArgs = {
                             SortedVar("i", "Int")};
-                        SMTRef heapInEqual = make_shared<Forall>(
-                            forallArgs,
-                            makeBinOp("=", makeBinOp("select", "HEAP$1", "i"),
-                                      makeBinOp("select", "HEAP$2", "i")));
+                        SMTRef heapInEqual = makeBinOp("=", "HEAP$1", "HEAP$2");
                         equal.push_back(heapInEqual);
                     }
                     body = makeBinOp("=>", make_shared<Op>("and", equal), body);

@@ -22,7 +22,8 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
                  vector<string> EndArgs, ProgramSelection SMTFor,
                  std::string FunName, Memory memory,
                  map<int, vector<string>> freeVarsMap) {
-    // This is the actual invariant we want to establish
+    // we want to end up with something like
+    // (and pre (=> (nextcall newargs res) (currentcall oldargs res)))
     auto FilteredArgs = InputArgs;
     auto FilteredEndArgs = EndArgs;
     if (SMTFor == ProgramSelection::First) {
@@ -60,25 +61,22 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
             break;
         }
     }
+    // Arguments passed into the current invariant
     vector<string> EndArgsVect;
-    Memory Heap = 0;
-    EndArgsVect = FilteredArgs;
+    for (const string &arg : FilteredArgs) {
+        EndArgsVect.push_back(arg + "_old");
+    }
     EndArgsVect.insert(EndArgsVect.end(), ResultArgs.begin(), ResultArgs.end());
-    EndArgsVect = resolveHeapReferences(EndArgsVect, "_old", Heap);
     EndArgsVect = fillUpArgs(EndArgsVect, freeVarsMap, memory, SMTFor,
                              InvariantAttr::NONE);
-
+    // The current invariant
     auto EndInvariant =
         makeOp(invariantName(StartIndex, SMTFor, FunName), EndArgsVect);
-    EndInvariant = wrapHeap(EndInvariant, Heap, EndArgsVect);
     auto Clause = EndInvariant;
 
     if (EndIndex != EXIT_MARK) {
-        // We require the result of another call to establish our invariant
-        // so
-        // make sure that it satisfies the invariant of the other call and
-        // then
-        // assert our own invariant
+        // The result of another call is required to establish the current invariant
+        // so we do do that call and use the result in the current invariant
         vector<SortedVar> ForallArgs;
         for (auto ResultArg : ResultArgs) {
             ForallArgs.push_back(SortedVar(ResultArg, argSort(ResultArg)));
@@ -87,8 +85,6 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
             vector<string> usingArgsPre;
             usingArgsPre.insert(usingArgsPre.begin(), FilteredEndArgs.begin(),
                                 FilteredEndArgs.end());
-            Memory Heap = 0;
-            usingArgsPre = resolveHeapReferences(usingArgsPre, "", Heap);
             vector<string> usingArgs = usingArgsPre;
             usingArgsPre = fillUpArgs(usingArgsPre, freeVarsMap, memory, SMTFor,
                                       InvariantAttr::PRE);
@@ -97,17 +93,14 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
                 usingArgsPre);
             usingArgs.insert(usingArgs.end(), ResultArgs.begin(),
                              ResultArgs.end());
-            usingArgs = resolveHeapReferences(usingArgs, "", Heap);
             usingArgs = fillUpArgs(usingArgs, freeVarsMap, memory, SMTFor,
                                    InvariantAttr::NONE);
-            Clause = makeBinOp(
-                "=>", wrapHeap(makeOp(invariantName(EndIndex, SMTFor, FunName),
-                                      usingArgs),
-                               Heap, usingArgs),
-                Clause);
+            Clause =
+                makeBinOp("=>", makeOp(invariantName(EndIndex, SMTFor, FunName),
+                                       usingArgs),
+                          Clause);
             if (SMTFor == ProgramSelection::Both) {
-                Clause = makeBinOp("and", wrapHeap(PreInv, Heap, usingArgsPre),
-                                   Clause);
+                Clause = makeBinOp("and", PreInv, Clause);
             }
         }
         Clause = make_shared<Forall>(ForallArgs, Clause);
@@ -128,28 +121,42 @@ SMTRef mainInvariant(int EndIndex, vector<string> FreeVars, string FunName,
     if (EndIndex == UNREACHABLE_MARK) {
         return name("true");
     }
-    FreeVars = resolveHeapReferences(FreeVars, "", Heap);
-    return wrapHeap(makeOp(invariantName(EndIndex, ProgramSelection::Both,
-                                         FunName, InvariantAttr::MAIN),
-                           FreeVars),
-                    Heap, FreeVars);
+    return makeOp(invariantName(EndIndex, ProgramSelection::Both, FunName,
+                                InvariantAttr::MAIN),
+                  FreeVars);
 }
 
 /// Declare an invariant
 MonoPair<SMTRef> invariantDeclaration(int BlockIndex, vector<string> FreeVars,
                                       ProgramSelection For, std::string FunName,
                                       Memory Heap) {
-    size_t NumArgs = invariantArgs(FreeVars, Heap, For, InvariantAttr::NONE);
-    size_t preArgs = invariantArgs(FreeVars, Heap, For, InvariantAttr::PRE);
-    const vector<string> Args(NumArgs, "Int");
-    const vector<string> PreArgs(preArgs, "Int");
+    vector<string> args;
+    for (const string &arg : FreeVars) {
+        if (std::regex_match(arg, HEAP_REGEX)) {
+            args.push_back("(Array Int Int)");
+        } else {
+            args.push_back("Int");
+        }
+    }
+    const vector<string> preArgs = args;
+    // add results
+    args.push_back("Int");
+    if (For == ProgramSelection::Both) {
+        args.push_back("Int");
+    }
+    if (Heap) {
+        args.push_back("(Array Int Int)");
+        if (For == ProgramSelection::Both) {
+            args.push_back("(Array Int Int)");
+        }
+    }
 
     return makeMonoPair<SMTRef>(
         std::make_shared<class FunDecl>(invariantName(BlockIndex, For, FunName),
-                                        Args, "Bool"),
+                                        args, "Bool"),
         std::make_shared<class FunDecl>(
             invariantName(BlockIndex, For, FunName, InvariantAttr::PRE),
-            PreArgs, "Bool"));
+            preArgs, "Bool"));
 }
 
 MonoPair<SMTRef>
@@ -183,13 +190,12 @@ size_t invariantArgs(vector<string> freeVars, Memory memory,
         if (memory) {
             // index + value at that index
             if (prog == ProgramSelection::Both) {
-                numArgs += 4;
-            } else {
                 numArgs += 2;
+            } else {
+                numArgs += 1;
             }
         }
     }
-    numArgs = adaptSizeToHeap(numArgs, freeVars);
     return numArgs;
 }
 
@@ -216,18 +222,10 @@ size_t maxArgs(map<int, vector<string>> freeVarsMap, Memory memory,
 SMTRef mainInvariantDeclaration(int BlockIndex, vector<string> FreeVars,
                                 ProgramSelection For, std::string FunName) {
     vector<string> Args;
-    if (MuZFlag) {
-        for (const string &arg  : FreeVars) {
-            if (std::regex_match(arg, HEAP_REGEX)) {
-                Args.push_back("(Array Int Int)");
-            } else {
-                Args.push_back("Int");
-            }
-        }
-    } else {
-        size_t NumArgs = FreeVars.size();
-        NumArgs = adaptSizeToHeap(NumArgs, FreeVars);
-        for (size_t i = 0; i < NumArgs; ++i) {
+    for (const string &arg : FreeVars) {
+        if (std::regex_match(arg, HEAP_REGEX)) {
+            Args.push_back("(Array Int Int)");
+        } else {
             Args.push_back("Int");
         }
     }
