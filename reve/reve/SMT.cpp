@@ -47,6 +47,9 @@ SExprRef Assert::toSExpr() const {
 }
 
 SExprRef Forall::toSExpr() const {
+    if (vars.empty()) {
+        return expr->toSExpr();
+    }
     std::vector<SExprRef> args;
     std::vector<SExprRef> sortedVars;
     for (auto &sortedVar : vars) {
