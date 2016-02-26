@@ -141,9 +141,13 @@ template <typename T> class Primitive : public SMTExpr {
 class Op : public SMTExpr {
   public:
     Op(std::string opName, std::vector<SMTRef> args)
-        : opName(std::move(opName)), args(std::move(args)) {}
+        : opName(std::move(opName)), args(std::move(args)), instantiate(true) {}
+    Op(std::string opName, std::vector<SMTRef> args, bool instantiate)
+        : opName(std::move(opName)), args(std::move(args)),
+          instantiate(instantiate) {}
     std::string opName;
     std::vector<SMTRef> args;
+    bool instantiate;
     SExprRef toSExpr() const override;
     std::set<std::string> uses() const override;
     SMTRef compressLets(std::vector<Assignment> defs) const override;

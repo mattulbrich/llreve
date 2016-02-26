@@ -212,7 +212,7 @@ SMTRef Op::compressLets(std::vector<Assignment> defs) const {
     for (auto arg : args) {
         compressedArgs.push_back(arg->compressLets());
     }
-    return nestLets(make_shared<Op>(opName, compressedArgs), defs);
+    return nestLets(make_shared<Op>(opName, compressedArgs, instantiate), defs);
 }
 
 template <typename T>
@@ -269,10 +269,14 @@ SMTRef Op::instantiateArrays() const {
         std::vector<SMTRef> newArgs;
         for (const auto &arg : args) {
             if (auto array = arg->heapInfo()) {
-                string index = "i" + array->index + array->suffix;
-                newArgs.push_back(name(index));
-                newArgs.push_back(makeBinOp("select", arg, name(index)));
-                indices.push_back(SortedVar(index, "Int"));
+                if (instantiate) {
+                    string index = "i" + array->index + array->suffix;
+                    newArgs.push_back(name(index));
+                    newArgs.push_back(makeBinOp("select", arg, name(index)));
+                    indices.push_back(SortedVar(index, "Int"));
+                } else {
+                    newArgs.push_back(arg);
+                }
             } else {
                 newArgs.push_back(arg);
             }

@@ -679,12 +679,11 @@ SMTRef mutualRecursiveForall(SMTRef clause, MonoPair<CallInfo> callPair,
             implArgs.push_back(name("HEAP$1_res"));
             implArgs.push_back(name("HEAP$2_res"));
         }
-
-        const SMTRef postInvariant =
+        const auto postInvariant =
             make_shared<Op>(invariantName(ENTRY_MARK, ProgramSelection::Both,
                                           callPair.first.callName,
                                           InvariantAttr::NONE, varArgs),
-                            implArgs);
+                            implArgs, false);
         clause = makeBinOp("=>", postInvariant, clause);
         return make_shared<Forall>(args, clause);
     } else {
@@ -738,7 +737,7 @@ SMTRef nonmutualRecursiveForall(SMTRef clause, CallInfo call, Program prog,
         const SMTRef endInvariant = make_shared<Op>(
             invariantName(ENTRY_MARK, asSelection(prog), call.callName,
                           InvariantAttr::NONE, varArgs),
-            call.args);
+            call.args, false);
         clause = makeBinOp("=>", endInvariant, clause);
         return make_shared<Forall>(forallArgs, clause);
     } else {

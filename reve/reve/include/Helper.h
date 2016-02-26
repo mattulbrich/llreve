@@ -60,7 +60,6 @@ template <typename T> smt::SMTRef resolveGEP(T &gep) {
     const auto type = gep.getSourceElementType();
     std::vector<llvm::Value *> indices;
     for (auto ix = gep.idx_begin(), e = gep.idx_end(); ix != e; ++ix) {
-        indices.push_back(*ix);
         // Try several ways of finding the module
         const llvm::Module *mod = nullptr;
         if (auto instr = llvm::dyn_cast<llvm::Instruction>(&gep)) {
@@ -73,10 +72,10 @@ template <typename T> smt::SMTRef resolveGEP(T &gep) {
         if (mod == nullptr) {
             logErrorData("Couldn’t cast gep to an instruction:\n", gep);
         }
-        const auto size =
-            typeSize(llvm::GetElementPtrInst::getIndexedType(
-                         type, llvm::ArrayRef<llvm::Value *>(indices)),
-                     mod->getDataLayout());
+        indices.push_back(*ix);
+        const auto indexedType = llvm::GetElementPtrInst::getIndexedType(
+            type, llvm::ArrayRef<llvm::Value *>(indices));
+        const auto size = typeSize(indexedType, mod->getDataLayout());
         if (size == 1) {
             args.push_back(instrNameOrVal(*ix, (*ix)->getType()));
         } else {
