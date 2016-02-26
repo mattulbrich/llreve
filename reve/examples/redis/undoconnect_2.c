@@ -4,7 +4,7 @@
          ((i Int))
          (= (select HEAP$1 i) (select HEAP$2 i)))
       (let
-          ((server-state (select HEAP$2 (+ server$2 (* 682 0) 160))))
+          ((server-state (select HEAP$2 (+ server$2 (* 16 0) (* 4 1)))))
         (or (= 2 server-state) (= 3 server-state) (> server-state 11) (< server-state 2))))
 @*/
 #define REPL_STATE_CONNECTING 2 /* Connecting to master */

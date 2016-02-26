@@ -21,6 +21,16 @@ int slaveIsInHandshakeState(void) {
             server.repl_state <= REPL_STATE_RECEIVE_PSYNC) ? 1 : 0;
 }
 
+// this space is important since we use __LINE__
+
+
+
+
+
+
+
+
+
 void undoConnectWithMaster(void) {
     int fd = server.repl_transfer_s;
 

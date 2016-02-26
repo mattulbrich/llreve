@@ -24,7 +24,7 @@ custom-args:
   heap/selsort.smt2: []
   redis/undoconnect.smt2:
     - -fun
-    - undoconnectWithMaster
+    - undoConnectWithMaster
   argon2/finalize.smt2:
     - -signed
   libc/memmem_1.smt2:
