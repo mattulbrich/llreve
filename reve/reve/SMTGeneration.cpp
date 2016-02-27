@@ -80,9 +80,9 @@ vector<SharedSMTRef> functionAssertion(MonoPair<llvm::Function *> funs,
         MonoPair<SMTRef> invariants2 = invariantDeclaration(
             ENTRY_MARK, filterVars(2, freeVarsMap.at(ENTRY_MARK)),
             ProgramSelection::Second, funName, memory);
-        forEach<SMTRef>(std::move(invariants), addInvariant);
-        forEach<SMTRef>(std::move(invariants1), addInvariant);
-        forEach<SMTRef>(std::move(invariants2), addInvariant);
+        std::move(invariants).forEach(addInvariant);
+        std::move(invariants1).forEach(addInvariant);
+        std::move(invariants2).forEach(addInvariant);
     } else {
         MonoPair<SMTRef> invariants = singleInvariantDeclaration(
             freeVarsMap, memory, ProgramSelection::Both, funName);
@@ -90,9 +90,9 @@ vector<SharedSMTRef> functionAssertion(MonoPair<llvm::Function *> funs,
             freeVarsMap, memory, ProgramSelection::First, funName);
         MonoPair<SMTRef> invariants2 = singleInvariantDeclaration(
             freeVarsMap, memory, ProgramSelection::Second, funName);
-        forEach<SMTRef>(std::move(invariants), addInvariant);
-        forEach<SMTRef>(std::move(invariants1), addInvariant);
-        forEach<SMTRef>(std::move(invariants2), addInvariant);
+        std::move(invariants).forEach(addInvariant);
+        std::move(invariants1).forEach(addInvariant);
+        std::move(invariants2).forEach(addInvariant);
     }
 
     const map<int, map<int, vector<std::function<SharedSMTRef(SharedSMTRef)>>>>
@@ -415,7 +415,7 @@ void nonmutualPaths(PathMap pathMap, vector<SharedSMTRef> &pathExprs,
             MonoPair<SMTRef> invariants = invariantDeclaration(
                 startIndex, filterVars(progIndex, freeVarsMap.at(startIndex)),
                 asSelection(prog), funName, memory);
-            forEach<SMTRef>(std::move(invariants), [&declarations](SMTRef inv) {
+            std::move(invariants).forEach([&declarations](SMTRef inv) {
                 declarations.push_back(std::move(inv));
             });
         }
@@ -575,8 +575,7 @@ SharedSMTRef interleaveAssignments(
     MonoPair<vector<AssignmentCallBlock>> AssignmentCallBlocks, Memory memory) {
     SharedSMTRef clause = endClause;
     const auto splitAssignments =
-        std::move(AssignmentCallBlocks)
-            .map<SplitAssignments>(splitAssignmentsFromCalls);
+        AssignmentCallBlocks.map<SplitAssignments>(splitAssignmentsFromCalls);
     const auto assignmentBlocks1 = splitAssignments.first.assignments;
     const auto assignmentBlocks2 = splitAssignments.second.assignments;
     const auto callInfo1 = splitAssignments.first.callInfos;

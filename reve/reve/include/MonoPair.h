@@ -47,9 +47,13 @@ template <typename T> struct MonoPair {
         return {f(first, 1), f(second, 2)};
     }
 
-    void forEach(std::function<void(T)> f) const {
+    void forEach(std::function<void(T)> f) const & {
         f(first);
         f(second);
+    }
+    void forEach(std::function<void(T)> f) && {
+        f(std::forward<T>(first));
+        f(std::forward<T>(second));
     }
 
     void indexedForEach(std::function<void(T, int)> f) const {
@@ -116,10 +120,4 @@ template <typename A> std::vector<A> concat(MonoPair<std::vector<A>> pair) {
             acc.insert(acc.end(), vec.begin(), vec.end());
             return acc;
         });
-}
-
-template <typename T>
-void forEach(MonoPair<T> &&pair, std::function<void(T)> f) {
-    f(std::forward<T>(pair.first));
-    f(std::forward<T>(pair.second));
 }
