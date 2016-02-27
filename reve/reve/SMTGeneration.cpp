@@ -35,71 +35,77 @@ using std::string;
 vector<SMTRef> functionAssertion(MonoPair<llvm::Function *> funs,
                                  MonoPair<FAMRef> fams, bool offByN,
                                  vector<SMTRef> &declarations, Memory memory) {
-    const auto pathMaps = zipWith<llvm::Function *, FAMRef, PathMap>(
-        funs, fams, [](llvm::Function *fun, FAMRef fam) -> PathMap {
-            return fam->getResult<PathAnalysis>(*fun);
-        });
+    const MonoPair<PathMap> pathMaps =
+        zipWith<llvm::Function *, FAMRef, PathMap>(
+            funs, fams, [](llvm::Function *fun, FAMRef fam) -> PathMap {
+                return fam->getResult<PathAnalysis>(*fun);
+            });
     checkPathMaps(pathMaps.first, pathMaps.second);
-    const auto marked = zipWith<llvm::Function *, FAMRef, BidirBlockMarkMap>(
-        funs, fams, [](llvm::Function *fun, FAMRef fam) -> BidirBlockMarkMap {
-            return fam->getResult<MarkAnalysis>(*fun);
-        });
+    const MonoPair<BidirBlockMarkMap> marked =
+        zipWith<llvm::Function *, FAMRef, BidirBlockMarkMap>(
+            funs, fams,
+            [](llvm::Function *fun, FAMRef fam) -> BidirBlockMarkMap {
+                return fam->getResult<MarkAnalysis>(*fun);
+            });
     const string funName = funs.first->getName();
-    const auto funArgsPair = functionArgs(*funs.first, *funs.second);
-    const auto funArgs = funArgsPair.foldl<vector<string>>(
+    const MonoPair<vector<string>> funArgsPair =
+        functionArgs(*funs.first, *funs.second);
+    // TODO this should use concat
+    const vector<string> funArgs = funArgsPair.foldl<vector<string>>(
         {},
         [](vector<string> acc, vector<string> args) -> vector<string> {
             acc.insert(acc.end(), args.begin(), args.end());
             return acc;
         });
-    FreeVarsMap freeVarsMap =
+    const FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, memory);
     vector<SMTRef> smtExprs;
     vector<SMTRef> pathExprs;
 
-    auto addInvariant = [&](SMTRef invariant) {
+    const auto addInvariant = [&](SMTRef invariant) {
         declarations.push_back(invariant);
 
     };
     if (!SingleInvariantFlag) {
-        const auto invariants =
-            invariantDeclaration(ENTRY_MARK, freeVarsMap[ENTRY_MARK],
+        const MonoPair<SMTRef> invariants =
+            invariantDeclaration(ENTRY_MARK, freeVarsMap.at(ENTRY_MARK),
                                  ProgramSelection::Both, funName, memory);
-        const auto invariants1 = invariantDeclaration(
-            ENTRY_MARK, filterVars(1, freeVarsMap[ENTRY_MARK]),
+        const MonoPair<SMTRef> invariants1 = invariantDeclaration(
+            ENTRY_MARK, filterVars(1, freeVarsMap.at(ENTRY_MARK)),
             ProgramSelection::First, funName, memory);
-        const auto invariants2 = invariantDeclaration(
-            ENTRY_MARK, filterVars(2, freeVarsMap[ENTRY_MARK]),
+        const MonoPair<SMTRef> invariants2 = invariantDeclaration(
+            ENTRY_MARK, filterVars(2, freeVarsMap.at(ENTRY_MARK)),
             ProgramSelection::Second, funName, memory);
         invariants.forEach(addInvariant);
         invariants1.forEach(addInvariant);
         invariants2.forEach(addInvariant);
     } else {
-        const auto invariants = singleInvariantDeclaration(
+        const MonoPair<SMTRef> invariants = singleInvariantDeclaration(
             freeVarsMap, memory, ProgramSelection::Both, funName);
-        const auto invariants1 = singleInvariantDeclaration(
+        const MonoPair<SMTRef> invariants1 = singleInvariantDeclaration(
             freeVarsMap, memory, ProgramSelection::First, funName);
-        const auto invariants2 = singleInvariantDeclaration(
+        const MonoPair<SMTRef> invariants2 = singleInvariantDeclaration(
             freeVarsMap, memory, ProgramSelection::Second, funName);
         invariants.forEach(addInvariant);
         invariants1.forEach(addInvariant);
         invariants2.forEach(addInvariant);
     }
 
-    const auto synchronizedPaths = getSynchronizedPaths(
-        pathMaps.first, pathMaps.second, freeVarsMap, memory);
-    const auto recDecls =
+    const map<int, map<int, vector<std::function<SMTRef(SMTRef)>>>>
+        synchronizedPaths = getSynchronizedPaths(
+            pathMaps.first, pathMaps.second, freeVarsMap, memory);
+    const vector<SMTRef> recDecls =
         recDeclarations(pathMaps.first, funName, freeVarsMap, memory);
     declarations.insert(declarations.end(), recDecls.begin(), recDecls.end());
-    for (auto it : synchronizedPaths) {
+    for (const auto &it : synchronizedPaths) {
         const int startIndex = it.first;
-        for (auto it2 : it.second) {
+        for (const auto &it2 : it.second) {
             const int endIndex = it2.first;
-            const auto endInvariant =
+            const SMTRef endInvariant =
                 invariant(startIndex, endIndex, freeVarsMap.at(startIndex),
                           freeVarsMap.at(endIndex), ProgramSelection::Both,
                           funName, memory, freeVarsMap);
-            for (auto pathFun : it2.second) {
+            for (const auto &pathFun : it2.second) {
                 pathExprs.push_back(make_shared<Assert>(forallStartingAt(
                     pathFun(endInvariant), freeVarsMap.at(startIndex),
                     startIndex, ProgramSelection::Both, funName, false,
@@ -114,19 +120,19 @@ vector<SMTRef> functionAssertion(MonoPair<llvm::Function *> funs,
     nonmutualPaths(pathMaps.second, pathExprs, freeVarsMap, Program::Second,
                    funName, declarations, memory);
 
-    const auto forbiddenPaths = getForbiddenPaths(
+    const vector<SMTRef> forbiddenPaths = getForbiddenPaths(
         pathMaps, marked, freeVarsMap, offByN, funName, false, memory);
     pathExprs.insert(pathExprs.end(), forbiddenPaths.begin(),
                      forbiddenPaths.end());
 
     if (offByN) {
-        const auto offByNPaths =
-            getOffByNPaths(pathMaps.first, pathMaps.second, freeVarsMap,
-                           funName, false, memory);
-        for (auto it : offByNPaths) {
-            int startIndex = it.first;
-            for (auto it2 : it.second) {
-                for (auto pathFun : it2.second) {
+        const map<int, map<int, vector<std::function<SMTRef(SMTRef)>>>>
+            offByNPaths = getOffByNPaths(pathMaps.first, pathMaps.second,
+                                         freeVarsMap, funName, false, memory);
+        for (const auto &it : offByNPaths) {
+            const int startIndex = it.first;
+            for (const auto &it2 : it.second) {
+                for (const auto &pathFun : it2.second) {
                     pathExprs.push_back(make_shared<Assert>(forallStartingAt(
                         pathFun(nullptr), freeVarsMap.at(startIndex),
                         startIndex, ProgramSelection::Both, funName, false,
@@ -147,38 +153,44 @@ vector<SMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
                              MonoPair<FAMRef> fams, bool offByN,
                              vector<SMTRef> &declarations, bool onlyRec,
                              Memory memory, bool dontNest) {
-    const auto pathMaps = zipWith<llvm::Function *, FAMRef, PathMap>(
-        funs, fams, [](llvm::Function *fun, FAMRef fam) -> PathMap {
-            return fam->getResult<PathAnalysis>(*fun);
-        });
+    const MonoPair<PathMap> pathMaps =
+        zipWith<llvm::Function *, FAMRef, PathMap>(
+            funs, fams, [](llvm::Function *fun, FAMRef fam) -> PathMap {
+                return fam->getResult<PathAnalysis>(*fun);
+            });
     checkPathMaps(pathMaps.first, pathMaps.second);
-    const auto marked = zipWith<llvm::Function *, FAMRef, BidirBlockMarkMap>(
-        funs, fams, [](llvm::Function *fun, FAMRef fam) -> BidirBlockMarkMap {
-            return fam->getResult<MarkAnalysis>(*fun);
-        });
+    const MonoPair<BidirBlockMarkMap> marked =
+        zipWith<llvm::Function *, FAMRef, BidirBlockMarkMap>(
+            funs, fams,
+            [](llvm::Function *fun, FAMRef fam) -> BidirBlockMarkMap {
+                return fam->getResult<MarkAnalysis>(*fun);
+            });
     const string funName = funs.first->getName();
-    const auto funArgsPair = functionArgs(*funs.first, *funs.second);
-    const auto funArgs = funArgsPair.foldl<vector<string>>(
+    const MonoPair<vector<string>> funArgsPair =
+        functionArgs(*funs.first, *funs.second);
+    // TODO this should use concat
+    const vector<string> funArgs = funArgsPair.foldl<vector<string>>(
         {},
         [](vector<string> acc, vector<string> args) {
             acc.insert(acc.end(), args.begin(), args.end());
             return acc;
         });
 
-    FreeVarsMap freeVarsMap =
+    const FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, memory);
     if (MuZFlag) {
-        vector<SMTRef> variables = declareVariables(freeVarsMap);
+        const vector<SMTRef> variables = declareVariables(freeVarsMap);
         declarations.insert(declarations.end(), variables.begin(),
                             variables.end());
     }
     vector<SMTRef> smtExprs;
 
     if (onlyRec) {
-        smtExprs.push_back(equalInputsEqualOutputs(
-            freeVarsMap[ENTRY_MARK], filterVars(1, freeVarsMap[ENTRY_MARK]),
-            filterVars(2, freeVarsMap[ENTRY_MARK]), funName, freeVarsMap,
-            memory));
+        smtExprs.push_back(
+            equalInputsEqualOutputs(freeVarsMap.at(ENTRY_MARK),
+                                    filterVars(1, freeVarsMap.at(ENTRY_MARK)),
+                                    filterVars(2, freeVarsMap.at(ENTRY_MARK)),
+                                    funName, freeVarsMap, memory));
         return smtExprs;
     }
 
@@ -187,17 +199,18 @@ vector<SMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
             singleMainInvariant(freeVarsMap, memory, ProgramSelection::Both));
     }
 
-    auto synchronizedPaths = getSynchronizedPaths(
-        pathMaps.first, pathMaps.second, freeVarsMap, memory);
-    const auto mainDecls =
+    map<int, map<int, vector<std::function<SMTRef(SMTRef)>>>>
+        synchronizedPaths = getSynchronizedPaths(
+            pathMaps.first, pathMaps.second, freeVarsMap, memory);
+    const vector<SMTRef> mainDecls =
         mainDeclarations(pathMaps.first, funName, freeVarsMap);
     declarations.insert(declarations.end(), mainDecls.begin(), mainDecls.end());
-    const auto forbiddenPaths = getForbiddenPaths(
+    const vector<SMTRef> forbiddenPaths = getForbiddenPaths(
         pathMaps, marked, freeVarsMap, offByN, funName, true, memory);
     if (offByN) {
-        const auto offByNPaths =
-            getOffByNPaths(pathMaps.first, pathMaps.second, freeVarsMap,
-                           funName, true, memory);
+        const map<int, map<int, vector<std::function<SMTRef(SMTRef)>>>>
+            offByNPaths = getOffByNPaths(pathMaps.first, pathMaps.second,
+                                         freeVarsMap, funName, true, memory);
         synchronizedPaths = mergePathFuns(synchronizedPaths, offByNPaths);
     }
     auto transposedPaths = transpose(synchronizedPaths);
@@ -205,7 +218,7 @@ vector<SMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
     for (auto &it : transposedPaths) {
         it.second.erase(it.first);
     }
-    for (auto it : synchronizedPaths) {
+    for (const auto &it : synchronizedPaths) {
         const int startIndex = it.first;
         vector<SMTRef> pathsStartingHere;
         for (auto it2 : it.second) {
