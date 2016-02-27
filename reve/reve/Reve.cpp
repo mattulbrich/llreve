@@ -360,10 +360,8 @@ int main(int argc, const char **argv) {
     for (auto funPair : makeZip(funs.get(), fams)) {
         // Main function
         if (funPair.first.first->getName() == fun) {
-            smtExprs.push_back(inInvariant(
-                rewrapMonoPair<llvm::Function *, const llvm::Function *>(
-                    funPair.first),
-                inOutInvs.first, mem, *mod1, *mod2, strings));
+            smtExprs.push_back(inInvariant(funPair.first, inOutInvs.first, mem,
+                                           *mod1, *mod2, strings));
             smtExprs.push_back(outInvariant(inOutInvs.second, mem));
             auto newSmtExprs =
                 mainAssertion(funPair.first, funPair.second, offByN,
@@ -481,13 +479,14 @@ zipFunctions(llvm::Module &mod1, llvm::Module &mod2) {
         if (Fun1.isDeclaration()) {
             continue;
         }
-        auto fun2 = mod2.getFunction(Fun1.getName());
+        llvm::Function *fun2 = mod2.getFunction(Fun1.getName());
         if (!fun2) {
             logWarning("No corresponding function for " + Fun1.getName() +
                        "\n");
             continue;
         }
-        funs.push_back(makeMonoPair(&Fun1, fun2));
+        llvm::Function *fun1 = &Fun1;
+        funs.push_back(makeMonoPair(fun1, fun2));
     }
     return ErrorOr<std::vector<MonoPair<llvm::Function *>>>(funs);
 }

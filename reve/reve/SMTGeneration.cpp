@@ -336,9 +336,8 @@ vector<SharedSMTRef> recDeclarations(PathMap pathMap, string funName,
         if (startIndex != ENTRY_MARK && !SingleInvariantFlag) {
             // ignore entry node
             MonoPair<SharedSMTRef> invariants =
-                rewrapMoveMonoPair<SMTRef, SharedSMTRef>(invariantDeclaration(
-                    startIndex, freeVarsMap.at(startIndex),
-                    ProgramSelection::Both, funName, memory));
+                invariantDeclaration(startIndex, freeVarsMap.at(startIndex),
+                                     ProgramSelection::Both, funName, memory);
             declarations.push_back(invariants.first);
             declarations.push_back(invariants.second);
         }
@@ -576,7 +575,8 @@ SharedSMTRef interleaveAssignments(
     MonoPair<vector<AssignmentCallBlock>> AssignmentCallBlocks, Memory memory) {
     SharedSMTRef clause = endClause;
     const auto splitAssignments =
-        AssignmentCallBlocks.map<SplitAssignments>(splitAssignmentsFromCalls);
+        std::move(AssignmentCallBlocks)
+            .map<SplitAssignments>(splitAssignmentsFromCalls);
     const auto assignmentBlocks1 = splitAssignments.first.assignments;
     const auto assignmentBlocks2 = splitAssignments.second.assignments;
     const auto callInfo1 = splitAssignments.first.callInfos;
@@ -839,14 +839,16 @@ SharedSMTRef inInvariant(MonoPair<const llvm::Function *> funs,
 
     assert(Args1.size() == Args2.size());
 
-    vector<SortedVar> funArgs = concat(funArgsPair.map<vector<SortedVar>>(
-        [](vector<string> args) -> vector<SortedVar> {
-            vector<SortedVar> varArgs;
-            for (auto arg : args) {
-                varArgs.push_back(SortedVar(arg, argSort(arg)));
-            }
-            return varArgs;
-        }));
+    vector<SortedVar> funArgs =
+        concat(std::move(funArgsPair)
+                   .map<vector<SortedVar>>(
+                       [](vector<string> args) -> vector<SortedVar> {
+                           vector<SortedVar> varArgs;
+                           for (auto arg : args) {
+                               varArgs.push_back(SortedVar(arg, argSort(arg)));
+                           }
+                           return varArgs;
+                       }));
     for (auto argPair : makeZip(Args1, Args2)) {
         args.push_back(makeBinOp("=", argPair.first, argPair.second));
     }

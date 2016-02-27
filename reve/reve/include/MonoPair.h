@@ -9,21 +9,42 @@ template <typename T> struct MonoPair {
     T first;
     T second;
 
-    MonoPair(T first, T second)
-        : first(std::move(first)), second(std::move(second)) {}
+    MonoPair(const T &first, const T &second) : first(first), second(second) {}
+
+    template <typename T1>
+    MonoPair(const MonoPair<T1> &p,
+             typename std::enable_if<
+                 std::is_convertible<const T1 &, T>::value>::type * = 0)
+        : first(p.first), second(p.second) {}
+
+    MonoPair(const MonoPair &p) = default;
+
+    MonoPair &operator=(const MonoPair &p) = default;
+
+    MonoPair(MonoPair &&p) = default;
+
+    MonoPair &operator=(MonoPair &&p) = default;
+
+    template <typename T1, class = typename std::enable_if<
+                               std::is_convertible<T1, T>::value>::type>
+    MonoPair(T1 &&first, T1 &&second)
+        : first(std::forward<T1>(first)), second(std::forward<T1>(second)) {}
+
+    template <typename T1>
+    MonoPair(
+        MonoPair<T1> &&p,
+        typename std::enable_if<std::is_convertible<T1, T>::value>::type * = 0)
+        : first(std::forward<T1>(p.first)), second(std::forward<T1>(p.second)) {
+    }
 
     template <typename NewT>
     MonoPair<NewT> map(std::function<NewT(T)> f) const {
-        NewT newFirst = f(first);
-        NewT newSecond = f(second);
-        return {newFirst, newSecond};
+        return {f(first), f(second)};
     }
 
     template <typename NewT>
     MonoPair<NewT> indexedMap(std::function<NewT(T, int)> f) const {
-        NewT newFirst = f(first, 1);
-        NewT newSecond = f(second, 2);
-        return {newFirst, newSecond};
+        return {f(first, 1), f(second, 2)};
     }
 
     void forEach(std::function<void(T)> f) const {
@@ -49,8 +70,23 @@ template <typename T> struct MonoPair {
     }
 };
 
-template <typename T> MonoPair<T> makeMonoPair(T first, T second) {
-    return MonoPair<T>(std::move(first), std::move(second));
+// This weird template magic is stolen from libc++
+template <class _Tp> struct __make_pair_return_impl { typedef _Tp type; };
+template <class _Tp>
+struct __make_pair_return_impl<std::reference_wrapper<_Tp>> {
+    typedef _Tp &type;
+};
+template <class _Tp> struct __make_pair_return {
+    typedef
+        typename __make_pair_return_impl<typename std::decay<_Tp>::type>::type
+            type;
+};
+
+template <typename T>
+MonoPair<typename __make_pair_return<T>::type> makeMonoPair(T &&first,
+                                                            T &&second) {
+    return MonoPair<typename __make_pair_return<T>::type>(
+        std::forward<T>(first), std::forward<T>(second));
 }
 
 template <typename A, typename B, typename C>
@@ -64,16 +100,6 @@ MonoPair<std::pair<A, B>> zip(MonoPair<A> pairA, MonoPair<B> pairB) {
     return zipWith<A, B, std::pair<A, B>>(
         pairA, pairB,
         [](A a, B b) -> std::pair<A, B> { return std::make_pair(a, b); });
-}
-
-template <typename A, typename B>
-auto rewrapMoveMonoPair(MonoPair<A> &&pair) -> MonoPair<B> {
-    return {std::forward<A>(pair.first), std::forward<A>(pair.second)};
-}
-
-template <typename A, typename B>
-auto rewrapMonoPair(MonoPair<A> pair) -> MonoPair<B> {
-    return {pair.first, pair.second};
 }
 
 template <typename A>
