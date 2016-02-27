@@ -24,9 +24,10 @@ auto singleInvariantDeclaration(
     ProgramSelection prog, std::string funName) -> MonoPair<smt::SMTRef>;
 auto mainInvariantDeclaration(int BlockIndex, std::vector<std::string> FreeVars,
                               ProgramSelection For, std::string FunName)
-    -> smt::SMTRef;
+    -> smt::SharedSMTRef;
 auto singleMainInvariant(std::map<int, std::vector<std::string>> freeVarsMap,
-                         Memory memory, ProgramSelection prog) -> smt::SMTRef;
+                         Memory memory, ProgramSelection prog)
+    -> smt::SharedSMTRef;
 auto invariantName(int Index, ProgramSelection For, std::string FunName,
                    InvariantAttr attr = InvariantAttr::NONE,
                    uint32_t VarArgs = 0) -> std::string;
@@ -36,10 +37,10 @@ auto invariantArgs(std::vector<std::string> freeVars, Memory memory,
 // maximum number of arguments required
 auto maxArgs(std::map<int, std::vector<std::string>> freeVarsMap, Memory mem,
              ProgramSelection prog, InvariantAttr attr) -> size_t;
-auto fillUpArgs(std::vector<smt::SMTRef> args,
+auto fillUpArgs(std::vector<smt::SharedSMTRef> args,
                 std::map<int, std::vector<std::string>> freeVarsMap, Memory mem,
                 ProgramSelection prog, InvariantAttr attr)
-    -> std::vector<smt::SMTRef>;
+    -> std::vector<smt::SharedSMTRef>;
 auto fillUpArgs(std::vector<std::string> args,
                 std::map<int, std::vector<std::string>> freeVarsMap, Memory mem,
                 ProgramSelection prog, InvariantAttr attr)

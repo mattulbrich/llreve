@@ -7,7 +7,7 @@
 
 class Condition {
   public:
-    virtual smt::SMTRef toSmt() const = 0;
+    virtual std::unique_ptr<const smt::SMTExpr> toSmt() const = 0;
     virtual ~Condition();
 };
 
@@ -33,7 +33,7 @@ class BooleanCondition : public Condition {
         : Cond(std::move(Cond)), True(std::move(True)) {}
     const llvm::Value *const Cond;
     const bool True;
-    smt::SMTRef toSmt() const override;
+    std::unique_ptr<const smt::SMTExpr> toSmt() const override;
 };
 
 class SwitchCondition : public Condition {
@@ -42,7 +42,7 @@ class SwitchCondition : public Condition {
         : Cond(std::move(Cond)), Val(std::move(Val)) {}
     const llvm::Value *const Cond;
     const int64_t Val;
-    smt::SMTRef toSmt() const override;
+    std::unique_ptr<const smt::SMTExpr> toSmt() const override;
 };
 
 class SwitchDefault : public Condition {
@@ -51,7 +51,7 @@ class SwitchDefault : public Condition {
         : Cond(std::move(Cond)), Vals(std::move(Vals)) {}
     const llvm::Value *const Cond;
     const std::vector<int64_t> Vals;
-    smt::SMTRef toSmt() const override;
+    std::unique_ptr<const smt::SMTExpr> toSmt() const override;
 };
 
 using Path_ = std::vector<Edge>;

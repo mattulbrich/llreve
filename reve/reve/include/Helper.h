@@ -51,10 +51,10 @@ auto logWarningData_(Str message, A &el, const char *file, int line) -> void {
 }
 
 auto instrNameOrVal(const llvm::Value *val, const llvm::Type *ty)
-    -> smt::SMTRef;
+    -> std::unique_ptr<const smt::SMTExpr>;
 auto typeSize(llvm::Type *ty, const llvm::DataLayout &layout) -> int;
-template <typename T> smt::SMTRef resolveGEP(T &gep) {
-    std::vector<smt::SMTRef> args;
+template <typename T> std::unique_ptr<const smt::SMTExpr> resolveGEP(T &gep) {
+    std::vector<smt::SharedSMTRef> args;
     args.push_back(instrNameOrVal(gep.getPointerOperand(),
                                   gep.getPointerOperand()->getType()));
     const auto type = gep.getSourceElementType();
@@ -80,11 +80,11 @@ template <typename T> smt::SMTRef resolveGEP(T &gep) {
             args.push_back(instrNameOrVal(*ix, (*ix)->getType()));
         } else {
             args.push_back(
-                smt::makeBinOp("*", smt::name(std::to_string(size)),
-                               instrNameOrVal(*ix, (*ix)->getType())));
+                smt::makeBinOp("*", smt::stringExpr(std::to_string(size)),
+                                     instrNameOrVal(*ix, (*ix)->getType())));
         }
     }
-    return std::make_shared<smt::Op>("+", args);
+    return llvm::make_unique<smt::Op>("+", args);
 }
 
 template <typename Key, typename Val>

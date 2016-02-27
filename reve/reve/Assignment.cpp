@@ -10,11 +10,15 @@
 
 using std::vector;
 using std::make_shared;
+using std::shared_ptr;
+using std::unique_ptr;
 using llvm::Instruction;
 using llvm::CmpInst;
 using smt::Assignment;
-using smt::name;
+using smt::stringExpr;
+using smt::SharedSMTRef;
 using smt::SMTRef;
+using smt::SMTExpr;
 using smt::Op;
 using std::string;
 
@@ -49,17 +53,19 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
                                        defs.end());
                 } else {
                     if (heap & HEAP_MASK) {
-                        definitions.push_back(DefOrCallInfo(makeAssignment(
-                            "HEAP$" + std::to_string(progIndex),
-                            name("HEAP$" + std::to_string(progIndex)))));
+                        definitions.push_back(DefOrCallInfo(
+                            shared_ptr<const Assignment>(makeAssignment(
+                                "HEAP$" + std::to_string(progIndex),
+                                stringExpr("HEAP$" +
+                                           std::to_string(progIndex))))));
                     }
                     definitions.push_back(DefOrCallInfo(
                         toCallInfo(CallInst->getName(), prog, *CallInst)));
                     if (heap & HEAP_MASK) {
                         definitions.push_back(DefOrCallInfo(makeAssignment(
                             "HEAP$" + std::to_string(progIndex),
-                            name("HEAP$" + std::to_string(progIndex) +
-                                 "_res"))));
+                            stringExpr("HEAP$" + std::to_string(progIndex) +
+                                       "_res"))));
                     }
                 }
             } else {
@@ -71,7 +77,7 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
     if (const auto retInst =
             llvm::dyn_cast<llvm::ReturnInst>(BB.getTerminator())) {
         // TODO (moritz): use a more clever approach for void functions
-        auto retName = name("0");
+        SharedSMTRef retName = stringExpr("0");
         if (retInst->getReturnValue() != nullptr) {
             retName =
                 instrNameOrVal(retInst->getReturnValue(), retInst->getType());
@@ -79,18 +85,18 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
         definitions.push_back(DefOrCallInfo(
             makeAssignment("result$" + std::to_string(progIndex), retName)));
         if (heap & HEAP_MASK) {
-            definitions.push_back(DefOrCallInfo(
-                makeAssignment("HEAP$" + std::to_string(progIndex) + "_res",
-                               name("HEAP$" + std::to_string(progIndex)))));
+            definitions.push_back(DefOrCallInfo(makeAssignment(
+                "HEAP$" + std::to_string(progIndex) + "_res",
+                stringExpr("HEAP$" + std::to_string(progIndex)))));
         }
     }
     return definitions;
 }
 
 /// Convert a single instruction to an assignment
-std::shared_ptr<Assignment> instrAssignment(const llvm::Instruction &Instr,
-                                            const llvm::BasicBlock *prevBb,
-                                            Program prog) {
+std::unique_ptr<const Assignment>
+instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
+                Program prog) {
     const int progIndex = programIndex(prog);
     if (const auto BinOp = llvm::dyn_cast<llvm::BinaryOperator>(&Instr)) {
         if (NoByteHeapFlag && BinOp->getOpcode() == Instruction::SDiv) {
@@ -137,13 +143,13 @@ std::shared_ptr<Assignment> instrAssignment(const llvm::Instruction &Instr,
     }
     if (const auto cmpInst = llvm::dyn_cast<llvm::CmpInst>(&Instr)) {
         auto fun = predicateFun(*cmpInst);
-        const auto cmp =
+        SMTRef cmp =
             makeBinOp(predicateName(cmpInst->getPredicate()),
                       fun(instrNameOrVal(cmpInst->getOperand(0),
                                          cmpInst->getOperand(0)->getType())),
                       fun(instrNameOrVal(cmpInst->getOperand(1),
                                          cmpInst->getOperand(0)->getType())));
-        return makeAssignment(cmpInst->getName(), cmp);
+        return makeAssignment(cmpInst->getName(), std::move(cmp));
     }
     if (const auto phiInst = llvm::dyn_cast<llvm::PHINode>(&Instr)) {
         const auto Val = phiInst->getIncomingValueForBlock(prevBb);
@@ -155,7 +161,7 @@ std::shared_ptr<Assignment> instrAssignment(const llvm::Instruction &Instr,
         const auto cond = selectInst->getCondition();
         const auto trueVal = selectInst->getTrueValue();
         const auto falseVal = selectInst->getFalseValue();
-        const vector<SMTRef> args = {
+        const vector<SharedSMTRef> args = {
             instrNameOrVal(cond, cond->getType()),
             instrNameOrVal(trueVal, trueVal->getType()),
             instrNameOrVal(falseVal, falseVal->getType())};
@@ -175,32 +181,33 @@ std::shared_ptr<Assignment> instrAssignment(const llvm::Instruction &Instr,
     if (const auto loadInst = llvm::dyn_cast<llvm::LoadInst>(&Instr)) {
         SMTRef pointer = instrNameOrVal(loadInst->getOperand(0),
                                         loadInst->getOperand(0)->getType());
-        const auto load = makeBinOp(
-            "select", name("HEAP$" + std::to_string(progIndex)), pointer);
-        return makeAssignment(loadInst->getName(), load);
+        SMTRef load =
+            makeBinOp("select", stringExpr("HEAP$" + std::to_string(progIndex)),
+                      std::move(pointer));
+        return makeAssignment(loadInst->getName(), std::move(load));
     }
     if (const auto storeInst = llvm::dyn_cast<llvm::StoreInst>(&Instr)) {
         string heap = "HEAP$" + std::to_string(progIndex);
-        const auto val =
+        SharedSMTRef val =
             instrNameOrVal(storeInst->getValueOperand(),
                            storeInst->getValueOperand()->getType());
-        const auto pointer =
+        SharedSMTRef pointer =
             instrNameOrVal(storeInst->getPointerOperand(),
                            storeInst->getPointerOperand()->getType());
-        const std::vector<SMTRef> args = {name(heap), pointer, val};
+        const std::vector<SharedSMTRef> args = {stringExpr(heap), pointer, val};
         const auto store = make_shared<Op>("store", args);
         return makeAssignment("HEAP$" + std::to_string(progIndex), store);
     }
     if (const auto truncInst = llvm::dyn_cast<llvm::TruncInst>(&Instr)) {
-        const auto val = instrNameOrVal(truncInst->getOperand(0),
-                                        truncInst->getOperand(0)->getType());
+        SharedSMTRef val = instrNameOrVal(truncInst->getOperand(0),
+                                          truncInst->getOperand(0)->getType());
         return makeAssignment(truncInst->getName(), val);
     }
     const llvm::Instruction *ext = nullptr;
     if ((ext = llvm::dyn_cast<llvm::ZExtInst>(&Instr)) ||
         (ext = llvm::dyn_cast<llvm::SExtInst>(&Instr))) {
         const auto operand = ext->getOperand(0);
-        const auto val = instrNameOrVal(operand, operand->getType());
+        SharedSMTRef val = instrNameOrVal(operand, operand->getType());
         const auto retTy = ext->getType();
         if (retTy->isIntegerTy() && retTy->getIntegerBitWidth() > 1 &&
             operand->getType()->isIntegerTy(1)) {
@@ -208,30 +215,30 @@ std::shared_ptr<Assignment> instrAssignment(const llvm::Instruction &Instr,
             // (1bit
             // integer) to something bigger it needs to be an explicit
             // conversion
-            std::vector<SMTRef> args;
+            std::vector<SharedSMTRef> args;
             args.push_back(val);
-            args.push_back(name("1"));
-            args.push_back(name("0"));
+            args.push_back(stringExpr("1"));
+            args.push_back(stringExpr("0"));
             return makeAssignment(ext->getName(), make_shared<Op>("ite", args));
         } else {
             return makeAssignment(ext->getName(), val);
         }
     }
     if (const auto bitCast = llvm::dyn_cast<llvm::CastInst>(&Instr)) {
-        const auto val = instrNameOrVal(bitCast->getOperand(0),
-                                        bitCast->getOperand(0)->getType());
+        SharedSMTRef val = instrNameOrVal(bitCast->getOperand(0),
+                                          bitCast->getOperand(0)->getType());
         return makeAssignment(bitCast->getName(), val);
     }
     if (const auto allocaInst = llvm::dyn_cast<llvm::AllocaInst>(&Instr)) {
         return makeAssignment(
             allocaInst->getName(),
-            name(llvm::cast<llvm::MDString>(
-                     allocaInst->getMetadata("reve.stack_pointer")
-                         ->getOperand(0))
-                     ->getString()));
+            stringExpr(llvm::cast<llvm::MDString>(
+                           allocaInst->getMetadata("reve.stack_pointer")
+                               ->getOperand(0))
+                           ->getString()));
     }
     logErrorData("Couldn’t convert instruction to def\n", Instr);
-    return makeAssignment("UNKNOWN INSTRUCTION", name("UNKNOWN ARGS"));
+    return makeAssignment("UNKNOWN INSTRUCTION", stringExpr("UNKNOWN ARGS"));
 }
 
 /// Convert an LLVM predicate to an SMT predicate
@@ -262,7 +269,7 @@ string predicateName(llvm::CmpInst::Predicate pred) {
 std::function<SMTRef(SMTRef)> predicateFun(const llvm::CmpInst::CmpInst &cmp) {
     if (cmp.isUnsigned() && !EverythingSignedFlag) {
         return [](SMTRef everythingSigned) {
-            return makeUnaryOp("abs", everythingSigned);
+            return makeUnaryOp("abs", std::move(everythingSigned));
         };
     }
     return [](SMTRef everythingSigned) { return everythingSigned; };
@@ -315,15 +322,15 @@ combineOp(const llvm::BinaryOperator &Op) {
                 static_cast<uint64_t>(pow(2, constInt->getZExtValue()) + 0.5);
             return
                 [divisor](string opName, SMTRef firstArg, SMTRef /*unused*/) {
-                    return makeBinOp(opName, firstArg,
-                                     name(std::to_string(divisor)));
+                    return makeBinOp(opName, std::move(firstArg),
+                                     stringExpr(std::to_string(divisor)));
                 };
         } else {
             logErrorData("Only shifts by a constant are supported\n", Op);
         }
     }
     return [](string opName, SMTRef firstArg, SMTRef secondArg) {
-        return makeBinOp(opName, firstArg, secondArg);
+        return makeBinOp(opName, std::move(firstArg), std::move(secondArg));
     };
 }
 
@@ -346,10 +353,10 @@ vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *callInst,
             llvm::dyn_cast<llvm::StructType>(ty1->getElementType());
         if (StructTy0 && StructTy1) {
             assert(StructTy0->isLayoutIdentical(StructTy1));
-            const SMTRef basePointerDest =
+            SharedSMTRef basePointerDest =
                 instrNameOrVal(callInst->getArgOperand(0),
                                callInst->getArgOperand(0)->getType());
-            const SMTRef basePointerSrc =
+            SharedSMTRef basePointerSrc =
                 instrNameOrVal(callInst->getArgOperand(1),
                                callInst->getArgOperand(1)->getType());
             string heapNameSelect = "HEAP$" + std::to_string(program);
@@ -362,21 +369,22 @@ vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *callInst,
             }
             int i = 0;
             for (const auto elTy : StructTy0->elements()) {
-                const SMTRef heapSelect = name(heapNameSelect);
-                const SMTRef heapStore = name(heapNameStore);
+                SharedSMTRef heapSelect = stringExpr(heapNameSelect);
+                SharedSMTRef heapStore = stringExpr(heapNameStore);
                 for (int j = 0;
                      j < typeSize(elTy, callInst->getModule()->getDataLayout());
                      ++j) {
-                    const SMTRef select =
+                    SMTRef select =
                         makeBinOp("select", heapSelect,
                                   makeBinOp("+", basePointerSrc,
-                                            name(std::to_string(i))));
-                    const vector<SMTRef> args = {
+                                            stringExpr(std::to_string(i))));
+                    const vector<SharedSMTRef> args = {
                         heapStore, makeBinOp("+", basePointerDest,
-                                             name(std::to_string(i))),
-                        select};
-                    const SMTRef store = make_shared<Op>("store", args);
-                    definitions.push_back(makeAssignment(heapNameStore, store));
+                                             stringExpr(std::to_string(i))),
+                        std::move(select)};
+                    definitions.push_back(
+                        shared_ptr<const Assignment>(makeAssignment(
+                            heapNameStore, make_shared<Op>("store", args))));
                     ++i;
                 }
             }
@@ -395,7 +403,7 @@ vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *callInst,
 
 std::shared_ptr<CallInfo> toCallInfo(string assignedTo, Program prog,
                                      const llvm::CallInst &callInst) {
-    vector<SMTRef> args;
+    vector<SharedSMTRef> args;
     if (assignedTo.empty()) {
         assignedTo = "res" + std::to_string(programIndex(prog));
     }

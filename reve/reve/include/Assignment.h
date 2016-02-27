@@ -12,11 +12,11 @@
 struct CallInfo {
     std::string assignedTo;
     std::string callName;
-    std::vector<smt::SMTRef> args;
+    std::vector<smt::SharedSMTRef> args;
     bool externFun;
     const llvm::Function &fun;
     CallInfo(std::string assignedTo, std::string callName,
-             std::vector<smt::SMTRef> args, bool externFun,
+             std::vector<smt::SharedSMTRef> args, bool externFun,
              const llvm::Function &fun)
         : assignedTo(assignedTo), callName(callName), args(args),
           externFun(externFun), fun(fun) {}
@@ -38,10 +38,10 @@ struct CallInfo {
 enum class DefOrCallInfoTag { Call, Def };
 
 struct DefOrCallInfo {
-    std::shared_ptr<smt::Assignment> definition;
+    std::shared_ptr<const smt::Assignment> definition;
     std::shared_ptr<CallInfo> callInfo;
     enum DefOrCallInfoTag tag;
-    DefOrCallInfo(std::shared_ptr<smt::Assignment> definition)
+    DefOrCallInfo(std::shared_ptr<const smt::Assignment> definition)
         : definition(definition), callInfo(nullptr),
           tag(DefOrCallInfoTag::Def) {}
     DefOrCallInfo(std::shared_ptr<struct CallInfo> callInfo)
@@ -54,7 +54,7 @@ auto blockAssignments(const llvm::BasicBlock &bb,
                       Program prog, Memory heap) -> std::vector<DefOrCallInfo>;
 auto instrAssignment(const llvm::Instruction &instr,
                      const llvm::BasicBlock *prevBb, Program prog)
-    -> std::shared_ptr<smt::Assignment>;
+    -> std::unique_ptr<const smt::Assignment>;
 auto predicateName(const llvm::CmpInst::Predicate pred) -> std::string;
 auto predicateFun(const llvm::CmpInst::CmpInst &pred)
     -> std::function<smt::SMTRef(smt::SMTRef)>;

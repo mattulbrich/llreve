@@ -33,20 +33,20 @@ class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
     virtual std::shared_ptr<const SMTExpr> mergeImplications(
         std::vector<std::shared_ptr<const SMTExpr>> conditions) const;
     virtual std::shared_ptr<const SMTExpr> instantiateArrays() const;
-    virtual std::shared_ptr<const HeapInfo> heapInfo() const;
+    virtual std::unique_ptr<const HeapInfo> heapInfo() const;
     /// This is for the case when we are in the negative position of an
     /// implication
-    // virtual std::shared_ptr<const SMTExpr> properHornNegative() = 0;
     virtual ~SMTExpr() = default;
     SMTExpr(const SMTExpr & /*unused*/) = default;
     SMTExpr &operator=(SMTExpr &) = delete;
     SMTExpr() = default;
 };
 
-using SMTRef = std::shared_ptr<const SMTExpr>;
-using Assignment = std::pair<std::string, SMTRef>;
-auto makeAssignment(std::string name, SMTRef val)
-    -> std::shared_ptr<Assignment>;
+using SharedSMTRef = std::shared_ptr<const SMTExpr>;
+using SMTRef = std::unique_ptr<const SMTExpr>;
+using Assignment = std::pair<std::string, SharedSMTRef>;
+auto makeAssignment(std::string name, SharedSMTRef val)
+    -> std::unique_ptr<const Assignment>;
 
 class SetLogic : public SMTExpr {
   public:
@@ -57,13 +57,14 @@ class SetLogic : public SMTExpr {
 
 class Assert : public SMTExpr {
   public:
-    explicit Assert(SMTRef expr) : expr(std::move(expr)) {}
-    SMTRef expr;
+    explicit Assert(SharedSMTRef expr) : expr(std::move(expr)) {}
+    SharedSMTRef expr;
     SExprRef toSExpr() const override;
     std::set<std::string> uses() const override;
-    SMTRef compressLets(std::vector<Assignment> defs) const override;
-    SMTRef mergeImplications(std::vector<SMTRef> conditions) const override;
-    SMTRef instantiateArrays() const override;
+    SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
+    SharedSMTRef
+    mergeImplications(std::vector<SharedSMTRef> conditions) const override;
+    SharedSMTRef instantiateArrays() const override;
 };
 
 class SortedVar : public SMTExpr {
@@ -74,7 +75,7 @@ class SortedVar : public SMTExpr {
     std::string type;
     SExprRef toSExpr() const override;
     std::set<std::string> uses() const override;
-    SMTRef compressLets(std::vector<Assignment> defs) const override;
+    SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
     SortedVar &operator=(const SortedVar other) {
         name = other.name;
         type = other.type;
@@ -85,39 +86,41 @@ class SortedVar : public SMTExpr {
 
 class Forall : public SMTExpr {
   public:
-    Forall(std::vector<SortedVar> vars, SMTRef expr)
+    Forall(std::vector<SortedVar> vars, SharedSMTRef expr)
         : vars(std::move(vars)), expr(std::move(expr)) {}
     SExprRef toSExpr() const override;
     std::vector<SortedVar> vars;
-    SMTRef expr;
+    SharedSMTRef expr;
     std::set<std::string> uses() const override;
-    SMTRef compressLets(std::vector<Assignment> defs) const override;
-    SMTRef instantiateArrays() const override;
+    SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
+    SharedSMTRef instantiateArrays() const override;
 };
 
 class CheckSat : public SMTExpr {
   public:
     SExprRef toSExpr() const override;
-    SMTRef compressLets(std::vector<Assignment> defs) const override;
+    SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
 };
 
 class GetModel : public SMTExpr {
   public:
     SExprRef toSExpr() const override;
-    SMTRef compressLets(std::vector<Assignment> defs) const override;
+    SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
 };
 
 class Let : public SMTExpr {
   public:
     SExprRef toSExpr() const override;
     std::vector<Assignment> defs;
-    SMTRef expr;
-    Let(std::vector<Assignment> defs, SMTRef expr)
+    SharedSMTRef expr;
+    Let(std::vector<Assignment> defs, SharedSMTRef expr)
         : defs(std::move(defs)), expr(std::move(expr)) {}
     std::set<std::string> uses() const override;
-    SMTRef compressLets(std::vector<Assignment> passedDefs) const override;
-    SMTRef mergeImplications(std::vector<SMTRef> conditions) const override;
-    SMTRef instantiateArrays() const override;
+    SharedSMTRef
+    compressLets(std::vector<Assignment> passedDefs) const override;
+    SharedSMTRef
+    mergeImplications(std::vector<SharedSMTRef> conditions) const override;
+    SharedSMTRef instantiateArrays() const override;
 };
 
 template <typename T> class Primitive : public SMTExpr {
@@ -132,27 +135,28 @@ template <typename T> class Primitive : public SMTExpr {
     std::set<std::string> uses() const override {
         return std::set<std::string>();
     }
-    SMTRef compressLets(std::vector<Assignment> defs) const override;
-    std::shared_ptr<const HeapInfo> heapInfo() const override {
+    SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
+    std::unique_ptr<const HeapInfo> heapInfo() const override {
         return nullptr;
     }
 };
 
 class Op : public SMTExpr {
   public:
-    Op(std::string opName, std::vector<SMTRef> args)
+    Op(std::string opName, std::vector<SharedSMTRef> args)
         : opName(std::move(opName)), args(std::move(args)), instantiate(true) {}
-    Op(std::string opName, std::vector<SMTRef> args, bool instantiate)
+    Op(std::string opName, std::vector<SharedSMTRef> args, bool instantiate)
         : opName(std::move(opName)), args(std::move(args)),
           instantiate(instantiate) {}
     std::string opName;
-    std::vector<SMTRef> args;
+    std::vector<SharedSMTRef> args;
     bool instantiate;
     SExprRef toSExpr() const override;
     std::set<std::string> uses() const override;
-    SMTRef compressLets(std::vector<Assignment> defs) const override;
-    SMTRef mergeImplications(std::vector<SMTRef> conditions) const override;
-    SMTRef instantiateArrays() const override;
+    SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
+    SharedSMTRef
+    mergeImplications(std::vector<SharedSMTRef> conditions) const override;
+    SharedSMTRef instantiateArrays() const override;
 };
 
 class Query : public SMTExpr {
@@ -163,13 +167,15 @@ class Query : public SMTExpr {
 };
 
 auto makeBinOp(std::string opName, std::string arg1, std::string arg2)
-    -> std::shared_ptr<Op>;
-auto makeBinOp(std::string opName, SMTRef arg1, SMTRef arg2)
-    -> std::shared_ptr<Op>;
-auto makeUnaryOp(std::string opName, std::string arg) -> std::shared_ptr<Op>;
-auto makeUnaryOp(std::string opName, SMTRef arg) -> std::shared_ptr<Op>;
-auto name(std::string name) -> SMTRef;
-auto makeOp(std::string opName, std::vector<std::string> args) -> SMTRef;
+    -> std::unique_ptr<Op>;
+auto makeBinOp(std::string opName, SharedSMTRef arg1, SharedSMTRef arg2)
+    -> std::unique_ptr<Op>;
+auto makeUnaryOp(std::string opName, std::string arg) -> std::unique_ptr<Op>;
+auto makeUnaryOp(std::string opName, SharedSMTRef arg) -> std::unique_ptr<Op>;
+auto stringExpr(std::string name)
+    -> std::unique_ptr<const Primitive<std::string>>;
+auto makeOp(std::string opName, std::vector<std::string> args)
+    -> std::unique_ptr<const Op>;
 
 class FunDecl : public SMTExpr {
   public:
@@ -181,21 +187,21 @@ class FunDecl : public SMTExpr {
     std::vector<std::string> inTypes;
     std::string outType;
     SExprRef toSExpr() const override;
-    SMTRef instantiateArrays() const override;
+    SharedSMTRef instantiateArrays() const override;
 };
 
 class FunDef : public SMTExpr {
   public:
     FunDef(std::string funName, std::vector<SortedVar> args,
-           std::string outType, SMTRef body)
+           std::string outType, SharedSMTRef body)
         : funName(std::move(funName)), args(std::move(args)),
           outType(std::move(outType)), body(std::move(body)) {}
     std::string funName;
     std::vector<SortedVar> args;
     std::string outType;
-    SMTRef body;
+    SharedSMTRef body;
     SExprRef toSExpr() const override;
-    SMTRef instantiateArrays() const override;
+    SharedSMTRef instantiateArrays() const override;
 };
 
 class Comment : public SMTExpr {
@@ -214,5 +220,6 @@ class VarDecl : public SMTExpr {
     SExprRef toSExpr() const override;
 };
 
-auto nestLets(SMTRef clause, std::vector<Assignment> defs) -> SMTRef;
+auto nestLets(SharedSMTRef clause, std::vector<Assignment> defs)
+    -> SharedSMTRef;
 }

@@ -6,8 +6,10 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Operator.h"
 
+using smt::SharedSMTRef;
 using smt::SMTRef;
-using smt::name;
+using smt::stringExpr;
+using std::unique_ptr;
 using std::string;
 
 /// Get the name of the instruction or a string representation of the value if
@@ -16,16 +18,16 @@ SMTRef instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) {
     if (const auto constInt = llvm::dyn_cast<llvm::ConstantInt>(val)) {
         const auto apInt = constInt->getValue();
         if (apInt.isIntN(1) && ty->isIntegerTy(1)) {
-            return name(apInt.getBoolValue() ? "true" : "false");
+            return stringExpr(apInt.getBoolValue() ? "true" : "false");
         }
         if (apInt.isNegative()) {
-            return makeUnaryOp(
-                "-", name(apInt.toString(10, true).substr(1, string::npos)));
+            return makeUnaryOp("-", stringExpr(apInt.toString(10, true).substr(
+                                        1, string::npos)));
         }
-        return name(apInt.toString(10, true));
+        return stringExpr(apInt.toString(10, true));
     }
     if (llvm::isa<llvm::ConstantPointerNull>(val)) {
-        return name("0");
+        return stringExpr("0");
     }
     if (const auto gep = llvm::dyn_cast<llvm::GEPOperator>(val)) {
         if (!llvm::isa<llvm::Instruction>(val)) {
@@ -40,13 +42,13 @@ SMTRef instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) {
         }
     }
     if (llvm::isa<llvm::GlobalValue>(val)) {
-        return name(val->getName());
+        return stringExpr(val->getName());
     }
     if (val->getName().empty()) {
         logErrorData("Unnamed variable\n", *val);
         exit(1);
     }
-    return name(val->getName());
+    return stringExpr(val->getName());
 }
 
 int typeSize(llvm::Type *Ty, const llvm::DataLayout &layout) {

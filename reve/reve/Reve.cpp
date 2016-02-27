@@ -55,8 +55,8 @@ using llvm::Instruction;
 using llvm::IntrusiveRefCntPtr;
 
 using smt::SortedVar;
-using smt::SMTRef;
-using smt::name;
+using smt::SharedSMTRef;
+using smt::stringExpr;
 using smt::SetLogic;
 using smt::CheckSat;
 using smt::Query;
@@ -257,9 +257,10 @@ getCodeGenAction(const ArgStringList &ccArgs, clang::DiagnosticsEngine &diags) {
     return act;
 }
 
-MonoPair<SMTRef> parseInOutInvs(std::string fileName1, std::string fileName2) {
-    SMTRef in = nullptr;
-    SMTRef out = nullptr;
+MonoPair<SharedSMTRef> parseInOutInvs(std::string fileName1,
+                                      std::string fileName2) {
+    SharedSMTRef in = nullptr;
+    SharedSMTRef out = nullptr;
     std::ifstream fileStream1(fileName1);
     std::string fileString1((std::istreambuf_iterator<char>(fileStream1)),
                             std::istreambuf_iterator<char>());
@@ -273,7 +274,7 @@ MonoPair<SMTRef> parseInOutInvs(std::string fileName1, std::string fileName2) {
     return makeMonoPair(in, out);
 }
 
-void processFile(std::string file, SMTRef &in, SMTRef &out) {
+void processFile(std::string file, SharedSMTRef &in, SharedSMTRef &out) {
     std::regex relinRegex(
         "/\\*@\\s*rel_in\\s*(\\w*)\\s*\\(([\\s\\S]*?)\\)\\s*@\\*/",
         std::regex::ECMAScript);
@@ -283,11 +284,11 @@ void processFile(std::string file, SMTRef &in, SMTRef &out) {
     std::smatch match;
     if (std::regex_search(file, match, relinRegex) && in == nullptr) {
         std::string matchStr = match[2];
-        in = name("(" + matchStr + ")");
+        in = stringExpr("(" + matchStr + ")");
     }
     if (std::regex_search(file, match, reloutRegex) && out == nullptr) {
         std::string matchStr = match[2];
-        out = name("(" + matchStr + ")");
+        out = stringExpr("(" + matchStr + ")");
     }
 }
 
@@ -317,14 +318,14 @@ int main(int argc, const char **argv) {
         return 1;
     }
 
-    std::vector<SMTRef> declarations;
+    std::vector<SharedSMTRef> declarations;
     if (MuZFlag) {
         vector<string> args;
         declarations.push_back(
             make_shared<smt::FunDecl>("END_QUERY", args, "Bool"));
     }
-    std::vector<SMTRef> assertions;
-    std::vector<SMTRef> smtExprs;
+    std::vector<SharedSMTRef> assertions;
+    std::vector<SharedSMTRef> smtExprs;
     if (!MuZFlag) {
         smtExprs.push_back(std::make_shared<SetLogic>("HORN"));
     }
@@ -344,7 +345,7 @@ int main(int argc, const char **argv) {
         mem |= STACK_MASK;
     }
 
-    MonoPair<SMTRef> inOutInvs = parseInOutInvs(fileName1, fileName2);
+    MonoPair<SharedSMTRef> inOutInvs = parseInOutInvs(fileName1, fileName2);
 
     auto funCondMap = collectFunConds();
 
@@ -492,7 +493,7 @@ zipFunctions(llvm::Module &mod1, llvm::Module &mod2) {
 }
 
 void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
-                        std::vector<SMTRef> &declarations, Memory mem,
+                        std::vector<SharedSMTRef> &declarations, Memory mem,
                         std::multimap<string, string> funCondMap) {
     for (auto &fun1 : mod1) {
         if (fun1.isDeclaration() && !fun1.isIntrinsic()) {
@@ -532,22 +533,22 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                         args.push_back(
                             SortedVar("HEAP$2_res", "(Array Int Int)"));
                     }
-                    SMTRef body = makeBinOp("=", "res1", "res2");
+                    SharedSMTRef body = makeBinOp("=", "res1", "res2");
                     if (mem & HEAP_MASK) {
-                        SMTRef heapOutEqual =
+                        SharedSMTRef heapOutEqual =
                             makeBinOp("=", "HEAP$1_res", "HEAP$2_res");
                         body = makeBinOp("and", body, heapOutEqual);
                     }
-                    std::vector<SMTRef> equalOut;
+                    std::vector<SharedSMTRef> equalOut;
                     auto range = funCondMap.equal_range(fun1.getName());
                     for (auto i = range.first; i != range.second; ++i) {
-                        equalOut.push_back(name(i->second));
+                        equalOut.push_back(stringExpr(i->second));
                     }
                     if (!equalOut.empty()) {
                         equalOut.push_back(body);
                         body = make_shared<Op>("and", equalOut);
                     }
-                    std::vector<SMTRef> equal;
+                    std::vector<SharedSMTRef> equal;
                     for (auto it1 = funArgs1.begin(), it2 = funArgs2.begin();
                          it1 != funArgs1.end() && it2 != funArgs2.end();
                          ++it1) {
@@ -557,11 +558,12 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                     if (mem & HEAP_MASK) {
                         std::vector<SortedVar> forallArgs = {
                             SortedVar("i", "Int")};
-                        SMTRef heapInEqual = makeBinOp("=", "HEAP$1", "HEAP$2");
+                        SharedSMTRef heapInEqual =
+                            makeBinOp("=", "HEAP$1", "HEAP$2");
                         equal.push_back(heapInEqual);
                     }
                     body = makeBinOp("=>", make_shared<Op>("and", equal), body);
-                    SMTRef mainInv =
+                    SharedSMTRef mainInv =
                         make_shared<FunDef>(funName, args, "Bool", body);
                     declarations.push_back(mainInv);
                 }
@@ -613,9 +615,9 @@ std::vector<SortedVar> funArgs(llvm::Function &fun, std::string prefix,
     return args;
 }
 
-std::vector<SMTRef> externFunDecl(llvm::Function &fun, int program,
-                                  Memory mem) {
-    std::vector<SMTRef> decls;
+std::vector<SharedSMTRef> externFunDecl(llvm::Function &fun, int program,
+                                        Memory mem) {
+    std::vector<SharedSMTRef> decls;
     set<uint32_t> varArgs = getVarArgs(fun);
     for (auto argNum : varArgs) {
         std::vector<SortedVar> args = funArgs(fun, "arg_", argNum);
@@ -628,7 +630,7 @@ std::vector<SMTRef> externFunDecl(llvm::Function &fun, int program,
             invariantName(ENTRY_MARK, program == 1 ? ProgramSelection::First
                                                    : ProgramSelection::Second,
                           fun.getName().str(), InvariantAttr::NONE, argNum);
-        SMTRef body = name("true");
+        SharedSMTRef body = stringExpr("true");
         decls.push_back(make_shared<FunDef>(funName, args, "Bool", body));
     }
     return decls;
@@ -664,9 +666,11 @@ bool doesAccessMemory(const llvm::Module &mod) {
     return false;
 }
 
-vector<SMTRef> globalDeclarationsForMod(int globalPointer, llvm::Module &mod,
-                                        llvm::Module &modOther, int program) {
-    std::vector<SMTRef> declarations;
+vector<SharedSMTRef> globalDeclarationsForMod(int globalPointer,
+                                              llvm::Module &mod,
+                                              llvm::Module &modOther,
+                                              int program) {
+    std::vector<SharedSMTRef> declarations;
     for (auto &global1 : mod.globals()) {
         std::string globalName = global1.getName();
         if (!modOther.getNamedGlobal(globalName)) {
@@ -689,10 +693,11 @@ vector<SMTRef> globalDeclarationsForMod(int globalPointer, llvm::Module &mod,
     }
     return declarations;
 }
-std::vector<SMTRef> globalDeclarations(llvm::Module &mod1, llvm::Module &mod2) {
+std::vector<SharedSMTRef> globalDeclarations(llvm::Module &mod1,
+                                             llvm::Module &mod2) {
     // First match globals with the same name to make sure that they get the
     // same pointer, then match globals that only exist in one module
-    std::vector<SMTRef> declarations;
+    std::vector<SharedSMTRef> declarations;
     int globalPointer = 1;
     for (auto &global1 : mod1.globals()) {
         std::string globalName = global1.getName();

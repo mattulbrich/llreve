@@ -5,10 +5,13 @@
 
 using std::vector;
 using std::make_shared;
+using std::unique_ptr;
 using std::string;
 using smt::makeOp;
-using smt::name;
+using smt::stringExpr;
+using smt::SharedSMTRef;
 using smt::SMTRef;
+using smt::SMTExpr;
 using smt::SortedVar;
 using smt::Forall;
 using smt::FunDecl;
@@ -70,12 +73,12 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
     EndArgsVect = fillUpArgs(EndArgsVect, freeVarsMap, memory, SMTFor,
                              InvariantAttr::NONE);
     // The current invariant
-    auto EndInvariant =
+    SMTRef Clause =
         makeOp(invariantName(StartIndex, SMTFor, FunName), EndArgsVect);
-    auto Clause = EndInvariant;
 
     if (EndIndex != EXIT_MARK) {
-        // The result of another call is required to establish the current invariant
+        // The result of another call is required to establish the current
+        // invariant
         // so we do do that call and use the result in the current invariant
         vector<SortedVar> ForallArgs;
         for (auto ResultArg : ResultArgs) {
@@ -88,7 +91,7 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
             vector<string> usingArgs = usingArgsPre;
             usingArgsPre = fillUpArgs(usingArgsPre, freeVarsMap, memory, SMTFor,
                                       InvariantAttr::PRE);
-            const auto PreInv = makeOp(
+            SMTRef PreInv = makeOp(
                 invariantName(EndIndex, SMTFor, FunName, InvariantAttr::PRE),
                 usingArgsPre);
             usingArgs.insert(usingArgs.end(), ResultArgs.begin(),
@@ -98,12 +101,12 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
             Clause =
                 makeBinOp("=>", makeOp(invariantName(EndIndex, SMTFor, FunName),
                                        usingArgs),
-                          Clause);
+                          std::move(Clause));
             if (SMTFor == ProgramSelection::Both) {
-                Clause = makeBinOp("and", PreInv, Clause);
+                Clause = makeBinOp("and", std::move(PreInv), std::move(Clause));
             }
         }
-        Clause = make_shared<Forall>(ForallArgs, Clause);
+        Clause = llvm::make_unique<Forall>(ForallArgs, std::move(Clause));
     }
     return Clause;
 }
@@ -119,7 +122,7 @@ SMTRef mainInvariant(int EndIndex, vector<string> FreeVars, string FunName,
         return makeOp("OUT_INV", Args);
     }
     if (EndIndex == UNREACHABLE_MARK) {
-        return name("true");
+        return stringExpr("true");
     }
     return makeOp(invariantName(EndIndex, ProgramSelection::Both, FunName,
                                 InvariantAttr::MAIN),
@@ -152,9 +155,9 @@ MonoPair<SMTRef> invariantDeclaration(int BlockIndex, vector<string> FreeVars,
     }
 
     return makeMonoPair<SMTRef>(
-        std::make_shared<class FunDecl>(invariantName(BlockIndex, For, FunName),
-                                        args, "Bool"),
-        std::make_shared<class FunDecl>(
+        llvm::make_unique<FunDecl>(invariantName(BlockIndex, For, FunName),
+                                   args, "Bool"),
+        llvm::make_unique<FunDecl>(
             invariantName(BlockIndex, For, FunName, InvariantAttr::PRE),
             preArgs, "Bool"));
 }
@@ -176,8 +179,8 @@ singleInvariantDeclaration(map<int, vector<string>> freeVarsMap, Memory memory,
     const string preName = name + "_PRE";
 
     return makeMonoPair<SMTRef>(
-        std::make_shared<class FunDecl>(name, args, "Bool"),
-        std::make_shared<class FunDecl>(preName, preArgs, "Bool"));
+        llvm::make_unique<class FunDecl>(name, args, "Bool"),
+        llvm::make_unique<class FunDecl>(preName, preArgs, "Bool"));
 }
 
 size_t invariantArgs(vector<string> freeVars, Memory memory,
@@ -199,8 +202,8 @@ size_t invariantArgs(vector<string> freeVars, Memory memory,
     return numArgs;
 }
 
-SMTRef singleMainInvariant(map<int, vector<string>> freeVarsMap, Memory memory,
-                           ProgramSelection prog) {
+SharedSMTRef singleMainInvariant(map<int, vector<string>> freeVarsMap,
+                                 Memory memory, ProgramSelection prog) {
     size_t numArgs = maxArgs(freeVarsMap, memory, prog, InvariantAttr::MAIN);
     numArgs++;
     const vector<string> args(numArgs, "Int");
@@ -219,8 +222,9 @@ size_t maxArgs(map<int, vector<string>> freeVarsMap, Memory memory,
     return maxArgs;
 }
 
-SMTRef mainInvariantDeclaration(int BlockIndex, vector<string> FreeVars,
-                                ProgramSelection For, std::string FunName) {
+SharedSMTRef mainInvariantDeclaration(int BlockIndex, vector<string> FreeVars,
+                                      ProgramSelection For,
+                                      std::string FunName) {
     vector<string> Args;
     for (const string &arg : FreeVars) {
         if (std::regex_match(arg, HEAP_REGEX)) {
@@ -273,10 +277,12 @@ string invariantName(int Index, ProgramSelection For, std::string FunName,
     return Name;
 }
 
-vector<SMTRef> fillUpArgs(vector<SMTRef> args,
-                          map<int, vector<string>> freeVarsMap, Memory mem,
-                          ProgramSelection prog, InvariantAttr attr) {
-    return fillUpArgsWithFiller(name("424242"), args, freeVarsMap, mem, prog,
+vector<SharedSMTRef> fillUpArgs(vector<SharedSMTRef> args,
+                                map<int, vector<string>> freeVarsMap,
+                                Memory mem, ProgramSelection prog,
+                                InvariantAttr attr) {
+    SharedSMTRef fillConstant = stringExpr("424242");
+    return fillUpArgsWithFiller(fillConstant, args, freeVarsMap, mem, prog,
                                 attr);
 }
 

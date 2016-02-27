@@ -7,10 +7,13 @@
 #include "llvm/IR/Constants.h"
 
 using std::make_shared;
+using std::unique_ptr;
 using smt::Op;
-using smt::name;
+using smt::stringExpr;
 using std::set;
+using smt::SharedSMTRef;
 using smt::SMTRef;
+using smt::SMTExpr;
 
 char PathAnalysis::PassID;
 
@@ -160,23 +163,23 @@ llvm::BasicBlock *lastBlock(Path Path) {
 Condition::~Condition() = default;
 
 SMTRef BooleanCondition::toSmt() const {
-    SMTRef Result = instrNameOrVal(Cond, Cond->getType());
+    SMTRef result = instrNameOrVal(Cond, Cond->getType());
     if (True) {
-        return Result;
+        return result;
     }
-    return makeUnaryOp("not", Result);
+    return makeUnaryOp("not", std::move(result));
 }
 
 SMTRef SwitchCondition::toSmt() const {
     return makeBinOp("=", instrNameOrVal(Cond, Cond->getType()),
-                     name(std::to_string(Val)));
+                     stringExpr(std::to_string(Val)));
 }
 
 SMTRef SwitchDefault::toSmt() const {
-    std::vector<SMTRef> StringVals;
+    std::vector<SharedSMTRef> StringVals;
     for (auto Val : Vals) {
-        StringVals.push_back(name(std::to_string(Val)));
+        StringVals.push_back(stringExpr(std::to_string(Val)));
     }
     StringVals.push_back(instrNameOrVal(Cond, Cond->getType()));
-    return std::make_shared<Op>("distinct", StringVals);
+    return llvm::make_unique<Op>("distinct", StringVals);
 }

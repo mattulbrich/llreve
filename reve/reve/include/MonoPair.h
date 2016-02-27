@@ -67,6 +67,11 @@ MonoPair<std::pair<A, B>> zip(MonoPair<A> pairA, MonoPair<B> pairB) {
 }
 
 template <typename A, typename B>
+auto rewrapMoveMonoPair(MonoPair<A> &&pair) -> MonoPair<B> {
+    return {std::forward<A>(pair.first), std::forward<A>(pair.second)};
+}
+
+template <typename A, typename B>
 auto rewrapMonoPair(MonoPair<A> pair) -> MonoPair<B> {
     return {pair.first, pair.second};
 }
@@ -85,4 +90,10 @@ template <typename A> std::vector<A> concat(MonoPair<std::vector<A>> pair) {
             acc.insert(acc.end(), vec.begin(), vec.end());
             return acc;
         });
+}
+
+template <typename T>
+void forEach(MonoPair<T> &&pair, std::function<void(T)> f) {
+    f(std::forward<T>(pair.first));
+    f(std::forward<T>(pair.second));
 }
