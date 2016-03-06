@@ -293,10 +293,39 @@ void processFile(std::string file, SharedSMTRef &in, SharedSMTRef &out) {
 }
 
 int main(int argc, const char **argv) {
-    // The actual arguments are declared statically so we don't need
-    // to pass those in here
     llvm::cl::HideUnrelatedOptions(ReveCategory);
-    llvm::cl::ParseCommandLineOptions(argc, argv, "reve\n");
+    bool inlineOpts = false;
+    // We can’t use the option parser for this since it can only be run once and
+    // we might want to add arguments to it
+    const char *file1 = nullptr;
+    const char *file2 = nullptr;
+    for (int i = 1; i < argc; ++i) {
+        if (*argv[i] != '-') {
+            if (!file1) {
+                file1 = argv[i];
+            } else {
+                file2 = argv[i];
+            }
+        } else if (strcmp(argv[i], "--inline-opts")) {
+            inlineOpts = true;
+            break;
+        }
+    }
+    if (inlineOpts) {
+        const vector<std::string> parsedOpts = getInlineOpts(file1, file2);
+        vector<const char *> parsedOptsCStyle;
+        for (int i = 0; i < argc; ++i) {
+            parsedOptsCStyle.push_back(argv[i]);
+        }
+        for (auto opt : parsedOpts) {
+            parsedOptsCStyle.push_back(opt.c_str());
+        }
+        argc = static_cast<int>(parsedOptsCStyle.size());
+        argv = &parsedOptsCStyle[0];
+        llvm::cl::ParseCommandLineOptions(argc, argv, "reve\n");
+    } else {
+        llvm::cl::ParseCommandLineOptions(argc, argv, "reve\n");
+    }
 
     auto actPair = getModule(argv[0], fileName1, fileName2);
     const auto act1 = std::move(actPair.first);
@@ -764,4 +793,43 @@ std::multimap<string, string> collectFunCondsInFile(std::string file) {
         map.insert(make_pair(match[1], "(" + matchStr + ")"));
     }
     return map;
+}
+
+std::vector<string> getInlineOpts(const char *file1, const char *file2) {
+    std::regex optRegex("/\\*@\\s*opt\\s+(\\S+)\\s+(\\S*)\\s*@\\*/",
+                        std::regex::ECMAScript);
+    std::ifstream fileStream1(file1);
+    std::string fileString1((std::istreambuf_iterator<char>(fileStream1)),
+                            std::istreambuf_iterator<char>());
+    std::ifstream fileStream2(file2);
+    std::string fileString2((std::istreambuf_iterator<char>(fileStream2)),
+                            std::istreambuf_iterator<char>());
+    std::vector<string> args;
+    for (std::sregex_iterator
+             i = std::sregex_iterator(fileString1.begin(), fileString1.end(),
+                                      optRegex),
+             e = std::sregex_iterator();
+         i != e; ++i) {
+        std::smatch match = *i;
+        string optionName = match[1];
+        string optionVal = match[2];
+        args.push_back(optionName);
+        if (!optionVal.empty()) {
+            args.push_back(optionVal);
+        }
+    }
+    for (std::sregex_iterator
+             i = std::sregex_iterator(fileString2.begin(), fileString2.end(),
+                                      optRegex),
+             e = std::sregex_iterator();
+         i != e; ++i) {
+        std::smatch match = *i;
+        string optionName = match[1];
+        string optionVal = match[2];
+        args.push_back(optionName);
+        if (!optionVal.empty()) {
+            args.push_back(optionVal);
+        }
+    }
+    return args;
 }
