@@ -122,8 +122,7 @@ bool NestFlag;
 static llvm::cl::opt<bool, true>
     nest("nest",
          llvm::cl::desc("Nest clauses, this can sometimes help eldarica"),
-         llvm::cl::location(NestFlag),
-         llvm::cl::cat(ReveCategory));
+         llvm::cl::location(NestFlag), llvm::cl::cat(ReveCategory));
 bool NoByteHeapFlag;
 static llvm::cl::opt<bool, true> NoByteHeap(
     "no-byte-heap",
@@ -141,8 +140,7 @@ static llvm::cl::opt<bool, true>
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
-std::vector<const char *> initializeArgs(const char *exeName, string input1,
-                                         string input2) {
+std::vector<const char *> initializeArgs(const char *exeName) {
     std::vector<const char *> args;
     args.push_back(exeName); // add executable name
     args.push_back("-xc");   // force language to C
@@ -154,15 +152,8 @@ std::vector<const char *> initializeArgs(const char *exeName, string input1,
         args.push_back("-I");
         args.push_back(newInclude);
     }
-    // archlinux migrated to the new gcc api and something is completely broken
-    // so don’t use c_str here but instead allocate a new string and leak it
-    // like a boss
-    char *newInput1 = static_cast<char *>(malloc(input1.length() + 1));
-    memcpy(static_cast<void *>(newInput1), input1.data(), input1.length() + 1);
-    char *newInput2 = static_cast<char *>(malloc(input2.length() + 1));
-    memcpy(static_cast<void *>(newInput2), input2.data(), input2.length() + 1);
-    args.push_back(newInput1);       // add input file
-    args.push_back(newInput2);       // add input file
+    args.push_back(fileName1.c_str());       // add input file
+    args.push_back(fileName2.c_str());       // add input file
     args.push_back("-fsyntax-only"); // don't do more work than necessary
     return args;
 }
@@ -211,11 +202,10 @@ ErrorOr<MonoPair<ArgStringList>> getCmd(Compilation &comp,
 template <typename T> ErrorOr<T> makeErrorOr(T Arg) { return ErrorOr<T>(Arg); }
 
 /// Compile the inputs to llvm assembly and return those modules
-MonoPair<std::unique_ptr<clang::CodeGenAction>>
-getModule(const char *exeName, string input1, string input2) {
+MonoPair<std::unique_ptr<clang::CodeGenAction>> getModule(const char *exeName) {
     auto diags = initializeDiagnostics();
     auto driver = initializeDriver(*diags);
-    auto args = initializeArgs(exeName, input1, input2);
+    auto args = initializeArgs(exeName);
 
     std::unique_ptr<Compilation> comp(driver->BuildCompilation(args));
     if (!comp) {
@@ -324,7 +314,7 @@ int main(int argc, const char **argv) {
                 parsedOptsCStyle.push_back(argv[i]);
             }
         }
-        for (auto opt : parsedOpts) {
+        for (const string &opt : parsedOpts) {
             parsedOptsCStyle.push_back(opt.c_str());
         }
         argc = static_cast<int>(parsedOptsCStyle.size());
@@ -334,7 +324,7 @@ int main(int argc, const char **argv) {
         llvm::cl::ParseCommandLineOptions(argc, argv, "reve\n");
     }
 
-    auto actPair = getModule(argv[0], fileName1, fileName2);
+    auto actPair = getModule(argv[0]);
     const auto act1 = std::move(actPair.first);
     const auto act2 = std::move(actPair.second);
     if (!act1 || !act2) {
