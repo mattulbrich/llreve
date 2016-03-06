@@ -119,9 +119,10 @@ static llvm::cl::opt<bool, true> EverythingSigned(
     "signed", llvm::cl::desc("Treat all operations as signed operatons"),
     llvm::cl::location(EverythingSignedFlag), llvm::cl::cat(ReveCategory));
 bool NestFlag;
-static llvm::cl::opt<bool>
+static llvm::cl::opt<bool, true>
     nest("nest",
          llvm::cl::desc("Nest clauses, this can sometimes help eldarica"),
+         llvm::cl::location(NestFlag),
          llvm::cl::cat(ReveCategory));
 bool NoByteHeapFlag;
 static llvm::cl::opt<bool, true> NoByteHeap(
@@ -311,16 +312,15 @@ int main(int argc, const char **argv) {
             } else {
                 file2 = argv[i];
             }
-        } else if (strcmp(argv[i], "--inline-opts") == 0) {
+        } else if (strcmp(argv[i], "-inline-opts") == 0) {
             inlineOpts = true;
-            break;
         }
     }
     if (inlineOpts) {
         const vector<std::string> parsedOpts = getInlineOpts(file1, file2);
         vector<const char *> parsedOptsCStyle;
         for (int i = 0; i < argc; ++i) {
-            if (strcmp(argv[i], "--inline-opts") != 0) {
+            if (strcmp(argv[i], "-inline-opts") != 0) {
                 parsedOptsCStyle.push_back(argv[i]);
             }
         }
