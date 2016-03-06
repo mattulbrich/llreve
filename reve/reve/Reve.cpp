@@ -798,38 +798,24 @@ std::multimap<string, string> collectFunCondsInFile(std::string file) {
 std::vector<string> getInlineOpts(const char *file1, const char *file2) {
     std::regex optRegex("/\\*@\\s*opt\\s+(\\S+)\\s+(\\S*)\\s*@\\*/",
                         std::regex::ECMAScript);
-    std::ifstream fileStream1(file1);
-    std::string fileString1((std::istreambuf_iterator<char>(fileStream1)),
-                            std::istreambuf_iterator<char>());
-    std::ifstream fileStream2(file2);
-    std::string fileString2((std::istreambuf_iterator<char>(fileStream2)),
-                            std::istreambuf_iterator<char>());
     std::vector<string> args;
-    for (std::sregex_iterator
-             i = std::sregex_iterator(fileString1.begin(), fileString1.end(),
-                                      optRegex),
-             e = std::sregex_iterator();
-         i != e; ++i) {
-        std::smatch match = *i;
-        string optionName = match[1];
-        string optionVal = match[2];
-        args.push_back(optionName);
-        if (!optionVal.empty()) {
-            args.push_back(optionVal);
+    makeMonoPair(file1, file2).forEach([&args,&optRegex](const char *file) {
+        std::ifstream fileStream(file);
+        std::string fileString((std::istreambuf_iterator<char>(fileStream)),
+                               std::istreambuf_iterator<char>());
+        for (std::sregex_iterator
+                 i = std::sregex_iterator(fileString.begin(), fileString.end(),
+                                          optRegex),
+                 e = std::sregex_iterator();
+             i != e; ++i) {
+            std::smatch match = *i;
+            string optionName = match[1];
+            string optionVal = match[2];
+            args.push_back(optionName);
+            if (!optionVal.empty()) {
+                args.push_back(optionVal);
+            }
         }
-    }
-    for (std::sregex_iterator
-             i = std::sregex_iterator(fileString2.begin(), fileString2.end(),
-                                      optRegex),
-             e = std::sregex_iterator();
-         i != e; ++i) {
-        std::smatch match = *i;
-        string optionName = match[1];
-        string optionVal = match[2];
-        args.push_back(optionName);
-        if (!optionVal.empty()) {
-            args.push_back(optionVal);
-        }
-    }
+    });
     return args;
 }
