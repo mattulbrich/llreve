@@ -94,9 +94,11 @@ static llvm::cl::opt<bool>
     showMarkedCfg("show-marked-cfg",
                   llvm::cl::desc("Show cfg before mark removal"),
                   llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<bool>
-    offByN("off-by-n", llvm::cl::desc("Allow loops to be off by n iterations"),
-           llvm::cl::cat(ReveCategory));
+bool PerfectSyncFlag;
+static llvm::cl::opt<bool, true> perfectSync(
+    "perfect-sync",
+    llvm::cl::desc("Perfect synchronization, don’t allow off by n loops"),
+    llvm::cl::location(PerfectSyncFlag), llvm::cl::cat(ReveCategory));
 static llvm::cl::opt<bool>
     onlyRec("only-rec", llvm::cl::desc("Only generate recursive invariants"),
             llvm::cl::cat(ReveCategory));
@@ -116,9 +118,11 @@ bool EverythingSignedFlag;
 static llvm::cl::opt<bool, true> EverythingSigned(
     "signed", llvm::cl::desc("Treat all operations as signed operatons"),
     llvm::cl::location(EverythingSignedFlag), llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<bool> dontNest("dont-nest",
-                                    llvm::cl::desc("Don’t nest clauses"),
-                                    llvm::cl::cat(ReveCategory));
+bool NestFlag;
+static llvm::cl::opt<bool>
+    nest("nest",
+         llvm::cl::desc("Nest clauses, this can sometimes help eldarica"),
+         llvm::cl::cat(ReveCategory));
 bool NoByteHeapFlag;
 static llvm::cl::opt<bool, true> NoByteHeap(
     "no-byte-heap",
@@ -295,7 +299,8 @@ void processFile(std::string file, SharedSMTRef &in, SharedSMTRef &out) {
 int main(int argc, const char **argv) {
     llvm::cl::HideUnrelatedOptions(ReveCategory);
     bool inlineOpts = false;
-    // We can’t use the option parser for this since it can only be run once and
+    // We can’t use the option parser for this since it can only be run once
+    // (global state, fuck yeah) and
     // we might want to add arguments to it
     const char *file1 = nullptr;
     const char *file2 = nullptr;
@@ -306,7 +311,7 @@ int main(int argc, const char **argv) {
             } else {
                 file2 = argv[i];
             }
-        } else if (strcmp(argv[i], "--inline-opts")) {
+        } else if (strcmp(argv[i], "--inline-opts") == 0) {
             inlineOpts = true;
             break;
         }
@@ -315,7 +320,9 @@ int main(int argc, const char **argv) {
         const vector<std::string> parsedOpts = getInlineOpts(file1, file2);
         vector<const char *> parsedOptsCStyle;
         for (int i = 0; i < argc; ++i) {
-            parsedOptsCStyle.push_back(argv[i]);
+            if (strcmp(argv[i], "--inline-opts") != 0) {
+                parsedOptsCStyle.push_back(argv[i]);
+            }
         }
         for (auto opt : parsedOpts) {
             parsedOptsCStyle.push_back(opt.c_str());
@@ -392,9 +399,8 @@ int main(int argc, const char **argv) {
             smtExprs.push_back(inInvariant(funPair.first, inOutInvs.first, mem,
                                            *mod1, *mod2, strings));
             smtExprs.push_back(outInvariant(inOutInvs.second, mem));
-            auto newSmtExprs =
-                mainAssertion(funPair.first, funPair.second, offByN,
-                              declarations, onlyRec, mem, dontNest);
+            auto newSmtExprs = mainAssertion(funPair.first, funPair.second,
+                                             declarations, onlyRec, mem);
             assertions.insert(assertions.end(), newSmtExprs.begin(),
                               newSmtExprs.end());
         }
@@ -405,7 +411,7 @@ int main(int argc, const char **argv) {
                doesNotRecurse(*funPair.first.second)) ||
              onlyRec)) {
             auto newSmtExprs = functionAssertion(funPair.first, funPair.second,
-                                                 offByN, declarations, mem);
+                                                 declarations, mem);
             assertions.insert(assertions.end(), newSmtExprs.begin(),
                               newSmtExprs.end());
         }
@@ -799,7 +805,7 @@ std::vector<string> getInlineOpts(const char *file1, const char *file2) {
     std::regex optRegex("/\\*@\\s*opt\\s+(\\S+)\\s+(\\S*)\\s*@\\*/",
                         std::regex::ECMAScript);
     std::vector<string> args;
-    makeMonoPair(file1, file2).forEach([&args,&optRegex](const char *file) {
+    makeMonoPair(file1, file2).forEach([&args, &optRegex](const char *file) {
         std::ifstream fileStream(file);
         std::string fileString((std::istreambuf_iterator<char>(fileStream)),
                                std::istreambuf_iterator<char>());

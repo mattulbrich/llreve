@@ -47,7 +47,7 @@ the function. Each jump is modeled as a possibly recursive call.
  */
 auto functionAssertion(
     MonoPair<llvm::Function *> funs,
-    MonoPair<std::shared_ptr<llvm::FunctionAnalysisManager>> fams, bool offByN,
+    MonoPair<std::shared_ptr<llvm::FunctionAnalysisManager>> fams,
     std::vector<smt::SharedSMTRef> &declarations, Memory memory)
     -> std::vector<smt::SharedSMTRef>;
 /// Create the assertion for the passed main function.
@@ -57,9 +57,8 @@ need to contain the output parameters. While it’s not necessary to use this
 encoding it seems to perform better in some cases.
  */
 auto mainAssertion(MonoPair<llvm::Function *> funs, MonoPair<FAMRef> fams,
-                   bool offByN, std::vector<smt::SharedSMTRef> &declarations,
-                   bool onlyRec, Memory memory, bool dontNest)
-    -> std::vector<smt::SharedSMTRef>;
+                   std::vector<smt::SharedSMTRef> &declarations, bool onlyRec,
+                   Memory memory) -> std::vector<smt::SharedSMTRef>;
 /// Get all combinations of paths that have the same start and end mark.
 /**
   \return A nested map from start and end marks to a vector of paths. The paths
@@ -81,15 +80,15 @@ auto recDeclarations(PathMap pathMap, std::string funName,
     -> std::vector<smt::SharedSMTRef>;
 /// Find all paths with the same start but different end marks
 /**
-This can be relaxed when \p offByN is true. In this case if one program can only
+This is usually (when PerfectSync is false) slightly relaxed. If one program can
+only
 move away from the current block (e.g. the loop condition is no longer true) the
 other is still allowed to loop at its block.
  */
 auto getForbiddenPaths(MonoPair<PathMap> pathMaps,
                        MonoPair<BidirBlockMarkMap> marked,
-                       FreeVarsMap freeVarsMap, bool offByN,
-                       std::string funName, bool main, Memory memory)
-    -> std::vector<smt::SharedSMTRef>;
+                       FreeVarsMap freeVarsMap, std::string funName, bool main,
+                       Memory memory) -> std::vector<smt::SharedSMTRef>;
 /// Get the assertions for a single program
 auto nonmutualPaths(PathMap pathMap, std::vector<smt::SharedSMTRef> &pathExprs,
                     FreeVarsMap freeVarsMap, Program prog, std::string funName,

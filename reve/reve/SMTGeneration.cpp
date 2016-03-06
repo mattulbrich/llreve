@@ -36,7 +36,7 @@ using std::unique_ptr;
 using std::vector;
 
 vector<SharedSMTRef> functionAssertion(MonoPair<llvm::Function *> funs,
-                                       MonoPair<FAMRef> fams, bool offByN,
+                                       MonoPair<FAMRef> fams,
                                        vector<SharedSMTRef> &declarations,
                                        Memory memory) {
     const MonoPair<PathMap> pathMaps =
@@ -125,11 +125,11 @@ vector<SharedSMTRef> functionAssertion(MonoPair<llvm::Function *> funs,
                    funName, declarations, memory);
 
     const vector<SharedSMTRef> forbiddenPaths = getForbiddenPaths(
-        pathMaps, marked, freeVarsMap, offByN, funName, false, memory);
+        pathMaps, marked, freeVarsMap, funName, false, memory);
     pathExprs.insert(pathExprs.end(), forbiddenPaths.begin(),
                      forbiddenPaths.end());
 
-    if (offByN) {
+    if (!PerfectSyncFlag) {
         const map<int,
                   map<int, vector<std::function<SharedSMTRef(SharedSMTRef)>>>>
             offByNPaths = getOffByNPaths(pathMaps.first, pathMaps.second,
@@ -155,9 +155,9 @@ vector<SharedSMTRef> functionAssertion(MonoPair<llvm::Function *> funs,
 // the main function that we want to check doesn’t need the output parameters in
 // the assertions since it is never called
 vector<SharedSMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
-                                   MonoPair<FAMRef> fams, bool offByN,
+                                   MonoPair<FAMRef> fams,
                                    vector<SharedSMTRef> &declarations,
-                                   bool onlyRec, Memory memory, bool dontNest) {
+                                   bool onlyRec, Memory memory) {
     const MonoPair<PathMap> pathMaps =
         zipWith<llvm::Function *, FAMRef, PathMap>(
             funs, fams, [](llvm::Function *fun, FAMRef fam) -> PathMap {
@@ -210,9 +210,9 @@ vector<SharedSMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
     const vector<SharedSMTRef> mainDecls =
         mainDeclarations(pathMaps.first, funName, freeVarsMap);
     declarations.insert(declarations.end(), mainDecls.begin(), mainDecls.end());
-    const vector<SharedSMTRef> forbiddenPaths = getForbiddenPaths(
-        pathMaps, marked, freeVarsMap, offByN, funName, true, memory);
-    if (offByN) {
+    const vector<SharedSMTRef> forbiddenPaths =
+        getForbiddenPaths(pathMaps, marked, freeVarsMap, funName, true, memory);
+    if (!PerfectSyncFlag) {
         const map<int,
                   map<int, vector<std::function<SharedSMTRef(SharedSMTRef)>>>>
             offByNPaths = getOffByNPaths(pathMaps.first, pathMaps.second,
@@ -240,7 +240,7 @@ vector<SharedSMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
                 pathsStartingHere.push_back(pathFun(endInvariant));
             }
         }
-        if (dontNest) {
+        if (!NestFlag) {
             for (auto path : pathsStartingHere) {
                 auto clause = forallStartingAt(
                     path, freeVarsMap.at(startIndex), startIndex,
@@ -347,9 +347,8 @@ vector<SharedSMTRef> recDeclarations(PathMap pathMap, string funName,
 
 vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
                                        MonoPair<BidirBlockMarkMap> marked,
-                                       FreeVarsMap freeVarsMap, bool offByN,
-                                       string funName, bool main,
-                                       Memory memory) {
+                                       FreeVarsMap freeVarsMap, string funName,
+                                       bool main, Memory memory) {
     vector<SharedSMTRef> pathExprs;
     for (const auto &pathMapIt : pathMaps.first) {
         const int startIndex = pathMapIt.first;
@@ -371,7 +370,7 @@ vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
                                        llvm::BasicBlock *endBlock) -> set<int> {
                                         return marks.BlockToMarksMap[endBlock];
                                     });
-                            if (!offByN ||
+                            if (PerfectSyncFlag ||
                                 ((startIndex != endIndex1 && // no circles
                                   startIndex != endIndex2) &&
                                  intersection(endIndices.first,
