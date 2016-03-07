@@ -1,3 +1,4 @@
+/*@ opt -strings @*/
 #include <stddef.h>
 /*@ rel_in
 (and

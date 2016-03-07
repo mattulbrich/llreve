@@ -1,3 +1,4 @@
+/*@ opt -signed @*/
 /* glibc */
 #include <unistd.h>
 #include <stdint.h>

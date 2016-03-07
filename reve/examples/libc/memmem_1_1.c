@@ -1,3 +1,4 @@
+/*@ opt -heap @*/
 // openbsd
 /*@ rel_in
 (and

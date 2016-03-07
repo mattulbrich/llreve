@@ -28,7 +28,7 @@ solverWorker input seal mergeOutput =
     fromInput input >-> P.mapM solveSmt
                     >-> toOutput mergeOutput
 
-smtGeneratorWorker :: (MonadSafe m, MonadReader (Options, Config) m)
+smtGeneratorWorker :: (MonadSafe m, MonadReader (Options, Config) m, MonadLogger m)
                    => Output FilePath -> STM () -> m ()
 smtGeneratorWorker output seal = do
   (opts,config) <- ask

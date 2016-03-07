@@ -1,3 +1,4 @@
+/*@ opt -perfect-sync @*/
 /* dietlibc */
 #include <unistd.h>
 extern int __mark(int);

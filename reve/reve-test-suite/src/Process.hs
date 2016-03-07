@@ -15,6 +15,7 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Logger
 import           Control.Monad.Reader
 import qualified Data.Map as M
+import           Data.Maybe
 import           Data.Monoid
 import qualified Data.Text as T
 import           Options
@@ -83,7 +84,7 @@ solveEldarica eldarica smt =
        F.purely P.fold solverFold (void $ concats $ producer ^. utf8 . P.lines)
      pure (smt,solverStatus output)
 
-generateSmt :: (MonadIO m, MonadThrow m, MonadReader (Options,Config) m)
+generateSmt :: (MonadIO m, MonadThrow m, MonadReader (Options,Config) m, MonadLogger m)
             => FilePath -> m FilePath
 generateSmt path =
   do (opts,conf) <- ask
@@ -96,19 +97,20 @@ generateSmt path =
      liftIO $
        createDirectoryIfMissing True
                                 (takeDirectory smtfile)
+     let reveOpts = [file1,file2,"-o",smtfile,"-I","/usr/lib/clang/3.7.1/include"] ++
+           optionsFor (conf ^. cnfCustomArgs)
+                      smtfile
+     $logDebug $ "Running reve: " <> T.pack (show reveOpts)
      liftIO $
        safeReadProcess
          (optReve opts)
-         ([file1,file2,"-o",smtfile,"-I","/usr/lib/clang/3.7.1/include"] ++
-          optionsFor (conf ^. cnfCustomArgs)
-                     smtfile)
+          reveOpts
      pure smtfile
 
 optionsFor :: M.Map FilePath [String] -> FilePath -> [String]
 optionsFor m file =
-  case M.lookup file m of
-    Nothing -> ["-off-by-n"]
-    Just opts -> opts
+  "-inline-opts" :
+  fromMaybe [] (M.lookup file m)
 
 dropFromEnd :: Int -> [a] -> [a]
 dropFromEnd n xs = zipWith const xs (drop n xs)

@@ -1,3 +1,5 @@
+/*@ opt -signed @*/
+/*@ opt -strings @*/
 #include <stddef.h>
 extern int __mark(int);
 

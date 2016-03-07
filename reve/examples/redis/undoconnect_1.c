@@ -1,3 +1,4 @@
+/*@ opt -fun undoConnectWithMaster @*/
 #define REPL_STATE_CONNECTING 2 /* Connecting to master */
 #define AE_READABLE 1
 #define AE_WRITABLE 2
@@ -22,7 +23,6 @@ int slaveIsInHandshakeState(void) {
 }
 
 // this space is important since we use __LINE__
-
 
 
 

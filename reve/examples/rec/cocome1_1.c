@@ -1,3 +1,4 @@
+/*@ opt -only-rec @*/
 int triangle(int n) {
   int r;
   r = g(n);

@@ -1,3 +1,4 @@
+/*@ opt -perfect-sync @*/
 extern int __mark(int);
 
 int f(int n, int z) {
