@@ -1,0 +1,62 @@
+* libc
+- strcasecmp
+  - lookuptables are ridiculously slow
+- strcat
+  - unrolling
+  - not that interesting
+- strchr
+  - unrolling in dietlibc
+  - bitops in glibc
+- strcmp
+  - implementation in dietlibc depends on alignment
+- strcpy
+  - dietlibc depends on alignment
+  - openbsd calls memcpy which looks crazy
+- strdup
+  - boring, only malloc and memcpy
+- strerror
+  - no clear behavior
+- strlcat
+  - probably works, haven’t gotten around to trying it out
+- strlcpy
+  - probably works, haven’t gotten around to trying it out
+- strlen
+  - dietlibc
+    - ridiculous amount of bitops
+  - glibc
+    - unrolled
+- strncasecmp
+  - lookuptables
+- strncat
+  - unrolling
+- strncpy
+  - dietlibc & glibc call different functions
+  - openbsd inlines everything
+  - might work with inlining
+- strnlen
+  - glibc
+    - inlining & unrolling
+  - openbsd
+    - inlining
+  - dietlibc
+    - calls memchr
+  - openbsd & dietlibc might work with inlining
+- strrchr
+  - dietlibc
+    - unrolling
+  - dietlibc
+    - calls strchr
+  - glibc
+    - obvious implementation
+- strsep
+  - glibc
+    - a lot of checks and then strpbrk
+  - dietlibc & openbsd
+    - probably needs off by n in inner loop
+- strspn
+  - iirc it didn’t work, but I don’t remember why :)
+- strstr
+  - different
+- strtok_r
+  - implementations look too different (haven’t tried it :))
+  - same goes for the rest of the strto* functions
