@@ -2,17 +2,21 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Main where
 
-import           Control.DeepSeq
-import           Data.Binary
-import           Data.Data
-import           Data.Hashable
-import           Data.Monoid
-import           Development.Shake
-import           Development.Shake.FilePath
-import           Development.Shake.Util
+import Control.DeepSeq
+import Data.Binary
+import Data.Data
+import Data.Hashable
+import Data.List
+import Data.Monoid
+import Development.Shake
+import Development.Shake.FilePath
+import Development.Shake.Util
 
 getStdout :: Action (Stdout String) -> Action String
 getStdout a = a >>= \(Stdout (r :: String)) -> pure r
+
+unnecessaryCXXFlag :: String -> Bool
+unnecessaryCXXFlag s = "-O" `isPrefixOf` s
 
 main :: IO ()
 main =
@@ -24,7 +28,9 @@ main =
        addOracle $
        \(ClangLibs _) -> pure (unwords $ map ("-lclang" ++) clangComponents)
      getLLVMCXXFlags <-
-       addOracle $ \(LLVMCXXFlags _) -> getStdout $ cmd llvmConfig "--cxxflags"
+       addOracle $ \(LLVMCXXFlags _) -> do
+                     flags <- getStdout $ cmd llvmConfig "--cxxflags"
+                     pure . unwords $ (filter (not . unnecessaryCXXFlag) $ words flags)
      getLLVMLDFlags <-
        addOracle $ \(LLVMLDFlags _) -> getStdout $ cmd llvmConfig "--ldflags"
      getLLVMSystemLibs <-
@@ -122,4 +128,5 @@ cxxFlags =
   ,"-Wno-global-constructors"
   ,"-Wno-padded"
   ,"-Wno-switch-enum"
-  ,"-Wno-shadow"]
+  ,"-Wno-shadow"
+  ,"-g"]
