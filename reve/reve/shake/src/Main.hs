@@ -54,13 +54,17 @@ main =
      buildDir <//> "*.o" %>
        \out ->
          do let c = dropDirectory1 $ out -<.> "cpp"
+                m = out -<.> "m"
             need [c]
             cxxFlags' <- getCXXFlags (CXXFlags ())
-            cmd "clang++ -c -Iinclude"
-                cxxFlags'
-                [c]
-                "-o"
-                [out]
+            () <- cmd "clang++ -c -Iinclude"
+                      cxxFlags'
+                      [c]
+                      "-o"
+                      [out]
+                      ["-MMD","-MF",m]
+            needMakefileDependencies m
+
      buildDir </> "reve" <.> exe %>
        \out ->
          do cpps <-
