@@ -8,7 +8,7 @@ set(CXX_STANDARD_FLAGS "-std=c++11 -stdlib=libc++ -fno-rtti")
 set(CMAKE_CXX_FLAGS "${CXX_WARNINGS_FLAGS} ${CXX_STANDARD_FLAGS} ${CXX_OTHER_FLAGS}")
 set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
 
-find_package(LLVM 3.7 REQUIRED CONFIG)
+find_package(LLVM 3.8 REQUIRED CONFIG)
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")

@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-LLVM and Clang 3.7.1 are required, other version probably won't work,
+LLVM and Clang 3.8.0 are required, other version probably won't work,
 so make sure you have the right one.
 
 ## Ubuntu 14.04
@@ -10,18 +10,18 @@ so make sure you have the right one.
 ### Compile llvm/clang against libc++
 
 ```
-wget http://llvm.org/releases/3.7.1/clang+llvm-3.7.1-x86_64-linux-gnu-ubuntu-14.04.tar.xz
-tar xvf clang+llvm-3.7.1-x86_64-linux-gnu-ubuntu-14.04.tar.xz
-sudo cp -r clang+llvm-3.7.1-x86_64-linux-gnu-ubuntu-14.04/* /usr/local/
-wget http://llvm.org/releases/3.7.1/llvm-3.7.1.src.tar.xz
-tar xvf llvm-3.7.1.src.tar.xz
-wget http://llvm.org/releases/3.7.1/cfe-3.7.1.src.tar.xz
-tar xvf cfe-3.7.1.src.tar.xz
-mv cfe-3.7.1.src llvm-3.7.1.src/tools/clang
+wget http://llvm.org/releases/3.8.0/clang+llvm-3.8.0-x86_64-linux-gnu-ubuntu-14.04.tar.xz
+tar xvf clang+llvm-3.8.0-x86_64-linux-gnu-ubuntu-14.04.tar.xz
+sudo cp -r clang+llvm-3.8.0-x86_64-linux-gnu-ubuntu-14.04/* /usr/local/
+wget http://llvm.org/releases/3.8.0/llvm-3.8.0.src.tar.xz
+tar xvf llvm-3.8.0.src.tar.xz
+wget http://llvm.org/releases/3.8.0/cfe-3.8.0.src.tar.xz
+tar xvf cfe-3.8.0.src.tar.xz
+mv cfe-3.8.0.src llvm-3.8.0.src/tools/clang
 sudo apt-get install cmake libstdc++-4.8-dev
 export CC=clang
 export CXX=clang++
-cd llvm-3.7.1.src
+cd llvm-3.8.0.src
 mkdir build
 cd build
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local/  -DLLVM_ENABLE_LIBCXX=ON -DLLVM_ENABLE_LIBCXXABI=ON ..
@@ -64,15 +64,10 @@ Now you can simply run `./build.sh` and a static binary will be
 built. You can then just copy `reve/build/reve` to a more convenient
 place. Repeat that every time you want a new binary.
 
-## Archlinux
-
-Install clang and llvm using
-
-```
-pacman -S clang llvm llvm-libs
-```
-
 ## Build
+
+This currently requires libc++, if anybody is motivated to dive into
+cmake and figure out how to make it generic, be my guest.
 
 ```
 mkdir build
@@ -80,6 +75,19 @@ cd build
 cmake ..
 make
 ```
+
+## Build using shake
+
+Generic build where I actually know what’s going on but it requires
+Haskell. If you are not familiar with the Haskell build tooling
+landscape, I recommend using [stack](http://haskellstack.org/).
+
+```
+cd shake
+stack build
+stack exec shake-reve -- -C .
+```
+
 
 ## Usage
 
