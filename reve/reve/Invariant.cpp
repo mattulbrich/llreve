@@ -115,10 +115,7 @@ SMTRef mainInvariant(int EndIndex, vector<string> FreeVars, string FunName,
                      Memory Heap) {
     if (EndIndex == EXIT_MARK) {
         vector<string> Args = {"result$1", "result$2"};
-        if (Heap & HEAP_MASK) {
-            Args.push_back("HEAP$1_res");
-            Args.push_back("HEAP$2_res");
-        }
+        Args.insert(Args.end(), FreeVars.begin(), FreeVars.end());
         return makeOp("OUT_INV", Args);
     }
     if (EndIndex == UNREACHABLE_MARK) {

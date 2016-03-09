@@ -137,6 +137,14 @@ bool MuZFlag;
 static llvm::cl::opt<bool, true>
     MuZ("muz", llvm::cl::desc("Create smt intended for conversion to muz"),
         llvm::cl::location(MuZFlag), llvm::cl::cat(ReveCategory));
+bool PassInputThroughFlag;
+static llvm::cl::opt<bool, true>
+    PassInputThrough("pass-input-through",
+                     llvm::cl::desc("Pass the input arguments through the "
+                                    "complete program. This makes it possible "
+                                    "to use them in custom postconditions"),
+                     llvm::cl::location(PassInputThroughFlag),
+                     llvm::cl::cat(ReveCategory));
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
@@ -152,9 +160,9 @@ std::vector<const char *> initializeArgs(const char *exeName) {
         args.push_back("-I");
         args.push_back(newInclude);
     }
-    args.push_back(fileName1.c_str());       // add input file
-    args.push_back(fileName2.c_str());       // add input file
-    args.push_back("-fsyntax-only"); // don't do more work than necessary
+    args.push_back(fileName1.c_str()); // add input file
+    args.push_back(fileName2.c_str()); // add input file
+    args.push_back("-fsyntax-only");   // don't do more work than necessary
     return args;
 }
 
@@ -388,7 +396,9 @@ int main(int argc, const char **argv) {
         if (funPair.first.first->getName() == fun) {
             smtExprs.push_back(inInvariant(funPair.first, inOutInvs.first, mem,
                                            *mod1, *mod2, strings));
-            smtExprs.push_back(outInvariant(inOutInvs.second, mem));
+            smtExprs.push_back(outInvariant(
+                functionArgs(*funPair.first.first, *funPair.first.second),
+                inOutInvs.second, mem));
             auto newSmtExprs = mainAssertion(funPair.first, funPair.second,
                                              declarations, onlyRec, mem);
             assertions.insert(assertions.end(), newSmtExprs.begin(),

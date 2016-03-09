@@ -141,7 +141,8 @@ auto makeFunArgsEqual(smt::SharedSMTRef clause, smt::SharedSMTRef preClause,
 auto inInvariant(MonoPair<const llvm::Function *> funs, smt::SharedSMTRef body,
                  Memory memory, const llvm::Module &mod1,
                  const llvm::Module &mod2, bool strings) -> smt::SharedSMTRef;
-auto outInvariant(smt::SharedSMTRef body, Memory memory) -> smt::SharedSMTRef;
+auto outInvariant(MonoPair<std::vector<std::string>> funArgs,
+                  smt::SharedSMTRef body, Memory memory) -> smt::SharedSMTRef;
 auto equalInputsEqualOutputs(std::vector<std::string> funArgs,
                              std::vector<std::string> funArgs1,
                              std::vector<std::string> funArgs2,

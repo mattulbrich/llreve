@@ -872,11 +872,26 @@ SharedSMTRef inInvariant(MonoPair<const llvm::Function *> funs,
     return make_shared<FunDef>("IN_INV", funArgs, "Bool", body);
 }
 
-SharedSMTRef outInvariant(SharedSMTRef body, Memory memory) {
+SharedSMTRef outInvariant(MonoPair<vector<string>> functionArgs,
+                          SharedSMTRef body, Memory memory) {
     vector<SortedVar> funArgs = {SortedVar("result$1", "Int"),
                                  SortedVar("result$2", "Int")};
+    std::sort(functionArgs.first.begin(), functionArgs.first.end());
+    std::sort(functionArgs.second.begin(), functionArgs.second.end());
+    if (PassInputThroughFlag) {
+        for (const string &arg : functionArgs.first) {
+            funArgs.push_back(SortedVar(arg, "Int"));
+        }
+    }
     if (memory & HEAP_MASK) {
         funArgs.push_back(SortedVar("HEAP$1", "(Array Int Int)"));
+    }
+    if (PassInputThroughFlag) {
+        for (const string &arg : functionArgs.second) {
+            funArgs.push_back(SortedVar(arg, "Int"));
+        }
+    }
+    if (memory & HEAP_MASK) {
         funArgs.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
     }
     if (body == nullptr) {
@@ -919,8 +934,28 @@ SharedSMTRef equalInputsEqualOutputs(vector<string> funArgs,
     args = fillUpArgs(args, freeVarsMap, memory, ProgramSelection::Both,
                       InvariantAttr::NONE);
     vector<string> outArgs = {"result$1", "result$2"};
+    vector<string> sortedFunArgs1 = funArgs1;
+    vector<string> sortedFunArgs2 = funArgs2;
+    std::sort(sortedFunArgs1.begin(), sortedFunArgs1.end());
+    std::sort(sortedFunArgs2.begin(), sortedFunArgs2.end());
+    if (PassInputThroughFlag) {
+        for (const string &arg : funArgs1) {
+            if (!std::regex_match(arg, HEAP_REGEX)) {
+                outArgs.push_back(arg);
+            }
+        }
+    }
     if (memory & HEAP_MASK) {
         outArgs.push_back("HEAP$1_res");
+    }
+    if (PassInputThroughFlag) {
+        for (const string &arg : funArgs2) {
+            if (!std::regex_match(arg, HEAP_REGEX)) {
+                outArgs.push_back(arg);
+            }
+        }
+    }
+    if (memory & HEAP_MASK) {
         outArgs.push_back("HEAP$2_res");
     }
     const SharedSMTRef equalResults = makeBinOp(
@@ -1067,9 +1102,14 @@ FreeVarsMap freeVars(PathMap map1, PathMap map2, vector<string> funArgs,
     }
 
     freeVarsMap[EXIT_MARK] = set<string>();
+    if (PassInputThroughFlag) {
+        for (const string &arg : funArgs) {
+            freeVarsMap[EXIT_MARK].insert(arg);
+        }
+    }
     freeVarsMap[UNREACHABLE_MARK] = set<string>();
+
     // search for a least fixpoint
-    // don't tell anyone I wrote that
     bool changed = true;
     while (changed) {
         changed = false;
@@ -1116,6 +1156,8 @@ FreeVarsMap freeVars(PathMap map1, PathMap map2, vector<string> funArgs,
     const auto argPair =
         makeMonoPair(filterVars(1, funArgs), filterVars(2, funArgs))
             .indexedMap<vector<string>>(addMemoryArrays);
+    // The input arguments should be in the function call order so we can’t add
+    // them before
     freeVarsMapVect[ENTRY_MARK] = concat(argPair);
 
     return freeVarsMapVect;
