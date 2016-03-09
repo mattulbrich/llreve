@@ -14,3 +14,4 @@ __pycache__/
 /reve/reve/doc
 /reve/reve/_build/
 /reve/reve/report.html
+/reve/examples/voting/*.java
