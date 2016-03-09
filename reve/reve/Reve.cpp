@@ -299,7 +299,7 @@ int main(int argc, const char **argv) {
         if (*argv[i] != '-') {
             if (!file1) {
                 file1 = argv[i];
-            } else {
+            } else if (!file2) {
                 file2 = argv[i];
             }
         } else if (strcmp(argv[i], "-inline-opts") == 0) {
