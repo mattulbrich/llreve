@@ -1,5 +1,5 @@
 extern int __mark(int);
-void anonymity(int *votes, int *res, int length, int v, int w) {
+int anonymity(int *votes, int *res, int length) {
     int i = 0;
 
     while (__mark(0) & (i < length)) {
@@ -8,4 +8,5 @@ void anonymity(int *votes, int *res, int length, int v, int w) {
             i++;
         }
     }
+    return res;
 }
