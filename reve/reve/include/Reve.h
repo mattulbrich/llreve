@@ -28,10 +28,10 @@ auto getModule(const char *exeName)
 auto getCodeGenAction(const llvm::opt::ArgStringList &ccArgs,
                       clang::DiagnosticsEngine &diags)
     -> std::unique_ptr<clang::CodeGenAction>;
-auto parseInOutInvs(std::string fileName1, std::string fileName2)
-    -> MonoPair<smt::SharedSMTRef>;
+auto parseInOutInvs(std::string fileName1, std::string fileName2,
+                    bool &additionalIn) -> MonoPair<smt::SharedSMTRef>;
 auto processFile(std::string file, smt::SharedSMTRef &in,
-                 smt::SharedSMTRef &out) -> void;
+                 smt::SharedSMTRef &out, bool &additionalIn) -> void;
 auto externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                         std::vector<smt::SharedSMTRef> &declarations,
                         uint8_t mem,

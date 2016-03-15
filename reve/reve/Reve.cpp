@@ -261,7 +261,8 @@ getCodeGenAction(const ArgStringList &ccArgs, clang::DiagnosticsEngine &diags) {
 }
 
 MonoPair<SharedSMTRef> parseInOutInvs(std::string fileName1,
-                                      std::string fileName2) {
+                                      std::string fileName2,
+                                      bool &additionalIn) {
     SharedSMTRef in = nullptr;
     SharedSMTRef out = nullptr;
     std::ifstream fileStream1(fileName1);
@@ -271,23 +272,32 @@ MonoPair<SharedSMTRef> parseInOutInvs(std::string fileName1,
     std::string fileString2((std::istreambuf_iterator<char>(fileStream2)),
                             std::istreambuf_iterator<char>());
 
-    processFile(fileString1, in, out);
-    processFile(fileString2, in, out);
+    processFile(fileString1, in, out, additionalIn);
+    processFile(fileString2, in, out, additionalIn);
 
     return makeMonoPair(in, out);
 }
 
-void processFile(std::string file, SharedSMTRef &in, SharedSMTRef &out) {
+void processFile(std::string file, SharedSMTRef &in, SharedSMTRef &out,
+                 bool &additionalIn) {
     std::regex relinRegex(
         "/\\*@\\s*rel_in\\s*(\\w*)\\s*\\(([\\s\\S]*?)\\)\\s*@\\*/",
         std::regex::ECMAScript);
     std::regex reloutRegex(
         "/\\*@\\s*rel_out\\s*(\\w*)\\s*\\(([\\s\\S]*?)\\)\\s*@\\*/",
         std::regex::ECMAScript);
+    std::regex preRegex("/\\*@\\s*pre\\s*(\\w*)\\s*\\(([\\s\\S]*?)\\)\\s*@\\*/",
+                        std::regex::ECMAScript);
     std::smatch match;
-    if (std::regex_search(file, match, relinRegex) && in == nullptr) {
-        std::string matchStr = match[2];
-        in = stringExpr("(" + matchStr + ")");
+    if (in == nullptr) {
+        if (std::regex_search(file, match, preRegex)) {
+            std::string matchStr = match[2];
+            in = stringExpr("(" + matchStr + ")");
+            additionalIn = true;
+        } else if (std::regex_search(file, match, relinRegex)) {
+            std::string matchStr = match[2];
+            in = stringExpr("(" + matchStr + ")");
+        }
     }
     if (std::regex_search(file, match, reloutRegex) && out == nullptr) {
         std::string matchStr = match[2];
@@ -379,7 +389,11 @@ int main(int argc, const char **argv) {
         mem |= STACK_MASK;
     }
 
-    MonoPair<SharedSMTRef> inOutInvs = parseInOutInvs(fileName1, fileName2);
+    // Indicates if we just want to add to the default precondition or replace
+    // it
+    bool additionalIn = false;
+    MonoPair<SharedSMTRef> inOutInvs =
+        parseInOutInvs(fileName1, fileName2, additionalIn);
 
     auto funCondMap = collectFunConds();
 
@@ -395,7 +409,8 @@ int main(int argc, const char **argv) {
         // Main function
         if (funPair.first.first->getName() == fun) {
             smtExprs.push_back(inInvariant(funPair.first, inOutInvs.first, mem,
-                                           *mod1, *mod2, strings));
+                                           *mod1, *mod2, strings,
+                                           additionalIn));
             smtExprs.push_back(outInvariant(
                 functionArgs(*funPair.first.first, *funPair.first.second),
                 inOutInvs.second, mem));

@@ -816,7 +816,7 @@ SharedSMTRef makeFunArgsEqual(SharedSMTRef clause, SharedSMTRef preClause,
 SharedSMTRef inInvariant(MonoPair<const llvm::Function *> funs,
                          SharedSMTRef body, Memory memory,
                          const llvm::Module &mod1, const llvm::Module &mod2,
-                         bool strings) {
+                         bool strings, bool additionalIn) {
 
     vector<SharedSMTRef> args;
     const auto funArgsPair =
@@ -850,7 +850,10 @@ SharedSMTRef inInvariant(MonoPair<const llvm::Function *> funs,
     for (auto argPair : makeZip(Args1, Args2)) {
         args.push_back(makeBinOp("=", argPair.first, argPair.second));
     }
-    if (body == nullptr) {
+    if (additionalIn) {
+        args.push_back(body);
+    }
+    if (body == nullptr || additionalIn) {
         body = make_shared<Op>("and", args);
     }
     if (strings) {
