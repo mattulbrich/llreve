@@ -1,6 +1,5 @@
 #include "Reve.h"
 
-#include "ADCE.h"
 #include "AnnotStackPass.h"
 #include "CFGPrinter.h"
 #include "Compat.h"
@@ -32,6 +31,7 @@
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Scalar/ADCE.h"
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
 
 #include <fstream>
@@ -488,7 +488,7 @@ preprocessFunction(llvm::Function &fun, string prefix) {
     fam->registerPass(MarkAnalysis());
     fpm.addPass(RemoveMarkRefsPass());
     fpm.addPass(InstCombinePass());
-    fpm.addPass(ADCEPass());
+    fpm.addPass(llvm::ADCEPass());
     fpm.addPass(ConstantProp());
     fam->registerPass(PathAnalysis());
     fpm.addPass(UniqueNamePass(prefix)); // prefix register names
