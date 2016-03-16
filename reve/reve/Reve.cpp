@@ -685,20 +685,8 @@ std::vector<SharedSMTRef> externFunDecl(llvm::Function &fun, int program,
     return decls;
 }
 
-// this does not actually check if the function recurses but the next version of
-// llvm provides a function for that and I’m too lazy to implement it myself
 bool doesNotRecurse(llvm::Function &fun) {
-    for (auto &bb : fun) {
-        for (auto &inst : bb) {
-            if (const auto callInst = llvm::dyn_cast<llvm::CallInst>(&inst)) {
-                const auto calledFun = callInst->getCalledFunction();
-                if (calledFun && !calledFun->isDeclaration()) {
-                    return false;
-                }
-            }
-        }
-    }
-    return true;
+    return fun.doesNotRecurse();
 }
 
 bool doesAccessMemory(const llvm::Module &mod) {
