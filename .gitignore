@@ -1,4 +1,5 @@
 /reve/reve/build/
+/reve/build/
 /reve/reve-test-suite/build/
 .stack-work/
 *.dot
