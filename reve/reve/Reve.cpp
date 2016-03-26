@@ -112,7 +112,7 @@ static llvm::cl::opt<bool> strings("strings",
 static llvm::cl::opt<string>
     fun("fun", llvm::cl::desc("Name of the function which should be verified"),
         llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<string> include("I", llvm::cl::desc("Include path"),
+static llvm::cl::list<string> include("I", llvm::cl::desc("Include path"),
                                      llvm::cl::cat(ReveCategory));
 bool EverythingSignedFlag;
 static llvm::cl::opt<bool, true> EverythingSigned(
@@ -154,11 +154,13 @@ std::vector<const char *> initializeArgs(const char *exeName) {
     args.push_back("-xc");   // force language to C
     args.push_back("-std=c99");
     if (!include.empty()) {
-        char *newInclude = static_cast<char *>(malloc(include.length() + 1));
-        memcpy(static_cast<void *>(newInclude), include.data(),
-               include.length() + 1);
-        args.push_back("-I");
-        args.push_back(newInclude);
+    	for (string value: include) {
+            char *newInclude = static_cast<char *>(malloc(value.length() + 1));
+            memcpy(static_cast<void *>(newInclude), value.data(),
+            		value.length() + 1);
+            args.push_back("-I");
+            args.push_back(newInclude);
+    	}
     }
     args.push_back(fileName1.c_str()); // add input file
     args.push_back(fileName2.c_str()); // add input file
@@ -185,6 +187,10 @@ std::unique_ptr<Driver> initializeDriver(DiagnosticsEngine &diags) {
         llvm::make_unique<clang::driver::Driver>("clang", triple.str(), diags);
     driver->setTitle("reve");
     driver->setCheckInputsExist(false);
+    // Builtin includes may not be found, a possible but bad solution would be to hardcode them:
+    // driver->ResourceDir = "/usr/local/stow/clang-3.8.0/bin/../lib/clang/3.8.0";
+    // To find the correct path on linux the following comand can be used:
+    // clang '-###' -c foo.c 2>&1 | tr ' ' '\n' | grep -A1 resource
     return driver;
 }
 
