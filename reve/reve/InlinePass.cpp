@@ -13,18 +13,22 @@ InlinePass::run(llvm::Function &fun,
         for (auto &instr : bb) {
             if (auto inlineCall = llvm::dyn_cast<llvm::CallInst>(&instr)) {
                 auto fun = inlineCall->getCalledFunction();
-                if (fun->getName() == "__inlineCall") {
-                    if (auto callInst = llvm::dyn_cast<llvm::CallInst>(
-                            inlineCall->getOperand(0))) {
-                        for (auto user : inlineCall->users()) {
-                            user->replaceUsesOfWith(inlineCall, callInst);
-                        }
-                        toDelete.push_back(inlineCall);
-                        toBeInlined.push_back(callInst);
-                    }
-                }
-                if (fun->hasFnAttribute(llvm::Attribute::AlwaysInline)) {
-                    toBeInlined.push_back(inlineCall);
+                // It is possible that we do not have a representation of the function,
+                // (in case of indirect function invocation) so we need to check the return value:
+                if (fun) {
+					if (fun->getName() == "__inlineCall") {
+						if (auto callInst = llvm::dyn_cast<llvm::CallInst>(
+								inlineCall->getOperand(0))) {
+							for (auto user : inlineCall->users()) {
+								user->replaceUsesOfWith(inlineCall, callInst);
+							}
+							toDelete.push_back(inlineCall);
+							toBeInlined.push_back(callInst);
+						}
+					}
+					if (fun->hasFnAttribute(llvm::Attribute::AlwaysInline)) {
+						toBeInlined.push_back(inlineCall);
+					}
                 }
             }
         }
