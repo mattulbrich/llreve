@@ -113,7 +113,7 @@ static llvm::cl::opt<string>
     fun("fun", llvm::cl::desc("Name of the function which should be verified"),
         llvm::cl::cat(ReveCategory));
 static llvm::cl::list<string> include("I", llvm::cl::desc("Include path"),
-                                     llvm::cl::cat(ReveCategory));
+                                      llvm::cl::cat(ReveCategory));
 bool EverythingSignedFlag;
 static llvm::cl::opt<bool, true> EverythingSigned(
     "signed", llvm::cl::desc("Treat all operations as signed operatons"),
@@ -145,6 +145,11 @@ static llvm::cl::opt<bool, true>
                                     "to use them in custom postconditions"),
                      llvm::cl::location(PassInputThroughFlag),
                      llvm::cl::cat(ReveCategory));
+static llvm::cl::opt<string>
+    ResourceDir("resource-dir",
+                llvm::cl::desc("Directory containing the clang resource files, "
+                               "e.g. /usr/local/lib/clang/3.8.0"),
+                llvm::cl::cat(ReveCategory));
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
@@ -154,13 +159,14 @@ std::vector<const char *> initializeArgs(const char *exeName) {
     args.push_back("-xc");   // force language to C
     args.push_back("-std=c99");
     if (!include.empty()) {
-    	for (string value: include) {
-            char *newInclude = static_cast<char *>(malloc(value.length() + 1));
-            memcpy(static_cast<void *>(newInclude), value.data(),
-            		value.length() + 1);
+        for (string &value : include) {
             args.push_back("-I");
-            args.push_back(newInclude);
-    	}
+            args.push_back(value.c_str());
+        }
+    }
+    if (!ResourceDir.empty()) {
+        args.push_back("-resource-dir");
+        args.push_back(ResourceDir.c_str());
     }
     args.push_back(fileName1.c_str()); // add input file
     args.push_back(fileName2.c_str()); // add input file
@@ -187,8 +193,10 @@ std::unique_ptr<Driver> initializeDriver(DiagnosticsEngine &diags) {
         llvm::make_unique<clang::driver::Driver>("clang", triple.str(), diags);
     driver->setTitle("reve");
     driver->setCheckInputsExist(false);
-    // Builtin includes may not be found, a possible but bad solution would be to hardcode them:
-    // driver->ResourceDir = "/usr/local/stow/clang-3.8.0/bin/../lib/clang/3.8.0";
+    // Builtin includes may not be found, a possible but bad solution would be
+    // to hardcode them:
+    // driver->ResourceDir =
+    // "/usr/local/stow/clang-3.8.0/bin/../lib/clang/3.8.0";
     // To find the correct path on linux the following comand can be used:
     // clang '-###' -c foo.c 2>&1 | tr ' ' '\n' | grep -A1 resource
     return driver;
