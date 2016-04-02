@@ -2,7 +2,6 @@
 
 #include "SMT.h"
 
-#include <unistd.h>
 #include <regex>
 
 using Memory = uint8_t;
