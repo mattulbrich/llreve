@@ -133,4 +133,5 @@ cxxFlags =
   ,"-Wno-padded"
   ,"-Wno-switch-enum"
   ,"-Wno-shadow"
+  ,"-fcolor-diagnostics"
   ,"-g"]
