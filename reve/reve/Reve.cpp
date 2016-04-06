@@ -74,8 +74,13 @@ using std::placeholders::_1;
 using std::set;
 using std::vector;
 
-static llvm::cl::OptionCategory ReveCategory("Reve options",
-                                             "Options for controlling reve.");
+static llvm::cl::list<string> Include("I", llvm::cl::desc("Include path"),
+                                      llvm::cl::cat(ReveCategory));
+static llvm::cl::opt<string>
+    ResourceDir("resource-dir",
+                llvm::cl::desc("Directory containing the clang resource files, "
+                               "e.g. /usr/local/lib/clang/3.8.0"),
+                llvm::cl::cat(ReveCategory));
 static llvm::cl::opt<string> fileName1(llvm::cl::Positional,
                                        llvm::cl::desc("FILE1"),
                                        llvm::cl::Required,
@@ -88,68 +93,6 @@ static llvm::cl::opt<string>
     outputFileName("o", llvm::cl::desc("SMT output filename"),
                    llvm::cl::value_desc("filename"),
                    llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<bool> showCfg("show-cfg", llvm::cl::desc("Show cfg"),
-                                   llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<bool>
-    showMarkedCfg("show-marked-cfg",
-                  llvm::cl::desc("Show cfg before mark removal"),
-                  llvm::cl::cat(ReveCategory));
-bool PerfectSyncFlag;
-static llvm::cl::opt<bool, true> perfectSync(
-    "perfect-sync",
-    llvm::cl::desc("Perfect synchronization, don’t allow off by n loops"),
-    llvm::cl::location(PerfectSyncFlag), llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<bool>
-    onlyRec("only-rec", llvm::cl::desc("Only generate recursive invariants"),
-            llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<bool> heap("heap", llvm::cl::desc("Enable heap"),
-                                llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<bool> stack("stack", llvm::cl::desc("Enable stack"),
-                                 llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<bool> strings("strings",
-                                   llvm::cl::desc("Set global constants"),
-                                   llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<string>
-    fun("fun", llvm::cl::desc("Name of the function which should be verified"),
-        llvm::cl::cat(ReveCategory));
-static llvm::cl::list<string> include("I", llvm::cl::desc("Include path"),
-                                      llvm::cl::cat(ReveCategory));
-bool EverythingSignedFlag;
-static llvm::cl::opt<bool, true> EverythingSigned(
-    "signed", llvm::cl::desc("Treat all operations as signed operatons"),
-    llvm::cl::location(EverythingSignedFlag), llvm::cl::cat(ReveCategory));
-bool NestFlag;
-static llvm::cl::opt<bool, true>
-    nest("nest",
-         llvm::cl::desc("Nest clauses, this can sometimes help eldarica"),
-         llvm::cl::location(NestFlag), llvm::cl::cat(ReveCategory));
-bool NoByteHeapFlag;
-static llvm::cl::opt<bool, true> NoByteHeap(
-    "no-byte-heap",
-    llvm::cl::desc("Treat each primitive type as a single array entry"),
-    llvm::cl::location(NoByteHeapFlag), llvm::cl::cat(ReveCategory));
-bool SingleInvariantFlag;
-static llvm::cl::opt<bool, true> SingleInvariant(
-    "single-invariant",
-    llvm::cl::desc("Use a single invariant indexed by the mark"),
-    llvm::cl::location(SingleInvariantFlag), llvm::cl::cat(ReveCategory));
-bool MuZFlag;
-static llvm::cl::opt<bool, true>
-    MuZ("muz", llvm::cl::desc("Create smt intended for conversion to muz"),
-        llvm::cl::location(MuZFlag), llvm::cl::cat(ReveCategory));
-bool PassInputThroughFlag;
-static llvm::cl::opt<bool, true>
-    PassInputThrough("pass-input-through",
-                     llvm::cl::desc("Pass the input arguments through the "
-                                    "complete program. This makes it possible "
-                                    "to use them in custom postconditions"),
-                     llvm::cl::location(PassInputThroughFlag),
-                     llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<string>
-    ResourceDir("resource-dir",
-                llvm::cl::desc("Directory containing the clang resource files, "
-                               "e.g. /usr/local/lib/clang/3.8.0"),
-                llvm::cl::cat(ReveCategory));
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
@@ -158,8 +101,8 @@ std::vector<const char *> initializeArgs(const char *exeName) {
     args.push_back(exeName); // add executable name
     args.push_back("-xc");   // force language to C
     args.push_back("-std=c99");
-    if (!include.empty()) {
-        for (string &value : include) {
+    if (!Include.empty()) {
+        for (string &value : Include) {
             args.push_back("-I");
             args.push_back(value.c_str());
         }
@@ -396,10 +339,10 @@ int main(int argc, const char **argv) {
     }
 
     Memory mem = 0;
-    if (heap || doesAccessMemory(*mod1) || doesAccessMemory(*mod2)) {
+    if (Heap || doesAccessMemory(*mod1) || doesAccessMemory(*mod2)) {
         mem |= HEAP_MASK;
     }
-    if (stack) {
+    if (Stack) {
         mem |= STACK_MASK;
     }
 
@@ -412,8 +355,8 @@ int main(int argc, const char **argv) {
     auto funCondMap = collectFunConds();
 
     externDeclarations(*mod1, *mod2, declarations, mem, funCondMap);
-    if (fun == "" && !funs.get().empty()) {
-        fun = funs.get().at(0).first->getName();
+    if (MainFunction == "" && !funs.get().empty()) {
+        MainFunction = funs.get().at(0).first->getName();
     }
 
     auto globalDecls = globalDeclarations(*mod1, *mod2);
@@ -421,24 +364,24 @@ int main(int argc, const char **argv) {
 
     for (auto funPair : makeZip(funs.get(), fams)) {
         // Main function
-        if (funPair.first.first->getName() == fun) {
+        if (funPair.first.first->getName() == MainFunction) {
             smtExprs.push_back(inInvariant(funPair.first, inOutInvs.first, mem,
-                                           *mod1, *mod2, strings,
+                                           *mod1, *mod2, GlobalConstants,
                                            additionalIn));
             smtExprs.push_back(outInvariant(
                 functionArgs(*funPair.first.first, *funPair.first.second),
                 inOutInvs.second, mem));
             auto newSmtExprs = mainAssertion(funPair.first, funPair.second,
-                                             declarations, onlyRec, mem);
+                                             declarations, OnlyRecursive, mem);
             assertions.insert(assertions.end(), newSmtExprs.begin(),
                               newSmtExprs.end());
         }
         // Other functions used by the main function or the main function if
         // it’s recursive
-        if (funPair.first.first->getName() != fun ||
+        if (funPair.first.first->getName() != MainFunction ||
             (!(doesNotRecurse(*funPair.first.first) &&
                doesNotRecurse(*funPair.first.second)) ||
-             onlyRec)) {
+             OnlyRecursive)) {
             auto newSmtExprs = functionAssertion(funPair.first, funPair.second,
                                                  declarations, mem);
             assertions.insert(assertions.end(), newSmtExprs.begin(),
@@ -506,11 +449,11 @@ preprocessFunction(llvm::Function &fun, string prefix) {
     fpm.addPass(ConstantProp());
     fam->registerPass(PathAnalysis());
     fpm.addPass(UniqueNamePass(prefix)); // prefix register names
-    if (showMarkedCfg) {
+    if (ShowMarkedCFG) {
         fpm.addPass(CFGViewerPass()); // show marked cfg
     }
     fpm.addPass(RemoveMarkPass());
-    if (showCfg) {
+    if (ShowCFG) {
         fpm.addPass(CFGViewerPass()); // show cfg
     }
     fpm.addPass(AnnotStackPass()); // annotate load/store of stack variables
