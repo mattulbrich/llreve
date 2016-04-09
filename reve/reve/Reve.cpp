@@ -74,46 +74,113 @@ using std::placeholders::_1;
 using std::set;
 using std::vector;
 
-static llvm::cl::list<string> Include("I", llvm::cl::desc("Include path"),
-                                      llvm::cl::cat(ReveCategory));
+// Input flags
+static llvm::cl::list<string> IncludesFlag("I", llvm::cl::desc("Include path"),
+                                           llvm::cl::cat(ReveCategory));
+static llvm::cl::opt<string> ResourceDirFlag(
+    "resource-dir",
+    llvm::cl::desc("Directory containing the clang resource files, "
+                   "e.g. /usr/local/lib/clang/3.8.0"),
+    llvm::cl::cat(ReveCategory));
+static llvm::cl::opt<string> FileName1Flag(llvm::cl::Positional,
+                                           llvm::cl::desc("FILE1"),
+                                           llvm::cl::Required,
+                                           llvm::cl::cat(ReveCategory));
+static llvm::cl::opt<string> FileName2Flag(llvm::cl::Positional,
+                                           llvm::cl::desc("FILE2"),
+                                           llvm::cl::Required,
+                                           llvm::cl::cat(ReveCategory));
+
+// Serialize flags
 static llvm::cl::opt<string>
-    ResourceDir("resource-dir",
-                llvm::cl::desc("Directory containing the clang resource files, "
-                               "e.g. /usr/local/lib/clang/3.8.0"),
-                llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<string> fileName1(llvm::cl::Positional,
-                                       llvm::cl::desc("FILE1"),
-                                       llvm::cl::Required,
-                                       llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<string> fileName2(llvm::cl::Positional,
-                                       llvm::cl::desc("FILE2"),
-                                       llvm::cl::Required,
-                                       llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<string>
-    outputFileName("o", llvm::cl::desc("SMT output filename"),
-                   llvm::cl::value_desc("filename"),
-                   llvm::cl::cat(ReveCategory));
+    OutputFileNameFlag("o", llvm::cl::desc("SMT output filename"),
+                       llvm::cl::value_desc("filename"),
+                       llvm::cl::cat(ReveCategory));
+
+// Preprocess flags
+static llvm::cl::opt<bool, true> ShowCFGFlag("show-cfg",
+                                             llvm::cl::desc("Show cfg"),
+                                             llvm::cl::cat(ReveCategory));
+static llvm::cl::opt<bool>
+    ShowMarkedCFGFlag("show-marked-cfg",
+                      llvm::cl::desc("Show cfg before mark removal"),
+                      llvm::cl::cat(ReveCategory));
+
+// SMT generation opts
+static llvm::cl::opt<string> MainFunctionFlag(
+    "fun", llvm::cl::desc("Name of the function which should be verified"),
+    llvm::cl::cat(ReveCategory));
+
+static llvm::cl::opt<bool> HeapFlag("heap", llvm::cl::desc("Enable heap"),
+                                    llvm::cl::cat(ReveCategory));
+
+static llvm::cl::opt<bool> StackFlag("stack", llvm::cl::desc("Enable stack"),
+                                     llvm::cl::cat(ReveCategory));
+
+static llvm::cl::opt<bool>
+    GlobalConstantsFlag("strings", llvm::cl::desc("Set global constants"),
+                        llvm::cl::cat(ReveCategory));
+
+static llvm::cl::opt<bool>
+    OnlyRecursiveFlag("only-rec",
+                      llvm::cl::desc("Only generate recursive invariants"),
+                      llvm::cl::cat(ReveCategory));
+
+static llvm::cl::opt<bool> NoByteHeapFlag(
+    "no-byte-heap",
+    llvm::cl::desc("Treat each primitive type as a single array entry"),
+    llvm::cl::cat(ReveCategory));
+
+static llvm::cl::opt<bool> EverythingSignedFlag(
+    "signed", llvm::cl::desc("Treat all operations as signed operatons"),
+    llvm::cl::cat(ReveCategory));
+
+static llvm::cl::opt<bool> SingleInvariantFlag(
+    "single-invariant",
+    llvm::cl::desc("Use a single invariant indexed by the mark"),
+    llvm::cl::cat(ReveCategory));
+
+static llvm::cl::opt<bool>
+    MuZFlag("muz", llvm::cl::desc("Create smt intended for conversion to muz"),
+            llvm::cl::cat(ReveCategory));
+
+static llvm::cl::opt<bool> PerfectSyncFlag(
+    "perfect-sync",
+    llvm::cl::desc("Perfect synchronization, don’t allow off by n loops"),
+    llvm::cl::cat(ReveCategory));
+
+static llvm::cl::opt<bool>
+    NestFlag("nest",
+             llvm::cl::desc("Nest clauses, this can sometimes help eldarica"),
+             llvm::cl::cat(ReveCategory));
+
+static llvm::cl::opt<bool> PassInputThroughFlag(
+    "pass-input-through",
+    llvm::cl::desc("Pass the input arguments through the "
+                   "complete program. This makes it possible "
+                   "to use them in custom postconditions"),
+    llvm::cl::cat(ReveCategory));
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
-std::vector<const char *> initializeArgs(const char *exeName) {
+std::vector<const char *> initializeArgs(const char *exeName, InputOpts opts) {
     std::vector<const char *> args;
     args.push_back(exeName); // add executable name
     args.push_back("-xc");   // force language to C
     args.push_back("-std=c99");
-    if (!Include.empty()) {
-        for (string &value : Include) {
+    if (!opts.Includes.empty()) {
+        for (string &value : opts.Includes) {
             args.push_back("-I");
             args.push_back(value.c_str());
         }
     }
-    if (!ResourceDir.empty()) {
+    if (!opts.ResourceDir.empty()) {
         args.push_back("-resource-dir");
-        args.push_back(ResourceDir.c_str());
+        args.push_back(opts.ResourceDir.c_str());
     }
-    args.push_back(fileName1.c_str()); // add input file
-    args.push_back(fileName2.c_str()); // add input file
-    args.push_back("-fsyntax-only");   // don't do more work than necessary
+    args.push_back(opts.FileNames.first.c_str());  // add input file
+    args.push_back(opts.FileNames.second.c_str()); // add input file
+    args.push_back("-fsyntax-only"); // don't do more work than necessary
     return args;
 }
 
@@ -167,10 +234,11 @@ ErrorOr<MonoPair<ArgStringList>> getCmd(Compilation &comp,
 template <typename T> ErrorOr<T> makeErrorOr(T Arg) { return ErrorOr<T>(Arg); }
 
 /// Compile the inputs to llvm assembly and return those modules
-MonoPair<std::unique_ptr<clang::CodeGenAction>> getModule(const char *exeName) {
+MonoPair<std::unique_ptr<clang::CodeGenAction>> getModule(const char *exeName,
+                                                          InputOpts opts) {
     auto diags = initializeDiagnostics();
     auto driver = initializeDriver(*diags);
-    auto args = initializeArgs(exeName);
+    auto args = initializeArgs(exeName, opts);
 
     std::unique_ptr<Compilation> comp(driver->BuildCompilation(args));
     if (!comp) {
@@ -217,15 +285,14 @@ getCodeGenAction(const ArgStringList &ccArgs, clang::DiagnosticsEngine &diags) {
     return act;
 }
 
-MonoPair<SharedSMTRef> parseInOutInvs(std::string fileName1,
-                                      std::string fileName2,
+MonoPair<SharedSMTRef> parseInOutInvs(MonoPair<std::string> fileNames,
                                       bool &additionalIn) {
     SharedSMTRef in = nullptr;
     SharedSMTRef out = nullptr;
-    std::ifstream fileStream1(fileName1);
+    std::ifstream fileStream1(fileNames.first);
     std::string fileString1((std::istreambuf_iterator<char>(fileStream1)),
                             std::istreambuf_iterator<char>());
-    std::ifstream fileStream2(fileName2);
+    std::ifstream fileStream2(fileNames.second);
     std::string fileString2((std::istreambuf_iterator<char>(fileStream2)),
                             std::istreambuf_iterator<char>());
 
@@ -298,8 +365,17 @@ int main(int argc, const char **argv) {
     } else {
         llvm::cl::ParseCommandLineOptions(argc, argv, "reve\n");
     }
+    PreprocessOpts preprocessOpts(ShowCFGFlag, ShowMarkedCFGFlag);
+    SMTGenerationOpts::initialize(MainFunctionFlag, HeapFlag, StackFlag,
+                                  GlobalConstantsFlag, OnlyRecursiveFlag,
+                                  NoByteHeapFlag, EverythingSignedFlag,
+                                  SingleInvariantFlag, MuZFlag, PerfectSyncFlag,
+                                  NestFlag, PassInputThroughFlag);
+    InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,
+                        FileName2Flag);
+    SerializeOpts outputOpts(OutputFileNameFlag);
 
-    auto actPair = getModule(argv[0]);
+    auto actPair = getModule(argv[0], inputOpts);
     const auto act1 = std::move(actPair.first);
     const auto act2 = std::move(actPair.second);
     if (!act1 || !act2) {
@@ -320,29 +396,30 @@ int main(int argc, const char **argv) {
     }
 
     std::vector<SharedSMTRef> declarations;
-    if (MuZFlag) {
+    if (SMTGenerationOpts::getInstance().MuZ) {
         vector<string> args;
         declarations.push_back(
             make_shared<smt::FunDecl>("END_QUERY", args, "Bool"));
     }
     std::vector<SharedSMTRef> assertions;
     std::vector<SharedSMTRef> smtExprs;
-    if (!MuZFlag) {
+    if (!SMTGenerationOpts::getInstance().MuZ) {
         smtExprs.push_back(std::make_shared<SetLogic>("HORN"));
     }
 
     std::vector<MonoPair<FAMRef>> fams;
     for (auto funPair : funs.get()) {
-        auto fam1 = preprocessFunction(*funPair.first, "1");
-        auto fam2 = preprocessFunction(*funPair.second, "2");
+        auto fam1 = preprocessFunction(*funPair.first, "1", preprocessOpts);
+        auto fam2 = preprocessFunction(*funPair.second, "2", preprocessOpts);
         fams.push_back(makeMonoPair(fam1, fam2));
     }
 
     Memory mem = 0;
-    if (Heap || doesAccessMemory(*mod1) || doesAccessMemory(*mod2)) {
+    if (SMTGenerationOpts::getInstance().Heap || doesAccessMemory(*mod1) ||
+        doesAccessMemory(*mod2)) {
         mem |= HEAP_MASK;
     }
-    if (Stack) {
+    if (SMTGenerationOpts::getInstance().Stack) {
         mem |= STACK_MASK;
     }
 
@@ -350,13 +427,15 @@ int main(int argc, const char **argv) {
     // it
     bool additionalIn = false;
     MonoPair<SharedSMTRef> inOutInvs =
-        parseInOutInvs(fileName1, fileName2, additionalIn);
+        parseInOutInvs(inputOpts.FileNames, additionalIn);
 
-    auto funCondMap = collectFunConds();
+    auto funCondMap = collectFunConds(inputOpts.FileNames);
+
+    SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
 
     externDeclarations(*mod1, *mod2, declarations, mem, funCondMap);
-    if (MainFunction == "" && !funs.get().empty()) {
-        MainFunction = funs.get().at(0).first->getName();
+    if (smtOpts.MainFunction == "" && !funs.get().empty()) {
+        smtOpts.MainFunction = funs.get().at(0).first->getName();
     }
 
     auto globalDecls = globalDeclarations(*mod1, *mod2);
@@ -364,24 +443,25 @@ int main(int argc, const char **argv) {
 
     for (auto funPair : makeZip(funs.get(), fams)) {
         // Main function
-        if (funPair.first.first->getName() == MainFunction) {
-            smtExprs.push_back(inInvariant(funPair.first, inOutInvs.first, mem,
-                                           *mod1, *mod2, GlobalConstants,
-                                           additionalIn));
+        if (funPair.first.first->getName() == smtOpts.MainFunction) {
+            smtExprs.push_back(
+                inInvariant(funPair.first, inOutInvs.first, mem, *mod1, *mod2,
+                            smtOpts.GlobalConstants, additionalIn));
             smtExprs.push_back(outInvariant(
                 functionArgs(*funPair.first.first, *funPair.first.second),
                 inOutInvs.second, mem));
-            auto newSmtExprs = mainAssertion(funPair.first, funPair.second,
-                                             declarations, OnlyRecursive, mem);
+            auto newSmtExprs =
+                mainAssertion(funPair.first, funPair.second, declarations,
+                              smtOpts.OnlyRecursive, mem);
             assertions.insert(assertions.end(), newSmtExprs.begin(),
                               newSmtExprs.end());
         }
         // Other functions used by the main function or the main function if
         // it’s recursive
-        if (funPair.first.first->getName() != MainFunction ||
+        if (funPair.first.first->getName() != smtOpts.MainFunction ||
             (!(doesNotRecurse(*funPair.first.first) &&
                doesNotRecurse(*funPair.first.second)) ||
-             OnlyRecursive)) {
+             smtOpts.OnlyRecursive)) {
             auto newSmtExprs = functionAssertion(funPair.first, funPair.second,
                                                  declarations, mem);
             assertions.insert(assertions.end(), newSmtExprs.begin(),
@@ -390,7 +470,7 @@ int main(int argc, const char **argv) {
     }
     smtExprs.insert(smtExprs.end(), declarations.begin(), declarations.end());
     smtExprs.insert(smtExprs.end(), assertions.begin(), assertions.end());
-    if (MuZFlag) {
+    if (SMTGenerationOpts::getInstance().MuZ) {
         smtExprs.push_back(make_shared<Query>("END_QUERY"));
     } else {
         smtExprs.push_back(make_shared<CheckSat>());
@@ -401,8 +481,8 @@ int main(int argc, const char **argv) {
     std::streambuf *buf;
     std::ofstream ofStream;
 
-    if (!outputFileName.empty()) {
-        ofStream.open(outputFileName);
+    if (!outputOpts.OutputFileName.empty()) {
+        ofStream.open(outputOpts.OutputFileName);
         buf = ofStream.rdbuf();
     } else {
         buf = std::cout.rdbuf();
@@ -411,7 +491,7 @@ int main(int argc, const char **argv) {
     std::ostream outFile(buf);
 
     for (auto &smt : smtExprs) {
-        if (MuZFlag) {
+        if (SMTGenerationOpts::getInstance().MuZ) {
             outFile << *smt->compressLets()->mergeImplications({})->toSExpr();
         } else {
             outFile << *smt->compressLets()->instantiateArrays()->toSExpr();
@@ -419,7 +499,7 @@ int main(int argc, const char **argv) {
         outFile << "\n";
     }
 
-    if (!outputFileName.empty()) {
+    if (!outputOpts.OutputFileName.empty()) {
         ofStream.close();
     }
 
@@ -429,7 +509,7 @@ int main(int argc, const char **argv) {
 }
 
 shared_ptr<llvm::FunctionAnalysisManager>
-preprocessFunction(llvm::Function &fun, string prefix) {
+preprocessFunction(llvm::Function &fun, string prefix, PreprocessOpts opts) {
     llvm::PassBuilder pb;
     auto fam =
         make_shared<llvm::FunctionAnalysisManager>(true); // enable debug log
@@ -449,11 +529,11 @@ preprocessFunction(llvm::Function &fun, string prefix) {
     fpm.addPass(ConstantProp());
     fam->registerPass(PathAnalysis());
     fpm.addPass(UniqueNamePass(prefix)); // prefix register names
-    if (ShowMarkedCFG) {
+    if (opts.ShowMarkedCFG) {
         fpm.addPass(CFGViewerPass()); // show marked cfg
     }
     fpm.addPass(RemoveMarkPass());
-    if (ShowCFG) {
+    if (opts.ShowCFG) {
         fpm.addPass(CFGViewerPass()); // show cfg
     }
     fpm.addPass(AnnotStackPass()); // annotate load/store of stack variables
@@ -742,12 +822,12 @@ std::vector<SharedSMTRef> globalDeclarations(llvm::Module &mod1,
     return declarations;
 }
 
-std::multimap<string, string> collectFunConds() {
+std::multimap<string, string> collectFunConds(MonoPair<string> fileNames) {
     std::multimap<string, string> map;
-    std::ifstream fileStream1(fileName1);
+    std::ifstream fileStream1(fileNames.first);
     std::string fileString1((std::istreambuf_iterator<char>(fileStream1)),
                             std::istreambuf_iterator<char>());
-    std::ifstream fileStream2(fileName2);
+    std::ifstream fileStream2(fileNames.second);
     std::string fileString2((std::istreambuf_iterator<char>(fileStream2)),
                             std::istreambuf_iterator<char>());
     auto map1 = collectFunCondsInFile(fileString1);

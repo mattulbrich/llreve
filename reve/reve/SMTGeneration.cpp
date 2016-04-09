@@ -70,7 +70,7 @@ vector<SharedSMTRef> functionAssertion(MonoPair<llvm::Function *> funs,
         declarations.push_back(std::move(invariant));
 
     };
-    if (!SingleInvariantFlag) {
+    if (!SMTGenerationOpts::getInstance().SingleInvariant) {
         MonoPair<SMTRef> invariants =
             invariantDeclaration(ENTRY_MARK, freeVarsMap.at(ENTRY_MARK),
                                  ProgramSelection::Both, funName, memory);
@@ -129,7 +129,7 @@ vector<SharedSMTRef> functionAssertion(MonoPair<llvm::Function *> funs,
     pathExprs.insert(pathExprs.end(), forbiddenPaths.begin(),
                      forbiddenPaths.end());
 
-    if (!PerfectSyncFlag) {
+    if (!SMTGenerationOpts::getInstance().PerfectSync) {
         const map<int,
                   map<int, vector<std::function<SharedSMTRef(SharedSMTRef)>>>>
             offByNPaths = getOffByNPaths(pathMaps.first, pathMaps.second,
@@ -183,7 +183,7 @@ vector<SharedSMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
 
     const FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, memory);
-    if (MuZFlag) {
+    if (SMTGenerationOpts::getInstance().MuZ) {
         const vector<SharedSMTRef> variables = declareVariables(freeVarsMap);
         declarations.insert(declarations.end(), variables.begin(),
                             variables.end());
@@ -199,7 +199,7 @@ vector<SharedSMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
         return smtExprs;
     }
 
-    if (SingleInvariantFlag) {
+    if (SMTGenerationOpts::getInstance().SingleInvariant) {
         declarations.push_back(
             singleMainInvariant(freeVarsMap, memory, ProgramSelection::Both));
     }
@@ -212,7 +212,7 @@ vector<SharedSMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
     declarations.insert(declarations.end(), mainDecls.begin(), mainDecls.end());
     const vector<SharedSMTRef> forbiddenPaths =
         getForbiddenPaths(pathMaps, marked, freeVarsMap, funName, true, memory);
-    if (!PerfectSyncFlag) {
+    if (!SMTGenerationOpts::getInstance().PerfectSync) {
         const map<int,
                   map<int, vector<std::function<SharedSMTRef(SharedSMTRef)>>>>
             offByNPaths = getOffByNPaths(pathMaps.first, pathMaps.second,
@@ -229,9 +229,9 @@ vector<SharedSMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
         vector<SharedSMTRef> pathsStartingHere;
         for (auto it2 : it.second) {
             const int endIndex = it2.first;
-            SharedSMTRef endInvariant = mainInvariant(
-                endIndex, freeVarsMap.at(endIndex), funName, memory);
-            if (MuZFlag && endIndex == EXIT_MARK) {
+            SharedSMTRef endInvariant =
+                mainInvariant(endIndex, freeVarsMap.at(endIndex), funName);
+            if (SMTGenerationOpts::getInstance().MuZ && endIndex == EXIT_MARK) {
                 endInvariant =
                     makeBinOp("=>", makeUnaryOp("not", std::move(endInvariant)),
                               stringExpr("END_QUERY"));
@@ -240,7 +240,7 @@ vector<SharedSMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
                 pathsStartingHere.push_back(pathFun(endInvariant));
             }
         }
-        if (!NestFlag) {
+        if (!SMTGenerationOpts::getInstance().Nest) {
             for (auto path : pathsStartingHere) {
                 auto clause = forallStartingAt(
                     path, freeVarsMap.at(startIndex), startIndex,
@@ -317,7 +317,8 @@ vector<SharedSMTRef> mainDeclarations(PathMap pathMap, string funName,
     vector<SharedSMTRef> declarations;
     for (const auto &pathMapIt : pathMap) {
         const int startIndex = pathMapIt.first;
-        if (startIndex != ENTRY_MARK && !SingleInvariantFlag) {
+        if (startIndex != ENTRY_MARK &&
+            !SMTGenerationOpts::getInstance().SingleInvariant) {
             // ignore entry node
             const auto invariant =
                 mainInvariantDeclaration(startIndex, freeVarsMap.at(startIndex),
@@ -333,7 +334,8 @@ vector<SharedSMTRef> recDeclarations(PathMap pathMap, string funName,
     vector<SharedSMTRef> declarations;
     for (const auto &pathMapIt : pathMap) {
         const int startIndex = pathMapIt.first;
-        if (startIndex != ENTRY_MARK && !SingleInvariantFlag) {
+        if (startIndex != ENTRY_MARK &&
+            !SMTGenerationOpts::getInstance().SingleInvariant) {
             // ignore entry node
             MonoPair<SharedSMTRef> invariants =
                 invariantDeclaration(startIndex, freeVarsMap.at(startIndex),
@@ -370,7 +372,7 @@ vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
                                        llvm::BasicBlock *endBlock) -> set<int> {
                                         return marks.BlockToMarksMap[endBlock];
                                     });
-                            if (PerfectSyncFlag ||
+                            if (SMTGenerationOpts::getInstance().PerfectSync ||
                                 ((startIndex != endIndex1 && // no circles
                                   startIndex != endIndex2) &&
                                  intersection(endIndices.first,
@@ -410,7 +412,8 @@ void nonmutualPaths(PathMap pathMap, vector<SharedSMTRef> &pathExprs,
     const int progIndex = programIndex(prog);
     for (const auto &pathMapIt : pathMap) {
         const int startIndex = pathMapIt.first;
-        if (startIndex != ENTRY_MARK && !SingleInvariantFlag) {
+        if (startIndex != ENTRY_MARK &&
+            !SMTGenerationOpts::getInstance().SingleInvariant) {
             MonoPair<SMTRef> invariants = invariantDeclaration(
                 startIndex, filterVars(progIndex, freeVarsMap.at(startIndex)),
                 asSelection(prog), funName, memory);
@@ -487,8 +490,7 @@ offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
                     }
                     SMTRef endInvariant;
                     if (main) {
-                        endInvariant =
-                            mainInvariant(startIndex, args, funName, memory);
+                        endInvariant = mainInvariant(startIndex, args, funName);
                     } else {
                         endInvariant = invariant(startIndex, startIndex,
                                                  freeVarsMap.at(startIndex),
@@ -790,7 +792,7 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<string> freeVars,
         clause = makeBinOp("=>", std::move(preInv), clause);
     }
 
-    if (MuZFlag) {
+    if (SMTGenerationOpts::getInstance().MuZ) {
         // μZ rules are implicitly universally quantified
         return clause;
     }
@@ -881,7 +883,7 @@ SharedSMTRef outInvariant(MonoPair<vector<string>> functionArgs,
                                  SortedVar("result$2", "Int")};
     std::sort(functionArgs.first.begin(), functionArgs.first.end());
     std::sort(functionArgs.second.begin(), functionArgs.second.end());
-    if (PassInputThroughFlag) {
+    if (SMTGenerationOpts::getInstance().PassInputThrough) {
         for (const string &arg : functionArgs.first) {
             funArgs.push_back(SortedVar(arg, "Int"));
         }
@@ -889,7 +891,7 @@ SharedSMTRef outInvariant(MonoPair<vector<string>> functionArgs,
     if (memory & HEAP_MASK) {
         funArgs.push_back(SortedVar("HEAP$1", "(Array Int Int)"));
     }
-    if (PassInputThroughFlag) {
+    if (SMTGenerationOpts::getInstance().PassInputThrough) {
         for (const string &arg : functionArgs.second) {
             funArgs.push_back(SortedVar(arg, "Int"));
         }
@@ -941,7 +943,7 @@ SharedSMTRef equalInputsEqualOutputs(vector<string> funArgs,
     vector<string> sortedFunArgs2 = funArgs2;
     std::sort(sortedFunArgs1.begin(), sortedFunArgs1.end());
     std::sort(sortedFunArgs2.begin(), sortedFunArgs2.end());
-    if (PassInputThroughFlag) {
+    if (SMTGenerationOpts::getInstance().PassInputThrough) {
         for (const string &arg : funArgs1) {
             if (!std::regex_match(arg, HEAP_REGEX)) {
                 outArgs.push_back(arg);
@@ -951,7 +953,7 @@ SharedSMTRef equalInputsEqualOutputs(vector<string> funArgs,
     if (memory & HEAP_MASK) {
         outArgs.push_back("HEAP$1_res");
     }
-    if (PassInputThroughFlag) {
+    if (SMTGenerationOpts::getInstance().PassInputThrough) {
         for (const string &arg : funArgs2) {
             if (!std::regex_match(arg, HEAP_REGEX)) {
                 outArgs.push_back(arg);
@@ -1105,7 +1107,7 @@ FreeVarsMap freeVars(PathMap map1, PathMap map2, vector<string> funArgs,
     }
 
     freeVarsMap[EXIT_MARK] = set<string>();
-    if (PassInputThroughFlag) {
+    if (SMTGenerationOpts::getInstance().PassInputThrough) {
         for (const string &arg : funArgs) {
             freeVarsMap[EXIT_MARK].insert(arg);
         }

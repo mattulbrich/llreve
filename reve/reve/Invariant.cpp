@@ -111,8 +111,7 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
     return Clause;
 }
 
-SMTRef mainInvariant(int EndIndex, vector<string> FreeVars, string FunName,
-                     Memory Heap) {
+SMTRef mainInvariant(int EndIndex, vector<string> FreeVars, string FunName) {
     if (EndIndex == EXIT_MARK) {
         vector<string> Args = {"result$1", "result$2"};
         Args.insert(Args.end(), FreeVars.begin(), FreeVars.end());
@@ -242,11 +241,12 @@ string invariantName(int Index, ProgramSelection For, std::string FunName,
     string Name;
     if (attr == InvariantAttr::MAIN) {
         Name = "INV_MAIN";
-        if (!SingleInvariantFlag) {
+        if (!SMTGenerationOpts::getInstance().SingleInvariant) {
             Name += "_" + std::to_string(Index);
         }
     } else {
-        if (SingleInvariantFlag || Index == ENTRY_MARK) {
+        if (SMTGenerationOpts::getInstance().SingleInvariant ||
+            Index == ENTRY_MARK) {
             Name = "INV_REC_" + FunName;
         } else {
             Name = "INV_" + std::to_string(Index);
@@ -264,7 +264,7 @@ string invariantName(int Index, ProgramSelection For, std::string FunName,
     if (attr == InvariantAttr::PRE) {
         Name += "_PRE";
     }
-    if (SingleInvariantFlag) {
+    if (SMTGenerationOpts::getInstance().SingleInvariant) {
         string indexString = std::to_string(abs(Index));
         if (Index < 0) {
             indexString = "(- " + indexString + ")";
