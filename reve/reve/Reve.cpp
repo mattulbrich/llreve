@@ -12,6 +12,7 @@
 #include "RemoveMarkPass.h"
 #include "RemoveMarkRefsPass.h"
 #include "SMTGeneration.h"
+#include "Serialize.h"
 #include "SplitEntryBlockPass.h"
 #include "UnifyFunctionExitNodes.h"
 #include "UniqueNamePass.h"
@@ -98,9 +99,8 @@ static llvm::cl::opt<string>
                        llvm::cl::cat(ReveCategory));
 
 // Preprocess flags
-static llvm::cl::opt<bool, true> ShowCFGFlag("show-cfg",
-                                             llvm::cl::desc("Show cfg"),
-                                             llvm::cl::cat(ReveCategory));
+static llvm::cl::opt<bool> ShowCFGFlag("show-cfg", llvm::cl::desc("Show cfg"),
+                                       llvm::cl::cat(ReveCategory));
 static llvm::cl::opt<bool>
     ShowMarkedCFGFlag("show-marked-cfg",
                       llvm::cl::desc("Show cfg before mark removal"),
@@ -163,7 +163,7 @@ static llvm::cl::opt<bool> PassInputThroughFlag(
 
 /// Initialize the argument vector to produce the llvm assembly for
 /// the two C files
-std::vector<const char *> initializeArgs(const char *exeName, InputOpts opts) {
+std::vector<const char *> initializeArgs(const char *exeName, InputOpts &opts) {
     std::vector<const char *> args;
     args.push_back(exeName); // add executable name
     args.push_back("-xc");   // force language to C
@@ -373,7 +373,7 @@ int main(int argc, const char **argv) {
                                   NestFlag, PassInputThroughFlag);
     InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,
                         FileName2Flag);
-    SerializeOpts outputOpts(OutputFileNameFlag);
+    SerializeOpts serializeOpts(OutputFileNameFlag);
 
     auto actPair = getModule(argv[0], inputOpts);
     const auto act1 = std::move(actPair.first);
@@ -477,31 +477,7 @@ int main(int argc, const char **argv) {
         smtExprs.push_back(make_shared<GetModel>());
     }
 
-    // write to file or to stdout
-    std::streambuf *buf;
-    std::ofstream ofStream;
-
-    if (!outputOpts.OutputFileName.empty()) {
-        ofStream.open(outputOpts.OutputFileName);
-        buf = ofStream.rdbuf();
-    } else {
-        buf = std::cout.rdbuf();
-    }
-
-    std::ostream outFile(buf);
-
-    for (auto &smt : smtExprs) {
-        if (SMTGenerationOpts::getInstance().MuZ) {
-            outFile << *smt->compressLets()->mergeImplications({})->toSExpr();
-        } else {
-            outFile << *smt->compressLets()->instantiateArrays()->toSExpr();
-        }
-        outFile << "\n";
-    }
-
-    if (!outputOpts.OutputFileName.empty()) {
-        ofStream.close();
-    }
+    serializeSMT(smtExprs, SMTGenerationOpts::getInstance().MuZ, serializeOpts);
 
     llvm::llvm_shutdown();
 
