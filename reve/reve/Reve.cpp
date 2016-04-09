@@ -68,11 +68,12 @@ using smt::makeUnaryOp;
 using smt::Op;
 using smt::Forall;
 
-using std::shared_ptr;
 using std::make_shared;
-using std::string;
 using std::placeholders::_1;
 using std::set;
+using std::shared_ptr;
+using std::string;
+using std::unique_ptr;
 using std::vector;
 
 // Input flags
@@ -185,7 +186,7 @@ std::vector<const char *> initializeArgs(const char *exeName, InputOpts &opts) {
 }
 
 /// Set up the diagnostics engine
-std::unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
+unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
     const IntrusiveRefCntPtr<clang::DiagnosticOptions> diagOpts =
         new clang::DiagnosticOptions();
     auto diagClient =
@@ -196,7 +197,7 @@ std::unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
 }
 
 /// Initialize the driver
-std::unique_ptr<Driver> initializeDriver(DiagnosticsEngine &diags) {
+unique_ptr<Driver> initializeDriver(DiagnosticsEngine &diags) {
     string tripleStr = llvm::sys::getProcessTriple();
     llvm::Triple triple(tripleStr);
     auto driver =
@@ -234,38 +235,36 @@ ErrorOr<MonoPair<ArgStringList>> getCmd(Compilation &comp,
 template <typename T> ErrorOr<T> makeErrorOr(T Arg) { return ErrorOr<T>(Arg); }
 
 /// Compile the inputs to llvm assembly and return those modules
-MonoPair<std::unique_ptr<clang::CodeGenAction>> getModule(const char *exeName,
-                                                          InputOpts opts) {
+MonoPair<unique_ptr<clang::CodeGenAction>> getModule(const char *exeName,
+                                                     InputOpts opts) {
     auto diags = initializeDiagnostics();
     auto driver = initializeDriver(*diags);
     auto args = initializeArgs(exeName, opts);
 
-    std::unique_ptr<Compilation> comp(driver->BuildCompilation(args));
+    unique_ptr<Compilation> comp(driver->BuildCompilation(args));
     if (!comp) {
-        return makeMonoPair<std::unique_ptr<clang::CodeGenAction>>(
+        return makeMonoPair<unique_ptr<clang::CodeGenAction>>(
             std::move(nullptr), std::move(nullptr));
     }
 
     auto cmdArgsOrError = getCmd(*comp, *diags);
     if (!cmdArgsOrError) {
-        return makeMonoPair<std::unique_ptr<clang::CodeGenAction>>(nullptr,
-                                                                   nullptr);
+        return makeMonoPair<unique_ptr<clang::CodeGenAction>>(nullptr, nullptr);
     }
     auto cmdArgs = cmdArgsOrError.get();
 
     auto act1 = getCodeGenAction(cmdArgs.first, *diags);
     auto act2 = getCodeGenAction(cmdArgs.second, *diags);
     if (!act1 || !act2) {
-        return makeMonoPair<std::unique_ptr<clang::CodeGenAction>>(nullptr,
-                                                                   nullptr);
+        return makeMonoPair<unique_ptr<clang::CodeGenAction>>(nullptr, nullptr);
     }
 
     return makeMonoPair(std::move(act1), std::move(act2));
 }
 
 /// Build the CodeGenAction corresponding to the arguments
-std::unique_ptr<CodeGenAction>
-getCodeGenAction(const ArgStringList &ccArgs, clang::DiagnosticsEngine &diags) {
+unique_ptr<CodeGenAction> getCodeGenAction(const ArgStringList &ccArgs,
+                                           clang::DiagnosticsEngine &diags) {
     auto ci = llvm::make_unique<CompilerInvocation>();
     CompilerInvocation::CreateFromArgs(*ci, (ccArgs.data()),
                                        (ccArgs.data()) + ccArgs.size(), diags);
@@ -276,7 +275,7 @@ getCodeGenAction(const ArgStringList &ccArgs, clang::DiagnosticsEngine &diags) {
         logError("Couldn’t enable diagnostics\n");
         exit(1);
     }
-    std::unique_ptr<CodeGenAction> act =
+    unique_ptr<CodeGenAction> act =
         llvm::make_unique<clang::EmitLLVMOnlyAction>();
     if (!clang.ExecuteAction(*act)) {
         logError("Couldn’t execute action\n");
@@ -382,8 +381,8 @@ int main(int argc, const char **argv) {
         return 1;
     }
 
-    const auto mod1 = act1->takeModule();
-    const auto mod2 = act2->takeModule();
+    const unique_ptr<llvm::Module> mod1 = act1->takeModule();
+    const unique_ptr<llvm::Module> mod2 = act2->takeModule();
     if (!mod1 || !mod2) {
         return 1;
     }
