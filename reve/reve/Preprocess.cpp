@@ -32,7 +32,6 @@ preprocessFunctions(MonoPair<shared_ptr<llvm::Module>> modules,
     vector<MonoPair<PreprocessedFunction>> processedFuns;
     auto funs = zipFunctions(*modules.first, *modules.second);
     for (auto funPair : funs.get()) {
-        llvm::errs() << "iterating over function\n";
         auto fam1 = preprocessFunction(*funPair.first, "1", opts);
         auto fam2 = preprocessFunction(*funPair.second, "2", opts);
         processedFuns.push_back(

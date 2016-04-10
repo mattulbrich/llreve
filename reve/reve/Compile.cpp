@@ -47,9 +47,6 @@ void executeCodeGenActions(const char *exeName, InputOpts &opts,
     auto args = initializeArgs(exeName, opts);
 
     unique_ptr<Compilation> comp(driver->BuildCompilation(args));
-    for (auto str : args) {
-        llvm::errs() << "arg: " << str << "\n";
-    }
     if (!comp) {
         logError("Couldn’t initiate compilation\n");
         exit(1);

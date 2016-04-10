@@ -198,6 +198,7 @@ void processFile(std::string file, SharedSMTRef &in, SharedSMTRef &out,
 
 int main(int argc, const char **argv) {
     parseCommandLineArguments(argc, argv);
+
     PreprocessOpts preprocessOpts(ShowCFGFlag, ShowMarkedCFGFlag);
     SMTGenerationOpts::initialize(MainFunctionFlag, HeapFlag, StackFlag,
                                   GlobalConstantsFlag, OnlyRecursiveFlag,
@@ -213,11 +214,8 @@ int main(int argc, const char **argv) {
                      make_shared<clang::EmitLLVMOnlyAction>());
     MonoPair<shared_ptr<llvm::Module>> modules =
         compileToModules(argv[0], inputOpts, acts);
-
-    llvm::errs() << "Compiled\n";
     vector<MonoPair<PreprocessedFunction>> preprocessedFuns =
         preprocessFunctions(modules, preprocessOpts);
-    llvm::errs() << "Preprocessed\n";
 
     std::vector<SharedSMTRef> declarations;
     if (SMTGenerationOpts::getInstance().MuZ) {
@@ -242,7 +240,6 @@ int main(int argc, const char **argv) {
 
     // Indicates if we just want to add to the default precondition or replace
     // it
-    llvm::errs() << "before inoutinvs\n";
     bool additionalIn = false;
     MonoPair<SharedSMTRef> inOutInvs =
         parseInOutInvs(inputOpts.FileNames, additionalIn);
@@ -257,23 +254,16 @@ int main(int argc, const char **argv) {
         smtOpts.MainFunction = preprocessedFuns.at(0).first.fun->getName();
     }
 
-    llvm::errs() << "before globaldecls\n";
     auto globalDecls = globalDeclarations(*modules.first, *modules.second);
     smtExprs.insert(smtExprs.end(), globalDecls.begin(), globalDecls.end());
 
-    llvm::errs() << preprocessedFuns.size() << "\n";
-
-    llvm::errs() << "start to iterate\n";
     for (auto &funPair : preprocessedFuns) {
         // Main function
-        llvm::errs() << "iterating\n";
         if (funPair.first.fun->getName() == smtOpts.MainFunction) {
-            llvm::errs() << "ininvariant\n";
             smtExprs.push_back(inInvariant(
                 makeMonoPair(funPair.first.fun, funPair.second.fun),
                 inOutInvs.first, mem, *modules.first, *modules.second,
                 smtOpts.GlobalConstants, additionalIn));
-            llvm::errs() << "done\n";
             smtExprs.push_back(outInvariant(
                 functionArgs(*funPair.first.fun, *funPair.second.fun),
                 inOutInvs.second, mem));
@@ -293,7 +283,6 @@ int main(int argc, const char **argv) {
                               newSmtExprs.end());
         }
     }
-    llvm::errs() << "skipped the loop\n";
     smtExprs.insert(smtExprs.end(), declarations.begin(), declarations.end());
     smtExprs.insert(smtExprs.end(), assertions.begin(), assertions.end());
     if (SMTGenerationOpts::getInstance().MuZ) {
@@ -305,9 +294,7 @@ int main(int argc, const char **argv) {
 
     serializeSMT(smtExprs, SMTGenerationOpts::getInstance().MuZ, serializeOpts);
 
-    llvm::errs() << "shutting down\n";
     llvm::llvm_shutdown();
-    llvm::errs() << "shut down\n";
 
     return 0;
 }
