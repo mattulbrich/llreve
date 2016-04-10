@@ -66,3 +66,7 @@ class SerializeOpts {
     SerializeOpts(std::string outputFileName)
         : OutputFileName(outputFileName) {}
 };
+
+void parseCommandLineArguments(int argc, const char **argv);
+auto getInlineOpts(const char *file1, const char *file2)
+    -> std::vector<std::string>;

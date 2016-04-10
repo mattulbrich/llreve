@@ -56,5 +56,3 @@ auto collectFunConds(MonoPair<std::string> fileNames)
 auto collectFunCondsInFile(std::string file)
     -> std::multimap<std::string, std::string>;
 auto doesAccessMemory(const llvm::Module &mod) -> bool;
-auto getInlineOpts(const char *file1, const char *file2)
-    -> std::vector<std::string>;

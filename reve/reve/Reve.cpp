@@ -329,41 +329,7 @@ void processFile(std::string file, SharedSMTRef &in, SharedSMTRef &out,
 }
 
 int main(int argc, const char **argv) {
-    llvm::cl::HideUnrelatedOptions(ReveCategory);
-    bool inlineOpts = false;
-    // We can’t use the option parser for this since it can only be run once
-    // (global state, fuck yeah) and
-    // we might want to add arguments to it
-    const char *file1 = nullptr;
-    const char *file2 = nullptr;
-    for (int i = 1; i < argc; ++i) {
-        if (*argv[i] != '-') {
-            if (!file1) {
-                file1 = argv[i];
-            } else if (!file2) {
-                file2 = argv[i];
-            }
-        } else if (strcmp(argv[i], "-inline-opts") == 0) {
-            inlineOpts = true;
-        }
-    }
-    if (inlineOpts) {
-        const vector<std::string> parsedOpts = getInlineOpts(file1, file2);
-        vector<const char *> parsedOptsCStyle;
-        for (int i = 0; i < argc; ++i) {
-            if (strcmp(argv[i], "-inline-opts") != 0) {
-                parsedOptsCStyle.push_back(argv[i]);
-            }
-        }
-        for (const string &opt : parsedOpts) {
-            parsedOptsCStyle.push_back(opt.c_str());
-        }
-        argc = static_cast<int>(parsedOptsCStyle.size());
-        argv = &parsedOptsCStyle[0];
-        llvm::cl::ParseCommandLineOptions(argc, argv, "reve\n");
-    } else {
-        llvm::cl::ParseCommandLineOptions(argc, argv, "reve\n");
-    }
+    parseCommandLineArguments(argc, argv);
     PreprocessOpts preprocessOpts(ShowCFGFlag, ShowMarkedCFGFlag);
     SMTGenerationOpts::initialize(MainFunctionFlag, HeapFlag, StackFlag,
                                   GlobalConstantsFlag, OnlyRecursiveFlag,
@@ -826,29 +792,4 @@ std::multimap<string, string> collectFunCondsInFile(std::string file) {
         map.insert(make_pair(match[1], "(" + matchStr + ")"));
     }
     return map;
-}
-
-std::vector<string> getInlineOpts(const char *file1, const char *file2) {
-    std::regex optRegex("/\\*@\\s*opt\\s+(\\S+)\\s+(\\S*)\\s*@\\*/",
-                        std::regex::ECMAScript);
-    std::vector<string> args;
-    makeMonoPair(file1, file2).forEach([&args, &optRegex](const char *file) {
-        std::ifstream fileStream(file);
-        std::string fileString((std::istreambuf_iterator<char>(fileStream)),
-                               std::istreambuf_iterator<char>());
-        for (std::sregex_iterator
-                 i = std::sregex_iterator(fileString.begin(), fileString.end(),
-                                          optRegex),
-                 e = std::sregex_iterator();
-             i != e; ++i) {
-            std::smatch match = *i;
-            string optionName = match[1];
-            string optionVal = match[2];
-            args.push_back(optionName);
-            if (!optionVal.empty()) {
-                args.push_back(optionVal);
-            }
-        }
-    });
-    return args;
 }
