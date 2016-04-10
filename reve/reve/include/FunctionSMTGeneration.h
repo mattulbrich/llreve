@@ -1,9 +1,5 @@
 #pragma once
 
-/**
-  \file SMTGeneration.h
-  Contains the main logic for actually generating smt from the llvm assembly.
-*/
 #include "Assignment.h"
 #include "Helper.h"
 #include "Memory.h"
@@ -139,12 +135,6 @@ auto forallStartingAt(smt::SharedSMTRef clause,
 auto makeFunArgsEqual(smt::SharedSMTRef clause, smt::SharedSMTRef preClause,
                       std::vector<std::string> args1,
                       std::vector<std::string> args2) -> smt::SharedSMTRef;
-auto inInvariant(MonoPair<const llvm::Function *> funs, smt::SharedSMTRef body,
-                 Memory memory, const llvm::Module &mod1,
-                 const llvm::Module &mod2, bool strings, bool inInvariant)
-    -> smt::SharedSMTRef;
-auto outInvariant(MonoPair<std::vector<std::string>> funArgs,
-                  smt::SharedSMTRef body, Memory memory) -> smt::SharedSMTRef;
 auto equalInputsEqualOutputs(std::vector<std::string> funArgs,
                              std::vector<std::string> funArgs1,
                              std::vector<std::string> funArgs2,
@@ -174,8 +164,6 @@ struct SplitAssignments {
 auto splitAssignmentsFromCalls(std::vector<AssignmentCallBlock>)
     -> SplitAssignments;
 
-auto stringConstants(const llvm::Module &mod, std::string heap)
-    -> std::vector<smt::SharedSMTRef>;
 auto matchFunCalls(std::vector<CallInfo> callInfos1,
                    std::vector<CallInfo> callInfos2)
     -> std::vector<InterleaveStep>;

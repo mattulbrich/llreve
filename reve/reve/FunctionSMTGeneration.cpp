@@ -1,4 +1,4 @@
-#include "SMTGeneration.h"
+#include "FunctionSMTGeneration.h"
 
 #include "Compat.h"
 #include "Invariant.h"
@@ -807,100 +807,6 @@ SharedSMTRef makeFunArgsEqual(SharedSMTRef clause, SharedSMTRef preClause,
                      makeBinOp("and", clause, preClause));
 }
 
-SharedSMTRef inInvariant(MonoPair<const llvm::Function *> funs,
-                         SharedSMTRef body, Memory memory,
-                         const llvm::Module &mod1, const llvm::Module &mod2,
-                         bool strings, bool additionalIn) {
-
-    vector<SharedSMTRef> args;
-    const auto funArgsPair =
-        functionArgs(*funs.first, *funs.second)
-            .indexedMap<vector<string>>(
-                [memory](vector<string> args, int index) -> vector<string> {
-                    string indexString = std::to_string(index);
-                    if (memory & HEAP_MASK) {
-                        args.push_back("HEAP$" + indexString);
-                    }
-                    if (memory & STACK_MASK) {
-                        args.push_back("STACK$" + indexString);
-                    }
-                    return args;
-                });
-    vector<string> Args1 = funArgsPair.first;
-    vector<string> Args2 = funArgsPair.second;
-
-    assert(Args1.size() == Args2.size());
-
-    vector<SortedVar> funArgs =
-        concat(std::move(funArgsPair)
-                   .map<vector<SortedVar>>(
-                       [](vector<string> args) -> vector<SortedVar> {
-                           vector<SortedVar> varArgs;
-                           for (auto arg : args) {
-                               varArgs.push_back(SortedVar(arg, argSort(arg)));
-                           }
-                           return varArgs;
-                       }));
-    for (auto argPair : makeZip(Args1, Args2)) {
-        args.push_back(makeBinOp("=", argPair.first, argPair.second));
-    }
-    if (additionalIn) {
-        args.push_back(body);
-    }
-    if (body == nullptr || additionalIn) {
-        body = make_shared<Op>("and", args);
-    }
-    if (strings) {
-        // Add values of static arrays, strings and similar things
-        vector<SharedSMTRef> smtArgs = {body};
-        makeMonoPair(&mod1, &mod2)
-            .indexedMap<vector<SharedSMTRef>>([&args](const llvm::Module *mod,
-                                                      int index) {
-                return stringConstants(*mod, "HEAP$" + std::to_string(index));
-            })
-            .forEach([&smtArgs](vector<SharedSMTRef> constants) {
-                if (!constants.empty()) {
-                    smtArgs.push_back(make_shared<Op>("and", constants));
-                }
-            });
-        body = make_shared<Op>("and", smtArgs);
-    }
-
-    return make_shared<FunDef>("IN_INV", funArgs, "Bool", body);
-}
-
-SharedSMTRef outInvariant(MonoPair<vector<string>> functionArgs,
-                          SharedSMTRef body, Memory memory) {
-    vector<SortedVar> funArgs = {SortedVar("result$1", "Int"),
-                                 SortedVar("result$2", "Int")};
-    std::sort(functionArgs.first.begin(), functionArgs.first.end());
-    std::sort(functionArgs.second.begin(), functionArgs.second.end());
-    if (SMTGenerationOpts::getInstance().PassInputThrough) {
-        for (const string &arg : functionArgs.first) {
-            funArgs.push_back(SortedVar(arg, "Int"));
-        }
-    }
-    if (memory & HEAP_MASK) {
-        funArgs.push_back(SortedVar("HEAP$1", "(Array Int Int)"));
-    }
-    if (SMTGenerationOpts::getInstance().PassInputThrough) {
-        for (const string &arg : functionArgs.second) {
-            funArgs.push_back(SortedVar(arg, "Int"));
-        }
-    }
-    if (memory & HEAP_MASK) {
-        funArgs.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
-    }
-    if (body == nullptr) {
-        body = makeBinOp("=", "result$1", "result$2");
-        if (memory & HEAP_MASK) {
-            body = makeBinOp("and", body, makeBinOp("=", "HEAP$1", "HEAP$2"));
-        }
-    }
-
-    return make_shared<FunDef>("OUT_INV", funArgs, "Bool", body);
-}
-
 /// Create an assertion to require that if the recursive invariant holds and the
 /// arguments are equal the outputs are equal
 SharedSMTRef equalInputsEqualOutputs(vector<string> funArgs,
@@ -1209,31 +1115,6 @@ splitAssignmentsFromCalls(vector<AssignmentCallBlock> assignmentCallBlocks) {
     }
     assignmentBlocks.push_back(currentAssignmentsList);
     return {assignmentBlocks, callInfos};
-}
-
-vector<SharedSMTRef> stringConstants(const llvm::Module &mod, string memory) {
-    vector<SharedSMTRef> stringConstants;
-    for (const auto &global : mod.globals()) {
-        const string globalName = global.getName();
-        vector<SharedSMTRef> stringConstant;
-        if (global.hasInitializer() && global.isConstant()) {
-            if (const auto arr = llvm::dyn_cast<llvm::ConstantDataArray>(
-                    global.getInitializer())) {
-                for (unsigned int i = 0; i < arr->getNumElements(); ++i) {
-                    stringConstant.push_back(makeBinOp(
-                        "=",
-                        stringExpr(std::to_string(arr->getElementAsInteger(i))),
-                        makeBinOp(
-                            "select", stringExpr(memory),
-                            makeBinOp("+", globalName, std::to_string(i)))));
-                }
-            }
-        }
-        if (!stringConstant.empty()) {
-            stringConstants.push_back(make_shared<Op>("and", stringConstant));
-        }
-    }
-    return stringConstants;
 }
 
 vector<InterleaveStep> matchFunCalls(vector<CallInfo> callInfos1,
