@@ -67,16 +67,20 @@ main =
 
      buildDir </> "reve" <.> exe %>
        \out ->
-         do cpps <-
-              getDirectoryFiles ""
-                                ["*.cpp"]
+         do let cpps = ["Reve.cpp"]
             llvmLDFlags <- getLLVMLDFlags (LLVMLDFlags ())
             llvmSystemLibs <- getLLVMSystemLibs (LLVMSystemLibs ())
             llvmLibs <- getLLVMLibs (LLVMLibs ())
             clangLibs <- getClangLibs (ClangLibs ())
             let os = map (\cpp -> buildDir </> cpp -<.> "o") cpps
+            need ((buildDir </> "libreve.a") :os)
+            cmd "clang++ -o" [out] os (buildDir </> "libreve.a") llvmLDFlags llvmSystemLibs clangLibs llvmLibs
+     buildDir </> "libreve.a" %>
+       \out ->
+         do cpps <- getDirectoryFiles "" ["lib/*.cpp"]
+            let os = map (\cpp -> buildDir </> cpp -<.> "o") cpps
             need os
-            cmd "clang++ -o" [out] os llvmLDFlags llvmSystemLibs clangLibs llvmLibs
+            cmd "ar qc" [out] os
 
 newtype LLVMLibs =
   LLVMLibs ()
