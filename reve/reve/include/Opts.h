@@ -1,7 +1,11 @@
 #pragma once
 
 #include "MonoPair.h"
+#include "SMT.h"
+
 #include "llvm/Support/CommandLine.h"
+
+#include <map>
 
 extern llvm::cl::OptionCategory ReveCategory;
 
@@ -67,9 +71,43 @@ class SerializeOpts {
         : OutputFileName(outputFileName) {}
 };
 
+/// Options that are parsed from special comments inside the programs
+/// Currently this consists of custom relations and preconditions
+class FileOptions {
+  public:
+    // map from function names to conditions
+    std::multimap<std::string, std::string> FunctionConditions;
+    smt::SharedSMTRef InRelation;
+    smt::SharedSMTRef OutRelation;
+    // Indicates if InRelation is meant to replace the existing relation or just
+    // enhance it
+    bool AdditionalInRelation;
+    FileOptions(std::multimap<std::string, std::string> functionConditions,
+                smt::SharedSMTRef inRelation, smt::SharedSMTRef outRelation,
+                bool additionalIn)
+        : FunctionConditions(functionConditions), InRelation(inRelation),
+          OutRelation(outRelation), AdditionalInRelation(additionalIn) {}
+};
+
 /// If inline-opts is passed this will try to read arguments from the files.
 /// In that case the files have to come before any other option that takes an
 /// argument.
-void parseCommandLineArguments(int argc, const char **argv);
+auto parseCommandLineArguments(int argc, const char **argv) -> void;
+
+// Search for command line options that are specified inside the programs
 auto getInlineOpts(const char *file1, const char *file2)
     -> std::vector<std::string>;
+
+// Search for options that can only be specified as special comments inside the
+// programs
+auto getFileOptions(MonoPair<std::string> fileNames) -> FileOptions;
+
+auto searchCustomRelations(MonoPair<std::string> fileNames, bool &additionalIn)
+    -> MonoPair<smt::SharedSMTRef>;
+auto searchCustomRelationsInFile(std::string file, smt::SharedSMTRef &in,
+                                 smt::SharedSMTRef &out, bool &additionalIn)
+    -> void;
+auto searchFunctionConditions(MonoPair<std::string> fileNames)
+    -> std::multimap<std::string, std::string>;
+auto searchFunctionConditionsInFile(std::string file)
+    -> std::multimap<std::string, std::string>;

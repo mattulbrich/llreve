@@ -152,50 +152,6 @@ static llvm::cl::opt<bool> PassInputThroughFlag(
                    "to use them in custom postconditions"),
     llvm::cl::cat(ReveCategory));
 
-MonoPair<SharedSMTRef> parseInOutInvs(MonoPair<std::string> fileNames,
-                                      bool &additionalIn) {
-    SharedSMTRef in = nullptr;
-    SharedSMTRef out = nullptr;
-    std::ifstream fileStream1(fileNames.first);
-    std::string fileString1((std::istreambuf_iterator<char>(fileStream1)),
-                            std::istreambuf_iterator<char>());
-    std::ifstream fileStream2(fileNames.second);
-    std::string fileString2((std::istreambuf_iterator<char>(fileStream2)),
-                            std::istreambuf_iterator<char>());
-
-    processFile(fileString1, in, out, additionalIn);
-    processFile(fileString2, in, out, additionalIn);
-
-    return makeMonoPair(in, out);
-}
-
-void processFile(std::string file, SharedSMTRef &in, SharedSMTRef &out,
-                 bool &additionalIn) {
-    std::regex relinRegex(
-        "/\\*@\\s*rel_in\\s*(\\w*)\\s*\\(([\\s\\S]*?)\\)\\s*@\\*/",
-        std::regex::ECMAScript);
-    std::regex reloutRegex(
-        "/\\*@\\s*rel_out\\s*(\\w*)\\s*\\(([\\s\\S]*?)\\)\\s*@\\*/",
-        std::regex::ECMAScript);
-    std::regex preRegex("/\\*@\\s*pre\\s*(\\w*)\\s*\\(([\\s\\S]*?)\\)\\s*@\\*/",
-                        std::regex::ECMAScript);
-    std::smatch match;
-    if (in == nullptr) {
-        if (std::regex_search(file, match, preRegex)) {
-            std::string matchStr = match[2];
-            in = stringExpr("(" + matchStr + ")");
-            additionalIn = true;
-        } else if (std::regex_search(file, match, relinRegex)) {
-            std::string matchStr = match[2];
-            in = stringExpr("(" + matchStr + ")");
-        }
-    }
-    if (std::regex_search(file, match, reloutRegex) && out == nullptr) {
-        std::string matchStr = match[2];
-        out = stringExpr("(" + matchStr + ")");
-    }
-}
-
 int main(int argc, const char **argv) {
     parseCommandLineArguments(argc, argv);
 
@@ -208,6 +164,7 @@ int main(int argc, const char **argv) {
     InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,
                         FileName2Flag);
     SerializeOpts serializeOpts(OutputFileNameFlag);
+    FileOptions fileOpts = getFileOptions(inputOpts.FileNames);
 
     MonoPair<shared_ptr<CodeGenAction>> acts =
         makeMonoPair(make_shared<clang::EmitLLVMOnlyAction>(),
@@ -238,18 +195,10 @@ int main(int argc, const char **argv) {
         mem |= STACK_MASK;
     }
 
-    // Indicates if we just want to add to the default precondition or replace
-    // it
-    bool additionalIn = false;
-    MonoPair<SharedSMTRef> inOutInvs =
-        parseInOutInvs(inputOpts.FileNames, additionalIn);
-
-    auto funCondMap = collectFunConds(inputOpts.FileNames);
-
     SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
 
     externDeclarations(*modules.first, *modules.second, declarations, mem,
-                       funCondMap);
+                       fileOpts.FunctionConditions);
     if (smtOpts.MainFunction == "" && !preprocessedFuns.empty()) {
         smtOpts.MainFunction = preprocessedFuns.at(0).first.fun->getName();
     }
@@ -262,11 +211,11 @@ int main(int argc, const char **argv) {
         if (funPair.first.fun->getName() == smtOpts.MainFunction) {
             smtExprs.push_back(inInvariant(
                 makeMonoPair(funPair.first.fun, funPair.second.fun),
-                inOutInvs.first, mem, *modules.first, *modules.second,
-                smtOpts.GlobalConstants, additionalIn));
+                fileOpts.InRelation, mem, *modules.first, *modules.second,
+                smtOpts.GlobalConstants, fileOpts.AdditionalInRelation));
             smtExprs.push_back(outInvariant(
                 functionArgs(*funPair.first.fun, *funPair.second.fun),
-                inOutInvs.second, mem));
+                fileOpts.OutRelation, mem));
             auto newSmtExprs = mainAssertion(funPair, declarations,
                                              smtOpts.OnlyRecursive, mem);
             assertions.insert(assertions.end(), newSmtExprs.begin(),
@@ -541,35 +490,4 @@ std::vector<SharedSMTRef> globalDeclarations(llvm::Module &mod1,
         global2.setName(global2.getName() + "$2");
     }
     return declarations;
-}
-
-std::multimap<string, string> collectFunConds(MonoPair<string> fileNames) {
-    std::multimap<string, string> map;
-    std::ifstream fileStream1(fileNames.first);
-    std::string fileString1((std::istreambuf_iterator<char>(fileStream1)),
-                            std::istreambuf_iterator<char>());
-    std::ifstream fileStream2(fileNames.second);
-    std::string fileString2((std::istreambuf_iterator<char>(fileStream2)),
-                            std::istreambuf_iterator<char>());
-    auto map1 = collectFunCondsInFile(fileString1);
-    auto map2 = collectFunCondsInFile(fileString2);
-    std::merge(map1.begin(), map1.end(), map2.begin(), map2.end(),
-               std::inserter(map, std::end(map)));
-    return map;
-}
-
-std::multimap<string, string> collectFunCondsInFile(std::string file) {
-    std::multimap<string, string> map;
-    std::regex condRegex(
-        "/\\*@\\s*addfuncond\\s*(\\w*)\\s*\\(([\\s\\S]*?)\\)\\s*@\\*/",
-        std::regex::ECMAScript);
-    for (std::sregex_iterator
-             i = std::sregex_iterator(file.begin(), file.end(), condRegex),
-             e = std::sregex_iterator();
-         i != e; ++i) {
-        std::smatch match = *i;
-        std::string matchStr = match[2];
-        map.insert(make_pair(match[1], "(" + matchStr + ")"));
-    }
-    return map;
 }

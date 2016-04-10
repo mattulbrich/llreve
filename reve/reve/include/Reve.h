@@ -12,11 +12,7 @@
 #include "llvm/Option/Option.h"
 
 auto main(int argc, const char **argv) -> int;
-template <typename T> auto makeErrorOr(T Arg) -> llvm::ErrorOr<T>;
-auto parseInOutInvs(MonoPair<std::string> fileNames, bool &additionalIn)
-    -> MonoPair<smt::SharedSMTRef>;
-auto processFile(std::string file, smt::SharedSMTRef &in,
-                 smt::SharedSMTRef &out, bool &additionalIn) -> void;
+
 auto externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                         std::vector<smt::SharedSMTRef> &declarations,
                         uint8_t mem,
@@ -33,8 +29,5 @@ auto globalDeclarations(llvm::Module &mod1, llvm::Module &mod2)
 auto globalDeclarationsForMod(int globalPointer, llvm::Module &mod,
                               llvm::Module &otherMod, int program)
     -> std::vector<smt::SharedSMTRef>;
-auto collectFunConds(MonoPair<std::string> fileNames)
-    -> std::multimap<std::string, std::string>;
-auto collectFunCondsInFile(std::string file)
-    -> std::multimap<std::string, std::string>;
+
 auto doesAccessMemory(const llvm::Module &mod) -> bool;

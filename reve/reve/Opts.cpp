@@ -2,11 +2,13 @@
 
 #include "llvm/Support/CommandLine.h"
 
-#include <regex>
 #include <fstream>
+#include <regex>
 
 using std::string;
 using std::vector;
+using smt::stringExpr;
+using smt::SharedSMTRef;
 
 llvm::cl::OptionCategory ReveCategory("Reve options",
                                       "Options for controlling reve.");
@@ -93,4 +95,89 @@ std::vector<string> getInlineOpts(const char *file1, const char *file2) {
         }
     });
     return args;
+}
+
+MonoPair<SharedSMTRef> searchCustomRelations(MonoPair<std::string> fileNames,
+                                             bool &additionalIn) {
+    SharedSMTRef in = nullptr;
+    SharedSMTRef out = nullptr;
+    std::ifstream fileStream1(fileNames.first);
+    std::string fileString1((std::istreambuf_iterator<char>(fileStream1)),
+                            std::istreambuf_iterator<char>());
+    std::ifstream fileStream2(fileNames.second);
+    std::string fileString2((std::istreambuf_iterator<char>(fileStream2)),
+                            std::istreambuf_iterator<char>());
+
+    searchCustomRelationsInFile(fileString1, in, out, additionalIn);
+    searchCustomRelationsInFile(fileString2, in, out, additionalIn);
+
+    return makeMonoPair(in, out);
+}
+
+void searchCustomRelationsInFile(std::string file, SharedSMTRef &in,
+                                 SharedSMTRef &out, bool &additionalIn) {
+    std::regex relinRegex(
+        "/\\*@\\s*rel_in\\s*(\\w*)\\s*\\(([\\s\\S]*?)\\)\\s*@\\*/",
+        std::regex::ECMAScript);
+    std::regex reloutRegex(
+        "/\\*@\\s*rel_out\\s*(\\w*)\\s*\\(([\\s\\S]*?)\\)\\s*@\\*/",
+        std::regex::ECMAScript);
+    std::regex preRegex("/\\*@\\s*pre\\s*(\\w*)\\s*\\(([\\s\\S]*?)\\)\\s*@\\*/",
+                        std::regex::ECMAScript);
+    std::smatch match;
+    if (in == nullptr) {
+        if (std::regex_search(file, match, preRegex)) {
+            std::string matchStr = match[2];
+            in = stringExpr("(" + matchStr + ")");
+            additionalIn = true;
+        } else if (std::regex_search(file, match, relinRegex)) {
+            std::string matchStr = match[2];
+            in = stringExpr("(" + matchStr + ")");
+        }
+    }
+    if (std::regex_search(file, match, reloutRegex) && out == nullptr) {
+        std::string matchStr = match[2];
+        out = stringExpr("(" + matchStr + ")");
+    }
+}
+
+std::multimap<string, string>
+searchFunctionConditions(MonoPair<string> fileNames) {
+    std::multimap<string, string> map;
+    std::ifstream fileStream1(fileNames.first);
+    std::string fileString1((std::istreambuf_iterator<char>(fileStream1)),
+                            std::istreambuf_iterator<char>());
+    std::ifstream fileStream2(fileNames.second);
+    std::string fileString2((std::istreambuf_iterator<char>(fileStream2)),
+                            std::istreambuf_iterator<char>());
+    auto map1 = searchFunctionConditionsInFile(fileString1);
+    auto map2 = searchFunctionConditionsInFile(fileString2);
+    std::merge(map1.begin(), map1.end(), map2.begin(), map2.end(),
+               std::inserter(map, std::end(map)));
+    return map;
+}
+
+std::multimap<string, string> searchFunctionConditionsInFile(std::string file) {
+    std::multimap<string, string> map;
+    std::regex condRegex(
+        "/\\*@\\s*addfuncond\\s*(\\w*)\\s*\\(([\\s\\S]*?)\\)\\s*@\\*/",
+        std::regex::ECMAScript);
+    for (std::sregex_iterator
+             i = std::sregex_iterator(file.begin(), file.end(), condRegex),
+             e = std::sregex_iterator();
+         i != e; ++i) {
+        std::smatch match = *i;
+        std::string matchStr = match[2];
+        map.insert(make_pair(match[1], "(" + matchStr + ")"));
+    }
+    return map;
+}
+
+FileOptions getFileOptions(MonoPair<string> fileNames) {
+    std::multimap<string, string> funConds =
+        searchFunctionConditions(fileNames);
+    bool additionalIn;
+    auto relationPair = searchCustomRelations(fileNames, additionalIn);
+    return FileOptions(funConds, relationPair.first, relationPair.second,
+                       additionalIn);
 }
