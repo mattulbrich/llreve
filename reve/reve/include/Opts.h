@@ -67,6 +67,9 @@ class SerializeOpts {
         : OutputFileName(outputFileName) {}
 };
 
+/// If inline-opts is passed this will try to read arguments from the files.
+/// In that case the files have to come before any other option that takes an
+/// argument.
 void parseCommandLineArguments(int argc, const char **argv);
 auto getInlineOpts(const char *file1, const char *file2)
     -> std::vector<std::string>;

@@ -9,6 +9,7 @@
 #include "Memory.h"
 #include "MonoPair.h"
 #include "PathAnalysis.h"
+#include "Preprocess.h"
 #include "Program.h"
 #include "SMT.h"
 
@@ -45,20 +46,20 @@ struct AssignmentBlock {
 This creates complete assertions containing the input and output parameters of
 the function. Each jump is modeled as a possibly recursive call.
  */
-auto functionAssertion(
-    MonoPair<llvm::Function *> funs,
-    MonoPair<std::shared_ptr<llvm::FunctionAnalysisManager>> fams,
-    std::vector<smt::SharedSMTRef> &declarations, Memory memory)
-    -> std::vector<smt::SharedSMTRef>;
+auto functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
+                       std::vector<smt::SharedSMTRef> &declarations,
+                       Memory memory) -> std::vector<smt::SharedSMTRef>;
+
 /// Create the assertion for the passed main function.
 /**
 The main function is special because it is never called so the predicates don’t
 need to contain the output parameters. While it’s not necessary to use this
 encoding it seems to perform better in some cases.
  */
-auto mainAssertion(MonoPair<llvm::Function *> funs, MonoPair<FAMRef> fams,
+auto mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
                    std::vector<smt::SharedSMTRef> &declarations, bool onlyRec,
                    Memory memory) -> std::vector<smt::SharedSMTRef>;
+
 /// Get all combinations of paths that have the same start and end mark.
 /**
   \return A nested map from start and end marks to a vector of paths. The paths

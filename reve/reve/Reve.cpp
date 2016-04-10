@@ -1,21 +1,13 @@
 #include "Reve.h"
 
-#include "AnnotStackPass.h"
-#include "CFGPrinter.h"
 #include "Compat.h"
-#include "ConstantProp.h"
+#include "Compile.h"
 #include "Helper.h"
-#include "InlinePass.h"
-#include "InstCombine.h"
 #include "Invariant.h"
 #include "Opts.h"
-#include "RemoveMarkPass.h"
-#include "RemoveMarkRefsPass.h"
+#include "Preprocess.h"
 #include "SMTGeneration.h"
 #include "Serialize.h"
-#include "SplitEntryBlockPass.h"
-#include "UnifyFunctionExitNodes.h"
-#include "UniqueNamePass.h"
 
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/Tool.h"
@@ -28,12 +20,10 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/Verifier.h"
-#include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/ADCE.h"
-#include "llvm/Transforms/Scalar/SimplifyCFG.h"
 
 #include <fstream>
 #include <iostream>
@@ -162,128 +152,6 @@ static llvm::cl::opt<bool> PassInputThroughFlag(
                    "to use them in custom postconditions"),
     llvm::cl::cat(ReveCategory));
 
-/// Initialize the argument vector to produce the llvm assembly for
-/// the two C files
-std::vector<const char *> initializeArgs(const char *exeName, InputOpts &opts) {
-    std::vector<const char *> args;
-    args.push_back(exeName); // add executable name
-    args.push_back("-xc");   // force language to C
-    args.push_back("-std=c99");
-    if (!opts.Includes.empty()) {
-        for (string &value : opts.Includes) {
-            args.push_back("-I");
-            args.push_back(value.c_str());
-        }
-    }
-    if (!opts.ResourceDir.empty()) {
-        args.push_back("-resource-dir");
-        args.push_back(opts.ResourceDir.c_str());
-    }
-    args.push_back(opts.FileNames.first.c_str());  // add input file
-    args.push_back(opts.FileNames.second.c_str()); // add input file
-    args.push_back("-fsyntax-only"); // don't do more work than necessary
-    return args;
-}
-
-/// Set up the diagnostics engine
-unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
-    const IntrusiveRefCntPtr<clang::DiagnosticOptions> diagOpts =
-        new clang::DiagnosticOptions();
-    auto diagClient =
-        new clang::TextDiagnosticPrinter(llvm::errs(), &*diagOpts);
-    const IntrusiveRefCntPtr<clang::DiagnosticIDs> diagId(
-        new clang::DiagnosticIDs());
-    return llvm::make_unique<DiagnosticsEngine>(diagId, &*diagOpts, diagClient);
-}
-
-/// Initialize the driver
-unique_ptr<Driver> initializeDriver(DiagnosticsEngine &diags) {
-    string tripleStr = llvm::sys::getProcessTriple();
-    llvm::Triple triple(tripleStr);
-    auto driver =
-        llvm::make_unique<clang::driver::Driver>("clang", triple.str(), diags);
-    driver->setTitle("reve");
-    driver->setCheckInputsExist(false);
-    // Builtin includes may not be found, a possible but bad solution would be
-    // to hardcode them:
-    // driver->ResourceDir =
-    // "/usr/local/stow/clang-3.8.0/bin/../lib/clang/3.8.0";
-    // To find the correct path on linux the following comand can be used:
-    // clang '-###' -c foo.c 2>&1 | tr ' ' '\n' | grep -A1 resource
-    return driver;
-}
-
-/// This creates the compilations commands to compile to assembly
-ErrorOr<MonoPair<ArgStringList>> getCmd(Compilation &comp,
-                                        DiagnosticsEngine &diags) {
-    const JobList &jobs = comp.getJobs();
-
-    // there should be exactly two jobs
-    if (jobs.size() != 2) {
-        llvm::SmallString<256> msg;
-        llvm::raw_svector_ostream os(msg);
-        jobs.Print(os, "; ", true);
-        diags.Report(clang::diag::err_fe_expected_compiler_job) << os.str();
-        return ErrorOr<MonoPair<ArgStringList>>(std::error_code());
-    }
-
-    return makeErrorOr(makeMonoPair(jobs.begin()->getArguments(),
-                                    std::next(jobs.begin())->getArguments()));
-}
-
-/// Wrapper function to allow inferenece of template parameters
-template <typename T> ErrorOr<T> makeErrorOr(T Arg) { return ErrorOr<T>(Arg); }
-
-/// Compile the inputs to llvm assembly and return those modules
-MonoPair<unique_ptr<clang::CodeGenAction>> getModule(const char *exeName,
-                                                     InputOpts opts) {
-    auto diags = initializeDiagnostics();
-    auto driver = initializeDriver(*diags);
-    auto args = initializeArgs(exeName, opts);
-
-    unique_ptr<Compilation> comp(driver->BuildCompilation(args));
-    if (!comp) {
-        return makeMonoPair<unique_ptr<clang::CodeGenAction>>(
-            std::move(nullptr), std::move(nullptr));
-    }
-
-    auto cmdArgsOrError = getCmd(*comp, *diags);
-    if (!cmdArgsOrError) {
-        return makeMonoPair<unique_ptr<clang::CodeGenAction>>(nullptr, nullptr);
-    }
-    auto cmdArgs = cmdArgsOrError.get();
-
-    auto act1 = getCodeGenAction(cmdArgs.first, *diags);
-    auto act2 = getCodeGenAction(cmdArgs.second, *diags);
-    if (!act1 || !act2) {
-        return makeMonoPair<unique_ptr<clang::CodeGenAction>>(nullptr, nullptr);
-    }
-
-    return makeMonoPair(std::move(act1), std::move(act2));
-}
-
-/// Build the CodeGenAction corresponding to the arguments
-unique_ptr<CodeGenAction> getCodeGenAction(const ArgStringList &ccArgs,
-                                           clang::DiagnosticsEngine &diags) {
-    auto ci = llvm::make_unique<CompilerInvocation>();
-    CompilerInvocation::CreateFromArgs(*ci, (ccArgs.data()),
-                                       (ccArgs.data()) + ccArgs.size(), diags);
-    CompilerInstance clang;
-    clang.setInvocation(ci.release());
-    clang.createDiagnostics();
-    if (!clang.hasDiagnostics()) {
-        logError("Couldn’t enable diagnostics\n");
-        exit(1);
-    }
-    unique_ptr<CodeGenAction> act =
-        llvm::make_unique<clang::EmitLLVMOnlyAction>();
-    if (!clang.ExecuteAction(*act)) {
-        logError("Couldn’t execute action\n");
-        exit(1);
-    }
-    return act;
-}
-
 MonoPair<SharedSMTRef> parseInOutInvs(MonoPair<std::string> fileNames,
                                       bool &additionalIn) {
     SharedSMTRef in = nullptr;
@@ -340,25 +208,16 @@ int main(int argc, const char **argv) {
                         FileName2Flag);
     SerializeOpts serializeOpts(OutputFileNameFlag);
 
-    auto actPair = getModule(argv[0], inputOpts);
-    const auto act1 = std::move(actPair.first);
-    const auto act2 = std::move(actPair.second);
-    if (!act1 || !act2) {
-        return 1;
-    }
+    MonoPair<shared_ptr<CodeGenAction>> acts =
+        makeMonoPair(make_shared<clang::EmitLLVMOnlyAction>(),
+                     make_shared<clang::EmitLLVMOnlyAction>());
+    MonoPair<shared_ptr<llvm::Module>> modules =
+        compileToModules(argv[0], inputOpts, acts);
 
-    const unique_ptr<llvm::Module> mod1 = act1->takeModule();
-    const unique_ptr<llvm::Module> mod2 = act2->takeModule();
-    if (!mod1 || !mod2) {
-        return 1;
-    }
-
-    auto funs = zipFunctions(*mod1, *mod2);
-
-    if (!funs) {
-        errs() << "Couldn't find matching functions\n";
-        return 1;
-    }
+    llvm::errs() << "Compiled\n";
+    vector<MonoPair<PreprocessedFunction>> preprocessedFuns =
+        preprocessFunctions(modules, preprocessOpts);
+    llvm::errs() << "Preprocessed\n";
 
     std::vector<SharedSMTRef> declarations;
     if (SMTGenerationOpts::getInstance().MuZ) {
@@ -372,16 +231,9 @@ int main(int argc, const char **argv) {
         smtExprs.push_back(std::make_shared<SetLogic>("HORN"));
     }
 
-    std::vector<MonoPair<FAMRef>> fams;
-    for (auto funPair : funs.get()) {
-        auto fam1 = preprocessFunction(*funPair.first, "1", preprocessOpts);
-        auto fam2 = preprocessFunction(*funPair.second, "2", preprocessOpts);
-        fams.push_back(makeMonoPair(fam1, fam2));
-    }
-
     Memory mem = 0;
-    if (SMTGenerationOpts::getInstance().Heap || doesAccessMemory(*mod1) ||
-        doesAccessMemory(*mod2)) {
+    if (SMTGenerationOpts::getInstance().Heap ||
+        doesAccessMemory(*modules.first) || doesAccessMemory(*modules.second)) {
         mem |= HEAP_MASK;
     }
     if (SMTGenerationOpts::getInstance().Stack) {
@@ -390,6 +242,7 @@ int main(int argc, const char **argv) {
 
     // Indicates if we just want to add to the default precondition or replace
     // it
+    llvm::errs() << "before inoutinvs\n";
     bool additionalIn = false;
     MonoPair<SharedSMTRef> inOutInvs =
         parseInOutInvs(inputOpts.FileNames, additionalIn);
@@ -398,41 +251,49 @@ int main(int argc, const char **argv) {
 
     SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
 
-    externDeclarations(*mod1, *mod2, declarations, mem, funCondMap);
-    if (smtOpts.MainFunction == "" && !funs.get().empty()) {
-        smtOpts.MainFunction = funs.get().at(0).first->getName();
+    externDeclarations(*modules.first, *modules.second, declarations, mem,
+                       funCondMap);
+    if (smtOpts.MainFunction == "" && !preprocessedFuns.empty()) {
+        smtOpts.MainFunction = preprocessedFuns.at(0).first.fun->getName();
     }
 
-    auto globalDecls = globalDeclarations(*mod1, *mod2);
+    llvm::errs() << "before globaldecls\n";
+    auto globalDecls = globalDeclarations(*modules.first, *modules.second);
     smtExprs.insert(smtExprs.end(), globalDecls.begin(), globalDecls.end());
 
-    for (auto funPair : makeZip(funs.get(), fams)) {
+    llvm::errs() << preprocessedFuns.size() << "\n";
+
+    llvm::errs() << "start to iterate\n";
+    for (auto &funPair : preprocessedFuns) {
         // Main function
-        if (funPair.first.first->getName() == smtOpts.MainFunction) {
-            smtExprs.push_back(
-                inInvariant(funPair.first, inOutInvs.first, mem, *mod1, *mod2,
-                            smtOpts.GlobalConstants, additionalIn));
+        llvm::errs() << "iterating\n";
+        if (funPair.first.fun->getName() == smtOpts.MainFunction) {
+            llvm::errs() << "ininvariant\n";
+            smtExprs.push_back(inInvariant(
+                makeMonoPair(funPair.first.fun, funPair.second.fun),
+                inOutInvs.first, mem, *modules.first, *modules.second,
+                smtOpts.GlobalConstants, additionalIn));
+            llvm::errs() << "done\n";
             smtExprs.push_back(outInvariant(
-                functionArgs(*funPair.first.first, *funPair.first.second),
+                functionArgs(*funPair.first.fun, *funPair.second.fun),
                 inOutInvs.second, mem));
-            auto newSmtExprs =
-                mainAssertion(funPair.first, funPair.second, declarations,
-                              smtOpts.OnlyRecursive, mem);
+            auto newSmtExprs = mainAssertion(funPair, declarations,
+                                             smtOpts.OnlyRecursive, mem);
             assertions.insert(assertions.end(), newSmtExprs.begin(),
                               newSmtExprs.end());
         }
         // Other functions used by the main function or the main function if
         // it’s recursive
-        if (funPair.first.first->getName() != smtOpts.MainFunction ||
-            (!(doesNotRecurse(*funPair.first.first) &&
-               doesNotRecurse(*funPair.first.second)) ||
+        if (funPair.first.fun->getName() != smtOpts.MainFunction ||
+            (!(doesNotRecurse(*funPair.first.fun) &&
+               doesNotRecurse(*funPair.second.fun)) ||
              smtOpts.OnlyRecursive)) {
-            auto newSmtExprs = functionAssertion(funPair.first, funPair.second,
-                                                 declarations, mem);
+            auto newSmtExprs = functionAssertion(funPair, declarations, mem);
             assertions.insert(assertions.end(), newSmtExprs.begin(),
                               newSmtExprs.end());
         }
     }
+    llvm::errs() << "skipped the loop\n";
     smtExprs.insert(smtExprs.end(), declarations.begin(), declarations.end());
     smtExprs.insert(smtExprs.end(), assertions.begin(), assertions.end());
     if (SMTGenerationOpts::getInstance().MuZ) {
@@ -444,79 +305,11 @@ int main(int argc, const char **argv) {
 
     serializeSMT(smtExprs, SMTGenerationOpts::getInstance().MuZ, serializeOpts);
 
+    llvm::errs() << "shutting down\n";
     llvm::llvm_shutdown();
+    llvm::errs() << "shut down\n";
 
     return 0;
-}
-
-shared_ptr<llvm::FunctionAnalysisManager>
-preprocessFunction(llvm::Function &fun, string prefix, PreprocessOpts opts) {
-    llvm::PassBuilder pb;
-    auto fam =
-        make_shared<llvm::FunctionAnalysisManager>(true); // enable debug log
-    pb.registerFunctionAnalyses(*fam); // register basic analyses
-    fam->registerPass(UnifyFunctionExitNodes());
-
-    llvm::FunctionPassManager fpm(true); // enable debug log
-
-    fpm.addPass(InlinePass());
-    fpm.addPass(PromotePass()); // mem2reg
-    fpm.addPass(llvm::SimplifyCFGPass());
-    fpm.addPass(SplitEntryBlockPass());
-    fam->registerPass(MarkAnalysis());
-    fpm.addPass(RemoveMarkRefsPass());
-    fpm.addPass(InstCombinePass());
-    fpm.addPass(llvm::ADCEPass());
-    fpm.addPass(ConstantProp());
-    fam->registerPass(PathAnalysis());
-    fpm.addPass(UniqueNamePass(prefix)); // prefix register names
-    if (opts.ShowMarkedCFG) {
-        fpm.addPass(CFGViewerPass()); // show marked cfg
-    }
-    fpm.addPass(RemoveMarkPass());
-    if (opts.ShowCFG) {
-        fpm.addPass(CFGViewerPass()); // show cfg
-    }
-    fpm.addPass(AnnotStackPass()); // annotate load/store of stack variables
-    fpm.addPass(llvm::VerifierPass());
-    // FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
-    fpm.run(fun, fam.get());
-
-    return fam;
-}
-
-ErrorOr<std::vector<MonoPair<llvm::Function *>>>
-zipFunctions(llvm::Module &mod1, llvm::Module &mod2) {
-    std::vector<MonoPair<llvm::Function *>> funs;
-    int size1 = 0;
-    int size2 = 0;
-    for (auto &fun : mod1) {
-        if (!fun.isDeclaration()) {
-            ++size1;
-        }
-    }
-    for (auto &fun : mod2) {
-        if (!fun.isDeclaration()) {
-            ++size2;
-        }
-    }
-    if (size1 != size2) {
-        logWarning("Number of functions is not equal\n");
-    }
-    for (auto &Fun1 : mod1) {
-        if (Fun1.isDeclaration()) {
-            continue;
-        }
-        llvm::Function *fun2 = mod2.getFunction(Fun1.getName());
-        if (!fun2) {
-            logWarning("No corresponding function for " + Fun1.getName() +
-                       "\n");
-            continue;
-        }
-        llvm::Function *fun1 = &Fun1;
-        funs.push_back(makeMonoPair(fun1, fun2));
-    }
-    return ErrorOr<std::vector<MonoPair<llvm::Function *>>>(funs);
 }
 
 void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,

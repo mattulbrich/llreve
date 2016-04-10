@@ -35,25 +35,21 @@ using std::string;
 using std::unique_ptr;
 using std::vector;
 
-vector<SharedSMTRef> functionAssertion(MonoPair<llvm::Function *> funs,
-                                       MonoPair<FAMRef> fams,
-                                       vector<SharedSMTRef> &declarations,
-                                       Memory memory) {
+vector<SharedSMTRef>
+functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
+                  vector<SharedSMTRef> &declarations, Memory memory) {
     const MonoPair<PathMap> pathMaps =
-        zipWith<llvm::Function *, FAMRef, PathMap>(
-            funs, fams, [](llvm::Function *fun, FAMRef fam) -> PathMap {
-                return fam->getResult<PathAnalysis>(*fun);
-            });
+        preprocessedFuns.map<PathMap>([](PreprocessedFunction pair) {
+            return pair.fam->getResult<PathAnalysis>(*pair.fun);
+        });
     checkPathMaps(pathMaps.first, pathMaps.second);
     const MonoPair<BidirBlockMarkMap> marked =
-        zipWith<llvm::Function *, FAMRef, BidirBlockMarkMap>(
-            funs, fams,
-            [](llvm::Function *fun, FAMRef fam) -> BidirBlockMarkMap {
-                return fam->getResult<MarkAnalysis>(*fun);
-            });
-    const string funName = funs.first->getName();
+        preprocessedFuns.map<BidirBlockMarkMap>([](PreprocessedFunction pair) {
+            return pair.fam->getResult<MarkAnalysis>(*pair.fun);
+        });
+    const string funName = preprocessedFuns.first.fun->getName();
     const MonoPair<vector<string>> funArgsPair =
-        functionArgs(*funs.first, *funs.second);
+        functionArgs(*preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
     // TODO this should use concat
     const vector<string> funArgs = funArgsPair.foldl<vector<string>>(
         {},
@@ -154,25 +150,21 @@ vector<SharedSMTRef> functionAssertion(MonoPair<llvm::Function *> funs,
 
 // the main function that we want to check doesn’t need the output parameters in
 // the assertions since it is never called
-vector<SharedSMTRef> mainAssertion(MonoPair<llvm::Function *> funs,
-                                   MonoPair<FAMRef> fams,
-                                   vector<SharedSMTRef> &declarations,
-                                   bool onlyRec, Memory memory) {
+vector<SharedSMTRef>
+mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
+              vector<SharedSMTRef> &declarations, bool onlyRec, Memory memory) {
     const MonoPair<PathMap> pathMaps =
-        zipWith<llvm::Function *, FAMRef, PathMap>(
-            funs, fams, [](llvm::Function *fun, FAMRef fam) -> PathMap {
-                return fam->getResult<PathAnalysis>(*fun);
-            });
+        preprocessedFuns.map<PathMap>([](PreprocessedFunction pair) {
+            return pair.fam->getResult<PathAnalysis>(*pair.fun);
+        });
     checkPathMaps(pathMaps.first, pathMaps.second);
     const MonoPair<BidirBlockMarkMap> marked =
-        zipWith<llvm::Function *, FAMRef, BidirBlockMarkMap>(
-            funs, fams,
-            [](llvm::Function *fun, FAMRef fam) -> BidirBlockMarkMap {
-                return fam->getResult<MarkAnalysis>(*fun);
-            });
-    const string funName = funs.first->getName();
+        preprocessedFuns.map<BidirBlockMarkMap>([](PreprocessedFunction pair) {
+            return pair.fam->getResult<MarkAnalysis>(*pair.fun);
+        });
+    const string funName = preprocessedFuns.first.fun->getName();
     const MonoPair<vector<string>> funArgsPair =
-        functionArgs(*funs.first, *funs.second);
+        functionArgs(*preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
     // TODO this should use concat
     const vector<string> funArgs = funArgsPair.foldl<vector<string>>(
         {},
