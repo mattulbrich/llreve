@@ -99,7 +99,8 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
                 Program prog) {
     const int progIndex = programIndex(prog);
     if (const auto BinOp = llvm::dyn_cast<llvm::BinaryOperator>(&Instr)) {
-        if (NoByteHeapFlag && BinOp->getOpcode() == Instruction::SDiv) {
+        if (SMTGenerationOpts::getInstance().NoByteHeap &&
+            BinOp->getOpcode() == Instruction::SDiv) {
             // This is a heuristic to remove divisions by 4 of pointer
             // subtractions
             // Since we treat every int as a single value, we expect the
@@ -267,7 +268,8 @@ string predicateName(llvm::CmpInst::Predicate pred) {
 
 /// A function that is abblied to the arguments of a predicate
 std::function<SMTRef(SMTRef)> predicateFun(const llvm::CmpInst::CmpInst &cmp) {
-    if (cmp.isUnsigned() && !EverythingSignedFlag) {
+    if (cmp.isUnsigned() &&
+        !SMTGenerationOpts::getInstance().EverythingSigned) {
         return [](SMTRef everythingSigned) {
             return makeUnaryOp("abs", std::move(everythingSigned));
         };

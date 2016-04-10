@@ -15,7 +15,7 @@ auto invariant(int StartIndex, int EndIndex, std::vector<std::string> InputArgs,
                std::map<int, std::vector<std::string>> freeVarsMap)
     -> smt::SMTRef;
 auto mainInvariant(int EndIndex, std::vector<std::string> FreeVars,
-                   std::string FunName, Memory memory) -> smt::SMTRef;
+                   std::string FunName) -> smt::SMTRef;
 auto invariantDeclaration(int BlockIndex, std::vector<std::string> FreeVars,
                           ProgramSelection For, std::string FunName,
                           Memory heap) -> MonoPair<smt::SMTRef>;
@@ -50,7 +50,7 @@ auto fillUpArgsWithFiller(T filler, std::vector<T> args,
                           std::map<int, std::vector<std::string>> freeVarsMap,
                           Memory mem, ProgramSelection prog, InvariantAttr attr)
     -> std::vector<T> {
-    if (!SingleInvariantFlag) {
+    if (!SMTGenerationOpts::getInstance().SingleInvariant) {
         return args;
     }
     size_t neededArgs = maxArgs(freeVarsMap, mem, prog, attr);

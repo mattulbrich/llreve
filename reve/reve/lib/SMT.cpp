@@ -43,7 +43,8 @@ SExprRef GetModel::toSExpr() const {
 SExprRef Assert::toSExpr() const {
     std::vector<SExprRef> args;
     args.push_back(expr->toSExpr());
-    const string keyword = MuZFlag ? "rule" : "assert";
+    const string keyword =
+        SMTGenerationOpts::getInstance().MuZ ? "rule" : "assert";
     return llvm::make_unique<Apply<std::string>>(keyword, std::move(args));
 }
 
@@ -102,10 +103,11 @@ SExprRef FunDecl::toSExpr() const {
     args.push_back(stringExpr(funName)->toSExpr());
     args.push_back(
         llvm::make_unique<List<std::string>>(std::move(inTypeSExprs)));
-    if (!MuZFlag) {
+    if (!SMTGenerationOpts::getInstance().MuZ) {
         args.push_back(stringExpr(outType)->toSExpr());
     }
-    const string keyword = MuZFlag ? "declare-rel" : "declare-fun";
+    const string keyword =
+        SMTGenerationOpts::getInstance().MuZ ? "declare-rel" : "declare-fun";
     return llvm::make_unique<Apply<std::string>>(keyword, std::move(args));
 }
 

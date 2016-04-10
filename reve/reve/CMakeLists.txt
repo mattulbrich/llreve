@@ -16,10 +16,11 @@ message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 include_directories(${LLVM_INCLUDE_DIRS} include)
 add_definitions(${LLVM_DEFINITIONS})
 
-file(GLOB sources *.cpp)
+file(GLOB sources lib/*.cpp)
 file(GLOB headers include/*.h)
 
-add_executable(reve ${sources} ${headers})
+add_library(libreve ${sources} ${headers})
+add_executable(reve Reve.cpp ${headers})
 
 llvm_map_components_to_libnames(llvm_libs
   bitwriter
@@ -64,7 +65,7 @@ set_target_properties(clangEdit PROPERTIES
 add_library(clangLex STATIC IMPORTED)
 set_target_properties(clangLex PROPERTIES
     IMPORTED_LOCATION /usr/local/lib/libclangLex.a)
-target_link_libraries(reve
+target_link_libraries(libreve
   c++
   c++abi
   clangFrontend
@@ -79,4 +80,7 @@ target_link_libraries(reve
   clangEdit
   clangLex
   ${llvm_libs}
+  )
+target_link_libraries(reve
+  libreve
   )
