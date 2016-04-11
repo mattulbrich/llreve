@@ -114,7 +114,12 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
 SMTRef mainInvariant(int EndIndex, vector<string> FreeVars, string FunName) {
     if (EndIndex == EXIT_MARK) {
         vector<string> Args = {"result$1", "result$2"};
-        Args.insert(Args.end(), FreeVars.begin(), FreeVars.end());
+        for (string& arg : FreeVars) {
+            // No stack in output
+            if (arg.compare(0,5,"STACK")) {
+                Args.push_back(arg);
+            }
+        }
         return makeOp("OUT_INV", Args);
     }
     if (EndIndex == UNREACHABLE_MARK) {
