@@ -21,6 +21,8 @@ custom-args: {}
 custom-eldarica-args:
   heap/swaparray.smt2:
     - '-abstract:off'
+  heap/selsort.smt2:
+    - '-abstract:off'
   rec/mccarthy91.smt2:
     - '-abstract:off'
   rec/ackermann.smt2:
