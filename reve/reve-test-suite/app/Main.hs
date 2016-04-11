@@ -38,6 +38,7 @@ main =
   do opts <- execParser optParser
      conf' <- decodeFileEither (optConfig opts) >>= either throwM return
      let conf = conf' & cnfCustomArgs %~ M.mapKeys (optBuild opts </>)
+                      & cnfCustomEldArgs %~ M.mapKeys (optBuild opts </>)
      resetJavaOpts
      (output,input,seal) <- spawn' (bounded (optProcesses opts))
      (mergeOutput,mergeInput,mergeSeal) <- spawn' (bounded (optProcesses opts))

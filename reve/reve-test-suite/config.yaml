@@ -5,14 +5,27 @@ ignored-dirs:
   - coreutils
   - linux
   - torch
+  - voting
 ignored-files:
   - a_1.c
   - heap/findmax_1.c
   - heap/fib_1.c
   - argon2/fill_memory_blocks_1.c
+  - libc/strncasecmp_1_1.c
 z3-files:
   - rec/rec_while.smt2
   - rec/cocome1.smt2
   - rec/triangular.smt2
   - libc/strncasecmp_1.smt2
 custom-args: {}
+custom-eldarica-args:
+  heap/swaparray.smt2:
+    - '-abstract:off'
+  rec/mccarthy91.smt2:
+    - '-abstract:off'
+  rec/ackermann.smt2:
+    - '-abstract:off'
+  'faulty/ackermann!.smt2':
+    - '-abstract:off'
+  libc/strcspn_3.smt2:
+    - '-abstract:off'

@@ -74,12 +74,17 @@ solverStatus (SolverOutput{..})
   | otherwise = Error (T.unlines solverOutput)
 
 solveEldarica
-  :: (Monad m, MonadIO m, MonadSafe m, MonadLogger m)
+  :: (Monad m, MonadIO m, MonadSafe m, MonadLogger m, MonadReader (Options,Config) m)
   => FilePath -> FilePath -> m (FilePath,Status)
 solveEldarica eldarica smt =
-  do let producer =
-           producerCmd (eldarica <> " -t:300 " <> smt) >-> P.map (either id id)
-     $logDebug $ "Solving using eldarica: " <> (T.pack smt)
+  do customArgs <- asks (_cnfCustomEldArgs . snd)
+     let args = M.lookup smt customArgs
+         producer =
+           producerCmd
+             (eldarica <> " -t:300 " <> smt <>
+              maybe "" ((" " <>) . unwords) args) >->
+           P.map (either id id)
+     $logDebug $ "Solving using eldarica: " <> (T.pack smt) <> " " <> T.pack (show args)
      output <-
        F.purely P.fold solverFold (void $ concats $ producer ^. utf8 . P.lines)
      pure (smt,solverStatus output)
