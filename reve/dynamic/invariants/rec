@@ -1,11 +1,86 @@
-../../reve-test-suite/build/rec/mccarthy91.smt2: (define-fun INV_REC_f__2_PRE ((A Int)) Bool false)
-../../reve-test-suite/build/rec/triangular.smt2: (define-fun INV_REC_triangle__2_PRE ((A Int)) Bool false)
-../../reve-test-suite/build/rec/rec_while.smt2: (define-fun INV_REC_f__2_PRE ((A Int) (B Int)) Bool (and (= B 0) (>= A 0)))
-../../reve-test-suite/build/rec/inlining.smt2: (define-fun INV_REC_f__2_PRE ((A Int)) Bool (>= A 0))
-../../reve-test-suite/build/rec/limit1unrolled.smt2: (define-fun INV_REC_f__2_PRE ((A Int)) Bool (= A 0))
-../../reve-test-suite/build/rec/limit3.smt2: (define-fun INV_REC_f__2_PRE ((A Int)) Bool false)
-../../reve-test-suite/build/rec/loop_rec.smt2: (define-fun INV_REC_tr__2_PRE ((A Int)) Bool false)
-../../reve-test-suite/build/rec/limit2.smt2: (define-fun INV_REC_f__2_PRE ((A Int)) Bool false)
-../../reve-test-suite/build/rec/cocome1.smt2: (define-fun INV_REC_triangle__2_PRE ((A Int)) Bool false)
-../../reve-test-suite/build/rec/ackermann.smt2: (define-fun INV_REC_f__2_PRE ((A Int) (B Int)) Bool false)
-../../reve-test-suite/build/rec/add-horn.smt2: (define-fun INV_REC_f__2_PRE ((A Int) (B Int)) Bool false)
+../../reve-test-suite/build/rec/mccarthy91.smt2:
+(define-fun INV_REC_f ((A Int) (B Int) (C Int) (D Int)) Bool (= C D))
+(define-fun INV_REC_f_PRE ((A Int) (B Int)) Bool (= A B))
+
+../../reve-test-suite/build/rec/triangular.smt2:
+(define-fun INV_REC_g ((n$1 Int) (n$2 Int) (s$2 Int) (result$1 Int) (result$2 Int)) Bool
+  (and (= n$1 n$2) (= (+ s$2 result$1) result$2)))
+(define-fun INV_REC_g_PRE ((n$1 Int) (n$2 Int) (C Int)) Bool
+
+../../reve-test-suite/build/rec/rec_while.smt2:
+(define-fun INV_42 ((A Int) (B Int) (C Int) (D Int) (E Int) (F Int)) Bool
+  (= E F))
+(define-fun INV_42_PRE ((A Int) (B Int) (C Int) (D Int)) Bool
+  (and (= A C) (= B D)))
+(define-fun INV_MAIN_42 ((A Int) (B Int) (C Int) (D Int)) Bool
+  (and (= A C) (= B D)))
+(define-fun INV_REC_f ((A Int) (B Int) (C Int) (D Int) (E Int) (F Int)) Bool
+  (= E F))
+(define-fun INV_REC_f_PRE ((A Int) (B Int) (C Int) (D Int)) Bool
+  (= A C))
+(define-fun INV_REC_f__1 ((A Int) (B Int) (C Int)) Bool
+  false)
+(define-fun INV_REC_f__1_PRE ((A Int) (B Int)) Bool
+  false)
+(define-fun INV_REC_f__2 ((A Int) (B Int) (C Int)) Bool
+  false)
+(define-fun INV_REC_f__2_PRE ((A Int) (B Int)) Bool
+  false)
+
+../../reve-test-suite/build/rec/inlining.smt2:
+(define-fun INV_REC_f ((A Int) (B Int) (C Int) (D Int)) Bool
+  (and (= A C) (= D B)))
+(define-fun INV_REC_f_PRE ((A Int) (B Int)) Bool
+  (and (>= B 0) (>= A B)))
+(define-fun INV_REC_f__1 ((A Int) (B Int)) Bool
+  (= A B))
+(define-fun INV_REC_f__1_PRE ((A Int)) Bool
+  (>= A 0))
+(define-fun INV_REC_f__2 ((A Int) (B Int)) Bool false)
+(define-fun INV_REC_f__2_PRE ((A Int)) Bool false)
+
+../../reve-test-suite/build/rec/limit1unrolled.smt2:
+(define-fun INV_REC_f ((A Int) (B Int) (C Int) (D Int)) Bool (and (= C D) (>= A 1)))
+(define-fun INV_REC_f_PRE ((A Int) (B Int)) Bool (and (= A B) (>= A 1)))
+(define-fun INV_REC_f__2 ((A Int) (B Int)) Bool (and (= A 0) (= B 0)))
+(define-fun INV_REC_f__2_PRE ((A Int)) Bool (= A 0))
+
+../../reve-test-suite/build/rec/limit3.smt2:
+(define-fun INV_REC_f ((A Int) (B Int) (C Int) (D Int)) Bool (and (= C D) (>= A 1) (>= C 1)))
+(define-fun INV_REC_f_PRE ((A Int) (B Int)) Bool (and (= A B) (>= A 1)))
+
+../../reve-test-suite/build/rec/loop_rec.smt2:
+(define-fun INV_42 ((A Int) (B Int) (C Int) (D Int)) Bool (and (= A 0) (= C 0) (= D 0) (<= B 0)))
+(define-fun INV_42_PRE ((A Int) (B Int)) Bool (>= A 0))
+(define-fun INV_REC_tr ((A Int) (B Int) (C Int) (D Int)) Bool (and (= A 0) (= C 0) (= D 0) (<= B 0)))
+(define-fun INV_REC_tr_PRE ((A Int) (B Int)) Bool (>= A 0))
+
+../../reve-test-suite/build/rec/limit2.smt2:
+(define-fun INV_REC_f ((A Int) (B Int) (C Int) (D Int)) Bool
+  (= D C))
+(define-fun INV_REC_f_PRE ((A Int) (B Int)) Bool
+  (= A B))
+(define-fun INV_REC_f__1 ((A Int) (B Int)) Bool
+  (= B 0))
+(define-fun INV_REC_f__1_PRE ((A Int)) Bool
+  (= A 0))
+
+../../reve-test-suite/build/rec/cocome1.smt2:
+(define-fun INV_REC_g ((A Int) (B Int) (C Int) (D Int) (E Int)) Bool
+  (= (+ C D) E))
+(define-fun INV_REC_g_PRE ((A Int) (B Int) (C Int)) Bool
+  (= A B))
+
+../../reve-test-suite/build/rec/ackermann.smt2:
+(define-fun INV_REC_f ((A Int) (B Int) (C Int) (D Int) (E Int) (F Int)) Bool (and (= B D) (= E F) (>= A 0) (>= C 0)))
+(define-fun INV_REC_f_PRE ((A Int) (B Int) (C Int) (D Int)) Bool (and (= A C) (= B D)))
+
+../../reve-test-suite/build/rec/add-horn.smt2:
+(define-fun INV_REC_f ((A Int) (B Int) (C Int) (D Int) (E Int) (F Int)) Bool
+  (= (+ B F ) (+ E D)))
+(define-fun INV_REC_f_PRE ((A Int) (B Int) (C Int) (D Int)) Bool
+  (= A C))
+(define-fun INV_REC_f__1 ((A Int) (B Int) (C Int)) Bool
+  (= B C))
+(define-fun INV_REC_f__1_PRE ((A Int) (B Int)) Bool
+  (= A 0))
