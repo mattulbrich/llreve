@@ -4,6 +4,9 @@
 
 #include "llvm/IR/Constants.h"
 
+using llvm::LoadInst;
+using llvm::StoreInst;
+using llvm::GetElementPtrInst;
 using llvm::Argument;
 using llvm::BasicBlock;
 using llvm::BinaryOperator;
@@ -19,6 +22,7 @@ using llvm::Value;
 using llvm::dyn_cast;
 using llvm::isa;
 using llvm::ConstantInt;
+using llvm::CastInst;
 
 using std::vector;
 using std::string;
@@ -87,6 +91,34 @@ State interpretInstruction(const Instruction *instr, State state) {
         return interpretBinOp(binOp, state);
     } else if (const auto icmp = dyn_cast<ICmpInst>(instr)) {
         return interpretICmpInst(icmp, state);
+    } else if (const auto cast = dyn_cast<CastInst>(instr)) {
+        assert(cast->getNumOperands() == 1);
+        state.variables[cast->getName()] =
+            resolveValue(cast->getOperand(0), state);
+        return state;
+    } else if (const auto gep = dyn_cast<GetElementPtrInst>(instr)) {
+        state.variables[gep->getName()] =
+            make_shared<VarInt>(resolveGEP(*gep, state));
+        return state;
+    } else if (const auto load = dyn_cast<LoadInst>(instr)) {
+        shared_ptr<VarVal> ptr = resolveValue(load->getPointerOperand(), state);
+        assert(ptr->getType() == VarType::Int);
+        VarInt heapVal = VarInt(0);
+        auto heapIt = state.heap.find(static_pointer_cast<VarInt>(ptr)->val);
+        if (heapIt != state.heap.end()) {
+            heapVal = heapIt->second;
+        }
+        state.variables[load->getName()] = make_shared<VarInt>(heapVal);
+        return state;
+    } else if (const auto store = dyn_cast<StoreInst>(instr)) {
+        shared_ptr<VarVal> ptr =
+            resolveValue(store->getPointerOperand(), state);
+        assert(ptr->getType() == VarType::Int);
+        shared_ptr<VarVal> val = resolveValue(store->getValueOperand(), state);
+        assert(val->getType() == VarType::Int);
+        HeapAddress addr = static_pointer_cast<VarInt>(ptr)->val;
+        state.heap[addr] = *static_pointer_cast<VarInt>(val);
+        return state;
     } else {
         logErrorData("unsupported instruction:\n", *instr);
         return state;
@@ -130,6 +162,7 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr, State state) {
 
 shared_ptr<VarVal> resolveValue(const Value *val, State state) {
     if (isa<Instruction>(val) || isa<Argument>(val)) {
+        logWarning("Reading: " + val->getName() + "\n");
         return state.variables.at(val->getName());
     } else if (const auto constInt = dyn_cast<ConstantInt>(val)) {
         return make_shared<VarInt>(constInt->getSExtValue());
@@ -144,16 +177,27 @@ State interpretICmpInst(const ICmpInst *instr, State state) {
     const auto op1 = resolveValue(instr->getOperand(1), state);
     switch (instr->getPredicate()) {
     case CmpInst::ICMP_SGE: {
-        // TODO
+        assert(op0->getType() == VarType::Int);
+        assert(op1->getType() == VarType::Int);
         mpz_class i0 = static_pointer_cast<VarInt>(op0)->val;
         mpz_class i1 = static_pointer_cast<VarInt>(op1)->val;
         state.variables[instr->getName()] = make_shared<VarBool>(i0 >= i1);
         return state;
     }
     case CmpInst::ICMP_SLE: {
+        assert(op0->getType() == VarType::Int);
+        assert(op1->getType() == VarType::Int);
         mpz_class i0 = static_pointer_cast<VarInt>(op0)->val;
         mpz_class i1 = static_pointer_cast<VarInt>(op1)->val;
         state.variables[instr->getName()] = make_shared<VarBool>(i0 <= i1);
+        return state;
+    }
+    case CmpInst::ICMP_SLT: {
+        assert(op0->getType() == VarType::Int);
+        assert(op1->getType() == VarType::Int);
+        mpz_class i0 = static_pointer_cast<VarInt>(op0)->val;
+        mpz_class i1 = static_pointer_cast<VarInt>(op1)->val;
+        state.variables[instr->getName()] = make_shared<VarBool>(i0 < i1);
         return state;
     }
     default:
@@ -167,12 +211,16 @@ State interpretBinOp(const BinaryOperator *instr, State state) {
     const auto op1 = resolveValue(instr->getOperand(1), state);
     switch (instr->getOpcode()) {
     case Instruction::Add: {
+        assert(op0->getType() == VarType::Int);
+        assert(op1->getType() == VarType::Int);
         mpz_class i0 = static_pointer_cast<VarInt>(op0)->val;
         mpz_class i1 = static_pointer_cast<VarInt>(op1)->val;
         state.variables[instr->getName()] = make_shared<VarInt>(i0 + i1);
         return state;
     }
     case Instruction::Sub: {
+        assert(op0->getType() == VarType::Int);
+        assert(op1->getType() == VarType::Int);
         mpz_class i0 = static_pointer_cast<VarInt>(op0)->val;
         mpz_class i1 = static_pointer_cast<VarInt>(op1)->val;
         state.variables[instr->getName()] = make_shared<VarInt>(i0 - i1);

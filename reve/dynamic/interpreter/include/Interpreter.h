@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Helper.h"
+
 #include <gmpxx.h>
 #include <map>
 #include <vector>
@@ -7,6 +9,7 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/Module.h"
 
 #include "json.hpp"
 
@@ -31,6 +34,7 @@ struct VarInt : VarVal {
     VarType getType() const override;
     nlohmann::json toJSON() const override;
     VarInt(mpz_class val) : val(val) {}
+    VarInt() = default;
 };
 
 struct VarBool : VarVal {
@@ -113,3 +117,33 @@ auto interpretBinOp(const llvm::BinaryOperator *instr, State state) -> State;
 
 nlohmann::json callToJSON(Call call);
 nlohmann::json stateToJSON(State state);
+
+template <typename T> VarInt resolveGEP(T &gep, State state) {
+    std::shared_ptr<VarVal> val = resolveValue(gep.getPointerOperand(), state);
+    assert(val->getType() == VarType::Int);
+    mpz_class offset = std::static_pointer_cast<VarInt>(val)->val;
+    const auto type = gep.getSourceElementType();
+    std::vector<llvm::Value *> indices;
+    for (auto ix = gep.idx_begin(), e = gep.idx_end(); ix != e; ++ix) {
+        // Try several ways of finding the module
+        const llvm::Module *mod = nullptr;
+        if (auto instr = llvm::dyn_cast<llvm::Instruction>(&gep)) {
+            mod = instr->getModule();
+        }
+        if (auto global =
+                llvm::dyn_cast<llvm::GlobalValue>(gep.getPointerOperand())) {
+            mod = global->getParent();
+        }
+        if (mod == nullptr) {
+            logErrorData("Couldn’t cast gep to an instruction:\n", gep);
+        }
+        indices.push_back(*ix);
+        const auto indexedType = llvm::GetElementPtrInst::getIndexedType(
+            type, llvm::ArrayRef<llvm::Value *>(indices));
+        const auto size = typeSize(indexedType, mod->getDataLayout());
+        std::shared_ptr<VarVal> val = resolveValue(*ix, state);
+        assert(val->getType() == VarType::Int);
+        offset += size * std::static_pointer_cast<VarInt>(val)->val;
+    }
+    return VarInt(offset);
+}

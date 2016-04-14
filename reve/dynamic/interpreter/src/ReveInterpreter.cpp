@@ -55,8 +55,14 @@ int main(int argc, const char **argv) {
     vector<MonoPair<PreprocessedFunction>> preprocessedFuns =
         preprocessFunctions(modules, preprocessOpts);
     VarMap variables;
-    variables["n$1_0"] = make_shared<VarInt>(4);
+    variables["dest$1_0"] = make_shared<VarInt>(0);
+    variables["src$1_0"] = make_shared<VarInt>(16);
+    variables["size$1_0"] = make_shared<VarInt>(4);
     Heap heap;
+    heap[16] = VarInt(4);
+    heap[20] = VarInt(3);
+    heap[24] = VarInt(2);
+    heap[28] = VarInt(1);
     State entry(variables, heap);
     Call call = interpretFunction(*modules.first->getFunction(MainFunctionFlag), entry);
     std::cout << call.toJSON().dump(4) << std::endl;
