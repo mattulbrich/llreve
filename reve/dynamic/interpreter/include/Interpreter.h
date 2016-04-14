@@ -1,0 +1,115 @@
+#pragma once
+
+#include <gmpxx.h>
+#include <map>
+#include <vector>
+
+#include "llvm/IR/Function.h"
+#include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/Instructions.h"
+
+#include "json.hpp"
+
+using BlockName = std::string;
+using VarName = std::string;
+using VarIntVal = mpz_class;
+using HeapAddress = mpz_class;
+enum class VarType { Int, Bool };
+const VarName ReturnName = "return";
+
+struct VarVal {
+    virtual VarType getType() const = 0;
+    virtual nlohmann::json toJSON() const = 0;
+    virtual ~VarVal();
+    VarVal(const VarVal &other) = default;
+    VarVal() = default;
+    VarVal &operator=(const VarVal &other) = default;
+};
+
+struct VarInt : VarVal {
+    mpz_class val;
+    VarType getType() const override;
+    nlohmann::json toJSON() const override;
+    VarInt(mpz_class val) : val(val) {}
+};
+
+struct VarBool : VarVal {
+    bool val;
+    VarType getType() const override;
+    nlohmann::json toJSON() const override;
+    VarBool(bool val) : val(val) {}
+};
+
+using Heap = std::map<HeapAddress, VarInt>;
+using VarMap = std::map<VarName, std::shared_ptr<VarVal>>;
+
+struct State {
+    VarMap variables;
+    // If an address is not in the map, it’s value is zero
+    // Note that the values in the map can also be zero
+    Heap heap;
+    State(VarMap variables, Heap heap) : variables(variables), heap(heap) {}
+    State() = default;
+};
+
+struct Step {
+    virtual ~Step();
+    Step(const Step &other) = default;
+    Step() = default;
+    Step &operator=(const Step &other) = default;
+    virtual nlohmann::json toJSON() const = 0;
+};
+
+struct Call : Step {
+    State entryState;
+    State returnState;
+    std::vector<std::shared_ptr<Step>> steps;
+    Call(State entryState, State returnState,
+         std::vector<std::shared_ptr<Step>> steps)
+        : entryState(entryState), returnState(returnState), steps(steps) {}
+    nlohmann::json toJSON() const override;
+};
+
+struct BlockStep : Step {
+    BlockName blockName;
+    State state;
+    BlockStep(BlockName blockName, State state)
+        : blockName(blockName), state(state) {}
+    nlohmann::json toJSON() const override;
+};
+
+struct BlockUpdate {
+    // State after phi nodes
+    State step;
+    // State at the end of the block
+    State end;
+    // next block, null if the block ended with a return instruction
+    llvm::BasicBlock *nextBlock;
+    BlockUpdate(State step, State end, llvm::BasicBlock *nextBlock)
+        : step(step), end(end), nextBlock(nextBlock) {}
+    BlockUpdate() = default;
+};
+
+struct TerminatorUpdate {
+    State end;
+    llvm::BasicBlock *nextBlock;
+    TerminatorUpdate(State end, llvm::BasicBlock *nextBlock)
+        : end(end), nextBlock(nextBlock) {}
+    TerminatorUpdate() = default;
+};
+
+auto interpretFunction(llvm::Function &fun, State entry) -> Call;
+auto interpretBlock(llvm::BasicBlock &block, const llvm::BasicBlock *prevBlock,
+                    State state) -> BlockUpdate;
+auto interpretPHI(const llvm::PHINode &instr, State state,
+                  const llvm::BasicBlock *prevBlock) -> State;
+auto interpretInstruction(const llvm::Instruction *instr, State state) -> State;
+auto interpretTerminator(const llvm::TerminatorInst *instr, State state)
+    -> TerminatorUpdate;
+auto resolveValue(const llvm::Value *val, State state)
+    -> std::shared_ptr<VarVal>;
+auto interpretICmpInst(const llvm::ICmpInst *instr, State state) -> State;
+auto interpretBinOp(const llvm::BinaryOperator *instr, State state) -> State;
+
+nlohmann::json callToJSON(Call call);
+nlohmann::json stateToJSON(State state);
