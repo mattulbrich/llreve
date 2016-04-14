@@ -1,5 +1,6 @@
 #include "Interpreter.h"
 
+#include "Compat.h"
 #include "Helper.h"
 
 #include "llvm/IR/Constants.h"
@@ -42,24 +43,24 @@ json VarBool::toJSON() const { return json(val); }
 
 VarType VarBool::getType() const { return VarType::Bool; }
 
-Call interpretFunction(Function &fun, State entry) {
+Call interpretFunction(const Function &fun, State entry) {
     const BasicBlock *prevBlock = nullptr;
-    BasicBlock *currentBlock = &fun.getEntryBlock();
+    const BasicBlock *currentBlock = &fun.getEntryBlock();
     vector<shared_ptr<Step>> steps;
     State currentState = entry;
     BlockUpdate update;
     do {
         update = interpretBlock(*currentBlock, prevBlock, currentState);
-        steps.push_back(
-            make_shared<BlockStep>(currentBlock->getName(), update.step));
+        steps.push_back(make_shared<BlockStep>(currentBlock->getName(),
+                                               update.step, update.calls));
         prevBlock = currentBlock;
         currentBlock = update.nextBlock;
         currentState = update.end;
     } while (currentBlock != nullptr);
-    return Call(entry, update.end, steps);
+    return Call(fun.getName(), entry, update.end, steps);
 }
 
-BlockUpdate interpretBlock(BasicBlock &block, const BasicBlock *prevBlock,
+BlockUpdate interpretBlock(const BasicBlock &block, const BasicBlock *prevBlock,
                            State state) {
     // VarMap variables = state.variables;
     // Heap heap = state.heap;
@@ -75,15 +76,31 @@ BlockUpdate interpretBlock(BasicBlock &block, const BasicBlock *prevBlock,
     }
     State step(state);
 
+    vector<Call> calls;
     // Handle non phi instructions
     for (; &*instrIterator != terminator; ++instrIterator) {
-        state = interpretInstruction(&*instrIterator, state);
+        if (const auto call = dyn_cast<llvm::CallInst>(&*instrIterator)) {
+            const Function *fun = call->getFunction();
+            VarMap args;
+            auto argIt = fun->getArgumentList().begin();
+            for (const auto &arg : call->arg_operands()) {
+                args[argIt->getName()] = resolveValue(arg, state);
+                ++argIt;
+            }
+            Call c = interpretFunction(*fun, State(args, state.heap));
+            calls.push_back(c);
+            state.heap = c.returnState.heap;
+            state.variables[call->getName()] =
+                c.returnState.variables[ReturnName];
+        } else {
+            state = interpretInstruction(&*instrIterator, state);
+        }
     }
 
     // Terminator instruction
     TerminatorUpdate update = interpretTerminator(block.getTerminator(), state);
 
-    return BlockUpdate(step, update.end, update.nextBlock);
+    return BlockUpdate(step, update.end, update.nextBlock, calls);
 }
 
 State interpretInstruction(const Instruction *instr, State state) {
@@ -176,60 +193,71 @@ State interpretICmpInst(const ICmpInst *instr, State state) {
     const auto op0 = resolveValue(instr->getOperand(0), state);
     const auto op1 = resolveValue(instr->getOperand(1), state);
     switch (instr->getPredicate()) {
-    case CmpInst::ICMP_SGE: {
+    default:
         assert(op0->getType() == VarType::Int);
         assert(op1->getType() == VarType::Int);
         mpz_class i0 = static_pointer_cast<VarInt>(op0)->val;
         mpz_class i1 = static_pointer_cast<VarInt>(op1)->val;
-        state.variables[instr->getName()] = make_shared<VarBool>(i0 >= i1);
-        return state;
+        return interpretIntPredicate(instr->getName(), instr->getPredicate(),
+                                     i0, i1, state);
     }
-    case CmpInst::ICMP_SLE: {
-        assert(op0->getType() == VarType::Int);
-        assert(op1->getType() == VarType::Int);
-        mpz_class i0 = static_pointer_cast<VarInt>(op0)->val;
-        mpz_class i1 = static_pointer_cast<VarInt>(op1)->val;
-        state.variables[instr->getName()] = make_shared<VarBool>(i0 <= i1);
-        return state;
-    }
-    case CmpInst::ICMP_SLT: {
-        assert(op0->getType() == VarType::Int);
-        assert(op1->getType() == VarType::Int);
-        mpz_class i0 = static_pointer_cast<VarInt>(op0)->val;
-        mpz_class i1 = static_pointer_cast<VarInt>(op1)->val;
-        state.variables[instr->getName()] = make_shared<VarBool>(i0 < i1);
-        return state;
-    }
+}
+
+State interpretIntPredicate(string name, CmpInst::Predicate pred, mpz_class i0,
+                            mpz_class i1, State state) {
+    bool predVal = false;
+    switch (pred) {
+    case CmpInst::ICMP_SGE:
+        predVal = i0 >= i1;
+        break;
+    case CmpInst::ICMP_SLE:
+        predVal = i0 <= i1;
+        break;
+    case CmpInst::ICMP_SLT:
+        predVal = i0 < i1;
+        break;
+    case CmpInst::ICMP_EQ:
+        predVal = i0 == i1;
+        break;
+    case CmpInst::ICMP_NE:
+        predVal = i0 != i1;
+        break;
     default:
         logError("Unsupported predicate\n");
-        return state;
     }
+    state.variables[name] = make_shared<VarBool>(predVal);
+    return state;
 }
 
 State interpretBinOp(const BinaryOperator *instr, State state) {
     const auto op0 = resolveValue(instr->getOperand(0), state);
     const auto op1 = resolveValue(instr->getOperand(1), state);
     switch (instr->getOpcode()) {
-    case Instruction::Add: {
-        assert(op0->getType() == VarType::Int);
-        assert(op1->getType() == VarType::Int);
-        mpz_class i0 = static_pointer_cast<VarInt>(op0)->val;
-        mpz_class i1 = static_pointer_cast<VarInt>(op1)->val;
-        state.variables[instr->getName()] = make_shared<VarInt>(i0 + i1);
-        return state;
-    }
-    case Instruction::Sub: {
-        assert(op0->getType() == VarType::Int);
-        assert(op1->getType() == VarType::Int);
-        mpz_class i0 = static_pointer_cast<VarInt>(op0)->val;
-        mpz_class i1 = static_pointer_cast<VarInt>(op1)->val;
-        state.variables[instr->getName()] = make_shared<VarInt>(i0 - i1);
-        return state;
-    }
     default:
-        logError("Unsupported opcode\n");
-        return state;
+        assert(op0->getType() == VarType::Int);
+        assert(op1->getType() == VarType::Int);
+        mpz_class i0 = static_pointer_cast<VarInt>(op0)->val;
+        mpz_class i1 = static_pointer_cast<VarInt>(op1)->val;
+        return interpretIntBinOp(instr->getName(), instr->getOpcode(), i0, i1,
+                                 state);
     }
+}
+
+State interpretIntBinOp(string name, Instruction::BinaryOps op, mpz_class i0,
+                        mpz_class i1, State state) {
+    mpz_class result = 0;
+    switch (op) {
+    case Instruction::Add:
+        result = i0 + i1;
+        break;
+    case Instruction::Sub:
+        result = i0 - i1;
+        break;
+    default:
+        logError("Unsupported binop\n");
+    }
+    state.variables[name] = make_shared<VarInt>(result);
+    return state;
 }
 
 json Call::toJSON() const {
@@ -248,6 +276,11 @@ json BlockStep::toJSON() const {
     json j;
     j["block_name"] = blockName;
     j["state"] = stateToJSON(state);
+    vector<json> jsonCalls;
+    for (auto call : calls) {
+        jsonCalls.push_back(call.toJSON());
+    }
+    j["calls"] = jsonCalls;
     return j;
 }
 

@@ -34,7 +34,7 @@ struct VarInt : VarVal {
     VarType getType() const override;
     nlohmann::json toJSON() const override;
     VarInt(mpz_class val) : val(val) {}
-    VarInt() = default;
+    VarInt() : val(0) {}
 };
 
 struct VarBool : VarVal {
@@ -65,20 +65,24 @@ struct Step {
 };
 
 struct Call : Step {
+    std::string functionName;
     State entryState;
     State returnState;
     std::vector<std::shared_ptr<Step>> steps;
-    Call(State entryState, State returnState,
+    Call(std::string functionName, State entryState, State returnState,
          std::vector<std::shared_ptr<Step>> steps)
-        : entryState(entryState), returnState(returnState), steps(steps) {}
+        : functionName(functionName), entryState(entryState),
+          returnState(returnState), steps(steps) {}
     nlohmann::json toJSON() const override;
 };
 
 struct BlockStep : Step {
     BlockName blockName;
     State state;
-    BlockStep(BlockName blockName, State state)
-        : blockName(blockName), state(state) {}
+    // The calls performed in this block
+    std::vector<Call> calls;
+    BlockStep(BlockName blockName, State state, std::vector<Call> calls)
+        : blockName(blockName), state(state), calls(calls) {}
     nlohmann::json toJSON() const override;
 };
 
@@ -89,8 +93,10 @@ struct BlockUpdate {
     State end;
     // next block, null if the block ended with a return instruction
     llvm::BasicBlock *nextBlock;
-    BlockUpdate(State step, State end, llvm::BasicBlock *nextBlock)
-        : step(step), end(end), nextBlock(nextBlock) {}
+    std::vector<Call> calls;
+    BlockUpdate(State step, State end, llvm::BasicBlock *nextBlock,
+                std::vector<Call> calls)
+        : step(step), end(end), nextBlock(nextBlock), calls(calls) {}
     BlockUpdate() = default;
 };
 
@@ -102,9 +108,10 @@ struct TerminatorUpdate {
     TerminatorUpdate() = default;
 };
 
-auto interpretFunction(llvm::Function &fun, State entry) -> Call;
-auto interpretBlock(llvm::BasicBlock &block, const llvm::BasicBlock *prevBlock,
-                    State state) -> BlockUpdate;
+auto interpretFunction(const llvm::Function &fun, State entry) -> Call;
+auto interpretBlock(const llvm::BasicBlock &block,
+                    const llvm::BasicBlock *prevBlock, State state)
+    -> BlockUpdate;
 auto interpretPHI(const llvm::PHINode &instr, State state,
                   const llvm::BasicBlock *prevBlock) -> State;
 auto interpretInstruction(const llvm::Instruction *instr, State state) -> State;
@@ -113,7 +120,11 @@ auto interpretTerminator(const llvm::TerminatorInst *instr, State state)
 auto resolveValue(const llvm::Value *val, State state)
     -> std::shared_ptr<VarVal>;
 auto interpretICmpInst(const llvm::ICmpInst *instr, State state) -> State;
+auto interpretIntPredicate(std::string name, llvm::CmpInst::Predicate pred,
+                           mpz_class i0, mpz_class i1, State state) -> State;
 auto interpretBinOp(const llvm::BinaryOperator *instr, State state) -> State;
+State interpretIntBinOp(std::string name, llvm::Instruction::BinaryOps op,
+                        mpz_class i0, mpz_class i1, State state);
 
 nlohmann::json callToJSON(Call call);
 nlohmann::json stateToJSON(State state);
