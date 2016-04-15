@@ -31,10 +31,10 @@ struct VarVal {
 };
 
 struct VarInt : VarVal {
-    mpz_class val;
+    VarIntVal val;
     VarType getType() const override;
     nlohmann::json toJSON() const override;
-    VarInt(mpz_class val) : val(val) {}
+    VarInt(VarIntVal val) : val(val) {}
     VarInt() : val(0) {}
 };
 
@@ -138,17 +138,17 @@ auto resolveValue(const llvm::Value *val, const State &state)
     -> std::shared_ptr<VarVal>;
 auto interpretICmpInst(const llvm::ICmpInst *instr, State &state) -> void;
 auto interpretIntPredicate(std::string name, llvm::CmpInst::Predicate pred,
-                           mpz_class i0, mpz_class i1, State &state) -> void;
+                           VarIntVal i0, VarIntVal i1, State &state) -> void;
 auto interpretBinOp(const llvm::BinaryOperator *instr, State &state) -> void;
 auto interpretIntBinOp(std::string name, llvm::Instruction::BinaryOps op,
-                       mpz_class i0, mpz_class i1, State &state) -> void;
+                       VarIntVal i0, VarIntVal i1, State &state) -> void;
 
 nlohmann::json stateToJSON(State state);
 
 template <typename T> VarInt resolveGEP(T &gep, State state) {
     std::shared_ptr<VarVal> val = resolveValue(gep.getPointerOperand(), state);
     assert(val->getType() == VarType::Int);
-    mpz_class offset = std::static_pointer_cast<VarInt>(val)->val;
+    VarIntVal offset = std::static_pointer_cast<VarInt>(val)->val;
     const auto type = gep.getSourceElementType();
     std::vector<llvm::Value *> indices;
     for (auto ix = gep.idx_begin(), e = gep.idx_end(); ix != e; ++ix) {

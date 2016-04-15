@@ -12,10 +12,10 @@ using std::make_shared;
 using llvm::Function;
 
 void serializeValuesInRange(MonoPair<const Function *> funs,
-                            mpz_class lowerBound, mpz_class upperBound,
+                            VarIntVal lowerBound, VarIntVal upperBound,
                             string outputDirectory) {
     assert(!(funs.first->isVarArg() || funs.second->isVarArg()));
-    vector<mpz_class> argValues;
+    vector<VarIntVal> argValues;
     vector<string> varNames;
     for (auto &arg : funs.first->args()) {
         // The variables are already renamed so we need to remove the suffix
@@ -45,7 +45,7 @@ void serializeValuesInRange(MonoPair<const Function *> funs,
 }
 
 Range::RangeIterator Range::begin() {
-    vector<mpz_class> vals(n);
+    vector<VarIntVal> vals(n);
     for (size_t i = 0; i < vals.size(); ++i) {
         vals[i] = lowerBound;
     }
@@ -53,7 +53,7 @@ Range::RangeIterator Range::begin() {
 }
 
 Range::RangeIterator Range::end() {
-    vector<mpz_class> vals(n);
+    vector<VarIntVal> vals(n);
     vals[0] = upperBound + 1;
     for (size_t i = 1; i < vals.size(); ++i) {
         vals[i] = lowerBound;

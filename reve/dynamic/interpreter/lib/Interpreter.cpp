@@ -195,9 +195,9 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
         shared_ptr<VarVal> cond =
             resolveValue(switchInst->getCondition(), state);
         assert(cond->getType() == VarType::Int);
-        mpz_class condVal = static_pointer_cast<VarInt>(cond)->val;
+        VarIntVal condVal = static_pointer_cast<VarInt>(cond)->val;
         for (auto c : switchInst->cases()) {
-            mpz_class caseVal = c.getCaseValue()->getSExtValue();
+            VarIntVal caseVal = c.getCaseValue()->getSExtValue();
             if (caseVal == condVal) {
                 return TerminatorUpdate(c.getCaseSuccessor());
             }
@@ -228,15 +228,15 @@ void interpretICmpInst(const ICmpInst *instr, State &state) {
     default:
         assert(op0->getType() == VarType::Int);
         assert(op1->getType() == VarType::Int);
-        mpz_class i0 = static_pointer_cast<VarInt>(op0)->val;
-        mpz_class i1 = static_pointer_cast<VarInt>(op1)->val;
+        VarIntVal i0 = static_pointer_cast<VarInt>(op0)->val;
+        VarIntVal i1 = static_pointer_cast<VarInt>(op1)->val;
         interpretIntPredicate(instr->getName(), instr->getPredicate(), i0, i1,
                               state);
     }
 }
 
-void interpretIntPredicate(string name, CmpInst::Predicate pred, mpz_class i0,
-                           mpz_class i1, State &state) {
+void interpretIntPredicate(string name, CmpInst::Predicate pred, VarIntVal i0,
+                           VarIntVal i1, State &state) {
     bool predVal = false;
     switch (pred) {
     case CmpInst::ICMP_SGE:
@@ -270,15 +270,15 @@ void interpretBinOp(const BinaryOperator *instr, State &state) {
     default:
         assert(op0->getType() == VarType::Int);
         assert(op1->getType() == VarType::Int);
-        mpz_class i0 = static_pointer_cast<VarInt>(op0)->val;
-        mpz_class i1 = static_pointer_cast<VarInt>(op1)->val;
+        VarIntVal i0 = static_pointer_cast<VarInt>(op0)->val;
+        VarIntVal i1 = static_pointer_cast<VarInt>(op1)->val;
         interpretIntBinOp(instr->getName(), instr->getOpcode(), i0, i1, state);
     }
 }
 
-void interpretIntBinOp(string name, Instruction::BinaryOps op, mpz_class i0,
-                       mpz_class i1, State &state) {
-    mpz_class result = 0;
+void interpretIntBinOp(string name, Instruction::BinaryOps op, VarIntVal i0,
+                       VarIntVal i1, State &state) {
+    VarIntVal result = 0;
     switch (op) {
     case Instruction::Add:
         result = i0 + i1;
