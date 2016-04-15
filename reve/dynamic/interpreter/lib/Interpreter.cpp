@@ -43,27 +43,33 @@ json VarBool::toJSON() const { return json(val); }
 
 VarType VarBool::getType() const { return VarType::Bool; }
 
-Call interpretFunction(const Function &fun, State entry) {
+Call interpretFunction(const Function &fun, State entry, int maxSteps) {
     const BasicBlock *prevBlock = nullptr;
     const BasicBlock *currentBlock = &fun.getEntryBlock();
     vector<shared_ptr<Step>> steps;
     State currentState = entry;
     BlockUpdate update;
+    int blocksVisited = 0;
     do {
-        update = interpretBlock(*currentBlock, prevBlock, currentState);
+        update = interpretBlock(*currentBlock, prevBlock, currentState,
+                                maxSteps - blocksVisited);
+        blocksVisited += update.blocksVisited;
         steps.push_back(make_shared<BlockStep>(currentBlock->getName(),
                                                update.step, update.calls));
         prevBlock = currentBlock;
         currentBlock = update.nextBlock;
         currentState = update.end;
+        if (blocksVisited > maxSteps || update.earlyExit) {
+            return Call(fun.getName(), entry, update.end, steps, true,
+                        blocksVisited);
+        }
     } while (currentBlock != nullptr);
-    return Call(fun.getName(), entry, update.end, steps);
+    return Call(fun.getName(), entry, update.end, steps, false, blocksVisited);
 }
 
 BlockUpdate interpretBlock(const BasicBlock &block, const BasicBlock *prevBlock,
-                           State state) {
-    // VarMap variables = state.variables;
-    // Heap heap = state.heap;
+                           State state, int maxSteps) {
+    int blocksVisited = 1;
     const Instruction *firstNonPhi = block.getFirstNonPHI();
     const Instruction *terminator = block.getTerminator();
     // Handle phi instructions
@@ -87,7 +93,13 @@ BlockUpdate interpretBlock(const BasicBlock &block, const BasicBlock *prevBlock,
                 args[argIt->getName()] = resolveValue(arg, state);
                 ++argIt;
             }
-            Call c = interpretFunction(*fun, State(args, state.heap));
+            Call c = interpretFunction(*fun, State(args, state.heap),
+                                       maxSteps - blocksVisited);
+            blocksVisited += c.blocksVisited;
+            if (blocksVisited > maxSteps || c.earlyExit) {
+                return BlockUpdate(step, state, nullptr, calls, true,
+                                   blocksVisited);
+            }
             calls.push_back(c);
             state.heap = c.returnState.heap;
             state.variables[call->getName()] =
@@ -100,7 +112,8 @@ BlockUpdate interpretBlock(const BasicBlock &block, const BasicBlock *prevBlock,
     // Terminator instruction
     TerminatorUpdate update = interpretTerminator(block.getTerminator(), state);
 
-    return BlockUpdate(step, update.end, update.nextBlock, calls);
+    return BlockUpdate(step, update.end, update.nextBlock, calls, false,
+                       blocksVisited);
 }
 
 State interpretInstruction(const Instruction *instr, State state) {
@@ -209,6 +222,9 @@ State interpretIntPredicate(string name, CmpInst::Predicate pred, mpz_class i0,
     switch (pred) {
     case CmpInst::ICMP_SGE:
         predVal = i0 >= i1;
+        break;
+    case CmpInst::ICMP_SGT:
+        predVal = i0 > i1;
         break;
     case CmpInst::ICMP_SLE:
         predVal = i0 <= i1;

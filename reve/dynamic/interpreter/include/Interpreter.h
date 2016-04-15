@@ -69,10 +69,15 @@ struct Call : Step {
     State entryState;
     State returnState;
     std::vector<std::shared_ptr<Step>> steps;
+    // Did we exit because we ran out of steps?
+    bool earlyExit;
+    int blocksVisited;
     Call(std::string functionName, State entryState, State returnState,
-         std::vector<std::shared_ptr<Step>> steps)
+         std::vector<std::shared_ptr<Step>> steps, bool earlyExit,
+         int blocksVisited)
         : functionName(functionName), entryState(entryState),
-          returnState(returnState), steps(steps) {}
+          returnState(returnState), steps(steps), earlyExit(earlyExit),
+          blocksVisited(blocksVisited) {}
     nlohmann::json toJSON() const override;
 };
 
@@ -93,10 +98,17 @@ struct BlockUpdate {
     State end;
     // next block, null if the block ended with a return instruction
     llvm::BasicBlock *nextBlock;
+    // function calls in this block in the order they were called
     std::vector<Call> calls;
+    // Indicates a stop because we ran out of steps
+    bool earlyExit;
+    // steps this block has needed, if there are no function calls exactly one
+    // step per block is needed
+    int blocksVisited;
     BlockUpdate(State step, State end, llvm::BasicBlock *nextBlock,
-                std::vector<Call> calls)
-        : step(step), end(end), nextBlock(nextBlock), calls(calls) {}
+                std::vector<Call> calls, bool earlyExit, int blocksVisited)
+        : step(step), end(end), nextBlock(nextBlock), calls(calls),
+          earlyExit(earlyExit), blocksVisited(blocksVisited) {}
     BlockUpdate() = default;
 };
 
@@ -108,9 +120,10 @@ struct TerminatorUpdate {
     TerminatorUpdate() = default;
 };
 
-auto interpretFunction(const llvm::Function &fun, State entry) -> Call;
+auto interpretFunction(const llvm::Function &fun, State entry, int maxSteps)
+    -> Call;
 auto interpretBlock(const llvm::BasicBlock &block,
-                    const llvm::BasicBlock *prevBlock, State state)
+                    const llvm::BasicBlock *prevBlock, State state, int maxStep)
     -> BlockUpdate;
 auto interpretPHI(const llvm::PHINode &instr, State state,
                   const llvm::BasicBlock *prevBlock) -> State;

@@ -66,6 +66,7 @@ int main(int argc, const char **argv) {
     // heap[24] = VarInt(2);
     // heap[28] = VarInt(1);
     State entry(variables, heap);
-    Call call = interpretFunction(*modules.first->getFunction(MainFunctionFlag), entry);
+    Call call = interpretFunction(*modules.first->getFunction(MainFunctionFlag),
+                                  entry, 1000);
     std::cout << call.toJSON().dump(4) << std::endl;
 }
