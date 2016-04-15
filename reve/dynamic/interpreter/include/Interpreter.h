@@ -15,11 +15,11 @@
 #include "json.hpp"
 
 using BlockName = std::string;
-using VarName = std::string;
+using VarName = const llvm::Value *;
 using VarIntVal = mpz_class;
 using HeapAddress = mpz_class;
 enum class VarType { Int, Bool };
-const VarName ReturnName = "return";
+const VarName ReturnName = nullptr;
 
 struct VarVal {
     virtual VarType getType() const = 0;
@@ -46,7 +46,7 @@ struct VarBool : VarVal {
 };
 
 using Heap = std::map<HeapAddress, VarInt>;
-using VarMap = std::map<VarName, std::shared_ptr<VarVal>>;
+using VarMap = std::map<const llvm::Value *, std::shared_ptr<VarVal>>;
 
 struct State {
     VarMap variables;
@@ -122,8 +122,10 @@ struct TerminatorUpdate {
 
 /// The variables in the entry state will be renamed appropriately for both
 /// programs
-MonoPair<Call> interpretFunctionPair(MonoPair<const llvm::Function *> funs,
-                                     State entry, int maxSteps);
+MonoPair<Call>
+interpretFunctionPair(MonoPair<const llvm::Function *> funs,
+                      std::map<std::string, std::shared_ptr<VarVal>> variables,
+                      Heap heap, int maxSteps);
 auto interpretFunction(const llvm::Function &fun, State entry, int maxSteps)
     -> Call;
 auto interpretBlock(const llvm::BasicBlock &block,
@@ -137,11 +139,12 @@ auto interpretTerminator(const llvm::TerminatorInst *instr, State &state)
 auto resolveValue(const llvm::Value *val, const State &state)
     -> std::shared_ptr<VarVal>;
 auto interpretICmpInst(const llvm::ICmpInst *instr, State &state) -> void;
-auto interpretIntPredicate(std::string name, llvm::CmpInst::Predicate pred,
+auto interpretIntPredicate(const llvm::ICmpInst *instr, llvm::CmpInst::Predicate pred,
                            VarIntVal i0, VarIntVal i1, State &state) -> void;
 auto interpretBinOp(const llvm::BinaryOperator *instr, State &state) -> void;
-auto interpretIntBinOp(std::string name, llvm::Instruction::BinaryOps op,
-                       VarIntVal i0, VarIntVal i1, State &state) -> void;
+auto interpretIntBinOp(const llvm::BinaryOperator *instr,
+                       llvm::Instruction::BinaryOps op, VarIntVal i0,
+                       VarIntVal i1, State &state) -> void;
 
 nlohmann::json stateToJSON(State state);
 

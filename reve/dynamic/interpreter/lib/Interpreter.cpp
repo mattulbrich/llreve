@@ -46,16 +46,27 @@ json VarBool::toJSON() const { return json(val); }
 VarType VarBool::getType() const { return VarType::Bool; }
 
 MonoPair<Call> interpretFunctionPair(MonoPair<const Function *> funs,
-                                     State entry, int maxSteps) {
+                                     map<string, shared_ptr<VarVal>> variables,
+                                     Heap heap, int maxSteps) {
     VarMap var1;
     VarMap var2;
-    for (auto varPair : entry.variables) {
-        var1.insert({varPair.first + "$1_0", varPair.second});
-        var2.insert({varPair.first + "$2_0", varPair.second});
+    for (auto &arg : funs.first->args()) {
+        std::string varName = arg.getName();
+        size_t i = varName.find_first_of('$');
+        varName = varName.substr(0, i);
+        const llvm::Value *a = &arg;
+        var1[a] = variables.at(varName);
+    }
+    for (auto &arg : funs.second->args()) {
+        std::string varName = arg.getName();
+        size_t i = varName.find_first_of('$');
+        varName = varName.substr(0, i);
+        const llvm::Value *a = &arg;
+        var2[a] = variables.at(varName);
     }
     return makeMonoPair(
-        interpretFunction(*funs.first, State(var1, entry.heap), maxSteps),
-        interpretFunction(*funs.second, State(var2, entry.heap), maxSteps));
+        interpretFunction(*funs.first, State(var1, heap), maxSteps),
+        interpretFunction(*funs.second, State(var2, heap), maxSteps));
 }
 
 Call interpretFunction(const Function &fun, State entry, int maxSteps) {
@@ -105,7 +116,7 @@ BlockUpdate interpretBlock(const BasicBlock &block, const BasicBlock *prevBlock,
             VarMap args;
             auto argIt = fun->getArgumentList().begin();
             for (const auto &arg : call->arg_operands()) {
-                args[argIt->getName()] = resolveValue(arg, state);
+                args[&*argIt] = resolveValue(arg, state);
                 ++argIt;
             }
             Call c = interpretFunction(*fun, State(args, state.heap),
@@ -116,8 +127,7 @@ BlockUpdate interpretBlock(const BasicBlock &block, const BasicBlock *prevBlock,
             }
             calls.push_back(c);
             state.heap = c.returnState.heap;
-            state.variables[call->getName()] =
-                c.returnState.variables[ReturnName];
+            state.variables[call] = c.returnState.variables[ReturnName];
         } else {
             interpretInstruction(&*instrIterator, state);
         }
@@ -136,11 +146,9 @@ void interpretInstruction(const Instruction *instr, State &state) {
         interpretICmpInst(icmp, state);
     } else if (const auto cast = dyn_cast<CastInst>(instr)) {
         assert(cast->getNumOperands() == 1);
-        state.variables[cast->getName()] =
-            resolveValue(cast->getOperand(0), state);
+        state.variables[cast] = resolveValue(cast->getOperand(0), state);
     } else if (const auto gep = dyn_cast<GetElementPtrInst>(instr)) {
-        state.variables[gep->getName()] =
-            make_shared<VarInt>(resolveGEP(*gep, state));
+        state.variables[gep] = make_shared<VarInt>(resolveGEP(*gep, state));
     } else if (const auto load = dyn_cast<LoadInst>(instr)) {
         shared_ptr<VarVal> ptr = resolveValue(load->getPointerOperand(), state);
         assert(ptr->getType() == VarType::Int);
@@ -149,7 +157,7 @@ void interpretInstruction(const Instruction *instr, State &state) {
         if (heapIt != state.heap.end()) {
             heapVal = heapIt->second;
         }
-        state.variables[load->getName()] = make_shared<VarInt>(heapVal);
+        state.variables[load] = make_shared<VarInt>(heapVal);
     } else if (const auto store = dyn_cast<StoreInst>(instr)) {
         shared_ptr<VarVal> ptr =
             resolveValue(store->getPointerOperand(), state);
@@ -168,7 +176,7 @@ void interpretInstruction(const Instruction *instr, State &state) {
         } else {
             var = resolveValue(select->getFalseValue(), state);
         }
-        state.variables[select->getName()] = var;
+        state.variables[select] = var;
     } else {
         logErrorData("unsupported instruction:\n", *instr);
     }
@@ -178,7 +186,7 @@ void interpretPHI(const PHINode &instr, State &state,
                   const BasicBlock *prevBlock) {
     const Value *val = instr.getIncomingValueForBlock(prevBlock);
     shared_ptr<VarVal> var = resolveValue(val, state);
-    state.variables[instr.getName()] = var;
+    state.variables[&instr] = var;
 }
 
 TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
@@ -224,7 +232,7 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
 
 shared_ptr<VarVal> resolveValue(const Value *val, const State &state) {
     if (isa<Instruction>(val) || isa<Argument>(val)) {
-        return state.variables.at(val->getName());
+        return state.variables.at(val);
     } else if (const auto constInt = dyn_cast<ConstantInt>(val)) {
         return make_shared<VarInt>(constInt->getSExtValue());
     }
@@ -242,13 +250,12 @@ void interpretICmpInst(const ICmpInst *instr, State &state) {
         assert(op1->getType() == VarType::Int);
         VarIntVal i0 = static_pointer_cast<VarInt>(op0)->val;
         VarIntVal i1 = static_pointer_cast<VarInt>(op1)->val;
-        interpretIntPredicate(instr->getName(), instr->getPredicate(), i0, i1,
-                              state);
+        interpretIntPredicate(instr, instr->getPredicate(), i0, i1, state);
     }
 }
 
-void interpretIntPredicate(string name, CmpInst::Predicate pred, VarIntVal i0,
-                           VarIntVal i1, State &state) {
+void interpretIntPredicate(const ICmpInst *instr, CmpInst::Predicate pred,
+                           VarIntVal i0, VarIntVal i1, State &state) {
     bool predVal = false;
     switch (pred) {
     case CmpInst::ICMP_SGE:
@@ -270,9 +277,9 @@ void interpretIntPredicate(string name, CmpInst::Predicate pred, VarIntVal i0,
         predVal = i0 != i1;
         break;
     default:
-        logError("Unsupported predicate\n");
+        logErrorData("Unsupported predicate:\n", *instr);
     }
-    state.variables[name] = make_shared<VarBool>(predVal);
+    state.variables[instr] = make_shared<VarBool>(predVal);
 }
 
 void interpretBinOp(const BinaryOperator *instr, State &state) {
@@ -284,12 +291,12 @@ void interpretBinOp(const BinaryOperator *instr, State &state) {
         assert(op1->getType() == VarType::Int);
         VarIntVal i0 = static_pointer_cast<VarInt>(op0)->val;
         VarIntVal i1 = static_pointer_cast<VarInt>(op1)->val;
-        interpretIntBinOp(instr->getName(), instr->getOpcode(), i0, i1, state);
+        interpretIntBinOp(instr, instr->getOpcode(), i0, i1, state);
     }
 }
 
-void interpretIntBinOp(string name, Instruction::BinaryOps op, VarIntVal i0,
-                       VarIntVal i1, State &state) {
+void interpretIntBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
+                       VarIntVal i0, VarIntVal i1, State &state) {
     VarIntVal result = 0;
     switch (op) {
     case Instruction::Add:
@@ -299,9 +306,9 @@ void interpretIntBinOp(string name, Instruction::BinaryOps op, VarIntVal i0,
         result = i0 - i1;
         break;
     default:
-        logError("Unsupported binop\n");
+        logErrorData("Unsupported binop:\n", *instr);
     }
-    state.variables[name] = make_shared<VarInt>(result);
+    state.variables[instr] = make_shared<VarInt>(result);
 }
 
 json Call::toJSON() const {
@@ -334,7 +341,8 @@ json stateToJSON(State state) {
     map<string, json> jsonVariables;
     map<string, json> jsonHeap;
     for (auto var : state.variables) {
-        jsonVariables.insert({var.first, var.second->toJSON()});
+        string varName = var.first == nullptr ? "return" : var.first->getName();
+        jsonVariables.insert({varName, var.second->toJSON()});
     }
     for (auto index : state.heap) {
         jsonHeap.insert({index.first.get_str(), index.second.val.get_str()});

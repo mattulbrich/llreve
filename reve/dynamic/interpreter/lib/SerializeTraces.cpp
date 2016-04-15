@@ -8,6 +8,7 @@
 using std::vector;
 using std::string;
 using std::make_shared;
+using std::map;
 
 using llvm::Function;
 
@@ -21,17 +22,16 @@ void serializeValuesInRange(MonoPair<const Function *> funs,
         // The variables are already renamed so we need to remove the suffix
         std::string varName = arg.getName();
         size_t i = varName.find_first_of('$');
-        varNames.push_back(varName.substr(0, i));
+        varNames.push_back(varName.substr(0,i));
     }
     int counter = 0;
     for (const auto &vals : Range(lowerBound, upperBound, varNames.size())) {
-        VarMap map;
+        map<string, std::shared_ptr<VarVal>> map;
         for (size_t i = 0; i < vals.size(); ++i) {
             map.insert({varNames[i], make_shared<VarInt>(vals[i])});
         }
         Heap heap;
-        MonoPair<Call> calls =
-            interpretFunctionPair(funs, State(map, heap), 1000);
+        MonoPair<Call> calls = interpretFunctionPair(funs, map, heap, 1000);
         calls.indexedForEach([outputDirectory, &funs, counter](Call c, int i) {
             std::ofstream ofStream;
             std::string fileName = outputDirectory + "/";
