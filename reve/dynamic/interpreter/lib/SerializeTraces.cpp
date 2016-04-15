@@ -22,7 +22,7 @@ void serializeValuesInRange(MonoPair<const Function *> funs,
         // The variables are already renamed so we need to remove the suffix
         std::string varName = arg.getName();
         size_t i = varName.find_first_of('$');
-        varNames.push_back(varName.substr(0,i));
+        varNames.push_back(varName.substr(0, i));
     }
     int counter = 0;
     for (const auto &vals : Range(lowerBound, upperBound, varNames.size())) {
@@ -39,9 +39,16 @@ void serializeValuesInRange(MonoPair<const Function *> funs,
         calls.indexedForEach([&funs, counter, &baseName](Call c, int i) {
             std::ofstream ofStream;
             std::string fileName = baseName;
-            fileName += std::to_string(i) + "_" + std::to_string(counter) + ".json";
-            ofStream.open(fileName);
-            ofStream << c.toJSON() << std::endl;
+            fileName +=
+                std::to_string(i) + "_" + std::to_string(counter) + ".cbor";
+            ofStream.open(fileName, std::ios::out | std::ios::binary);
+            unsigned char *buffer;
+            cbor_item_t *root = c.toCBOR();
+            size_t bufferSize;
+            size_t length = cbor_serialize_alloc(root, &buffer, &bufferSize);
+            ofStream.write(reinterpret_cast<char *>(buffer), static_cast<long>(length));
+            free(buffer);
+            cbor_decref(&root);
             ofStream.close();
         });
         counter++;

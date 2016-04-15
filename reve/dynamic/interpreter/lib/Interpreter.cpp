@@ -41,13 +41,17 @@ Step::~Step() = default;
 
 VarType VarInt::getType() const { return VarType::Int; }
 json VarInt::toJSON() const { return val.get_str(); }
+cbor_item_t *VarInt::toCBOR() const {
+    return cbor_build_string(val.get_str().c_str());
+}
 json VarBool::toJSON() const { return json(val); }
+cbor_item_t *VarBool::toCBOR() const { return cbor_build_bool(val); }
 
 VarType VarBool::getType() const { return VarType::Bool; }
 
 MonoPair<Call> interpretFunctionPair(MonoPair<const Function *> funs,
                                      map<string, shared_ptr<VarVal>> variables,
-                                     Heap heap, int maxSteps) {
+                                     Heap heap, uint32_t maxSteps) {
     VarMap var1;
     VarMap var2;
     for (auto &arg : funs.first->args()) {
@@ -69,13 +73,13 @@ MonoPair<Call> interpretFunctionPair(MonoPair<const Function *> funs,
         interpretFunction(*funs.second, State(var2, heap), maxSteps));
 }
 
-Call interpretFunction(const Function &fun, State entry, int maxSteps) {
+Call interpretFunction(const Function &fun, State entry, uint32_t maxSteps) {
     const BasicBlock *prevBlock = nullptr;
     const BasicBlock *currentBlock = &fun.getEntryBlock();
     vector<shared_ptr<Step>> steps;
     State currentState = entry;
     BlockUpdate update;
-    int blocksVisited = 0;
+    uint32_t blocksVisited = 0;
     do {
         update = interpretBlock(*currentBlock, prevBlock, currentState,
                                 maxSteps - blocksVisited);
@@ -94,8 +98,8 @@ Call interpretFunction(const Function &fun, State entry, int maxSteps) {
 }
 
 BlockUpdate interpretBlock(const BasicBlock &block, const BasicBlock *prevBlock,
-                           State &state, int maxSteps) {
-    int blocksVisited = 1;
+                           State &state, uint32_t maxSteps) {
+    uint32_t blocksVisited = 1;
     const Instruction *firstNonPhi = block.getFirstNonPHI();
     const Instruction *terminator = block.getTerminator();
     // Handle phi instructions
@@ -325,6 +329,42 @@ json Call::toJSON() const {
     return j;
 }
 
+cbor_item_t *Call::toCBOR() const {
+    bool ret;
+    cbor_item_t *map = cbor_new_definite_map(5);
+    ret = cbor_map_add(
+        map,
+        (struct cbor_pair){.key = cbor_move(cbor_build_string("entry_state")),
+                           .value = cbor_move(stateToCBOR(entryState))});
+    assert(ret);
+    ret = cbor_map_add(
+        map,
+        (struct cbor_pair){.key = cbor_move(cbor_build_string("return_state")),
+                           .value = cbor_move(stateToCBOR(returnState))});
+    assert(ret);
+    cbor_item_t *cborSteps = cbor_new_definite_array(steps.size());
+
+    for (const auto &step : steps) {
+        ret = cbor_array_push(cborSteps, step->toCBOR());
+        assert(ret);
+    }
+    ret = cbor_map_add(
+        map, (struct cbor_pair){.key = cbor_move(cbor_build_string("steps")),
+                                .value = cbor_move(cborSteps)});
+    assert(ret);
+    ret = cbor_map_add(
+        map,
+        (struct cbor_pair){.key = cbor_move(cbor_build_string("early_exit")),
+                           .value = cbor_move(cbor_build_bool(earlyExit))});
+    assert(ret);
+    ret = cbor_map_add(
+        map, (struct cbor_pair){
+                 .key = cbor_move(cbor_build_string("blocks_visited")),
+                 .value = cbor_move(cbor_build_uint32(blocksVisited))});
+    assert(ret);
+    return map;
+}
+
 json BlockStep::toJSON() const {
     json j;
     j["block_name"] = blockName;
@@ -335,6 +375,29 @@ json BlockStep::toJSON() const {
     }
     j["calls"] = jsonCalls;
     return j;
+}
+
+cbor_item_t *BlockStep::toCBOR() const {
+    cbor_item_t *map = cbor_new_definite_map(3);
+    bool ret;
+    ret = cbor_map_add(
+        map, (struct cbor_pair){
+                 .key = cbor_move(cbor_build_string("block_name")),
+                 .value = cbor_move(cbor_build_string(blockName.c_str()))});
+    assert(ret);
+    ret = cbor_map_add(
+        map, (struct cbor_pair){.key = cbor_move(cbor_build_string("state")),
+                                .value = cbor_move(stateToCBOR(state))});
+    assert(ret);
+    cbor_item_t *cborCalls = cbor_new_definite_array(calls.size());
+    for (const auto &call : calls) {
+        ret = cbor_array_push(cborCalls, call.toCBOR());
+        assert(ret);
+    }
+    cbor_map_add(
+        map, (struct cbor_pair){.key = cbor_move(cbor_build_string("calls")),
+                                .value = cbor_move(cborCalls)});
+    return map;
 }
 
 json stateToJSON(State state) {
@@ -351,4 +414,31 @@ json stateToJSON(State state) {
     j["variables"] = jsonVariables;
     j["heap"] = jsonHeap;
     return j;
+}
+
+cbor_item_t *stateToCBOR(State state) {
+    cbor_item_t *cborVariables = cbor_new_definite_map(state.variables.size());
+    cbor_item_t *cborHeap = cbor_new_definite_map(state.heap.size());
+    for (const auto &var : state.variables) {
+        string varName = var.first == nullptr ? "return" : var.first->getName();
+        cbor_map_add(cborVariables,
+                     (struct cbor_pair){
+                         .key = cbor_move(cbor_build_string(varName.c_str())),
+                         .value = var.second->toCBOR()});
+    }
+    for (const auto &index : state.heap) {
+        cbor_map_add(cborHeap, (struct cbor_pair){
+                                   .key = cbor_move(cbor_build_string(
+                                       index.first.get_str().c_str())),
+                                   .value = cbor_move(cbor_build_string(
+                                       index.second.val.get_str().c_str()))});
+    }
+    cbor_item_t *map = cbor_new_definite_map(2);
+    cbor_map_add(map, (struct cbor_pair){
+                          .key = cbor_move(cbor_build_string("variables")),
+                          .value = cbor_move(cborVariables)});
+    cbor_map_add(map,
+                 (struct cbor_pair){.key = cbor_move(cbor_build_string("heap")),
+                                    .value = cbor_move(cborHeap)});
+    return map;
 }

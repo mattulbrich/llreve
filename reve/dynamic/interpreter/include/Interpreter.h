@@ -12,6 +12,7 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 
+#include "cbor.h"
 #include "json.hpp"
 
 using BlockName = std::string;
@@ -24,6 +25,7 @@ const VarName ReturnName = nullptr;
 struct VarVal {
     virtual VarType getType() const = 0;
     virtual nlohmann::json toJSON() const = 0;
+    virtual cbor_item_t *toCBOR() const = 0;
     virtual ~VarVal();
     VarVal(const VarVal &other) = default;
     VarVal() = default;
@@ -34,6 +36,7 @@ struct VarInt : VarVal {
     VarIntVal val;
     VarType getType() const override;
     nlohmann::json toJSON() const override;
+    cbor_item_t *toCBOR() const override;
     VarInt(VarIntVal val) : val(val) {}
     VarInt() : val(0) {}
 };
@@ -42,6 +45,7 @@ struct VarBool : VarVal {
     bool val;
     VarType getType() const override;
     nlohmann::json toJSON() const override;
+    cbor_item_t *toCBOR() const override;
     VarBool(bool val) : val(val) {}
 };
 
@@ -63,6 +67,7 @@ struct Step {
     Step() = default;
     Step &operator=(const Step &other) = default;
     virtual nlohmann::json toJSON() const = 0;
+    virtual cbor_item_t *toCBOR() const = 0;
 };
 
 struct Call : Step {
@@ -72,14 +77,15 @@ struct Call : Step {
     std::vector<std::shared_ptr<Step>> steps;
     // Did we exit because we ran out of steps?
     bool earlyExit;
-    int blocksVisited;
+    uint32_t blocksVisited;
     Call(std::string functionName, State entryState, State returnState,
          std::vector<std::shared_ptr<Step>> steps, bool earlyExit,
-         int blocksVisited)
+         uint32_t blocksVisited)
         : functionName(functionName), entryState(entryState),
           returnState(returnState), steps(steps), earlyExit(earlyExit),
           blocksVisited(blocksVisited) {}
     nlohmann::json toJSON() const override;
+    cbor_item_t *toCBOR() const override;
 };
 
 struct BlockStep : Step {
@@ -90,6 +96,7 @@ struct BlockStep : Step {
     BlockStep(BlockName blockName, State state, std::vector<Call> calls)
         : blockName(blockName), state(state), calls(calls) {}
     nlohmann::json toJSON() const override;
+    cbor_item_t *toCBOR() const override;
 };
 
 struct BlockUpdate {
@@ -103,10 +110,10 @@ struct BlockUpdate {
     bool earlyExit;
     // steps this block has needed, if there are no function calls exactly one
     // step per block is needed
-    int blocksVisited;
+    uint32_t blocksVisited;
     BlockUpdate(State step, // State end,
                 const llvm::BasicBlock *nextBlock, std::vector<Call> calls,
-                bool earlyExit, int blocksVisited)
+                bool earlyExit, uint32_t blocksVisited)
         : step(step), nextBlock(nextBlock), calls(calls), earlyExit(earlyExit),
           blocksVisited(blocksVisited) {}
     BlockUpdate() = default;
@@ -125,12 +132,12 @@ struct TerminatorUpdate {
 MonoPair<Call>
 interpretFunctionPair(MonoPair<const llvm::Function *> funs,
                       std::map<std::string, std::shared_ptr<VarVal>> variables,
-                      Heap heap, int maxSteps);
-auto interpretFunction(const llvm::Function &fun, State entry, int maxSteps)
-    -> Call;
+                      Heap heap, uint32_t maxSteps);
+auto interpretFunction(const llvm::Function &fun, State entry,
+                       uint32_t maxSteps) -> Call;
 auto interpretBlock(const llvm::BasicBlock &block,
                     const llvm::BasicBlock *prevBlock, State &state,
-                    int maxStep) -> BlockUpdate;
+                    uint32_t maxStep) -> BlockUpdate;
 auto interpretPHI(const llvm::PHINode &instr, State &state,
                   const llvm::BasicBlock *prevBlock) -> void;
 auto interpretInstruction(const llvm::Instruction *instr, State &state) -> void;
@@ -139,14 +146,16 @@ auto interpretTerminator(const llvm::TerminatorInst *instr, State &state)
 auto resolveValue(const llvm::Value *val, const State &state)
     -> std::shared_ptr<VarVal>;
 auto interpretICmpInst(const llvm::ICmpInst *instr, State &state) -> void;
-auto interpretIntPredicate(const llvm::ICmpInst *instr, llvm::CmpInst::Predicate pred,
-                           VarIntVal i0, VarIntVal i1, State &state) -> void;
+auto interpretIntPredicate(const llvm::ICmpInst *instr,
+                           llvm::CmpInst::Predicate pred, VarIntVal i0,
+                           VarIntVal i1, State &state) -> void;
 auto interpretBinOp(const llvm::BinaryOperator *instr, State &state) -> void;
 auto interpretIntBinOp(const llvm::BinaryOperator *instr,
                        llvm::Instruction::BinaryOps op, VarIntVal i0,
                        VarIntVal i1, State &state) -> void;
 
 nlohmann::json stateToJSON(State state);
+cbor_item_t *stateToCBOR(State state);
 
 template <typename T> VarInt resolveGEP(T &gep, State state) {
     std::shared_ptr<VarVal> val = resolveValue(gep.getPointerOperand(), state);
