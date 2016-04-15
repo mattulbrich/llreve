@@ -72,17 +72,17 @@ Call interpretFunction(const Function &fun, State entry, int maxSteps) {
                                                update.step, update.calls));
         prevBlock = currentBlock;
         currentBlock = update.nextBlock;
-        currentState = update.end;
         if (blocksVisited > maxSteps || update.earlyExit) {
-            return Call(fun.getName(), entry, update.end, steps, true,
+            return Call(fun.getName(), entry, currentState, steps, true,
                         blocksVisited);
         }
     } while (currentBlock != nullptr);
-    return Call(fun.getName(), entry, update.end, steps, false, blocksVisited);
+    return Call(fun.getName(), entry, currentState, steps, false,
+                blocksVisited);
 }
 
 BlockUpdate interpretBlock(const BasicBlock &block, const BasicBlock *prevBlock,
-                           State state, int maxSteps) {
+                           State &state, int maxSteps) {
     int blocksVisited = 1;
     const Instruction *firstNonPhi = block.getFirstNonPHI();
     const Instruction *terminator = block.getTerminator();
@@ -92,7 +92,7 @@ BlockUpdate interpretBlock(const BasicBlock &block, const BasicBlock *prevBlock,
          ++instrIterator) {
         const Instruction *inst = &*instrIterator;
         assert(isa<PHINode>(inst));
-        state = interpretPHI(*dyn_cast<PHINode>(inst), state, prevBlock);
+        interpretPHI(*dyn_cast<PHINode>(inst), state, prevBlock);
     }
     State step(state);
 
@@ -111,39 +111,35 @@ BlockUpdate interpretBlock(const BasicBlock &block, const BasicBlock *prevBlock,
                                        maxSteps - blocksVisited);
             blocksVisited += c.blocksVisited;
             if (blocksVisited > maxSteps || c.earlyExit) {
-                return BlockUpdate(step, state, nullptr, calls, true,
-                                   blocksVisited);
+                return BlockUpdate(step, nullptr, calls, true, blocksVisited);
             }
             calls.push_back(c);
             state.heap = c.returnState.heap;
             state.variables[call->getName()] =
                 c.returnState.variables[ReturnName];
         } else {
-            state = interpretInstruction(&*instrIterator, state);
+            interpretInstruction(&*instrIterator, state);
         }
     }
 
     // Terminator instruction
     TerminatorUpdate update = interpretTerminator(block.getTerminator(), state);
 
-    return BlockUpdate(step, update.end, update.nextBlock, calls, false,
-                       blocksVisited);
+    return BlockUpdate(step, update.nextBlock, calls, false, blocksVisited);
 }
 
-State interpretInstruction(const Instruction *instr, State state) {
+void interpretInstruction(const Instruction *instr, State &state) {
     if (const auto binOp = dyn_cast<BinaryOperator>(instr)) {
-        return interpretBinOp(binOp, state);
+        interpretBinOp(binOp, state);
     } else if (const auto icmp = dyn_cast<ICmpInst>(instr)) {
-        return interpretICmpInst(icmp, state);
+        interpretICmpInst(icmp, state);
     } else if (const auto cast = dyn_cast<CastInst>(instr)) {
         assert(cast->getNumOperands() == 1);
         state.variables[cast->getName()] =
             resolveValue(cast->getOperand(0), state);
-        return state;
     } else if (const auto gep = dyn_cast<GetElementPtrInst>(instr)) {
         state.variables[gep->getName()] =
             make_shared<VarInt>(resolveGEP(*gep, state));
-        return state;
     } else if (const auto load = dyn_cast<LoadInst>(instr)) {
         shared_ptr<VarVal> ptr = resolveValue(load->getPointerOperand(), state);
         assert(ptr->getType() == VarType::Int);
@@ -153,7 +149,6 @@ State interpretInstruction(const Instruction *instr, State state) {
             heapVal = heapIt->second;
         }
         state.variables[load->getName()] = make_shared<VarInt>(heapVal);
-        return state;
     } else if (const auto store = dyn_cast<StoreInst>(instr)) {
         shared_ptr<VarVal> ptr =
             resolveValue(store->getPointerOperand(), state);
@@ -162,30 +157,28 @@ State interpretInstruction(const Instruction *instr, State state) {
         assert(val->getType() == VarType::Int);
         HeapAddress addr = static_pointer_cast<VarInt>(ptr)->val;
         state.heap[addr] = *static_pointer_cast<VarInt>(val);
-        return state;
     } else {
         logErrorData("unsupported instruction:\n", *instr);
-        return state;
     }
 }
 
-State interpretPHI(const PHINode &instr, State state,
-                   const BasicBlock *prevBlock) {
+void interpretPHI(const PHINode &instr, State &state,
+                  const BasicBlock *prevBlock) {
     const Value *val = instr.getIncomingValueForBlock(prevBlock);
     shared_ptr<VarVal> var = resolveValue(val, state);
     state.variables[instr.getName()] = var;
-    return state;
 }
 
-TerminatorUpdate interpretTerminator(const TerminatorInst *instr, State state) {
+TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
+                                     State &state) {
     if (const auto retInst = dyn_cast<ReturnInst>(instr)) {
         state.variables[ReturnName] =
             resolveValue(retInst->getReturnValue(), state);
-        return TerminatorUpdate(state, nullptr);
+        return TerminatorUpdate(nullptr);
     } else if (const auto branchInst = dyn_cast<BranchInst>(instr)) {
         if (branchInst->isUnconditional()) {
             assert(branchInst->getNumSuccessors() == 1);
-            return TerminatorUpdate(state, branchInst->getSuccessor(0));
+            return TerminatorUpdate(branchInst->getSuccessor(0));
         } else {
             shared_ptr<VarVal> cond =
                 resolveValue(branchInst->getCondition(), state);
@@ -193,9 +186,9 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr, State state) {
             bool condVal = static_pointer_cast<VarBool>(cond)->val;
             assert(branchInst->getNumSuccessors() == 2);
             if (condVal) {
-                return TerminatorUpdate(state, branchInst->getSuccessor(0));
+                return TerminatorUpdate(branchInst->getSuccessor(0));
             } else {
-                return TerminatorUpdate(state, branchInst->getSuccessor(1));
+                return TerminatorUpdate(branchInst->getSuccessor(1));
             }
         }
     } else if (const auto switchInst = dyn_cast<SwitchInst>(instr)) {
@@ -206,18 +199,18 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr, State state) {
         for (auto c : switchInst->cases()) {
             mpz_class caseVal = c.getCaseValue()->getSExtValue();
             if (caseVal == condVal) {
-                return TerminatorUpdate(state, c.getCaseSuccessor());
+                return TerminatorUpdate(c.getCaseSuccessor());
             }
         }
-        return TerminatorUpdate(state, switchInst->getDefaultDest());
+        return TerminatorUpdate(switchInst->getDefaultDest());
 
     } else {
         logError("Only return and branches are supported\n");
-        return TerminatorUpdate(state, nullptr);
+        return TerminatorUpdate(nullptr);
     }
 }
 
-shared_ptr<VarVal> resolveValue(const Value *val, State state) {
+shared_ptr<VarVal> resolveValue(const Value *val, const State &state) {
     if (isa<Instruction>(val) || isa<Argument>(val)) {
         return state.variables.at(val->getName());
     } else if (const auto constInt = dyn_cast<ConstantInt>(val)) {
@@ -227,7 +220,7 @@ shared_ptr<VarVal> resolveValue(const Value *val, State state) {
     return make_shared<VarInt>(42);
 }
 
-State interpretICmpInst(const ICmpInst *instr, State state) {
+void interpretICmpInst(const ICmpInst *instr, State &state) {
     assert(instr->getNumOperands() == 2);
     const auto op0 = resolveValue(instr->getOperand(0), state);
     const auto op1 = resolveValue(instr->getOperand(1), state);
@@ -237,13 +230,13 @@ State interpretICmpInst(const ICmpInst *instr, State state) {
         assert(op1->getType() == VarType::Int);
         mpz_class i0 = static_pointer_cast<VarInt>(op0)->val;
         mpz_class i1 = static_pointer_cast<VarInt>(op1)->val;
-        return interpretIntPredicate(instr->getName(), instr->getPredicate(),
-                                     i0, i1, state);
+        interpretIntPredicate(instr->getName(), instr->getPredicate(), i0, i1,
+                              state);
     }
 }
 
-State interpretIntPredicate(string name, CmpInst::Predicate pred, mpz_class i0,
-                            mpz_class i1, State state) {
+void interpretIntPredicate(string name, CmpInst::Predicate pred, mpz_class i0,
+                           mpz_class i1, State &state) {
     bool predVal = false;
     switch (pred) {
     case CmpInst::ICMP_SGE:
@@ -268,10 +261,9 @@ State interpretIntPredicate(string name, CmpInst::Predicate pred, mpz_class i0,
         logError("Unsupported predicate\n");
     }
     state.variables[name] = make_shared<VarBool>(predVal);
-    return state;
 }
 
-State interpretBinOp(const BinaryOperator *instr, State state) {
+void interpretBinOp(const BinaryOperator *instr, State &state) {
     const auto op0 = resolveValue(instr->getOperand(0), state);
     const auto op1 = resolveValue(instr->getOperand(1), state);
     switch (instr->getOpcode()) {
@@ -280,13 +272,12 @@ State interpretBinOp(const BinaryOperator *instr, State state) {
         assert(op1->getType() == VarType::Int);
         mpz_class i0 = static_pointer_cast<VarInt>(op0)->val;
         mpz_class i1 = static_pointer_cast<VarInt>(op1)->val;
-        return interpretIntBinOp(instr->getName(), instr->getOpcode(), i0, i1,
-                                 state);
+        interpretIntBinOp(instr->getName(), instr->getOpcode(), i0, i1, state);
     }
 }
 
-State interpretIntBinOp(string name, Instruction::BinaryOps op, mpz_class i0,
-                        mpz_class i1, State state) {
+void interpretIntBinOp(string name, Instruction::BinaryOps op, mpz_class i0,
+                       mpz_class i1, State &state) {
     mpz_class result = 0;
     switch (op) {
     case Instruction::Add:
@@ -299,7 +290,6 @@ State interpretIntBinOp(string name, Instruction::BinaryOps op, mpz_class i0,
         logError("Unsupported binop\n");
     }
     state.variables[name] = make_shared<VarInt>(result);
-    return state;
 }
 
 json Call::toJSON() const {

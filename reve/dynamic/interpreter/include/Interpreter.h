@@ -95,8 +95,6 @@ struct BlockStep : Step {
 struct BlockUpdate {
     // State after phi nodes
     State step;
-    // State at the end of the block
-    State end;
     // next block, null if the block ended with a return instruction
     const llvm::BasicBlock *nextBlock;
     // function calls in this block in the order they were called
@@ -106,45 +104,45 @@ struct BlockUpdate {
     // steps this block has needed, if there are no function calls exactly one
     // step per block is needed
     int blocksVisited;
-    BlockUpdate(State step, State end, const llvm::BasicBlock *nextBlock,
-                std::vector<Call> calls, bool earlyExit, int blocksVisited)
-        : step(step), end(end), nextBlock(nextBlock), calls(calls),
-          earlyExit(earlyExit), blocksVisited(blocksVisited) {}
+    BlockUpdate(State step, // State end,
+                const llvm::BasicBlock *nextBlock, std::vector<Call> calls,
+                bool earlyExit, int blocksVisited)
+        : step(step), nextBlock(nextBlock), calls(calls), earlyExit(earlyExit),
+          blocksVisited(blocksVisited) {}
     BlockUpdate() = default;
 };
 
 struct TerminatorUpdate {
-    State end;
+    // State end;
     const llvm::BasicBlock *nextBlock;
-    TerminatorUpdate(State end, const llvm::BasicBlock *nextBlock)
-        : end(end), nextBlock(nextBlock) {}
+    TerminatorUpdate(const llvm::BasicBlock *nextBlock)
+        : nextBlock(nextBlock) {}
     TerminatorUpdate() = default;
 };
 
 /// The variables in the entry state will be renamed appropriately for both
 /// programs
-MonoPair<Call> interpretFunctionPair(MonoPair<const llvm::Function*> funs,
+MonoPair<Call> interpretFunctionPair(MonoPair<const llvm::Function *> funs,
                                      State entry, int maxSteps);
 auto interpretFunction(const llvm::Function &fun, State entry, int maxSteps)
     -> Call;
 auto interpretBlock(const llvm::BasicBlock &block,
-                    const llvm::BasicBlock *prevBlock, State state, int maxStep)
-    -> BlockUpdate;
-auto interpretPHI(const llvm::PHINode &instr, State state,
-                  const llvm::BasicBlock *prevBlock) -> State;
-auto interpretInstruction(const llvm::Instruction *instr, State state) -> State;
-auto interpretTerminator(const llvm::TerminatorInst *instr, State state)
+                    const llvm::BasicBlock *prevBlock, State &state,
+                    int maxStep) -> BlockUpdate;
+auto interpretPHI(const llvm::PHINode &instr, State &state,
+                  const llvm::BasicBlock *prevBlock) -> void;
+auto interpretInstruction(const llvm::Instruction *instr, State &state) -> void;
+auto interpretTerminator(const llvm::TerminatorInst *instr, State &state)
     -> TerminatorUpdate;
-auto resolveValue(const llvm::Value *val, State state)
+auto resolveValue(const llvm::Value *val, const State &state)
     -> std::shared_ptr<VarVal>;
-auto interpretICmpInst(const llvm::ICmpInst *instr, State state) -> State;
+auto interpretICmpInst(const llvm::ICmpInst *instr, State &state) -> void;
 auto interpretIntPredicate(std::string name, llvm::CmpInst::Predicate pred,
-                           mpz_class i0, mpz_class i1, State state) -> State;
-auto interpretBinOp(const llvm::BinaryOperator *instr, State state) -> State;
-State interpretIntBinOp(std::string name, llvm::Instruction::BinaryOps op,
-                        mpz_class i0, mpz_class i1, State state);
+                           mpz_class i0, mpz_class i1, State &state) -> void;
+auto interpretBinOp(const llvm::BinaryOperator *instr, State &state) -> void;
+auto interpretIntBinOp(std::string name, llvm::Instruction::BinaryOps op,
+                       mpz_class i0, mpz_class i1, State &state) -> void;
 
-nlohmann::json callToJSON(Call call);
 nlohmann::json stateToJSON(State state);
 
 template <typename T> VarInt resolveGEP(T &gep, State state) {
