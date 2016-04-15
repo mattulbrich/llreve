@@ -17,6 +17,7 @@ using llvm::SwitchInst;
 using llvm::ICmpInst;
 using llvm::CmpInst;
 using llvm::Instruction;
+using llvm::SelectInst;
 using llvm::PHINode;
 using llvm::ReturnInst;
 using llvm::TerminatorInst;
@@ -157,6 +158,17 @@ void interpretInstruction(const Instruction *instr, State &state) {
         assert(val->getType() == VarType::Int);
         HeapAddress addr = static_pointer_cast<VarInt>(ptr)->val;
         state.heap[addr] = *static_pointer_cast<VarInt>(val);
+    } else if (const auto select = dyn_cast<SelectInst>(instr)) {
+        shared_ptr<VarVal> cond = resolveValue(select->getCondition(), state);
+        assert(ptr->getType() == VarType::Bool);
+        bool condVal = static_pointer_cast<VarBool>(cond)->val;
+        shared_ptr<VarVal> var;
+        if (condVal) {
+            var = resolveValue(select->getTrueValue(), state);
+        } else {
+            var = resolveValue(select->getFalseValue(), state);
+        }
+        state.variables[select->getName()] = var;
     } else {
         logErrorData("unsupported instruction:\n", *instr);
     }
