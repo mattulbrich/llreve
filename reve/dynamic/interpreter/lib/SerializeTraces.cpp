@@ -32,13 +32,17 @@ void serializeValuesInRange(MonoPair<const Function *> funs,
         }
         Heap heap;
         MonoPair<Call> calls = interpretFunctionPair(funs, map, heap, 1000);
-        calls.indexedForEach([outputDirectory, &funs, counter](Call c, int i) {
+
+        std::string baseName = outputDirectory + "/";
+        baseName += funs.first->getName();
+        baseName += "_";
+        calls.indexedForEach([&funs, counter, &baseName](Call c, int i) {
             std::ofstream ofStream;
-            std::string fileName = outputDirectory + "/";
-            fileName += funs.first->getName();
-            fileName += "_" + std::to_string(i) + "_" + std::to_string(counter);
+            std::string fileName = baseName;
+            fileName += std::to_string(i) + "_" + std::to_string(counter) + ".json";
             ofStream.open(fileName);
             ofStream << c.toJSON() << std::endl;
+            ofStream.close();
         });
         counter++;
     }
