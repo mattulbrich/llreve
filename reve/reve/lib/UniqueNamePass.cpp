@@ -18,7 +18,8 @@ PreservedAnalyses UniqueNamePass::run(llvm::Function &F,
 
     int i = 0;
     for (auto &Block : F) {
-        Block.setName(funName + "/" + std::to_string(i));
+        Block.setName(funName + "/" + std::to_string(i) + "$" + Prefix);
+        ++i;
         for (auto &Inst : Block) {
             makePrefixed(Inst, Prefix, InstructionNames);
         }

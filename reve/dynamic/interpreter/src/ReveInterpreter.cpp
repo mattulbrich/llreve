@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "Interpreter.h"
+#include "SerializeTraces.h"
 
 #include "Compat.h"
 #include "Compile.h"
@@ -58,15 +59,19 @@ int main(int argc, const char **argv) {
     // variables["dest$1_0"] = make_shared<VarInt>(0);
     // variables["src$1_0"] = make_shared<VarInt>(16);
     // variables["size$1_0"] = make_shared<VarInt>(4);
-    variables["i$1_0"] = make_shared<VarInt>(3);
-    variables["j$1_0"] = make_shared<VarInt>(5);
+    variables["i$2_0"] = make_shared<VarInt>(3);
+    variables["j$2_0"] = make_shared<VarInt>(5);
     Heap heap;
     // heap[16] = VarInt(4);
     // heap[20] = VarInt(3);
     // heap[24] = VarInt(2);
     // heap[28] = VarInt(1);
     State entry(variables, heap);
-    Call call = interpretFunction(*modules.first->getFunction(MainFunctionFlag),
-                                  entry, 1000);
-    std::cout << call.toJSON().dump(4) << std::endl;
+    serializeValuesInRange(
+        makeMonoPair(modules.first->getFunction(MainFunctionFlag),
+                     modules.second->getFunction(MainFunctionFlag)),
+        -5, 5, "out");
+    // Call call = interpretFunction(
+    //     *modules.second->getFunction(MainFunctionFlag), entry, 1000);
+    // std::cout << call.toJSON().dump(4) << std::endl;
 }

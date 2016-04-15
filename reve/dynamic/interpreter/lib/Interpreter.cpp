@@ -13,6 +13,7 @@ using llvm::BasicBlock;
 using llvm::BinaryOperator;
 using llvm::BranchInst;
 using llvm::Function;
+using llvm::SwitchInst;
 using llvm::ICmpInst;
 using llvm::CmpInst;
 using llvm::Instruction;
@@ -42,6 +43,19 @@ json VarInt::toJSON() const { return val.get_str(); }
 json VarBool::toJSON() const { return json(val); }
 
 VarType VarBool::getType() const { return VarType::Bool; }
+
+MonoPair<Call> interpretFunctionPair(MonoPair<const Function *> funs,
+                                     State entry, int maxSteps) {
+    VarMap var1;
+    VarMap var2;
+    for (auto varPair : entry.variables) {
+        var1.insert({varPair.first + "$1_0", varPair.second});
+        var2.insert({varPair.first + "$2_0", varPair.second});
+    }
+    return makeMonoPair(
+        interpretFunction(*funs.first, State(var1, entry.heap), maxSteps),
+        interpretFunction(*funs.second, State(var2, entry.heap), maxSteps));
+}
 
 Call interpretFunction(const Function &fun, State entry, int maxSteps) {
     const BasicBlock *prevBlock = nullptr;
@@ -184,6 +198,19 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr, State state) {
                 return TerminatorUpdate(state, branchInst->getSuccessor(1));
             }
         }
+    } else if (const auto switchInst = dyn_cast<SwitchInst>(instr)) {
+        shared_ptr<VarVal> cond =
+            resolveValue(switchInst->getCondition(), state);
+        assert(cond->getType() == VarType::Int);
+        mpz_class condVal = static_pointer_cast<VarInt>(cond)->val;
+        for (auto c : switchInst->cases()) {
+            mpz_class caseVal = c.getCaseValue()->getSExtValue();
+            if (caseVal == condVal) {
+                return TerminatorUpdate(state, c.getCaseSuccessor());
+            }
+        }
+        return TerminatorUpdate(state, switchInst->getDefaultDest());
+
     } else {
         logError("Only return and branches are supported\n");
         return TerminatorUpdate(state, nullptr);
@@ -192,7 +219,6 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr, State state) {
 
 shared_ptr<VarVal> resolveValue(const Value *val, State state) {
     if (isa<Instruction>(val) || isa<Argument>(val)) {
-        logWarning("Reading: " + val->getName() + "\n");
         return state.variables.at(val->getName());
     } else if (const auto constInt = dyn_cast<ConstantInt>(val)) {
         return make_shared<VarInt>(constInt->getSExtValue());
@@ -285,6 +311,8 @@ json Call::toJSON() const {
         jsonSteps.push_back(step->toJSON());
     }
     j["steps"] = jsonSteps;
+    j["early_exit"] = earlyExit;
+    j["blocks_visited"] = blocksVisited;
     return j;
 }
 

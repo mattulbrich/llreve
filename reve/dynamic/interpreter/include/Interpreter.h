@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Helper.h"
+#include "MonoPair.h"
 
 #include <gmpxx.h>
 #include <map>
@@ -97,7 +98,7 @@ struct BlockUpdate {
     // State at the end of the block
     State end;
     // next block, null if the block ended with a return instruction
-    llvm::BasicBlock *nextBlock;
+    const llvm::BasicBlock *nextBlock;
     // function calls in this block in the order they were called
     std::vector<Call> calls;
     // Indicates a stop because we ran out of steps
@@ -105,7 +106,7 @@ struct BlockUpdate {
     // steps this block has needed, if there are no function calls exactly one
     // step per block is needed
     int blocksVisited;
-    BlockUpdate(State step, State end, llvm::BasicBlock *nextBlock,
+    BlockUpdate(State step, State end, const llvm::BasicBlock *nextBlock,
                 std::vector<Call> calls, bool earlyExit, int blocksVisited)
         : step(step), end(end), nextBlock(nextBlock), calls(calls),
           earlyExit(earlyExit), blocksVisited(blocksVisited) {}
@@ -114,12 +115,16 @@ struct BlockUpdate {
 
 struct TerminatorUpdate {
     State end;
-    llvm::BasicBlock *nextBlock;
-    TerminatorUpdate(State end, llvm::BasicBlock *nextBlock)
+    const llvm::BasicBlock *nextBlock;
+    TerminatorUpdate(State end, const llvm::BasicBlock *nextBlock)
         : end(end), nextBlock(nextBlock) {}
     TerminatorUpdate() = default;
 };
 
+/// The variables in the entry state will be renamed appropriately for both
+/// programs
+MonoPair<Call> interpretFunctionPair(MonoPair<const llvm::Function*> funs,
+                                     State entry, int maxSteps);
 auto interpretFunction(const llvm::Function &fun, State entry, int maxSteps)
     -> Call;
 auto interpretBlock(const llvm::BasicBlock &block,
