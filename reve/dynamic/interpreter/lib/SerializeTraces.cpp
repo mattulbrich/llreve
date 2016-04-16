@@ -107,12 +107,13 @@ void workerThread(MonoPair<const llvm::Function *> funs,
             map.insert({varNames[i], make_shared<VarInt>(item.vals[i])});
         }
         Heap heap;
-        MonoPair<Call> calls = interpretFunctionPair(funs, map, heap, 1000);
+        MonoPair<Call<const llvm::Value *>> calls =
+            interpretFunctionPair(funs, map, heap, 1000);
 
         std::string baseName = outputDirectory + "/";
         baseName += funs.first->getName();
         baseName += "_";
-        calls.indexedForEach([&funs, item, &baseName](Call c, int i) {
+        calls.indexedForEach([&funs, item, &baseName](FastCall c, int i) {
             std::ofstream ofStream;
             std::string fileName = baseName;
             fileName += std::to_string(i) + "_" + std::to_string(item.counter) +

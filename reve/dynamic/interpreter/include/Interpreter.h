@@ -32,6 +32,8 @@ struct VarVal {
     VarVal &operator=(const VarVal &other) = default;
 };
 
+std::shared_ptr<VarVal> cborToVarVal(const cbor_item_t *item);
+
 struct VarInt : VarVal {
     VarIntVal val;
     VarType getType() const override;
@@ -50,19 +52,22 @@ struct VarBool : VarVal {
 };
 
 using Heap = std::map<HeapAddress, VarInt>;
-using VarMap = std::map<const llvm::Value *, std::shared_ptr<VarVal>>;
+template <typename T> using VarMap = std::map<T, std::shared_ptr<VarVal>>;
+using FastVarMap = VarMap<const llvm::Value *>;
 
-struct State {
-    VarMap variables;
+template <typename T> struct State {
+    VarMap<T> variables;
     // If an address is not in the map, it’s value is zero
     // Note that the values in the map can also be zero
     Heap heap;
-    State(VarMap variables, Heap heap) : variables(variables), heap(heap) {}
+    State(VarMap<T> variables, Heap heap) : variables(variables), heap(heap) {}
     State() = default;
 };
 
-struct Step {
-    virtual ~Step();
+using FastState = State<const llvm::Value *>;
+
+template <typename T> struct Step {
+    virtual ~Step() = default;
     Step(const Step &other) = default;
     Step() = default;
     Step &operator=(const Step &other) = default;
@@ -70,49 +75,70 @@ struct Step {
     virtual cbor_item_t *toCBOR() const = 0;
 };
 
-struct Call : Step {
+std::shared_ptr<Step<std::string>> cborToStep(const cbor_item_t *item);
+
+template <typename T> struct Call : Step<T> {
     std::string functionName;
-    State entryState;
-    State returnState;
-    std::vector<std::shared_ptr<Step>> steps;
+    State<T> entryState;
+    State<T> returnState;
+    std::vector<std::shared_ptr<Step<T>>> steps;
     // Did we exit because we ran out of steps?
     bool earlyExit;
     uint32_t blocksVisited;
-    Call(std::string functionName, State entryState, State returnState,
-         std::vector<std::shared_ptr<Step>> steps, bool earlyExit,
+    Call(std::string functionName, State<T> entryState, State<T> returnState,
+         std::vector<std::shared_ptr<Step<T>>> steps, bool earlyExit,
          uint32_t blocksVisited)
         : functionName(functionName), entryState(entryState),
           returnState(returnState), steps(steps), earlyExit(earlyExit),
           blocksVisited(blocksVisited) {}
-    nlohmann::json toJSON() const override;
-    cbor_item_t *toCBOR() const override;
+    nlohmann::json toJSON() const override {
+        logError("Only specialized version can be serialized to json\n");
+        return nlohmann::json();
+    }
+    cbor_item_t *toCBOR() const override {
+        logError("Only specialized version cab be serialized to cbor\n");
+        return nullptr;
+    }
 };
 
-struct BlockStep : Step {
+Call<std::string> cborToCall(const cbor_item_t *item);
+
+using FastCall = Call<const llvm::Value *>;
+
+template <typename T> struct BlockStep : Step<T> {
     BlockName blockName;
-    State state;
+    State<T> state;
     // The calls performed in this block
-    std::vector<Call> calls;
-    BlockStep(BlockName blockName, State state, std::vector<Call> calls)
+    std::vector<Call<T>> calls;
+    BlockStep(BlockName blockName, State<T> state, std::vector<Call<T>> calls)
         : blockName(blockName), state(state), calls(calls) {}
-    nlohmann::json toJSON() const override;
-    cbor_item_t *toCBOR() const override;
+    nlohmann::json toJSON() const override {
+        logError("Only specialized version can be serialized to json\n");
+        return nlohmann::json();
+    }
+    cbor_item_t *toCBOR() const override {
+        logError("Only specialized version can be serialized to cbor\n");
+        return nullptr;
+    }
 };
 
-struct BlockUpdate {
+std::shared_ptr<BlockStep<std::string>>
+cborToBlockStep(const cbor_item_t *item);
+
+template <typename T> struct BlockUpdate {
     // State after phi nodes
-    State step;
+    State<T> step;
     // next block, null if the block ended with a return instruction
     const llvm::BasicBlock *nextBlock;
     // function calls in this block in the order they were called
-    std::vector<Call> calls;
+    std::vector<Call<T>> calls;
     // Indicates a stop because we ran out of steps
     bool earlyExit;
     // steps this block has needed, if there are no function calls exactly one
     // step per block is needed
     uint32_t blocksVisited;
-    BlockUpdate(State step, // State end,
-                const llvm::BasicBlock *nextBlock, std::vector<Call> calls,
+    BlockUpdate(State<T> step, // State end,
+                const llvm::BasicBlock *nextBlock, std::vector<Call<T>> calls,
                 bool earlyExit, uint32_t blocksVisited)
         : step(step), nextBlock(nextBlock), calls(calls), earlyExit(earlyExit),
           blocksVisited(blocksVisited) {}
@@ -129,35 +155,38 @@ struct TerminatorUpdate {
 
 /// The variables in the entry state will be renamed appropriately for both
 /// programs
-MonoPair<Call>
+MonoPair<FastCall>
 interpretFunctionPair(MonoPair<const llvm::Function *> funs,
                       std::map<std::string, std::shared_ptr<VarVal>> variables,
                       Heap heap, uint32_t maxSteps);
-auto interpretFunction(const llvm::Function &fun, State entry,
-                       uint32_t maxSteps) -> Call;
+auto interpretFunction(const llvm::Function &fun, FastState entry,
+                       uint32_t maxSteps) -> FastCall;
 auto interpretBlock(const llvm::BasicBlock &block,
-                    const llvm::BasicBlock *prevBlock, State &state,
-                    uint32_t maxStep) -> BlockUpdate;
-auto interpretPHI(const llvm::PHINode &instr, State &state,
+                    const llvm::BasicBlock *prevBlock, FastState &state,
+                    uint32_t maxStep) -> BlockUpdate<const llvm::Value *>;
+auto interpretPHI(const llvm::PHINode &instr, FastState &state,
                   const llvm::BasicBlock *prevBlock) -> void;
-auto interpretInstruction(const llvm::Instruction *instr, State &state) -> void;
-auto interpretTerminator(const llvm::TerminatorInst *instr, State &state)
+auto interpretInstruction(const llvm::Instruction *instr, FastState &state)
+    -> void;
+auto interpretTerminator(const llvm::TerminatorInst *instr, FastState &state)
     -> TerminatorUpdate;
-auto resolveValue(const llvm::Value *val, const State &state)
+auto resolveValue(const llvm::Value *val, const FastState &state)
     -> std::shared_ptr<VarVal>;
-auto interpretICmpInst(const llvm::ICmpInst *instr, State &state) -> void;
+auto interpretICmpInst(const llvm::ICmpInst *instr, FastState &state) -> void;
 auto interpretIntPredicate(const llvm::ICmpInst *instr,
                            llvm::CmpInst::Predicate pred, VarIntVal i0,
-                           VarIntVal i1, State &state) -> void;
-auto interpretBinOp(const llvm::BinaryOperator *instr, State &state) -> void;
+                           VarIntVal i1, FastState &state) -> void;
+auto interpretBinOp(const llvm::BinaryOperator *instr, FastState &state)
+    -> void;
 auto interpretIntBinOp(const llvm::BinaryOperator *instr,
                        llvm::Instruction::BinaryOps op, VarIntVal i0,
-                       VarIntVal i1, State &state) -> void;
+                       VarIntVal i1, FastState &state) -> void;
 
-nlohmann::json stateToJSON(State state);
-cbor_item_t *stateToCBOR(State state);
+nlohmann::json stateToJSON(FastState state);
+cbor_item_t *stateToCBOR(FastState state);
+State<std::string> cborToState(const cbor_item_t *item);
 
-template <typename T> VarInt resolveGEP(T &gep, State state) {
+template <typename A, typename T> VarInt resolveGEP(T &gep, State<A> state) {
     std::shared_ptr<VarVal> val = resolveValue(gep.getPointerOperand(), state);
     assert(val->getType() == VarType::Int);
     VarIntVal offset = std::static_pointer_cast<VarInt>(val)->val;
@@ -186,3 +215,12 @@ template <typename T> VarInt resolveGEP(T &gep, State state) {
     }
     return VarInt(offset);
 }
+
+std::string cborToString(const cbor_item_t *item);
+VarIntVal cborToVarIntVal(const cbor_item_t *item);
+
+template <typename T>
+std::vector<T> cborToVector(const cbor_item_t *item,
+                            std::function<T(const cbor_item_t *)> fun);
+std::map<std::string, const cbor_item_t *>
+cborToKeyMap(const cbor_item_t *item);

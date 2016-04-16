@@ -37,9 +37,36 @@ using std::static_pointer_cast;
 using nlohmann::json;
 
 VarVal::~VarVal() = default;
-Step::~Step() = default;
+
+template <typename Key, typename Val>
+std::map<Key, Val> cborToMap(const cbor_item_t *item,
+                             std::function<Key(const cbor_item_t *)> keyFun,
+                             std::function<Val(const cbor_item_t *)> valFun) {
+    assert(cbor_isa_map(item));
+    std::map<Key, Val> map;
+    struct cbor_pair *handle = cbor_map_handle(item);
+    for (size_t i = 0; i < cbor_map_size(item); ++i) {
+        map[keyFun(handle[i].key)] = valFun(handle[i].value);
+    }
+    return map;
+}
+
+template <typename T>
+std::map<std::string, T>
+cborToStringMap(const cbor_item_t *item,
+                std::function<T(const cbor_item_t *)> fun) {
+    return cborToMap<std::string, T>(item, cborToString, fun);
+}
+
+std::map<std::string, const cbor_item_t *>
+cborToKeyMap(const cbor_item_t *item) {
+    return cborToMap<std::string, const cbor_item_t *>(
+        item, cborToString, [](const cbor_item_t *x) { return x; });
+}
 
 VarType VarInt::getType() const { return VarType::Int; }
+VarType VarBool::getType() const { return VarType::Bool; }
+
 json VarInt::toJSON() const { return val.get_str(); }
 cbor_item_t *VarInt::toCBOR() const {
     return cbor_build_string(val.get_str().c_str());
@@ -47,13 +74,24 @@ cbor_item_t *VarInt::toCBOR() const {
 json VarBool::toJSON() const { return json(val); }
 cbor_item_t *VarBool::toCBOR() const { return cbor_build_bool(val); }
 
-VarType VarBool::getType() const { return VarType::Bool; }
+shared_ptr<VarVal> cborToVarVal(const cbor_item_t *item) {
+    if (cbor_is_bool(item)) {
+        return make_shared<VarBool>(cbor_ctrl_is_bool(item));
+    } else if (cbor_isa_string(item) && cbor_string_is_definite(item)) {
+        VarIntVal i;
+        i.set_str(cborToString(item), 10);
+        return make_shared<VarInt>(i);
+    } else {
+        return nullptr;
+    }
+}
 
-MonoPair<Call> interpretFunctionPair(MonoPair<const Function *> funs,
-                                     map<string, shared_ptr<VarVal>> variables,
-                                     Heap heap, uint32_t maxSteps) {
-    VarMap var1;
-    VarMap var2;
+MonoPair<FastCall>
+interpretFunctionPair(MonoPair<const Function *> funs,
+                      map<string, shared_ptr<VarVal>> variables, Heap heap,
+                      uint32_t maxSteps) {
+    VarMap<const llvm::Value *> var1;
+    VarMap<const llvm::Value *> var2;
     for (auto &arg : funs.first->args()) {
         std::string varName = arg.getName();
         size_t i = varName.find_first_of('$');
@@ -69,36 +107,39 @@ MonoPair<Call> interpretFunctionPair(MonoPair<const Function *> funs,
         var2[a] = variables.at(varName);
     }
     return makeMonoPair(
-        interpretFunction(*funs.first, State(var1, heap), maxSteps),
-        interpretFunction(*funs.second, State(var2, heap), maxSteps));
+        interpretFunction(*funs.first, FastState(var1, heap), maxSteps),
+        interpretFunction(*funs.second, FastState(var2, heap), maxSteps));
 }
 
-Call interpretFunction(const Function &fun, State entry, uint32_t maxSteps) {
+FastCall interpretFunction(const Function &fun, FastState entry,
+                           uint32_t maxSteps) {
     const BasicBlock *prevBlock = nullptr;
     const BasicBlock *currentBlock = &fun.getEntryBlock();
-    vector<shared_ptr<Step>> steps;
-    State currentState = entry;
-    BlockUpdate update;
+    vector<shared_ptr<Step<const llvm::Value *>>> steps;
+    FastState currentState = entry;
+    BlockUpdate<const llvm::Value *> update;
     uint32_t blocksVisited = 0;
     do {
         update = interpretBlock(*currentBlock, prevBlock, currentState,
                                 maxSteps - blocksVisited);
         blocksVisited += update.blocksVisited;
-        steps.push_back(make_shared<BlockStep>(currentBlock->getName(),
-                                               update.step, update.calls));
+        steps.push_back(make_shared<BlockStep<const llvm::Value *>>(
+            currentBlock->getName(), update.step, update.calls));
         prevBlock = currentBlock;
         currentBlock = update.nextBlock;
         if (blocksVisited > maxSteps || update.earlyExit) {
-            return Call(fun.getName(), entry, currentState, steps, true,
-                        blocksVisited);
+            return FastCall(fun.getName(), entry, currentState, steps, true,
+                            blocksVisited);
         }
     } while (currentBlock != nullptr);
-    return Call(fun.getName(), entry, currentState, steps, false,
-                blocksVisited);
+    return FastCall(fun.getName(), entry, currentState, steps, false,
+                    blocksVisited);
 }
 
-BlockUpdate interpretBlock(const BasicBlock &block, const BasicBlock *prevBlock,
-                           State &state, uint32_t maxSteps) {
+BlockUpdate<const llvm::Value *> interpretBlock(const BasicBlock &block,
+                                                const BasicBlock *prevBlock,
+                                                FastState &state,
+                                                uint32_t maxSteps) {
     uint32_t blocksVisited = 1;
     const Instruction *firstNonPhi = block.getFirstNonPHI();
     const Instruction *terminator = block.getTerminator();
@@ -110,24 +151,25 @@ BlockUpdate interpretBlock(const BasicBlock &block, const BasicBlock *prevBlock,
         assert(isa<PHINode>(inst));
         interpretPHI(*dyn_cast<PHINode>(inst), state, prevBlock);
     }
-    State step(state);
+    FastState step(state);
 
-    vector<Call> calls;
+    vector<FastCall> calls;
     // Handle non phi instructions
     for (; &*instrIterator != terminator; ++instrIterator) {
         if (const auto call = dyn_cast<llvm::CallInst>(&*instrIterator)) {
             const Function *fun = call->getFunction();
-            VarMap args;
+            FastVarMap args;
             auto argIt = fun->getArgumentList().begin();
             for (const auto &arg : call->arg_operands()) {
                 args[&*argIt] = resolveValue(arg, state);
                 ++argIt;
             }
-            Call c = interpretFunction(*fun, State(args, state.heap),
-                                       maxSteps - blocksVisited);
+            FastCall c = interpretFunction(*fun, FastState(args, state.heap),
+                                           maxSteps - blocksVisited);
             blocksVisited += c.blocksVisited;
             if (blocksVisited > maxSteps || c.earlyExit) {
-                return BlockUpdate(step, nullptr, calls, true, blocksVisited);
+                return BlockUpdate<const llvm::Value *>(step, nullptr, calls,
+                                                        true, blocksVisited);
             }
             calls.push_back(c);
             state.heap = c.returnState.heap;
@@ -140,10 +182,11 @@ BlockUpdate interpretBlock(const BasicBlock &block, const BasicBlock *prevBlock,
     // Terminator instruction
     TerminatorUpdate update = interpretTerminator(block.getTerminator(), state);
 
-    return BlockUpdate(step, update.nextBlock, calls, false, blocksVisited);
+    return BlockUpdate<const llvm::Value *>(step, update.nextBlock, calls,
+                                            false, blocksVisited);
 }
 
-void interpretInstruction(const Instruction *instr, State &state) {
+void interpretInstruction(const Instruction *instr, FastState &state) {
     if (const auto binOp = dyn_cast<BinaryOperator>(instr)) {
         interpretBinOp(binOp, state);
     } else if (const auto icmp = dyn_cast<ICmpInst>(instr)) {
@@ -186,7 +229,7 @@ void interpretInstruction(const Instruction *instr, State &state) {
     }
 }
 
-void interpretPHI(const PHINode &instr, State &state,
+void interpretPHI(const PHINode &instr, FastState &state,
                   const BasicBlock *prevBlock) {
     const Value *val = instr.getIncomingValueForBlock(prevBlock);
     shared_ptr<VarVal> var = resolveValue(val, state);
@@ -194,7 +237,7 @@ void interpretPHI(const PHINode &instr, State &state,
 }
 
 TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
-                                     State &state) {
+                                     FastState &state) {
     if (const auto retInst = dyn_cast<ReturnInst>(instr)) {
         state.variables[ReturnName] =
             resolveValue(retInst->getReturnValue(), state);
@@ -234,7 +277,7 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
     }
 }
 
-shared_ptr<VarVal> resolveValue(const Value *val, const State &state) {
+shared_ptr<VarVal> resolveValue(const Value *val, const FastState &state) {
     if (isa<Instruction>(val) || isa<Argument>(val)) {
         return state.variables.at(val);
     } else if (const auto constInt = dyn_cast<ConstantInt>(val)) {
@@ -244,7 +287,7 @@ shared_ptr<VarVal> resolveValue(const Value *val, const State &state) {
     return make_shared<VarInt>(42);
 }
 
-void interpretICmpInst(const ICmpInst *instr, State &state) {
+void interpretICmpInst(const ICmpInst *instr, FastState &state) {
     assert(instr->getNumOperands() == 2);
     const auto op0 = resolveValue(instr->getOperand(0), state);
     const auto op1 = resolveValue(instr->getOperand(1), state);
@@ -259,7 +302,7 @@ void interpretICmpInst(const ICmpInst *instr, State &state) {
 }
 
 void interpretIntPredicate(const ICmpInst *instr, CmpInst::Predicate pred,
-                           VarIntVal i0, VarIntVal i1, State &state) {
+                           VarIntVal i0, VarIntVal i1, FastState &state) {
     bool predVal = false;
     switch (pred) {
     case CmpInst::ICMP_SGE:
@@ -286,7 +329,7 @@ void interpretIntPredicate(const ICmpInst *instr, CmpInst::Predicate pred,
     state.variables[instr] = make_shared<VarBool>(predVal);
 }
 
-void interpretBinOp(const BinaryOperator *instr, State &state) {
+void interpretBinOp(const BinaryOperator *instr, FastState &state) {
     const auto op0 = resolveValue(instr->getOperand(0), state);
     const auto op1 = resolveValue(instr->getOperand(1), state);
     switch (instr->getOpcode()) {
@@ -300,7 +343,7 @@ void interpretBinOp(const BinaryOperator *instr, State &state) {
 }
 
 void interpretIntBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
-                       VarIntVal i0, VarIntVal i1, State &state) {
+                       VarIntVal i0, VarIntVal i1, FastState &state) {
     VarIntVal result = 0;
     switch (op) {
     case Instruction::Add:
@@ -318,7 +361,7 @@ void interpretIntBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
     state.variables[instr] = make_shared<VarInt>(result);
 }
 
-json Call::toJSON() const {
+template <> json FastCall::toJSON() const {
     json j;
     j["entry_state"] = stateToJSON(entryState);
     j["return_state"] = stateToJSON(returnState);
@@ -332,9 +375,40 @@ json Call::toJSON() const {
     return j;
 }
 
-cbor_item_t *Call::toCBOR() const {
+shared_ptr<Step<string>> cborToStep(const cbor_item_t *item) {
+    assert(cbor_isa_map(item));
+    if (cbor_map_size(item) == 6) {
+        return shared_ptr<Step<string>>(new Call<string>(cborToCall(item)));
+    } else if (cbor_map_size(item) == 3) {
+        return cborToBlockStep(item);
+    } else {
+        return nullptr;
+    }
+}
+
+Call<string> cborToCall(const cbor_item_t *item) {
+    assert(cbor_isa_map(item));
+    assert(cbor_map_size(item) == 6);
+    map<std::string, const cbor_item_t *> vals = cborToKeyMap(item);
+    string functionName = cborToString(vals.at("function_name"));
+    State<string> entry = cborToState(vals.at("entry_state"));
+    State<string> ret = cborToState(vals.at("return_state"));
+    vector<shared_ptr<Step<string>>> steps =
+        cborToVector<shared_ptr<Step<string>>>(vals.at("steps"), cborToStep);
+    bool earlyExit = cbor_ctrl_is_bool(vals.at("earlyExit"));
+    uint32_t blocksVisited = cbor_get_uint32(vals.at("blocks_visited"));
+    return Call<string>(functionName, entry, ret, steps, earlyExit,
+                        blocksVisited);
+}
+
+template <> cbor_item_t *FastCall::toCBOR() const {
     bool ret;
-    cbor_item_t *map = cbor_new_definite_map(5);
+    cbor_item_t *map = cbor_new_definite_map(6);
+    ret = cbor_map_add(
+        map, (struct cbor_pair){
+                 .key = cbor_move(cbor_build_string("function_name")),
+                 .value = cbor_move(cbor_build_string(functionName.c_str()))});
+    assert(ret);
     ret = cbor_map_add(
         map,
         (struct cbor_pair){.key = cbor_move(cbor_build_string("entry_state")),
@@ -368,7 +442,7 @@ cbor_item_t *Call::toCBOR() const {
     return map;
 }
 
-json BlockStep::toJSON() const {
+template <> json BlockStep<const llvm::Value *>::toJSON() const {
     json j;
     j["block_name"] = blockName;
     j["state"] = stateToJSON(state);
@@ -380,7 +454,18 @@ json BlockStep::toJSON() const {
     return j;
 }
 
-cbor_item_t *BlockStep::toCBOR() const {
+shared_ptr<BlockStep<string>> cborToBlockStep(const cbor_item_t *item) {
+    assert(cbor_isa_map(item));
+    assert(cbor_map_size(item) == 3);
+    map<std::string, const cbor_item_t *> vals = cborToKeyMap(item);
+    string blockName = cborToString(vals.at("block_name"));
+    State<string> state = cborToState(vals.at("state"));
+    vector<Call<string>> calls =
+        cborToVector<Call<string>>(vals.at("calls"), cborToCall);
+    return make_shared<BlockStep<string>>(blockName, state, calls);
+}
+
+template <> cbor_item_t *BlockStep<const llvm::Value *>::toCBOR() const {
     cbor_item_t *map = cbor_new_definite_map(3);
     bool ret;
     ret = cbor_map_add(
@@ -403,7 +488,7 @@ cbor_item_t *BlockStep::toCBOR() const {
     return map;
 }
 
-json stateToJSON(State state) {
+json stateToJSON(FastState state) {
     map<string, json> jsonVariables;
     map<string, json> jsonHeap;
     for (auto var : state.variables) {
@@ -419,7 +504,7 @@ json stateToJSON(State state) {
     return j;
 }
 
-cbor_item_t *stateToCBOR(State state) {
+cbor_item_t *stateToCBOR(FastState state) {
     cbor_item_t *cborVariables = cbor_new_definite_map(state.variables.size());
     cbor_item_t *cborHeap = cbor_new_definite_map(state.heap.size());
     for (const auto &var : state.variables) {
@@ -444,4 +529,48 @@ cbor_item_t *stateToCBOR(State state) {
                  (struct cbor_pair){.key = cbor_move(cbor_build_string("heap")),
                                     .value = cbor_move(cborHeap)});
     return map;
+}
+
+VarIntVal cborToVarIntVal(const cbor_item_t *item) {
+    VarIntVal i(cborToString(item), 10);
+    return i;
+}
+
+string cborToString(const cbor_item_t *item) {
+    assert(cbor_isa_string(item) && cbor_string_is_definite(item));
+    const char *data = reinterpret_cast<const char *>(cbor_string_handle(item));
+    string buf(data, cbor_string_length(item));
+    return buf;
+}
+
+State<string> cborToState(const cbor_item_t *item) {
+    assert(cbor_map_size(item) == 2);
+    struct cbor_pair *map = cbor_map_handle(item);
+    // TODO better validation
+    // variables
+    cbor_item_t *cborVariables = map[0].value;
+    assert(cbor_isa_map(cborVariables));
+    VarMap<string> variables =
+        cborToStringMap<shared_ptr<VarVal>>(cborVariables, cborToVarVal);
+    // heap
+    cbor_item_t *cborHeap = map[1].value;
+    assert(cbor_isa_map(cborHeap));
+    Heap heap = cborToMap<VarIntVal, VarInt>(
+        cborHeap, cborToVarIntVal, [](const cbor_item_t *item) -> VarInt {
+            return VarInt(cborToVarIntVal(item));
+        });
+    return State<string>(variables, heap);
+}
+
+template <typename T>
+vector<T> cborToVector(const cbor_item_t *item,
+                       std::function<T(const cbor_item_t *)> fun) {
+    assert(cbor_isa_array(item));
+    size_t size = cbor_array_size(item);
+    vector<T> vec;
+    vec.reserve(size);
+    for (size_t i = 0; i < size; ++i) {
+        vec[i] = fun(cbor_array_get(item, i));
+    }
+    return vec;
 }
