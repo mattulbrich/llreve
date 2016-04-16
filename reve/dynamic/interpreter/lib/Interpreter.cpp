@@ -395,7 +395,7 @@ Call<string> cborToCall(const cbor_item_t *item) {
     State<string> ret = cborToState(vals.at("return_state"));
     vector<shared_ptr<Step<string>>> steps =
         cborToVector<shared_ptr<Step<string>>>(vals.at("steps"), cborToStep);
-    bool earlyExit = cbor_ctrl_is_bool(vals.at("earlyExit"));
+    bool earlyExit = cbor_ctrl_is_bool(vals.at("early_exit"));
     uint32_t blocksVisited = cbor_get_uint32(vals.at("blocks_visited"));
     return Call<string>(functionName, entry, ret, steps, earlyExit,
                         blocksVisited);
@@ -570,7 +570,7 @@ vector<T> cborToVector(const cbor_item_t *item,
     vector<T> vec;
     vec.reserve(size);
     for (size_t i = 0; i < size; ++i) {
-        vec[i] = fun(cbor_array_get(item, i));
+        vec.push_back(fun(cbor_move(cbor_array_get(item, i))));
     }
     return vec;
 }
