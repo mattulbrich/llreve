@@ -1,9 +1,11 @@
 #include "SerializeTraces.h"
 
 #include "Interpreter.h"
+#include "ThreadSafeQueue.h"
 
 #include <fstream>
 #include <iostream>
+#include <thread>
 
 using std::vector;
 using std::string;
@@ -24,34 +26,28 @@ void serializeValuesInRange(MonoPair<const Function *> funs,
         size_t i = varName.find_first_of('$');
         varNames.push_back(varName.substr(0, i));
     }
+    ThreadSafeQueue<WorkItem> q;
+    unsigned int n = std::thread::hardware_concurrency();
+    vector<std::thread> threads(n);
+    for (size_t i = 0; i < n; ++i) {
+        threads[i] = std::thread([&q, varNames, funs, outputDirectory]() {
+            workerThread(funs, q, varNames, outputDirectory);
+        });
+    }
     int counter = 0;
     for (const auto &vals : Range(lowerBound, upperBound, varNames.size())) {
-        map<string, std::shared_ptr<VarVal>> map;
-        for (size_t i = 0; i < vals.size(); ++i) {
-            map.insert({varNames[i], make_shared<VarInt>(vals[i])});
-        }
-        Heap heap;
-        MonoPair<Call> calls = interpretFunctionPair(funs, map, heap, 1000);
-
-        std::string baseName = outputDirectory + "/";
-        baseName += funs.first->getName();
-        baseName += "_";
-        calls.indexedForEach([&funs, counter, &baseName](Call c, int i) {
-            std::ofstream ofStream;
-            std::string fileName = baseName;
-            fileName +=
-                std::to_string(i) + "_" + std::to_string(counter) + ".cbor";
-            ofStream.open(fileName, std::ios::out | std::ios::binary);
-            unsigned char *buffer;
-            cbor_item_t *root = c.toCBOR();
-            size_t bufferSize;
-            size_t length = cbor_serialize_alloc(root, &buffer, &bufferSize);
-            ofStream.write(reinterpret_cast<char *>(buffer), static_cast<long>(length));
-            free(buffer);
-            cbor_decref(&root);
-            ofStream.close();
-        });
+        q.push({vals, counter});
         counter++;
+    }
+    for (size_t i = 0; i < n; ++i) {
+        q.push({{}, -1});
+    }
+    for (auto &t : threads) {
+        if (t.joinable()) {
+            t.join();
+        } else {
+            std::cout << "not joinable " << t.get_id() << "\n";
+        }
     }
 }
 
@@ -98,4 +94,39 @@ Range::RangeIterator &Range::RangeIterator::operator++() {
     }
 
     return *this;
+}
+
+void workerThread(MonoPair<const llvm::Function *> funs,
+                  ThreadSafeQueue<WorkItem> &q,
+                  const std::vector<string> varNames,
+                  std::string outputDirectory) {
+    for (WorkItem item = q.pop(); item.counter >= 0; item = q.pop()) {
+        map<string, std::shared_ptr<VarVal>> map;
+
+        for (size_t i = 0; i < item.vals.size(); ++i) {
+            map.insert({varNames[i], make_shared<VarInt>(item.vals[i])});
+        }
+        Heap heap;
+        MonoPair<Call> calls = interpretFunctionPair(funs, map, heap, 1000);
+
+        std::string baseName = outputDirectory + "/";
+        baseName += funs.first->getName();
+        baseName += "_";
+        calls.indexedForEach([&funs, item, &baseName](Call c, int i) {
+            std::ofstream ofStream;
+            std::string fileName = baseName;
+            fileName += std::to_string(i) + "_" + std::to_string(item.counter) +
+                        ".cbor";
+            ofStream.open(fileName, std::ios::out | std::ios::binary);
+            unsigned char *buffer;
+            cbor_item_t *root = c.toCBOR();
+            size_t bufferSize;
+            size_t length = cbor_serialize_alloc(root, &buffer, &bufferSize);
+            ofStream.write(reinterpret_cast<char *>(buffer),
+                           static_cast<long>(length));
+            free(buffer);
+            cbor_decref(&root);
+            ofStream.close();
+        });
+    }
 }
