@@ -172,7 +172,7 @@ void interpretInstruction(const Instruction *instr, State &state) {
         state.heap[addr] = *static_pointer_cast<VarInt>(val);
     } else if (const auto select = dyn_cast<SelectInst>(instr)) {
         shared_ptr<VarVal> cond = resolveValue(select->getCondition(), state);
-        assert(ptr->getType() == VarType::Bool);
+        assert(cond->getType() == VarType::Bool);
         bool condVal = static_pointer_cast<VarBool>(cond)->val;
         shared_ptr<VarVal> var;
         if (condVal) {
@@ -309,6 +309,9 @@ void interpretIntBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
     case Instruction::Sub:
         result = i0 - i1;
         break;
+    case Instruction::SDiv:
+        result = i0 / i1;
+        break;
     default:
         logErrorData("Unsupported binop:\n", *instr);
     }
@@ -345,7 +348,7 @@ cbor_item_t *Call::toCBOR() const {
     cbor_item_t *cborSteps = cbor_new_definite_array(steps.size());
 
     for (const auto &step : steps) {
-        ret = cbor_array_push(cborSteps, step->toCBOR());
+        ret = cbor_array_push(cborSteps, cbor_move(step->toCBOR()));
         assert(ret);
     }
     ret = cbor_map_add(
@@ -391,7 +394,7 @@ cbor_item_t *BlockStep::toCBOR() const {
     assert(ret);
     cbor_item_t *cborCalls = cbor_new_definite_array(calls.size());
     for (const auto &call : calls) {
-        ret = cbor_array_push(cborCalls, call.toCBOR());
+        ret = cbor_array_push(cborCalls, cbor_move(call.toCBOR()));
         assert(ret);
     }
     cbor_map_add(
@@ -424,7 +427,7 @@ cbor_item_t *stateToCBOR(State state) {
         cbor_map_add(cborVariables,
                      (struct cbor_pair){
                          .key = cbor_move(cbor_build_string(varName.c_str())),
-                         .value = var.second->toCBOR()});
+                         .value = cbor_move(var.second->toCBOR())});
     }
     for (const auto &index : state.heap) {
         cbor_map_add(cborHeap, (struct cbor_pair){

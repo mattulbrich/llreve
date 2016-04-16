@@ -66,12 +66,6 @@ int main(int argc, const char **argv) {
     // heap[20] = VarInt(3);
     // heap[24] = VarInt(2);
     // heap[28] = VarInt(1);
-    cbor_item_t *root = cbor_new_definite_map(2);
-    /* Add the content */
-    cbor_map_add(root,
-                 (struct cbor_pair){
-                     .key = cbor_move(cbor_build_string("Is CBOR awesome?")),
-                     .value = cbor_move(cbor_build_bool(true))});
     State entry(variables, heap);
     serializeValuesInRange(
         makeMonoPair(modules.first->getFunction(MainFunctionFlag),
