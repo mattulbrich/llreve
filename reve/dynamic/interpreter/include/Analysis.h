@@ -5,6 +5,7 @@
 #include "MonoPair.h"
 #include "Preprocess.h"
 #include "These.h"
+#include "Pattern.h"
 
 #include "llvm/IR/Module.h"
 
