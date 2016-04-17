@@ -914,7 +914,8 @@ freeVarsForBlock(map<int, Paths> pathMap) {
                 }
                 for (const auto op : instr.operand_values()) {
                     if (constructed.find(op->getName()) == constructed.end() &&
-                        !op->getName().empty()) {
+                        !op->getName().empty() &&
+                        !llvm::isa<llvm::BasicBlock>(op)) {
                         freeVars.insert(op->getName());
                     }
                 }
@@ -930,7 +931,8 @@ freeVarsForBlock(map<int, Paths> pathMap) {
                             phiInst->getIncomingValueForBlock(prev);
                         if (constructed.find(incoming->getName()) ==
                                 constructed.end() &&
-                            !incoming->getName().empty()) {
+                            !incoming->getName().empty() &&
+                            !llvm::isa<llvm::BasicBlock>(incoming)) {
                             freeVars.insert(incoming->getName());
                         }
                         continue;
@@ -951,7 +953,8 @@ freeVarsForBlock(map<int, Paths> pathMap) {
                     for (const auto op : instr.operand_values()) {
                         if (constructed.find(op->getName()) ==
                                 constructed.end() &&
-                            !op->getName().empty()) {
+                            !op->getName().empty() &&
+                            !llvm::isa<llvm::BasicBlock>(op)) {
                             freeVars.insert(op->getName());
                         }
                     }
