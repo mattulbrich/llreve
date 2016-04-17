@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <iostream>
 #include <vector>
 
 // Monomorphic pair
@@ -120,4 +121,27 @@ template <typename A> std::vector<A> concat(MonoPair<std::vector<A>> pair) {
             acc.insert(acc.end(), vec.begin(), vec.end());
             return acc;
         });
+}
+
+template <typename T>
+std::ostream &operator<<(std::ostream &os, const MonoPair<T> &p) {
+    os << "(";
+    os << p.first;
+    os << ", ";
+    os << p.second;
+    os << ")";
+    return os;
+}
+
+template <typename T>
+bool operator<(const MonoPair<T> &lhs, const MonoPair<T> &rhs) {
+    if (lhs.first < rhs.first) {
+        return true;
+    }
+    return lhs.second < rhs.second;
+}
+
+template <typename T>
+bool operator==(const MonoPair<T> lhs, const MonoPair<T> &rhs) {
+    return lhs.first == rhs.first && lhs.second == rhs.second;
 }
