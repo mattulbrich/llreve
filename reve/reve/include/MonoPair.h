@@ -135,10 +135,10 @@ std::ostream &operator<<(std::ostream &os, const MonoPair<T> &p) {
 
 template <typename T>
 bool operator<(const MonoPair<T> &lhs, const MonoPair<T> &rhs) {
-    if (lhs.first < rhs.first) {
-        return true;
+    if (lhs.first == rhs.first) {
+        return lhs.second < rhs.second;
     }
-    return lhs.second < rhs.second;
+    return lhs.first < rhs.first;
 }
 
 template <typename T>
