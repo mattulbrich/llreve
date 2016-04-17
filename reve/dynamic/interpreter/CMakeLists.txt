@@ -5,7 +5,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Everything breaks if I enable this, probably because the include sets it again. Srsly cmake is a giant pile of crap and should die in a fire.
 # set(CMAKE_CXX_COMPILER "clang++")
 set(CXX_WARNINGS_FLAGS "-Weverything -Wno-c++98-compat -Wno-c99-extensions -Wno-exit-time-destructors -Wno-global-constructors -Wno-padded -Wno-switch-enum -Wno-shadow")
-set(CXX_OTHER_FLAGS "--system-header-prefix=llvm --system-header-prefix=clang -fno-omit-frame-pointer")
+set(CXX_OTHER_FLAGS "--system-header-prefix=llvm --system-header-prefix=clang -fno-omit-frame-pointer -fno-exceptions")
 set(CXX_STANDARD_FLAGS "-std=c++11 -stdlib=libc++ -fno-rtti")
 set(CMAKE_CXX_FLAGS "${CXX_WARNINGS_FLAGS} ${CXX_STANDARD_FLAGS} ${CXX_OTHER_FLAGS}")
 set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
@@ -26,11 +26,18 @@ file(GLOB headers include/*.h)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../reve ${CMAKE_CURRENT_BINARY_DIR}/reve)
 add_library(libreve-interpreter ${sources} ${headers})
 add_executable(reve-interpreter src/ReveInterpreter.cpp ${headers})
+add_executable(reve-analyzer src/ReveAnalyzer.cpp ${headers})
 
-# target_link_libraries(libreve-interpreter
-#   ${GMP_LIBRARIES}
-#   ${GMPXX_LIBRARIES}
-#   )
+target_link_libraries(libreve-interpreter
+  libreve
+)
+target_link_libraries(reve-analyzer
+  libreve
+  libreve-interpreter
+  ${GMP_LIBRARIES}
+  ${GMPXX_LIBRARIES}
+  ${CBOR_LIBRARIES}
+  )
 
 target_link_libraries(reve-interpreter
   libreve

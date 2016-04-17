@@ -32,6 +32,8 @@ struct VarVal {
     VarVal &operator=(const VarVal &other) = default;
 };
 
+bool varValEq(const VarVal& lhs, const VarVal& rhs);
+
 std::shared_ptr<VarVal> cborToVarVal(const cbor_item_t *item);
 
 struct VarInt : VarVal {
@@ -64,6 +66,10 @@ template <typename T> struct State {
     State() = default;
 };
 
+template <typename T>
+nlohmann::json stateToJSON(State<T> state,
+                           std::function<std::string(T)> getName);
+
 using FastState = State<const llvm::Value *>;
 
 template <typename T> struct Step {
@@ -71,29 +77,42 @@ template <typename T> struct Step {
     Step(const Step &other) = default;
     Step() = default;
     Step &operator=(const Step &other) = default;
-    virtual nlohmann::json toJSON() const = 0;
+    virtual nlohmann::json
+    toJSON(std::function<std::string(T)> varName) const = 0;
     virtual cbor_item_t *toCBOR() const = 0;
 };
 
 std::shared_ptr<Step<std::string>> cborToStep(const cbor_item_t *item);
 
+template<typename T> struct BlockStep;
+
 template <typename T> struct Call : Step<T> {
     std::string functionName;
     State<T> entryState;
     State<T> returnState;
-    std::vector<std::shared_ptr<Step<T>>> steps;
+    std::vector<std::shared_ptr<BlockStep<T>>> steps;
     // Did we exit because we ran out of steps?
     bool earlyExit;
     uint32_t blocksVisited;
     Call(std::string functionName, State<T> entryState, State<T> returnState,
-         std::vector<std::shared_ptr<Step<T>>> steps, bool earlyExit,
+         std::vector<std::shared_ptr<BlockStep<T>>> steps, bool earlyExit,
          uint32_t blocksVisited)
         : functionName(functionName), entryState(entryState),
           returnState(returnState), steps(steps), earlyExit(earlyExit),
           blocksVisited(blocksVisited) {}
-    nlohmann::json toJSON() const override {
-        logError("Only specialized version can be serialized to json\n");
-        return nlohmann::json();
+    nlohmann::json
+    toJSON(std::function<std::string(T)> varName) const override {
+        nlohmann::json j;
+        j["entry_state"] = stateToJSON<T>(entryState, varName);
+        j["return_state"] = stateToJSON<T>(returnState, varName);
+        std::vector<nlohmann::json> jsonSteps;
+        for (auto step : steps) {
+            jsonSteps.push_back(step->toJSON(varName));
+        }
+        j["steps"] = jsonSteps;
+        j["early_exit"] = earlyExit;
+        j["blocks_visited"] = blocksVisited;
+        return j;
     }
     cbor_item_t *toCBOR() const override {
         logError("Only specialized version cab be serialized to cbor\n");
@@ -112,15 +131,25 @@ template <typename T> struct BlockStep : Step<T> {
     std::vector<Call<T>> calls;
     BlockStep(BlockName blockName, State<T> state, std::vector<Call<T>> calls)
         : blockName(blockName), state(state), calls(calls) {}
-    nlohmann::json toJSON() const override {
-        logError("Only specialized version can be serialized to json\n");
-        return nlohmann::json();
+    nlohmann::json
+    toJSON(std::function<std::string(T)> varName) const override {
+        nlohmann::json j;
+        j["block_name"] = blockName;
+        j["state"] = stateToJSON(state, varName);
+        std::vector<nlohmann::json> jsonCalls;
+        for (auto call : calls) {
+            jsonCalls.push_back(call.toJSON(varName));
+        }
+        j["calls"] = jsonCalls;
+        return j;
     }
     cbor_item_t *toCBOR() const override {
         logError("Only specialized version can be serialized to cbor\n");
         return nullptr;
     }
 };
+
+template <> cbor_item_t *BlockStep<const llvm::Value *>::toCBOR() const;
 
 std::shared_ptr<BlockStep<std::string>>
 cborToBlockStep(const cbor_item_t *item);
@@ -182,7 +211,6 @@ auto interpretIntBinOp(const llvm::BinaryOperator *instr,
                        llvm::Instruction::BinaryOps op, VarIntVal i0,
                        VarIntVal i1, FastState &state) -> void;
 
-nlohmann::json stateToJSON(FastState state);
 cbor_item_t *stateToCBOR(FastState state);
 State<std::string> cborToState(const cbor_item_t *item);
 
@@ -224,3 +252,5 @@ std::vector<T> cborToVector(const cbor_item_t *item,
                             std::function<T(const cbor_item_t *)> fun);
 std::map<std::string, const cbor_item_t *>
 cborToKeyMap(const cbor_item_t *item);
+
+std::string valueName(const llvm::Value* val);

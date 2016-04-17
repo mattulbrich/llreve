@@ -33,6 +33,7 @@ using std::map;
 using std::shared_ptr;
 using std::make_shared;
 using std::static_pointer_cast;
+using std::function;
 
 using nlohmann::json;
 
@@ -115,7 +116,7 @@ FastCall interpretFunction(const Function &fun, FastState entry,
                            uint32_t maxSteps) {
     const BasicBlock *prevBlock = nullptr;
     const BasicBlock *currentBlock = &fun.getEntryBlock();
-    vector<shared_ptr<Step<const llvm::Value *>>> steps;
+    vector<shared_ptr<BlockStep<const llvm::Value *>>> steps;
     FastState currentState = entry;
     BlockUpdate<const llvm::Value *> update;
     uint32_t blocksVisited = 0;
@@ -361,20 +362,6 @@ void interpretIntBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
     state.variables[instr] = make_shared<VarInt>(result);
 }
 
-template <> json FastCall::toJSON() const {
-    json j;
-    j["entry_state"] = stateToJSON(entryState);
-    j["return_state"] = stateToJSON(returnState);
-    vector<json> jsonSteps;
-    for (auto step : steps) {
-        jsonSteps.push_back(step->toJSON());
-    }
-    j["steps"] = jsonSteps;
-    j["early_exit"] = earlyExit;
-    j["blocks_visited"] = blocksVisited;
-    return j;
-}
-
 shared_ptr<Step<string>> cborToStep(const cbor_item_t *item) {
     assert(cbor_isa_map(item));
     if (cbor_map_size(item) == 6) {
@@ -393,8 +380,9 @@ Call<string> cborToCall(const cbor_item_t *item) {
     string functionName = cborToString(vals.at("function_name"));
     State<string> entry = cborToState(vals.at("entry_state"));
     State<string> ret = cborToState(vals.at("return_state"));
-    vector<shared_ptr<Step<string>>> steps =
-        cborToVector<shared_ptr<Step<string>>>(vals.at("steps"), cborToStep);
+    vector<shared_ptr<BlockStep<string>>> steps =
+        cborToVector<shared_ptr<BlockStep<string>>>(vals.at("steps"),
+                                                    cborToBlockStep);
     bool earlyExit = cbor_ctrl_is_bool(vals.at("early_exit"));
     uint32_t blocksVisited = cbor_get_uint32(vals.at("blocks_visited"));
     return Call<string>(functionName, entry, ret, steps, earlyExit,
@@ -442,18 +430,6 @@ template <> cbor_item_t *FastCall::toCBOR() const {
     return map;
 }
 
-template <> json BlockStep<const llvm::Value *>::toJSON() const {
-    json j;
-    j["block_name"] = blockName;
-    j["state"] = stateToJSON(state);
-    vector<json> jsonCalls;
-    for (auto call : calls) {
-        jsonCalls.push_back(call.toJSON());
-    }
-    j["calls"] = jsonCalls;
-    return j;
-}
-
 shared_ptr<BlockStep<string>> cborToBlockStep(const cbor_item_t *item) {
     assert(cbor_isa_map(item));
     assert(cbor_map_size(item) == 3);
@@ -463,6 +439,20 @@ shared_ptr<BlockStep<string>> cborToBlockStep(const cbor_item_t *item) {
     vector<Call<string>> calls =
         cborToVector<Call<string>>(vals.at("calls"), cborToCall);
     return make_shared<BlockStep<string>>(blockName, state, calls);
+}
+
+bool varValEq(const VarVal& lhs, const VarVal& rhs) {
+    if (lhs.getType() != rhs.getType()) {
+        return false;
+    } else if (lhs.getType() == VarType::Bool) {
+        const VarBool& lhsB = static_cast<const VarBool&>(lhs);
+        const VarBool& rhsB = static_cast<const VarBool&>(rhs);
+        return lhsB.val == rhsB.val;
+    } else {
+        const VarInt& lhsI = static_cast<const VarInt&>(lhs);
+        const VarInt& rhsI = static_cast<const VarInt&>(rhs);
+        return lhsI.val == rhsI.val;
+    }
 }
 
 template <> cbor_item_t *BlockStep<const llvm::Value *>::toCBOR() const {
@@ -488,11 +478,15 @@ template <> cbor_item_t *BlockStep<const llvm::Value *>::toCBOR() const {
     return map;
 }
 
-json stateToJSON(FastState state) {
+string valueName(const llvm::Value *val) {
+    return val == nullptr ? "return" : val->getName();
+}
+template <typename T>
+json stateToJSON(State<T> state, function<string(T)> getName) {
     map<string, json> jsonVariables;
     map<string, json> jsonHeap;
     for (auto var : state.variables) {
-        string varName = var.first == nullptr ? "return" : var.first->getName();
+        string varName = getName(var.first);
         jsonVariables.insert({varName, var.second->toJSON()});
     }
     for (auto index : state.heap) {
