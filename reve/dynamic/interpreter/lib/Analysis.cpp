@@ -1,10 +1,10 @@
 #include "Analysis.h"
 
-#include "FunctionSMTGeneration.h"
 #include "Interpreter.h"
 #include "MarkAnalysis.h"
 #include "MonoPair.h"
 #include "PathAnalysis.h"
+#include "Pattern.h"
 
 #include <fstream>
 #include <iostream>
@@ -16,9 +16,11 @@
 using llvm::Module;
 using llvm::Optional;
 
+using std::make_shared;
 using std::shared_ptr;
 using std::string;
 using std::vector;
+using std::list;
 using std::ifstream;
 using std::ios;
 using std::map;
@@ -51,7 +53,6 @@ void analyse(MonoPair<shared_ptr<llvm::Module>> modules, string outputDirectory,
         std::streamsize size2 = file2.tellg();
         file1.seekg(0, ios::beg);
         file2.seekg(0, ios::beg);
-        // std::cout << "buffersize: " << size << "\n";
         std::cout << fileName1 << "\n";
         std::cout << fileName2 << "\n";
 
@@ -62,6 +63,8 @@ void analyse(MonoPair<shared_ptr<llvm::Module>> modules, string outputDirectory,
             logError("Couldn’t read one of the files: " + fileName1 + "\n");
             return;
         }
+
+        // deserialize
         struct cbor_load_result res;
         cbor_item_t *root =
             cbor_load(reinterpret_cast<unsigned char *>(buffer1.data()),
@@ -72,67 +75,117 @@ void analyse(MonoPair<shared_ptr<llvm::Module>> modules, string outputDirectory,
                          static_cast<size_t>(size2), &res);
         Call<std::string> c2 = cborToCall(root);
         cbor_decref(&root);
-        map<int, set<Equality>> equalityMap =
-            findEqualities(makeMonoPair(c1, c2), mainFunctionPair);
-        for (auto it : equalityMap) {
-            std::cout << it.first << ":\n";
-            for (auto eq : it.second) {
-                std::cout << "\t";
-                std::cout << eq;
-                std::cout << "\n";
-            }
-        }
+
+        // Get analysis results
+        const MonoPair<BidirBlockMarkMap> markMaps =
+            mainFunctionPair.map<BidirBlockMarkMap>(
+                [](PreprocessedFunction pair) {
+                    return pair.fam->getResult<MarkAnalysis>(*pair.fun);
+                });
+        const MonoPair<PathMap> pathMaps =
+            mainFunctionPair.map<PathMap>([](PreprocessedFunction pair) {
+                return pair.fam->getResult<PathAnalysis>(*pair.fun);
+            });
+        const MonoPair<vector<string>> funArgsPair = functionArgs(
+            *mainFunctionPair.first.fun, *mainFunctionPair.second.fun);
+        // TODO this should use concat
+        const vector<string> funArgs = funArgsPair.foldl<vector<string>>(
+            {},
+            [](vector<string> acc, vector<string> args) -> vector<string> {
+                acc.insert(acc.end(), args.begin(), args.end());
+                return acc;
+            });
+        const FreeVarsMap freeVarsMap =
+            freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
+        MonoPair<BlockNameMap> nameMap =
+            markMaps.map<BlockNameMap>(blockNameMap);
+
+        // Debug output
+        analyzeExecution(makeMonoPair(c1, c2), nameMap, debugAnalysis);
+
+        // We search for equalities first, because that way we can limit the
+        // number of other patterns we need to instantiate
+        shared_ptr<pattern::Expr<VarIntVal>> eqPat =
+            make_shared<pattern::BinaryOp<VarIntVal>>(
+                pattern::Operation::Eq, make_shared<pattern::Value<VarIntVal>>(
+                                            pattern::Placeholder::Variable),
+                make_shared<pattern::Value<VarIntVal>>(
+                    pattern::Placeholder::Variable));
+        PatternCandidatesMap equalityCandidates =
+            findEqualities(makeMonoPair(c1, c2), nameMap, freeVarsMap);
+        dumpPatternCandidates(equalityCandidates, *eqPat);
+
+        // Other patterns, for now only a + b = c
+        shared_ptr<pattern::Expr<VarIntVal>> pat =
+            make_shared<pattern::BinaryOp<VarIntVal>>(
+                pattern::Operation::Eq,
+                make_shared<pattern::BinaryOp<VarIntVal>>(
+                    pattern::Operation::Add,
+                    make_shared<pattern::Value<VarIntVal>>(
+                        pattern::Placeholder::Variable),
+                    make_shared<pattern::Value<VarIntVal>>(
+                        pattern::Placeholder::Variable)),
+                make_shared<pattern::Value<VarIntVal>>(
+                    pattern::Placeholder::Variable));
+        PatternCandidatesMap patternCandidates =
+            instantiatePattern<string, VarIntVal>(freeVarsMap, *pat);
+        basicPatternCandidates(makeMonoPair(c1, c2), nameMap,
+                               patternCandidates);
+        dumpPatternCandidates(patternCandidates, *pat);
+
+        // Only analyze one file for now
         break;
     }
+
     closedir(dir);
 }
 
-map<int, set<Equality>>
-findEqualities(MonoPair<Call<string>> calls,
-               MonoPair<PreprocessedFunction> functions) {
-    map<int, set<Equality>> maps;
-    const MonoPair<BidirBlockMarkMap> markMaps =
-        functions.map<BidirBlockMarkMap>([](PreprocessedFunction pair) {
-            return pair.fam->getResult<MarkAnalysis>(*pair.fun);
-        });
-    const MonoPair<PathMap> pathMaps =
-        functions.map<PathMap>([](PreprocessedFunction pair) {
-            return pair.fam->getResult<PathAnalysis>(*pair.fun);
-        });
-    const MonoPair<vector<string>> funArgsPair =
-        functionArgs(*functions.first.fun, *functions.second.fun);
-    // TODO this should use concat
-    const vector<string> funArgs = funArgsPair.foldl<vector<string>>(
-        {},
-        [](vector<string> acc, vector<string> args) -> vector<string> {
-            acc.insert(acc.end(), args.begin(), args.end());
-            return acc;
-        });
-    const FreeVarsMap freeVarsMap =
-        freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
-    for (auto it : freeVarsMap) {
-        if (it.first != ENTRY_MARK && it.first != EXIT_MARK) {
-            for (size_t i = 0; i < it.second.size(); ++i) {
-                for (size_t j = i + 1; j < it.second.size(); ++j) {
-                    auto var1 = it.second[i];
-                    auto var2 = it.second[j];
-                    if (var1 <= var2) {
-                        maps[it.first].insert(makeMonoPair(var1, var2));
-                    } else {
-                        maps[it.first].insert(makeMonoPair(var2, var1));
-                    }
+void basicPatternCandidates(MonoPair<Call<string>> calls,
+                            MonoPair<BlockNameMap> nameMap,
+                            PatternCandidatesMap &candidates) {
+    // a + b = c
+    shared_ptr<pattern::Expr<VarIntVal>> pat =
+        make_shared<pattern::BinaryOp<VarIntVal>>(
+            pattern::Operation::Eq,
+            make_shared<pattern::BinaryOp<VarIntVal>>(
+                pattern::Operation::Add, make_shared<pattern::Value<VarIntVal>>(
+                                             pattern::Placeholder::Variable),
+                make_shared<pattern::Value<VarIntVal>>(
+                    pattern::Placeholder::Variable)),
+            make_shared<pattern::Value<VarIntVal>>(
+                pattern::Placeholder::Variable));
+    analyzeExecution(calls, nameMap,
+                     std::bind(removeNonMatchingPatterns, std::ref(candidates),
+                               std::cref(*pat), _1));
+}
+
+PatternCandidatesMap findEqualities(MonoPair<Call<string>> calls,
+                                    MonoPair<BlockNameMap> nameMap,
+                                    FreeVarsMap freeVars) {
+    PatternCandidatesMap maps;
+    for (auto it : freeVars) {
+        for (size_t i = 0; i < it.second.size(); ++i) {
+            for (size_t j = i + 1; j < it.second.size(); ++j) {
+                auto var1 = it.second[i];
+                auto var2 = it.second[j];
+                if (var1 <= var2) {
+                    maps[it.first].push_back({var1, var2});
+                } else {
+                    maps[it.first].push_back({var2, var1});
                 }
             }
         }
     }
-    MonoPair<BlockNameMap> nameMap = markMaps.map<BlockNameMap>(
-        [](BidirBlockMarkMap m) { return blockNameMap(m); });
-    analyzeExecution(calls, markMaps.first, nameMap, debugAnalysis);
-    analyzeExecution(calls, markMaps.first, nameMap,
-                     std::bind(removeEqualities, std::ref(maps), _1));
-    // calls.forEach([](Call<string> c) {
-    //     std::cout << c.toJSON(identity<string>).dump(4) << std::endl;
-    // });
+
+    shared_ptr<pattern::Expr<VarIntVal>> equalityPattern =
+        make_shared<pattern::BinaryOp<VarIntVal>>(
+            pattern::Operation::Eq, make_shared<pattern::Value<VarIntVal>>(
+                                        pattern::Placeholder::Variable),
+            make_shared<pattern::Value<VarIntVal>>(
+                pattern::Placeholder::Variable));
+    analyzeExecution(calls, nameMap,
+                     std::bind(removeNonMatchingPatterns, std::ref(maps),
+                               std::cref(*equalityPattern), _1));
     return maps;
 }
 
@@ -157,7 +210,6 @@ findFunction(const vector<MonoPair<PreprocessedFunction>> functions,
 }
 
 void analyzeExecution(MonoPair<Call<std::string>> calls,
-                      BidirBlockMarkMap markMap,
                       MonoPair<BlockNameMap> nameMaps,
                       std::function<void(MatchInfo)> fun) {
     auto steps1 = calls.first.steps;
@@ -246,23 +298,38 @@ void debugAnalysis(MatchInfo match) {
     std::cout << std::endl << std::endl;
 }
 
-void removeEqualities(map<int, set<Equality>> &equalities, MatchInfo match) {
-    if (match.mark == EXIT_MARK) {
-        return;
-    }
+void removeNonMatchingPatterns(PatternCandidatesMap &patternCandidates,
+                               const pattern::Expr<VarIntVal> &pat,
+                               MatchInfo match) {
     VarMap<string> variables;
     variables.insert(match.steps.first.state.variables.begin(),
                      match.steps.first.state.variables.end());
     variables.insert(match.steps.second.state.variables.begin(),
                      match.steps.second.state.variables.end());
-    for (auto it1 : variables) {
-        for (auto it2 : variables) {
-            if (!varValEq(*it1.second, *it2.second)) {
-                equalities.at(match.mark)
-                    .erase(makeMonoPair(it1.first, it2.first));
-                equalities.at(match.mark)
-                    .erase(makeMonoPair(it2.first, it1.first));
-            }
+    vector<VarIntVal> candidateVals(pat.arguments());
+    auto &list = patternCandidates[match.mark];
+    for (auto listIt = list.begin(), e = list.end(); listIt != e;) {
+        for (size_t i = 0; i < candidateVals.size(); ++i) {
+            candidateVals.at(i) =
+                std::static_pointer_cast<VarInt>(variables.at((*listIt).at(i)))
+                    ->val;
+        }
+        if (!pat.matches(candidateVals)) {
+            listIt = list.erase(listIt);
+        } else {
+            ++listIt;
+        }
+    }
+}
+
+void dumpPatternCandidates(const PatternCandidatesMap &candidates,
+                           const pattern::Expr<VarIntVal> &pat) {
+    for (auto it : candidates) {
+        std::cout << it.first << ":\n";
+        for (auto vec : it.second) {
+            std::cout << "\t";
+            pat.dump(std::cout, vec);
+            std::cout << std::endl;
         }
     }
 }
