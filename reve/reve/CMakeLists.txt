@@ -9,6 +9,7 @@ set(CMAKE_CXX_FLAGS "${CXX_WARNINGS_FLAGS} ${CXX_STANDARD_FLAGS} ${CXX_OTHER_FLA
 set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
 
 find_package(LLVM 3.8 REQUIRED CONFIG)
+find_package(Clang REQUIRED CONFIG)
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
@@ -32,39 +33,6 @@ llvm_map_components_to_libnames(llvm_libs
   x86codegen
   )
 
-add_library(clangFrontend STATIC IMPORTED)
-set_target_properties(clangFrontend PROPERTIES
-    IMPORTED_LOCATION /usr/local/lib/libclangFrontend.a)
-add_library(clangDriver STATIC IMPORTED)
-set_target_properties(clangDriver PROPERTIES
-    IMPORTED_LOCATION /usr/local/lib/libclangDriver.a)
-add_library(clangSerialization STATIC IMPORTED)
-set_target_properties(clangSerialization PROPERTIES
-    IMPORTED_LOCATION /usr/local/lib/libclangSerialization.a)
-add_library(clangCodeGen STATIC IMPORTED)
-set_target_properties(clangCodeGen PROPERTIES
-    IMPORTED_LOCATION /usr/local/lib/libclangCodeGen.a)
-add_library(clangParse STATIC IMPORTED)
-set_target_properties(clangParse PROPERTIES
-    IMPORTED_LOCATION /usr/local/lib/libclangParse.a)
-add_library(clangSema STATIC IMPORTED)
-set_target_properties(clangSema PROPERTIES
-    IMPORTED_LOCATION /usr/local/lib/libclangSema.a)
-add_library(clangAST STATIC IMPORTED)
-set_target_properties(clangAST PROPERTIES
-    IMPORTED_LOCATION /usr/local/lib/libclangAST.a)
-add_library(clangAnalysis STATIC IMPORTED)
-set_target_properties(clangAnalysis PROPERTIES
-    IMPORTED_LOCATION /usr/local/lib/libclangAnalysis.a)
-add_library(clangBasic STATIC IMPORTED)
-set_target_properties(clangBasic PROPERTIES
-    IMPORTED_LOCATION /usr/local/lib/libclangBasic.a)
-add_library(clangEdit STATIC IMPORTED)
-set_target_properties(clangEdit PROPERTIES
-    IMPORTED_LOCATION /usr/local/lib/libclangEdit.a)
-add_library(clangLex STATIC IMPORTED)
-set_target_properties(clangLex PROPERTIES
-    IMPORTED_LOCATION /usr/local/lib/libclangLex.a)
 target_link_libraries(libreve
   c++
   c++abi
