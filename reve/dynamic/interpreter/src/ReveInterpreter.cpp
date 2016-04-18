@@ -2,6 +2,8 @@
 #include <string>
 #include <vector>
 
+#include <sys/stat.h>
+
 #include "Interpreter.h"
 #include "SerializeTraces.h"
 
@@ -42,6 +44,11 @@ static llvm::cl::opt<string> MainFunctionFlag(
     "fun", llvm::cl::desc("Name of the function which should be verified"),
     llvm::cl::Required);
 
+static llvm::cl::opt<string> OutputDirectoryFlag(
+    "output",
+    llvm::cl::desc("Directory containing the output of the interpreter"),
+    llvm::cl::Required);
+
 int main(int argc, const char **argv) {
     llvm::cl::ParseCommandLineOptions(argc, argv);
     InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,
@@ -55,23 +62,17 @@ int main(int argc, const char **argv) {
         compileToModules(argv[0], inputOpts, acts);
     vector<MonoPair<PreprocessedFunction>> preprocessedFuns =
         preprocessFunctions(modules, preprocessOpts);
-    // VarMap variables;
-    // variables["dest$1_0"] = make_shared<VarInt>(0);
-    // variables["src$1_0"] = make_shared<VarInt>(16);
-    // variables["size$1_0"] = make_shared<VarInt>(4);
-    // variables["i$2_0"] = make_shared<VarInt>(3);
-    // variables["j$2_0"] = make_shared<VarInt>(5);
-    // Heap heap;
-    // heap[16] = VarInt(4);
-    // heap[20] = VarInt(3);
-    // heap[24] = VarInt(2);
-    // heap[28] = VarInt(1);
-    // State entry(variables, heap);
+    // Create directory
+    int ret = mkdir(OutputDirectoryFlag.c_str(),
+                    S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IWOTH);
+    if (ret != 0) {
+        if (errno != EEXIST) {
+            logError("Couldn’t create directory " + OutputDirectoryFlag + "\n");
+            exit(1);
+        }
+    }
     serializeValuesInRange(
         makeMonoPair(modules.first->getFunction(MainFunctionFlag),
                      modules.second->getFunction(MainFunctionFlag)),
-        -40, 40, "out");
-    // Call call = interpretFunction(
-    //     *modules.second->getFunction(MainFunctionFlag), entry, 1000);
-    // std::cout << call.toJSON().dump(4) << std::endl;
+        -40, 40, OutputDirectoryFlag);
 }
