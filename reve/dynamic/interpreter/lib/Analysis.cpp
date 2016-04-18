@@ -207,8 +207,6 @@ void analyzeExecution(MonoPair<Call<std::string>> calls,
     auto stepsIt1 = steps1.begin();
     auto stepsIt2 = steps2.begin();
     while (stepsIt1 != steps1.end() && stepsIt2 != steps2.end()) {
-        // assert(nameMap.at((*stepsIt1)->blockName) ==
-        //        nameMap.at((*stepsIt2)->blockName));
         // Advance until a mark is reached
         auto prevStepIt1 = *stepsIt1;
         while (!normalMarkBlock(nameMaps.first, (*stepsIt1)->blockName) &&
@@ -235,6 +233,7 @@ void analyzeExecution(MonoPair<Call<std::string>> calls,
             auto prevStepIt = prevStepIt1;
             auto prevStepItOther = prevStepIt2;
             auto end = steps1.end();
+            // Only a reference for performance reasons
             auto &nameMap = nameMaps.first;
             if ((*stepsIt2)->blockName == prevStepIt2->blockName) {
                 loop = LoopInfo::Right;
@@ -245,14 +244,23 @@ void analyzeExecution(MonoPair<Call<std::string>> calls,
                 nameMap = nameMaps.second;
             }
             // Keep looping one program until it moves on
-            while ((*stepsIt)->blockName == prevStepIt->blockName) {
+            do {
                 fun(MatchInfo(makeMonoPair(**stepsIt, *prevStepItOther), loop,
                               nameMap.at(prevStepIt->blockName)));
-                // Go to tnext mark
-                while (!normalMarkBlock(nameMap, (*stepsIt)->blockName) &&
-                       stepsIt != end) {
+                // Go to the next mark
+                do {
                     stepsIt++;
-                }
+                } while (stepsIt != end &&
+                         !normalMarkBlock(nameMap, (*stepsIt)->blockName));
+                // Did we return to the same mark?
+            } while (stepsIt != end &&
+                     (*stepsIt)->blockName == prevStepIt->blockName);
+            // Getting a reference to the iterator and modifying that doesn’t
+            // seem to work so we copy it and set it again
+            if (loop == LoopInfo::Left) {
+                stepsIt1 = stepsIt;
+            } else {
+                stepsIt2 = stepsIt;
             }
         }
     }
