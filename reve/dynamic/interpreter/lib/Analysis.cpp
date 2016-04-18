@@ -297,8 +297,7 @@ void debugAnalysis(MatchInfo match) {
 }
 
 void removeNonMatchingPatterns(PatternCandidatesMap &patternCandidates,
-                               const pattern::Expr<VarIntVal> &pat,
-                               MatchInfo match) {
+                               const pattern::Expr &pat, MatchInfo match) {
     VarMap<string> variables;
     variables.insert(match.steps.first.state.variables.begin(),
                      match.steps.first.state.variables.end());
@@ -321,7 +320,7 @@ void removeNonMatchingPatterns(PatternCandidatesMap &patternCandidates,
 }
 
 void dumpPatternCandidates(const PatternCandidatesMap &candidates,
-                           const pattern::Expr<VarIntVal> &pat) {
+                           const pattern::Expr &pat) {
     for (auto it : candidates) {
         std::cout << it.first << ":\n";
         for (auto vec : it.second) {

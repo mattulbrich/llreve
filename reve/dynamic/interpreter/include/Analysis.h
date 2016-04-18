@@ -6,6 +6,7 @@
 #include "MonoPair.h"
 #include "Pattern.h"
 #include "Preprocess.h"
+#include "Permutation.h"
 
 #include "llvm/IR/Module.h"
 
@@ -56,17 +57,18 @@ void debugAnalysis(MatchInfo match);
 void removeEqualities(std::map<int, std::set<Equality>> &equalities,
                       MatchInfo match);
 void removeNonMatchingPatterns(PatternCandidatesMap &patternCandidates,
-                               const pattern::Expr<VarIntVal> &pat,
+                               const pattern::Expr &pat,
                                MatchInfo match);
+
 template <typename N, typename V>
 PatternCandidatesMap instantiatePattern(std::map<int, std::vector<N>> variables,
-                                        const pattern::Expr<V> &pat) {
+                                        const pattern::Expr &pat) {
     std::map<int, std::list<std::vector<N>>> output;
     for (auto mapIt : variables) {
         if (pat.arguments() <= mapIt.second.size()) {
             output.insert(std::make_pair(
                 mapIt.first,
-                pattern::kPermutations(mapIt.second, pat.arguments())));
+                kPermutations(mapIt.second, pat.arguments())));
         } else {
             std::list<std::vector<N>> l;
             output.insert(std::make_pair(mapIt.first, l));
@@ -76,7 +78,7 @@ PatternCandidatesMap instantiatePattern(std::map<int, std::vector<N>> variables,
 }
 
 void dumpPatternCandidates(const PatternCandidatesMap &candidates,
-                           const pattern::Expr<VarIntVal> &pat);
+                           const pattern::Expr &pat);
 
 FreeVarsMap removeEqualities(FreeVarsMap freeVars,
                              const PatternCandidatesMap &candidates);
