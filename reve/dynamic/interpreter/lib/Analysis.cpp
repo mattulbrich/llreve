@@ -1,5 +1,6 @@
 #include "Analysis.h"
 
+#include "CommonPattern.h"
 #include "Interpreter.h"
 #include "MarkAnalysis.h"
 #include "MonoPair.h"
@@ -105,33 +106,17 @@ void analyse(MonoPair<shared_ptr<llvm::Module>> modules, string outputDirectory,
 
         // We search for equalities first, because that way we can limit the
         // number of other patterns we need to instantiate
-        shared_ptr<pattern::Expr<VarIntVal>> eqPat =
-            make_shared<pattern::BinaryOp<VarIntVal>>(
-                pattern::Operation::Eq, make_shared<pattern::Value<VarIntVal>>(
-                                            pattern::Placeholder::Variable),
-                make_shared<pattern::Value<VarIntVal>>(
-                    pattern::Placeholder::Variable));
         PatternCandidatesMap equalityCandidates =
             findEqualities(makeMonoPair(c1, c2), nameMap, freeVarsMap);
-        dumpPatternCandidates(equalityCandidates, *eqPat);
+        dumpPatternCandidates(equalityCandidates, *commonpattern::eqPat);
 
         // Other patterns, for now only a + b = c
-        shared_ptr<pattern::Expr<VarIntVal>> pat =
-            make_shared<pattern::BinaryOp<VarIntVal>>(
-                pattern::Operation::Eq,
-                make_shared<pattern::BinaryOp<VarIntVal>>(
-                    pattern::Operation::Add,
-                    make_shared<pattern::Value<VarIntVal>>(
-                        pattern::Placeholder::Variable),
-                    make_shared<pattern::Value<VarIntVal>>(
-                        pattern::Placeholder::Variable)),
-                make_shared<pattern::Value<VarIntVal>>(
-                    pattern::Placeholder::Variable));
         PatternCandidatesMap patternCandidates =
-            instantiatePattern<string, VarIntVal>(freeVarsMap, *pat);
+            instantiatePattern<string, VarIntVal>(freeVarsMap,
+                                                  *commonpattern::additionPat);
         basicPatternCandidates(makeMonoPair(c1, c2), nameMap,
                                patternCandidates);
-        dumpPatternCandidates(patternCandidates, *pat);
+        dumpPatternCandidates(patternCandidates, *commonpattern::additionPat);
 
         // Only analyze one file for now
         break;
@@ -143,20 +128,9 @@ void analyse(MonoPair<shared_ptr<llvm::Module>> modules, string outputDirectory,
 void basicPatternCandidates(MonoPair<Call<string>> calls,
                             MonoPair<BlockNameMap> nameMap,
                             PatternCandidatesMap &candidates) {
-    // a + b = c
-    shared_ptr<pattern::Expr<VarIntVal>> pat =
-        make_shared<pattern::BinaryOp<VarIntVal>>(
-            pattern::Operation::Eq,
-            make_shared<pattern::BinaryOp<VarIntVal>>(
-                pattern::Operation::Add, make_shared<pattern::Value<VarIntVal>>(
-                                             pattern::Placeholder::Variable),
-                make_shared<pattern::Value<VarIntVal>>(
-                    pattern::Placeholder::Variable)),
-            make_shared<pattern::Value<VarIntVal>>(
-                pattern::Placeholder::Variable));
     analyzeExecution(calls, nameMap,
                      std::bind(removeNonMatchingPatterns, std::ref(candidates),
-                               std::cref(*pat), _1));
+                               std::cref(*commonpattern::additionPat), _1));
 }
 
 PatternCandidatesMap findEqualities(MonoPair<Call<string>> calls,
@@ -177,15 +151,9 @@ PatternCandidatesMap findEqualities(MonoPair<Call<string>> calls,
         }
     }
 
-    shared_ptr<pattern::Expr<VarIntVal>> equalityPattern =
-        make_shared<pattern::BinaryOp<VarIntVal>>(
-            pattern::Operation::Eq, make_shared<pattern::Value<VarIntVal>>(
-                                        pattern::Placeholder::Variable),
-            make_shared<pattern::Value<VarIntVal>>(
-                pattern::Placeholder::Variable));
     analyzeExecution(calls, nameMap,
                      std::bind(removeNonMatchingPatterns, std::ref(maps),
-                               std::cref(*equalityPattern), _1));
+                               std::cref(*commonpattern::eqPat), _1));
     return maps;
 }
 
