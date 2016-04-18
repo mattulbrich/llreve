@@ -96,7 +96,7 @@ void analyse(MonoPair<shared_ptr<llvm::Module>> modules, string outputDirectory,
                 acc.insert(acc.end(), args.begin(), args.end());
                 return acc;
             });
-        const FreeVarsMap freeVarsMap =
+        FreeVarsMap freeVarsMap =
             freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
         MonoPair<BlockNameMap> nameMap =
             markMaps.map<BlockNameMap>(blockNameMap);
@@ -109,6 +109,8 @@ void analyse(MonoPair<shared_ptr<llvm::Module>> modules, string outputDirectory,
         PatternCandidatesMap equalityCandidates =
             findEqualities(makeMonoPair(c1, c2), nameMap, freeVarsMap);
         dumpPatternCandidates(equalityCandidates, *commonpattern::eqPat);
+
+        freeVarsMap = removeEqualities(freeVarsMap, equalityCandidates);
 
         // Other patterns, for now only a + b = c
         PatternCandidatesMap patternCandidates =
@@ -131,6 +133,26 @@ void basicPatternCandidates(MonoPair<Call<string>> calls,
     analyzeExecution(calls, nameMap,
                      std::bind(removeNonMatchingPatterns, std::ref(candidates),
                                std::cref(*commonpattern::additionPat), _1));
+}
+
+FreeVarsMap removeEqualities(FreeVarsMap freeVars,
+                             const PatternCandidatesMap &candidates) {
+    FreeVarsMap out;
+    for (auto mapIt : candidates) {
+        list<string> vars;
+        vars.insert(vars.begin(), freeVars.at(mapIt.first).begin(),
+                    freeVars.at(mapIt.first).end());
+        for (auto vec : mapIt.second) {
+            assert(vec.size() == 2);
+            // Equalities are sorted lexicographically so it’s safe to throw out
+            // all right sides
+            vars.remove(vec.at(1));
+        }
+        vector<string> varsVec;
+        varsVec.insert(varsVec.end(), vars.begin(), vars.end());
+        out[mapIt.first] = varsVec;
+    }
+    return out;
 }
 
 PatternCandidatesMap findEqualities(MonoPair<Call<string>> calls,

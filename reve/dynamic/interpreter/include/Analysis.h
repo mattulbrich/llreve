@@ -77,3 +77,6 @@ PatternCandidatesMap instantiatePattern(std::map<int, std::vector<N>> variables,
 
 void dumpPatternCandidates(const PatternCandidatesMap &candidates,
                            const pattern::Expr<VarIntVal> &pat);
+
+FreeVarsMap removeEqualities(FreeVarsMap freeVars,
+                             const PatternCandidatesMap &candidates);
