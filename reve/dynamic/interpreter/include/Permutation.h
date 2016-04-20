@@ -1,8 +1,10 @@
 #pragma once
 
-
 template <typename T>
 std::list<std::vector<T>> kSubset(std::vector<T> input, size_t k) {
+    if (k > input.size()) {
+        return {};
+    }
     std::list<std::vector<T>> output;
     assert(input.size() < 64);
     uint64_t bitVec = (1 << k) - 1;
@@ -18,8 +20,8 @@ std::list<std::vector<T>> kSubset(std::vector<T> input, size_t k) {
         output.push_back(subset);
         // Dark magic from
         // https://graphics.stanford.edu/~seander/bithacks.html#NextBitPermutation
-        uint64_t t = (bitVec | (bitVec - 1)) + 1;
-        bitVec = t | ((((t & -t) / (bitVec & -bitVec)) >> 1) - 1);
+        uint64_t t = bitVec | (bitVec - 1);
+        bitVec = (t + 1) | (((~t & -~t) - 1) >> (__builtin_ctzl(bitVec) + 1));
     } while (!(bitVec & (1 << input.size())));
     return output;
 }
@@ -28,7 +30,6 @@ std::list<std::vector<T>> kSubset(std::vector<T> input, size_t k) {
 template <typename T>
 std::list<std::vector<T>> kPermutations(std::vector<T> input, size_t k) {
     if (k > input.size()) {
-        logError("Requested more elements than the input contains\n");
         return {};
     }
     std::list<std::vector<T>> output;
@@ -38,8 +39,7 @@ std::list<std::vector<T>> kPermutations(std::vector<T> input, size_t k) {
         std::sort(vec.begin(), vec.end());
         do {
             output.push_back(vec);
-        } while (std::next_permutation(vec.begin(),
-                                       vec.end()));
+        } while (std::next_permutation(vec.begin(), vec.end()));
     }
     return output;
 }

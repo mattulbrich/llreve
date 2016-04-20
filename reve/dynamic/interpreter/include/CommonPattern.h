@@ -1,7 +1,7 @@
 #pragma once
 
 namespace commonpattern {
-// a = b
+// A = B
 const std::shared_ptr<const pattern::Expr> eqPat =
     std::make_shared<pattern::BinaryOp>(
         pattern::Operation::Eq, std::make_shared<pattern::Value>(
@@ -9,7 +9,7 @@ const std::shared_ptr<const pattern::Expr> eqPat =
         std::make_shared<pattern::Value>(
             pattern::Placeholder::Variable));
 
-// a + b = c
+// A + B = C
 const std::shared_ptr<const pattern::Expr> additionPat =
     std::make_shared<pattern::BinaryOp>(
         pattern::Operation::Eq, std::make_shared<pattern::BinaryOp>(
@@ -20,4 +20,17 @@ const std::shared_ptr<const pattern::Expr> additionPat =
                                         pattern::Placeholder::Variable)),
         std::make_shared<pattern::Value>(
             pattern::Placeholder::Variable));
+
+// A + b = C
+const std::shared_ptr<const pattern::Expr> constantAdditionPat =
+    std::make_shared<pattern::BinaryOp>(
+        pattern::Operation::Eq, std::make_shared<pattern::BinaryOp>(
+                                    pattern::Operation::Add,
+                                    std::make_shared<pattern::Value>(
+                                        pattern::Placeholder::Variable),
+                                    std::make_shared<pattern::Value>(
+                                        pattern::Placeholder::Constant)),
+        std::make_shared<pattern::Value>(
+            pattern::Placeholder::Variable));
+
 }

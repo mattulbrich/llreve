@@ -11,7 +11,7 @@
 #include "llvm/IR/Module.h"
 
 using BlockNameMap = std::map<std::string, int>;
-using PatternCandidates = std::list<std::vector<std::string>>;
+using PatternCandidates = std::list<std::vector<std::shared_ptr<pattern::InstantiatedValue>>>;
 using PatternCandidatesMap = std::map<int, PatternCandidates>;
 
 void analyse(MonoPair<std::shared_ptr<llvm::Module>> modules,
@@ -60,25 +60,14 @@ void removeNonMatchingPatterns(PatternCandidatesMap &patternCandidates,
                                const pattern::Expr &pat,
                                MatchInfo match);
 
-template <typename N, typename V>
-PatternCandidatesMap instantiatePattern(std::map<int, std::vector<N>> variables,
-                                        const pattern::Expr &pat) {
-    std::map<int, std::list<std::vector<N>>> output;
-    for (auto mapIt : variables) {
-        if (pat.arguments() <= mapIt.second.size()) {
-            output.insert(std::make_pair(
-                mapIt.first,
-                kPermutations(mapIt.second, pat.arguments())));
-        } else {
-            std::list<std::vector<N>> l;
-            output.insert(std::make_pair(mapIt.first, l));
-        }
-    }
-    return output;
-}
-
+PatternCandidatesMap instantiatePattern(std::map<int, std::vector<std::string>> variables,
+                                        const pattern::Expr &pat);
 void dumpPatternCandidates(const PatternCandidatesMap &candidates,
                            const pattern::Expr &pat);
 
 FreeVarsMap removeEqualities(FreeVarsMap freeVars,
                              const PatternCandidatesMap &candidates);
+
+void instantiatePatternWithConstant(PatternCandidatesMap &patternCandidates,
+                                    const FreeVarsMap &freeVars,
+                                    const pattern::Expr &pat, MatchInfo match);

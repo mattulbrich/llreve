@@ -66,7 +66,12 @@ cborToKeyMap(const cbor_item_t *item) {
 }
 
 VarType VarInt::getType() const { return VarType::Int; }
+VarIntVal VarInt::unsafeIntVal() const { return val; }
 VarType VarBool::getType() const { return VarType::Bool; }
+VarIntVal VarBool::unsafeIntVal() const {
+    logError("Called unsafeIntVal on a VarBool\n");
+    return 0;
+}
 
 json VarInt::toJSON() const { return val.get_str(); }
 cbor_item_t *VarInt::toCBOR() const {
@@ -441,16 +446,16 @@ shared_ptr<BlockStep<string>> cborToBlockStep(const cbor_item_t *item) {
     return make_shared<BlockStep<string>>(blockName, state, calls);
 }
 
-bool varValEq(const VarVal& lhs, const VarVal& rhs) {
+bool varValEq(const VarVal &lhs, const VarVal &rhs) {
     if (lhs.getType() != rhs.getType()) {
         return false;
     } else if (lhs.getType() == VarType::Bool) {
-        const VarBool& lhsB = static_cast<const VarBool&>(lhs);
-        const VarBool& rhsB = static_cast<const VarBool&>(rhs);
+        const VarBool &lhsB = static_cast<const VarBool &>(lhs);
+        const VarBool &rhsB = static_cast<const VarBool &>(rhs);
         return lhsB.val == rhsB.val;
     } else {
-        const VarInt& lhsI = static_cast<const VarInt&>(lhs);
-        const VarInt& rhsI = static_cast<const VarInt&>(rhs);
+        const VarInt &lhsI = static_cast<const VarInt &>(lhs);
+        const VarInt &rhsI = static_cast<const VarInt &>(rhs);
         return lhsI.val == rhsI.val;
     }
 }

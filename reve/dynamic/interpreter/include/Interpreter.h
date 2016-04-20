@@ -30,6 +30,7 @@ struct VarVal {
     VarVal(const VarVal &other) = default;
     VarVal() = default;
     VarVal &operator=(const VarVal &other) = default;
+    virtual VarIntVal unsafeIntVal() const = 0;
 };
 
 bool varValEq(const VarVal& lhs, const VarVal& rhs);
@@ -43,6 +44,7 @@ struct VarInt : VarVal {
     cbor_item_t *toCBOR() const override;
     VarInt(VarIntVal val) : val(val) {}
     VarInt() : val(0) {}
+    VarIntVal unsafeIntVal() const override;
 };
 
 struct VarBool : VarVal {
@@ -51,6 +53,7 @@ struct VarBool : VarVal {
     nlohmann::json toJSON() const override;
     cbor_item_t *toCBOR() const override;
     VarBool(bool val) : val(val) {}
+    VarIntVal unsafeIntVal() const override;
 };
 
 using Heap = std::map<HeapAddress, VarInt>;

@@ -26,7 +26,13 @@ using std::ifstream;
 using std::ios;
 using std::map;
 using std::set;
+using std::static_pointer_cast;
+
 using namespace std::placeholders;
+
+using pattern::Placeholder;
+using pattern::Variable;
+using pattern::InstantiatedValue;
 
 void analyse(MonoPair<shared_ptr<llvm::Module>> modules, string outputDirectory,
              vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
@@ -109,16 +115,26 @@ void analyse(MonoPair<shared_ptr<llvm::Module>> modules, string outputDirectory,
         PatternCandidatesMap equalityCandidates =
             findEqualities(makeMonoPair(c1, c2), nameMap, freeVarsMap);
         dumpPatternCandidates(equalityCandidates, *commonpattern::eqPat);
-
+        std::cerr << "A = B\n";
         freeVarsMap = removeEqualities(freeVarsMap, equalityCandidates);
 
         // Other patterns, for now only a + b = c
         PatternCandidatesMap patternCandidates =
-            instantiatePattern<string, VarIntVal>(freeVarsMap,
-                                                  *commonpattern::additionPat);
+            instantiatePattern(freeVarsMap, *commonpattern::additionPat);
         basicPatternCandidates(makeMonoPair(c1, c2), nameMap,
                                patternCandidates);
+        std::cerr << "A + B = C\n";
         dumpPatternCandidates(patternCandidates, *commonpattern::additionPat);
+
+        PatternCandidatesMap constantPatterns;
+        analyzeExecution(
+            makeMonoPair(c1, c2), nameMap,
+            std::bind(instantiatePatternWithConstant,
+                      std::ref(constantPatterns), std::cref(freeVarsMap),
+                      std::cref(*commonpattern::constantAdditionPat), _1));
+        std::cerr << "A + b = C\n";
+        dumpPatternCandidates(constantPatterns,
+                              *commonpattern::constantAdditionPat);
 
         // Only analyze one file for now
         break;
@@ -137,7 +153,6 @@ void basicPatternCandidates(MonoPair<Call<string>> calls,
 
 FreeVarsMap removeEqualities(FreeVarsMap freeVars,
                              const PatternCandidatesMap &candidates) {
-    FreeVarsMap out;
     for (auto mapIt : candidates) {
         list<string> vars;
         vars.insert(vars.begin(), freeVars.at(mapIt.first).begin(),
@@ -146,13 +161,14 @@ FreeVarsMap removeEqualities(FreeVarsMap freeVars,
             assert(vec.size() == 2);
             // Equalities are sorted lexicographically so it’s safe to throw out
             // all right sides
-            vars.remove(vec.at(1));
+            assert(vec.at(1)->getType() == Placeholder::Variable);
+            vars.remove(static_pointer_cast<Variable>(vec.at(1))->name);
         }
         vector<string> varsVec;
         varsVec.insert(varsVec.end(), vars.begin(), vars.end());
-        out[mapIt.first] = varsVec;
+        freeVars[mapIt.first] = varsVec;
     }
-    return out;
+    return freeVars;
 }
 
 PatternCandidatesMap findEqualities(MonoPair<Call<string>> calls,
@@ -165,9 +181,11 @@ PatternCandidatesMap findEqualities(MonoPair<Call<string>> calls,
                 auto var1 = it.second[i];
                 auto var2 = it.second[j];
                 if (var1 <= var2) {
-                    maps[it.first].push_back({var1, var2});
+                    maps[it.first].push_back({make_shared<Variable>(var1),
+                                              make_shared<Variable>(var2)});
                 } else {
-                    maps[it.first].push_back({var2, var1});
+                    maps[it.first].push_back({make_shared<Variable>(var2),
+                                              make_shared<Variable>(var1)});
                 }
             }
         }
@@ -296,6 +314,35 @@ void debugAnalysis(MatchInfo match) {
     std::cout << std::endl << std::endl;
 }
 
+void instantiatePatternWithConstant(PatternCandidatesMap &patternCandidates,
+                                    const FreeVarsMap &freeVars,
+                                    const pattern::Expr &pat, MatchInfo match) {
+    VarMap<string> variables;
+    variables.insert(match.steps.first.state.variables.begin(),
+                     match.steps.first.state.variables.end());
+    variables.insert(match.steps.second.state.variables.begin(),
+                     match.steps.second.state.variables.end());
+    if (patternCandidates.find(match.mark) == patternCandidates.end()) {
+        // Instantiate the first time
+        patternCandidates[match.mark] =
+            pat.instantiate(freeVars.at(match.mark), variables);
+    } else {
+        // Already instantiated, remove the non matching instantiations
+        auto &list = patternCandidates.at(match.mark);
+        vector<VarIntVal> candidateVals(pat.arguments());
+        for (auto listIt = list.begin(), e = list.end(); listIt != e;) {
+            for (size_t i = 0; i < candidateVals.size(); ++i) {
+                candidateVals.at(i) = listIt->at(i)->getValue(variables);
+            }
+            if (!pat.matches(candidateVals)) {
+                listIt = list.erase(listIt);
+            } else {
+                ++listIt;
+            }
+        }
+    }
+}
+
 void removeNonMatchingPatterns(PatternCandidatesMap &patternCandidates,
                                const pattern::Expr &pat, MatchInfo match) {
     VarMap<string> variables;
@@ -307,9 +354,7 @@ void removeNonMatchingPatterns(PatternCandidatesMap &patternCandidates,
     auto &list = patternCandidates[match.mark];
     for (auto listIt = list.begin(), e = list.end(); listIt != e;) {
         for (size_t i = 0; i < candidateVals.size(); ++i) {
-            candidateVals.at(i) =
-                std::static_pointer_cast<VarInt>(variables.at((*listIt).at(i)))
-                    ->val;
+            candidateVals.at(i) = listIt->at(i)->getValue(variables);
         }
         if (!pat.matches(candidateVals)) {
             listIt = list.erase(listIt);
@@ -329,4 +374,23 @@ void dumpPatternCandidates(const PatternCandidatesMap &candidates,
             std::cout << std::endl;
         }
     }
+}
+
+PatternCandidatesMap instantiatePattern(map<int, vector<string>> variables,
+                                        const pattern::Expr &pat) {
+    map<int, list<vector<shared_ptr<InstantiatedValue>>>> output;
+    for (auto mapIt : variables) {
+        vector<shared_ptr<InstantiatedValue>> args;
+        for (auto arg : mapIt.second) {
+            args.push_back(make_shared<Variable>(arg));
+        }
+        if (pat.arguments() <= mapIt.second.size()) {
+            output.insert(std::make_pair(mapIt.first,
+                                         kPermutations(args, pat.arguments())));
+        } else {
+            std::list<std::vector<shared_ptr<InstantiatedValue>>> l;
+            output.insert(std::make_pair(mapIt.first, l));
+        }
+    }
+    return output;
 }
