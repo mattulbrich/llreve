@@ -11,6 +11,7 @@ using std::set;
 using std::shared_ptr;
 using std::make_shared;
 using std::static_pointer_cast;
+using std::function;
 
 using namespace pattern;
 
@@ -143,75 +144,16 @@ BinaryOp::instantiate(vector<string> variables,
             // at all. In both cases we go through each instantiation on the
             // left and take all instantiations on the right with the same
             // value.
-            list<vector<shared_ptr<InstantiatedValue>>> output;
-
-            for (auto vec : kPermutations(variables, args.first->variables())) {
-                vector<VarIntVal> leftValues(vec.size());
-                for (size_t i = 0; i < leftValues.size(); ++i) {
-                    leftValues.at(i) =
-                        variableValues.at(vec.at(i))->unsafeIntVal();
-                }
-                VarIntVal leftValue =
-                    args.first->eval(leftValues.begin(), leftValues.end());
-                // Variables are only allowed to appear either left or right
-                set<string> leftVariables;
-                leftVariables.insert(vec.begin(), vec.end());
-                vector<string> rightVariables;
-                for (auto var : variables) {
-                    if (leftVariables.find(var) == leftVariables.end()) {
-                        rightVariables.push_back(var);
-                    }
-                }
-                list<vector<shared_ptr<InstantiatedValue>>> rightResult =
-                    args.second->instantiateToValue(rightVariables,
-                                                    variableValues, leftValue);
-                for (auto right : rightResult) {
-                    vector<shared_ptr<InstantiatedValue>> res;
-                    for (auto var : vec) {
-                        res.push_back(make_shared<Variable>(var));
-                    }
-                    res.insert(res.end(), right.begin(), right.end());
-                    output.push_back(res);
-                }
-            }
-            return output;
+            return instantiateBinaryOperation(*args.first, *args.second,
+                                              variables, variableValues,
+                                              std::plus<VarIntVal>(), 0, false);
         } else {
             // The constant is on the left
             assert(arguments() - this->variables() == 1);
             assert(args.first->arguments() - args.first->variables() == 1);
-            list<vector<shared_ptr<InstantiatedValue>>> output;
-
-            for (auto vec :
-                 kPermutations(variables, args.second->variables())) {
-                vector<VarIntVal> rightValues(vec.size());
-                for (size_t i = 0; i < rightValues.size(); ++i) {
-                    rightValues.at(i) =
-                        variableValues.at(vec.at(i))->unsafeIntVal();
-                }
-                VarIntVal rightValue =
-                    args.second->eval(rightValues.begin(), rightValues.end());
-                // Variables are only allowed to appear either left or right
-                set<string> rightVariables;
-                rightVariables.insert(vec.begin(), vec.end());
-                vector<string> leftVariables;
-                for (auto var : variables) {
-                    if (rightVariables.find(var) == rightVariables.end()) {
-                        leftVariables.push_back(var);
-                    }
-                }
-                list<vector<shared_ptr<InstantiatedValue>>> leftResult =
-                    args.first->instantiateToValue(leftVariables,
-                                                   variableValues, rightValue);
-                for (auto left : leftResult) {
-                    vector<shared_ptr<InstantiatedValue>> res;
-                    res.insert(res.end(), left.begin(), left.end());
-                    for (auto var : vec) {
-                        res.push_back(make_shared<Variable>(var));
-                    }
-                    output.push_back(res);
-                }
-            }
-            return output;
+            return instantiateBinaryOperation(*args.second, *args.first,
+                                              variables, variableValues,
+                                              std::plus<VarIntVal>(), 0, true);
         }
     }
 }
@@ -223,11 +165,13 @@ BinaryOp::instantiateToValue(vector<string> variables,
     assert(arguments() - this->variables() == 1);
     assert(op == Operation::Add);
     if (args.first->variables() == args.first->arguments()) {
-        return instantiateAddWithConstant(*args.first, *args.second, variables,
-                                          variableValues, value, false);
+        return instantiateBinaryOperation(
+            *args.first, *args.second, variables, variableValues,
+            std::minus<VarIntVal>(), value, false);
     } else {
-        return instantiateAddWithConstant(*args.second, *args.first, variables,
-                                          variableValues, value, true);
+        return instantiateBinaryOperation(*args.second, *args.first, variables,
+                                          variableValues,
+                                          std::minus<VarIntVal>(), value, true);
     }
 }
 
@@ -272,11 +216,14 @@ VarIntVal Variable::getValue(VarMap<string> varVals) const {
     return static_pointer_cast<VarInt>(ret)->val;
 }
 
-list<vector<shared_ptr<InstantiatedValue>>> pattern::instantiateAddWithConstant(
-    const Expr &pat, const Expr &patWithConstant, vector<string> variables,
-    VarMap<string> variableValues, VarIntVal value, bool patWithConstantFirst) {
+list<vector<shared_ptr<InstantiatedValue>>> pattern::instantiateBinaryOperation(
+    const Expr &pat, const Expr &otherPat, vector<string> variables,
+    VarMap<string> variableValues,
+    function<VarIntVal(VarIntVal, VarIntVal)> combineValues, VarIntVal value,
+    bool otherPatFirst) {
     assert(pat.variables() == pat.arguments());
-    assert(patWithConstant.arguments() - patWithConstant.variables() == 1);
+    assert(otherPat.arguments() - otherPat.variables() == 1 ||
+           otherPat.arguments() == otherPat.variables());
     list<vector<shared_ptr<InstantiatedValue>>> output;
 
     for (auto variableInstantiation :
@@ -286,7 +233,7 @@ list<vector<shared_ptr<InstantiatedValue>>> pattern::instantiateAddWithConstant(
             values.at(i) =
                 variableValues.at(variableInstantiation.at(i))->unsafeIntVal();
         }
-        VarIntVal targetValue = pat.eval(values.begin(), values.end());
+        VarIntVal patValue = pat.eval(values.begin(), values.end());
         // Variables are only allowed to appear on one side
         set<string> usedVariables;
         usedVariables.insert(variableInstantiation.begin(),
@@ -298,11 +245,11 @@ list<vector<shared_ptr<InstantiatedValue>>> pattern::instantiateAddWithConstant(
             }
         }
         list<vector<shared_ptr<InstantiatedValue>>> constantInstantiations =
-            patWithConstant.instantiateToValue(
-                availableVariables, variableValues, value - targetValue);
+            otherPat.instantiateToValue(availableVariables, variableValues,
+                                        combineValues(value, patValue));
         for (auto constantInstantiation : constantInstantiations) {
             vector<shared_ptr<InstantiatedValue>> instantiation;
-            if (patWithConstantFirst) {
+            if (otherPatFirst) {
                 instantiation.insert(instantiation.end(),
                                      constantInstantiation.begin(),
                                      constantInstantiation.end());
@@ -310,7 +257,7 @@ list<vector<shared_ptr<InstantiatedValue>>> pattern::instantiateAddWithConstant(
             for (auto var : variableInstantiation) {
                 instantiation.push_back(make_shared<Variable>(var));
             }
-            if (!patWithConstantFirst) {
+            if (!otherPatFirst) {
                 instantiation.insert(instantiation.end(),
                                      constantInstantiation.begin(),
                                      constantInstantiation.end());

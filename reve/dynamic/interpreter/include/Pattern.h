@@ -104,9 +104,13 @@ struct Value : Expr {
                        VarIntVal value) const override;
 };
 
-std::list<std::vector<std::shared_ptr<InstantiatedValue>>>
-instantiateAddWithConstant(const Expr &pat, const Expr &patWithConstant,
-                           std::vector<std::string> variables,
-                           VarMap<std::string> variableValues, VarIntVal value,
-                           bool patWithConstantFirst);
+// Goes through each instantiation of pat and calculates its value.
+// That value is then used to find all instantiations of otherPat whose value is
+// the result of applying the
+// supplied function to (value,patResult).
+std::list<std::vector<std::shared_ptr<InstantiatedValue>>> instantiateBinaryOperation(
+    const Expr &pat, const Expr &otherPat, std::vector<std::string> variables,
+    VarMap<std::string> variableValues,
+    std::function<VarIntVal(VarIntVal, VarIntVal)> combineValues,
+    VarIntVal value, bool otherPatFirst);
 }
