@@ -103,4 +103,10 @@ struct Value : Expr {
                        VarMap<std::string> variableValues,
                        VarIntVal value) const override;
 };
+
+std::list<std::vector<std::shared_ptr<InstantiatedValue>>>
+instantiateAddWithConstant(const Expr &pat, const Expr &patWithConstant,
+                           std::vector<std::string> variables,
+                           VarMap<std::string> variableValues, VarIntVal value,
+                           bool patWithConstantFirst);
 }
