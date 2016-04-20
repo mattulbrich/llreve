@@ -8,7 +8,7 @@
 
 namespace pattern {
 enum class Placeholder { Variable, Constant };
-enum class Operation { Eq, Add };
+enum class Operation { Eq, Add, Mul };
 enum class ExprType { BinOp, Val };
 using VecIter = typename std::vector<VarIntVal>::iterator;
 
@@ -104,11 +104,28 @@ struct Value : Expr {
                        VarIntVal value) const override;
 };
 
+struct CombineResult {
+    llvm::Optional<VarIntVal> value;
+    bool alwaysTrue;
+    CombineResult(VarIntVal value) : value(value), alwaysTrue(false) {}
+    CombineResult(bool alwaysTrue)
+        : value(llvm::Optional<VarIntVal>()), alwaysTrue(alwaysTrue) {}
+};
+
 // Goes through each instantiation of pat and calculates its value.
 // That value is then used to find all instantiations of otherPat whose value is
 // the result of applying the
 // supplied function to (value,patResult).
-std::list<std::vector<std::shared_ptr<InstantiatedValue>>> instantiateBinaryOperation(
+std::list<std::vector<std::shared_ptr<InstantiatedValue>>>
+instantiateBinaryOperation(
+    const Expr &pat, const Expr &otherPat, std::vector<std::string> variables,
+    VarMap<std::string> variableValues,
+    std::function<llvm::Optional<VarIntVal>(VarIntVal, VarIntVal)>
+        combineValues,
+    VarIntVal value, bool otherPatFirst);
+// Variant of the above where the operation can always be inverted
+std::list<std::vector<std::shared_ptr<InstantiatedValue>>>
+instantiateBijectiveBinaryOperation(
     const Expr &pat, const Expr &otherPat, std::vector<std::string> variables,
     VarMap<std::string> variableValues,
     std::function<VarIntVal(VarIntVal, VarIntVal)> combineValues,

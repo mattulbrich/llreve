@@ -361,8 +361,12 @@ void interpretIntBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
     case Instruction::SDiv:
         result = i0 / i1;
         break;
+    case Instruction::Mul:
+        result = i0 * i1;
+        break;
     default:
         logErrorData("Unsupported binop:\n", *instr);
+        llvm::errs() << "\n";
     }
     state.variables[instr] = make_shared<VarInt>(result);
 }

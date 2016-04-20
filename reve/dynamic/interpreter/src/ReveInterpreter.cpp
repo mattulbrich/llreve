@@ -74,5 +74,5 @@ int main(int argc, const char **argv) {
     serializeValuesInRange(
         makeMonoPair(modules.first->getFunction(MainFunctionFlag),
                      modules.second->getFunction(MainFunctionFlag)),
-        -40, 40, OutputDirectoryFlag);
+        -10, 10, OutputDirectoryFlag);
 }

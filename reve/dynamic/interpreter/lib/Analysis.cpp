@@ -39,12 +39,41 @@ void analyse(MonoPair<shared_ptr<llvm::Module>> modules, string outputDirectory,
              string mainFunctionName) {
     DIR *dir = opendir(outputDirectory.c_str());
     if (dir == nullptr) {
-        std::cerr << "Couldn’t open directory: " << outputDirectory << "\n";
+        std::cerr << "Couldn't open directory: " << outputDirectory << "\n";
         exit(1);
     }
-    // Error handling? who needs that anyway …
+
+    // Error handling? who needs that anyway
     MonoPair<PreprocessedFunction> mainFunctionPair =
         findFunction(preprocessedFuns, mainFunctionName).getValue();
+
+    // Get analysis results
+    const MonoPair<BidirBlockMarkMap> markMaps =
+        mainFunctionPair.map<BidirBlockMarkMap>([](PreprocessedFunction pair) {
+            return pair.fam->getResult<MarkAnalysis>(*pair.fun);
+        });
+    const MonoPair<PathMap> pathMaps =
+        mainFunctionPair.map<PathMap>([](PreprocessedFunction pair) {
+            return pair.fam->getResult<PathAnalysis>(*pair.fun);
+        });
+    const MonoPair<vector<string>> funArgsPair =
+        functionArgs(*mainFunctionPair.first.fun, *mainFunctionPair.second.fun);
+    // TODO this should use concat
+    const vector<string> funArgs = funArgsPair.foldl<vector<string>>(
+        {},
+        [](vector<string> acc, vector<string> args) -> vector<string> {
+            acc.insert(acc.end(), args.begin(), args.end());
+            return acc;
+        });
+    FreeVarsMap freeVarsMap =
+        freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
+    MonoPair<BlockNameMap> nameMap = markMaps.map<BlockNameMap>(blockNameMap);
+
+    PatternCandidatesMap equalityCandidates;
+    PatternCandidatesMap patternCandidates;
+    PatternCandidatesMap constantPatterns;
+    PatternCandidatesMap linearEqPatterns;
+
     struct dirent *dirEntry;
     std::regex firstFileRegex("^(.*_)1(_\\d+.cbor)$", std::regex::ECMAScript);
     while ((dirEntry = readdir(dir))) {
@@ -83,63 +112,38 @@ void analyse(MonoPair<shared_ptr<llvm::Module>> modules, string outputDirectory,
         Call<std::string> c2 = cborToCall(root);
         cbor_decref(&root);
 
-        // Get analysis results
-        const MonoPair<BidirBlockMarkMap> markMaps =
-            mainFunctionPair.map<BidirBlockMarkMap>(
-                [](PreprocessedFunction pair) {
-                    return pair.fam->getResult<MarkAnalysis>(*pair.fun);
-                });
-        const MonoPair<PathMap> pathMaps =
-            mainFunctionPair.map<PathMap>([](PreprocessedFunction pair) {
-                return pair.fam->getResult<PathAnalysis>(*pair.fun);
-            });
-        const MonoPair<vector<string>> funArgsPair = functionArgs(
-            *mainFunctionPair.first.fun, *mainFunctionPair.second.fun);
-        // TODO this should use concat
-        const vector<string> funArgs = funArgsPair.foldl<vector<string>>(
-            {},
-            [](vector<string> acc, vector<string> args) -> vector<string> {
-                acc.insert(acc.end(), args.begin(), args.end());
-                return acc;
-            });
-        FreeVarsMap freeVarsMap =
-            freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
-        MonoPair<BlockNameMap> nameMap =
-            markMaps.map<BlockNameMap>(blockNameMap);
-
         // Debug output
-        analyzeExecution(makeMonoPair(c1, c2), nameMap, debugAnalysis);
+        // analyzeExecution(makeMonoPair(c1, c2), nameMap, debugAnalysis);
 
         // We search for equalities first, because that way we can limit the
         // number of other patterns we need to instantiate
-        PatternCandidatesMap equalityCandidates;
         findEqualities(makeMonoPair(c1, c2), nameMap, freeVarsMap,
                        equalityCandidates);
-        std::cerr << "A = B\n";
-        dumpPatternCandidates(equalityCandidates, *commonpattern::eqPat);
         freeVarsMap = removeEqualities(freeVarsMap, equalityCandidates);
 
-        // Other patterns, for now only a + b = c
-        PatternCandidatesMap patternCandidates;
         basicPatternCandidates(makeMonoPair(c1, c2), nameMap, freeVarsMap,
                                patternCandidates);
-        std::cerr << "A + B = C\n";
-        dumpPatternCandidates(patternCandidates, *commonpattern::additionPat);
-
-        PatternCandidatesMap constantPatterns;
         analyzeExecution(
             makeMonoPair(c1, c2), nameMap,
             std::bind(instantiatePattern, std::ref(constantPatterns),
                       std::cref(freeVarsMap),
                       std::cref(*commonpattern::constantAdditionPat), _1));
-        std::cerr << "A + b = C\n";
-        dumpPatternCandidates(constantPatterns,
-                              *commonpattern::constantAdditionPat);
-
-        // Only analyze one file for now
-        break;
+        analyzeExecution(makeMonoPair(c1, c2), nameMap,
+                         std::bind(instantiatePattern,
+                                   std::ref(linearEqPatterns),
+                                   std::cref(freeVarsMap),
+                                   std::cref(*commonpattern::linearEqPat), _1));
     }
 
+    std::cerr << "A = B\n";
+    dumpPatternCandidates(equalityCandidates, *commonpattern::eqPat);
+    std::cerr << "A + B = C\n";
+    dumpPatternCandidates(patternCandidates, *commonpattern::additionPat);
+    std::cerr << "A + b = C\n";
+    dumpPatternCandidates(constantPatterns,
+                          *commonpattern::constantAdditionPat);
+    std::cerr << "A + (b * C) = D\n";
+    dumpPatternCandidates(linearEqPatterns, *commonpattern::linearEqPat);
     closedir(dir);
 }
 

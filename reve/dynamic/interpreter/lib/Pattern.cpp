@@ -13,6 +13,8 @@ using std::make_shared;
 using std::static_pointer_cast;
 using std::function;
 
+using llvm::Optional;
+
 using namespace pattern;
 
 ostream &Expr::dump(ostream &os,
@@ -31,7 +33,10 @@ bool BinaryOp::matches(VecIter begin, VecIter end) const {
         return left == right;
     }
     case Operation::Add:
-        logWarning("Matching on an addition is always true\n");
+        logError("Matching on an addition is always true\n");
+        return true;
+    case Operation::Mul:
+        logError("Matching on a multiplication is always true\n");
         return true;
     }
 }
@@ -48,6 +53,8 @@ VarIntVal BinaryOp::eval(VecIter begin, VecIter end) const {
         return left == right;
     case Operation::Add:
         return left + right;
+    case Operation::Mul:
+        return left * right;
     }
 }
 
@@ -75,6 +82,9 @@ BinaryOp::dump(ostream &os,
         break;
     case Operation::Add:
         os << " + ";
+        break;
+    case Operation::Mul:
+        os << " * ";
         break;
     }
     args.second->dump(os, mid, end);
@@ -123,7 +133,7 @@ Value::dump(ostream &os, vector<shared_ptr<InstantiatedValue>>::iterator begin,
 list<vector<shared_ptr<InstantiatedValue>>>
 BinaryOp::instantiate(vector<string> variables,
                       VarMap<string> variableValues) const {
-    if (op == Operation::Add && this->variables() == arguments()) {
+    if (op != Operation::Eq && this->variables() == arguments()) {
         list<vector<shared_ptr<InstantiatedValue>>> output;
         for (auto vec : kPermutations(variables, arguments())) {
             vector<shared_ptr<InstantiatedValue>> outputVec(vec.size());
@@ -144,16 +154,16 @@ BinaryOp::instantiate(vector<string> variables,
             // at all. In both cases we go through each instantiation on the
             // left and take all instantiations on the right with the same
             // value.
-            return instantiateBinaryOperation(*args.first, *args.second,
-                                              variables, variableValues,
-                                              std::plus<VarIntVal>(), 0, false);
+            return instantiateBijectiveBinaryOperation(
+                *args.first, *args.second, variables, variableValues,
+                std::plus<VarIntVal>(), 0, false);
         } else {
             // The constant is on the left
             assert(arguments() - this->variables() == 1);
             assert(args.first->arguments() - args.first->variables() == 1);
-            return instantiateBinaryOperation(*args.second, *args.first,
-                                              variables, variableValues,
-                                              std::plus<VarIntVal>(), 0, true);
+            return instantiateBijectiveBinaryOperation(
+                *args.second, *args.first, variables, variableValues,
+                std::plus<VarIntVal>(), 0, true);
         }
     }
 }
@@ -163,15 +173,45 @@ BinaryOp::instantiateToValue(vector<string> variables,
                              VarMap<string> variableValues,
                              VarIntVal value) const {
     assert(arguments() - this->variables() == 1);
-    assert(op == Operation::Add);
+    assert(op == Operation::Add || op == Operation::Mul);
     if (args.first->variables() == args.first->arguments()) {
-        return instantiateBinaryOperation(
-            *args.first, *args.second, variables, variableValues,
-            std::minus<VarIntVal>(), value, false);
+        switch (op) {
+        case Operation::Add:
+            return instantiateBijectiveBinaryOperation(
+                *args.first, *args.second, variables, variableValues,
+                std::minus<VarIntVal>(), value, false);
+        case Operation::Mul:
+            return instantiateBinaryOperation(
+                *args.first, *args.second, variables, variableValues,
+                [](VarIntVal target, VarIntVal left) -> Optional<VarIntVal> {
+                    return (left != 0 && target % left == 0)
+                               ? Optional<VarIntVal>(target / left)
+                               : Optional<VarIntVal>();
+                },
+                value, false);
+        case Operation::Eq:
+            logError("Can't instantiate an equality to a value\n");
+            return {};
+        }
     } else {
-        return instantiateBinaryOperation(*args.second, *args.first, variables,
-                                          variableValues,
-                                          std::minus<VarIntVal>(), value, true);
+        switch (op) {
+        case Operation::Add:
+            return instantiateBijectiveBinaryOperation(
+                *args.second, *args.first, variables, variableValues,
+                std::minus<VarIntVal>(), value, true);
+        case Operation::Mul:
+            return instantiateBinaryOperation(
+                *args.second, *args.first, variables, variableValues,
+                [](VarIntVal target, VarIntVal left) -> Optional<VarIntVal> {
+                    return (left != 0 && target % left == 0)
+                               ? Optional<VarIntVal>(target / left)
+                               : Optional<VarIntVal>();
+                },
+                value, true);
+        case Operation::Eq:
+            logError("Can't instantiate an equality to a value\n");
+            return {};
+        }
     }
 }
 
@@ -219,8 +259,8 @@ VarIntVal Variable::getValue(VarMap<string> varVals) const {
 list<vector<shared_ptr<InstantiatedValue>>> pattern::instantiateBinaryOperation(
     const Expr &pat, const Expr &otherPat, vector<string> variables,
     VarMap<string> variableValues,
-    function<VarIntVal(VarIntVal, VarIntVal)> combineValues, VarIntVal value,
-    bool otherPatFirst) {
+    function<Optional<VarIntVal>(VarIntVal, VarIntVal)> combineValues,
+    VarIntVal value, bool otherPatFirst) {
     assert(pat.variables() == pat.arguments());
     assert(otherPat.arguments() - otherPat.variables() == 1 ||
            otherPat.arguments() == otherPat.variables());
@@ -244,27 +284,44 @@ list<vector<shared_ptr<InstantiatedValue>>> pattern::instantiateBinaryOperation(
                 availableVariables.push_back(var);
             }
         }
-        list<vector<shared_ptr<InstantiatedValue>>> constantInstantiations =
-            otherPat.instantiateToValue(availableVariables, variableValues,
-                                        combineValues(value, patValue));
-        for (auto constantInstantiation : constantInstantiations) {
-            vector<shared_ptr<InstantiatedValue>> instantiation;
-            if (otherPatFirst) {
-                instantiation.insert(instantiation.end(),
-                                     constantInstantiation.begin(),
-                                     constantInstantiation.end());
-            }
-            for (auto var : variableInstantiation) {
-                instantiation.push_back(make_shared<Variable>(var));
-            }
-            if (!otherPatFirst) {
-                instantiation.insert(instantiation.end(),
-                                     constantInstantiation.begin(),
-                                     constantInstantiation.end());
-            }
+        Optional<VarIntVal> otherPatValue = combineValues(value, patValue);
+        if (otherPatValue.hasValue()) {
+            list<vector<shared_ptr<InstantiatedValue>>> constantInstantiations =
+                otherPat.instantiateToValue(availableVariables, variableValues,
+                                            otherPatValue.getValue());
+            for (auto constantInstantiation : constantInstantiations) {
+                vector<shared_ptr<InstantiatedValue>> instantiation;
+                if (otherPatFirst) {
+                    instantiation.insert(instantiation.end(),
+                                         constantInstantiation.begin(),
+                                         constantInstantiation.end());
+                }
+                for (auto var : variableInstantiation) {
+                    instantiation.push_back(make_shared<Variable>(var));
+                }
+                if (!otherPatFirst) {
+                    instantiation.insert(instantiation.end(),
+                                         constantInstantiation.begin(),
+                                         constantInstantiation.end());
+                }
 
-            output.push_back(instantiation);
+                output.push_back(instantiation);
+            }
         }
     }
     return output;
+}
+
+list<vector<shared_ptr<InstantiatedValue>>>
+pattern::instantiateBijectiveBinaryOperation(
+    const Expr &pat, const Expr &otherPat, vector<string> variables,
+    VarMap<string> variableValues,
+    function<VarIntVal(VarIntVal, VarIntVal)> combineValues, VarIntVal value,
+    bool otherPatFirst) {
+    return instantiateBinaryOperation(
+        pat, otherPat, variables, variableValues,
+        [&combineValues](VarIntVal a, VarIntVal b) -> Optional<VarIntVal> {
+            return Optional<VarIntVal>(combineValues(a, b));
+        },
+        value, otherPatFirst);
 }
