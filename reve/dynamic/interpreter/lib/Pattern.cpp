@@ -122,7 +122,7 @@ Value::dump(ostream &os, vector<shared_ptr<InstantiatedValue>>::iterator begin,
 list<vector<shared_ptr<InstantiatedValue>>>
 BinaryOp::instantiate(vector<string> variables,
                       VarMap<string> variableValues) const {
-    if (this->variables() == arguments()) {
+    if (op == Operation::Add && this->variables() == arguments()) {
         list<vector<shared_ptr<InstantiatedValue>>> output;
         for (auto vec : kPermutations(variables, arguments())) {
             vector<shared_ptr<InstantiatedValue>> outputVec(vec.size());
@@ -135,9 +135,14 @@ BinaryOp::instantiate(vector<string> variables,
         // Only an equality can instantiate constants without a value
         assert(op == Operation::Eq);
         // We expect exactly one constant
-        assert(arguments() - this->variables() == 1);
-        if (args.first->variables() == arguments()) {
-            // The constant is on the right
+
+        if (args.first->variables() == args.first->arguments()) {
+            assert(args.second->arguments() - args.second->variables() == 1 ||
+                   args.second->arguments() == args.second->variables());
+            // Either there is a constant on the right or there is no constant
+            // at all. In both cases we go through each instantiation on the
+            // left and take all instantiations on the right with the same
+            // value.
             list<vector<shared_ptr<InstantiatedValue>>> output;
 
             for (auto vec : kPermutations(variables, args.first->variables())) {
@@ -172,6 +177,8 @@ BinaryOp::instantiate(vector<string> variables,
             return output;
         } else {
             // The constant is on the left
+            assert(arguments() - this->variables() == 1);
+            assert(args.first->arguments() - args.first->variables() == 1);
             list<vector<shared_ptr<InstantiatedValue>>> output;
 
             for (auto vec :
@@ -225,14 +232,23 @@ BinaryOp::instantiateToValue(vector<string> variables,
 }
 
 list<vector<shared_ptr<InstantiatedValue>>>
-Value::instantiateToValue(vector<string> /*unused*/, VarMap<string> /*unused*/,
+Value::instantiateToValue(vector<string> variables,
+                          VarMap<string> variableValues,
                           VarIntVal value) const {
-    assert(val == Placeholder::Constant);
-    list<vector<shared_ptr<InstantiatedValue>>> output;
-    vector<shared_ptr<InstantiatedValue>> constant = {
-        make_shared<Constant>(value)};
-    output.push_back(constant);
-    return output;
+    switch (val) {
+    case Placeholder::Constant: {
+        return {{make_shared<Constant>(value)}};
+    }
+    case Placeholder::Variable: {
+        list<vector<shared_ptr<InstantiatedValue>>> output;
+        for (auto var : variables) {
+            if (variableValues.at(var)->unsafeIntVal() == value) {
+                output.push_back({make_shared<Variable>(var)});
+            }
+        }
+        return output;
+    }
+    }
 }
 
 list<vector<shared_ptr<InstantiatedValue>>>

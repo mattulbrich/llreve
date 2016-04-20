@@ -5,13 +5,14 @@
 #include "MarkAnalysis.h"
 #include "MonoPair.h"
 #include "Pattern.h"
-#include "Preprocess.h"
 #include "Permutation.h"
+#include "Preprocess.h"
 
 #include "llvm/IR/Module.h"
 
 using BlockNameMap = std::map<std::string, int>;
-using PatternCandidates = std::list<std::vector<std::shared_ptr<pattern::InstantiatedValue>>>;
+using PatternCandidates =
+    std::list<std::vector<std::shared_ptr<pattern::InstantiatedValue>>>;
 using PatternCandidatesMap = std::map<int, PatternCandidates>;
 
 void analyse(MonoPair<std::shared_ptr<llvm::Module>> modules,
@@ -24,11 +25,12 @@ findFunction(const std::vector<MonoPair<PreprocessedFunction>> functions,
 
 using Equality = MonoPair<std::string>;
 
-PatternCandidatesMap findEqualities(MonoPair<Call<std::string>> calls,
-                                    MonoPair<BlockNameMap> nameMap,
-                                    FreeVarsMap freeVars);
+void findEqualities(MonoPair<Call<std::string>> calls,
+                    MonoPair<BlockNameMap> nameMap, FreeVarsMap freeVars,
+                    PatternCandidatesMap &candidates);
 void basicPatternCandidates(MonoPair<Call<std::string>> calls,
                             MonoPair<BlockNameMap> nameMap,
+                            FreeVarsMap freeVarsMap,
                             PatternCandidatesMap &candidates);
 template <typename T> T identity(T x) { return x; }
 BlockNameMap blockNameMap(BidirBlockMarkMap blockMap);
@@ -56,18 +58,13 @@ bool normalMarkBlock(const BlockNameMap &map, BlockName &blockName);
 void debugAnalysis(MatchInfo match);
 void removeEqualities(std::map<int, std::set<Equality>> &equalities,
                       MatchInfo match);
-void removeNonMatchingPatterns(PatternCandidatesMap &patternCandidates,
-                               const pattern::Expr &pat,
-                               MatchInfo match);
 
-PatternCandidatesMap instantiatePattern(std::map<int, std::vector<std::string>> variables,
-                                        const pattern::Expr &pat);
 void dumpPatternCandidates(const PatternCandidatesMap &candidates,
                            const pattern::Expr &pat);
 
 FreeVarsMap removeEqualities(FreeVarsMap freeVars,
                              const PatternCandidatesMap &candidates);
 
-void instantiatePatternWithConstant(PatternCandidatesMap &patternCandidates,
+void instantiatePattern(PatternCandidatesMap &patternCandidates,
                                     const FreeVarsMap &freeVars,
                                     const pattern::Expr &pat, MatchInfo match);
