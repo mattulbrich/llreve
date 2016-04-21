@@ -24,6 +24,7 @@ findFunction(const std::vector<MonoPair<PreprocessedFunction>> functions,
              std::string functionName);
 
 using Equality = MonoPair<std::string>;
+using EquationsMap = std::map<int, std::vector<std::vector<mpq_class>>>;
 
 void findEqualities(MonoPair<Call<std::string>> calls,
                     MonoPair<BlockNameMap> nameMap, FreeVarsMap freeVars,
@@ -66,5 +67,9 @@ FreeVarsMap removeEqualities(FreeVarsMap freeVars,
                              const PatternCandidatesMap &candidates);
 
 void instantiatePattern(PatternCandidatesMap &patternCandidates,
-                                    const FreeVarsMap &freeVars,
-                                    const pattern::Expr &pat, MatchInfo match);
+                        const FreeVarsMap &freeVars, const pattern::Expr &pat,
+                        MatchInfo match);
+void populateEquationsMap(EquationsMap &equationsMap, FreeVarsMap freeVarsMap,
+                          MatchInfo match);
+void dumpEquationsMap(const EquationsMap &equationsMap,
+                      const FreeVarsMap &freeVarsmap);

@@ -2,6 +2,7 @@
 
 #include "CommonPattern.h"
 #include "Interpreter.h"
+#include "Linear.h"
 #include "MarkAnalysis.h"
 #include "MonoPair.h"
 #include "PathAnalysis.h"
@@ -11,7 +12,7 @@
 #include <iostream>
 #include <regex>
 
-// I don’t care about windows
+// I don't care about windows
 #include "dirent.h"
 
 using llvm::Module;
@@ -67,11 +68,13 @@ void analyse(MonoPair<shared_ptr<llvm::Module>> modules, string outputDirectory,
         });
     FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
+    const FreeVarsMap originalFreeVarsMap = freeVarsMap;
     MonoPair<BlockNameMap> nameMap = markMaps.map<BlockNameMap>(blockNameMap);
 
     PatternCandidatesMap equalityCandidates;
     PatternCandidatesMap patternCandidates;
     PatternCandidatesMap constantPatterns;
+    EquationsMap equationsMap;
 
     struct dirent *dirEntry;
     std::regex firstFileRegex("^(.*_)1(_\\d+.cbor)$", std::regex::ECMAScript);
@@ -127,6 +130,9 @@ void analyse(MonoPair<shared_ptr<llvm::Module>> modules, string outputDirectory,
             std::bind(instantiatePattern, std::ref(constantPatterns),
                       std::cref(freeVarsMap),
                       std::cref(*commonpattern::constantAdditionPat), _1));
+        analyzeExecution(makeMonoPair(c1, c2), nameMap,
+                         std::bind(populateEquationsMap, std::ref(equationsMap),
+                                   std::cref(originalFreeVarsMap), _1));
     }
 
     std::cerr << "A = B\n";
@@ -136,6 +142,8 @@ void analyse(MonoPair<shared_ptr<llvm::Module>> modules, string outputDirectory,
     std::cerr << "A + b = C\n";
     dumpPatternCandidates(constantPatterns,
                           *commonpattern::constantAdditionPat);
+    std::cerr << "Equations\n";
+    dumpEquationsMap(equationsMap, originalFreeVarsMap);
     closedir(dir);
 }
 
@@ -147,6 +155,33 @@ void basicPatternCandidates(MonoPair<Call<string>> calls,
                      std::bind(instantiatePattern, std::ref(candidates),
                                std::cref(freeVarsMap),
                                std::cref(*commonpattern::additionPat), _1));
+}
+
+void populateEquationsMap(EquationsMap &equationsMap, FreeVarsMap freeVarsMap,
+                          MatchInfo match) {
+    VarMap<std::string> variables;
+    variables.insert(match.steps.first.state.variables.begin(),
+                     match.steps.first.state.variables.end());
+    variables.insert(match.steps.second.state.variables.begin(),
+                     match.steps.second.state.variables.end());
+    std::vector<mpq_class> equation(freeVarsMap.at(match.mark).size());
+    for (size_t i = 0; i < equation.size(); ++i) {
+        string name = freeVarsMap.at(match.mark).at(i);
+        equation.at(i) = variables.at(name)->unsafeIntVal();
+    }
+    if (isZero(equation)) {
+        return;
+    }
+    if (equationsMap.find(match.mark) == equationsMap.end()) {
+        equationsMap[match.mark] = {equation};
+    } else {
+        vector<vector<mpq_class>> vecs = equationsMap.at(match.mark);
+        vecs.push_back(equation);
+        if (!linearlyIndependent(vecs)) {
+            return;
+        }
+        equationsMap.at(match.mark).push_back(equation);
+    }
 }
 
 FreeVarsMap removeEqualities(FreeVarsMap freeVars,
@@ -339,5 +374,22 @@ void dumpPatternCandidates(const PatternCandidatesMap &candidates,
             pat.dump(std::cout, vec);
             std::cout << std::endl;
         }
+    }
+}
+
+void dumpEquationsMap(const EquationsMap &equationsMap,
+                      const FreeVarsMap &freeVarsMap) {
+    for (auto eqMapIt : equationsMap) {
+        std::cout << eqMapIt.first << ":\n";
+        for (const auto &varName : freeVarsMap.at(eqMapIt.first)) {
+            std::cout << varName << "\t";
+        }
+        std::cout << "\n";
+        Matrix<mpq_class> m = nullSpace(eqMapIt.second);
+        Matrix<mpz_class> n(m.size());
+        for (size_t i = 0; i < n.size(); ++i) {
+            n.at(i) = ratToInt(m.at(i));
+        }
+        dumpMatrix(n);
     }
 }
