@@ -164,11 +164,13 @@ void populateEquationsMap(EquationsMap &equationsMap, FreeVarsMap freeVarsMap,
                      match.steps.first.state.variables.end());
     variables.insert(match.steps.second.state.variables.begin(),
                      match.steps.second.state.variables.end());
-    std::vector<mpq_class> equation(freeVarsMap.at(match.mark).size());
-    for (size_t i = 0; i < equation.size(); ++i) {
+    std::vector<mpq_class> equation(freeVarsMap.at(match.mark).size() + 1);
+    for (size_t i = 0; i < equation.size() - 1; ++i) {
         string name = freeVarsMap.at(match.mark).at(i);
         equation.at(i) = variables.at(name)->unsafeIntVal();
     }
+    // Add a constant at the end of each vector
+    equation.at(equation.size() - 1) = 1;
     if (isZero(equation)) {
         return;
     }
@@ -384,7 +386,7 @@ void dumpEquationsMap(const EquationsMap &equationsMap,
         for (const auto &varName : freeVarsMap.at(eqMapIt.first)) {
             std::cout << varName << "\t";
         }
-        std::cout << "\n";
+        std::cout << "constant\n";
         Matrix<mpq_class> m = nullSpace(eqMapIt.second);
         Matrix<mpz_class> n(m.size());
         for (size_t i = 0; i < n.size(); ++i) {
