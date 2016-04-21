@@ -72,7 +72,6 @@ void analyse(MonoPair<shared_ptr<llvm::Module>> modules, string outputDirectory,
     PatternCandidatesMap equalityCandidates;
     PatternCandidatesMap patternCandidates;
     PatternCandidatesMap constantPatterns;
-    PatternCandidatesMap linearEqPatterns;
 
     struct dirent *dirEntry;
     std::regex firstFileRegex("^(.*_)1(_\\d+.cbor)$", std::regex::ECMAScript);
@@ -128,11 +127,6 @@ void analyse(MonoPair<shared_ptr<llvm::Module>> modules, string outputDirectory,
             std::bind(instantiatePattern, std::ref(constantPatterns),
                       std::cref(freeVarsMap),
                       std::cref(*commonpattern::constantAdditionPat), _1));
-        analyzeExecution(makeMonoPair(c1, c2), nameMap,
-                         std::bind(instantiatePattern,
-                                   std::ref(linearEqPatterns),
-                                   std::cref(freeVarsMap),
-                                   std::cref(*commonpattern::linearEqPat), _1));
     }
 
     std::cerr << "A = B\n";
@@ -142,8 +136,6 @@ void analyse(MonoPair<shared_ptr<llvm::Module>> modules, string outputDirectory,
     std::cerr << "A + b = C\n";
     dumpPatternCandidates(constantPatterns,
                           *commonpattern::constantAdditionPat);
-    std::cerr << "A + (b * C) = D\n";
-    dumpPatternCandidates(linearEqPatterns, *commonpattern::linearEqPat);
     closedir(dir);
 }
 
