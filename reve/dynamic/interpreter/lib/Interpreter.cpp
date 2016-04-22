@@ -199,7 +199,17 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
         interpretICmpInst(icmp, state);
     } else if (const auto cast = dyn_cast<CastInst>(instr)) {
         assert(cast->getNumOperands() == 1);
-        state.variables[cast] = resolveValue(cast->getOperand(0), state);
+        if (cast->getSrcTy()->isIntegerTy(1) &&
+            cast->getDestTy()->getIntegerBitWidth() > 1) {
+            // Convert a bool to an integer
+            shared_ptr<VarVal> operand =
+                state.variables.at(cast->getOperand(0));
+            assert(operand->getType() == VarType::Bool);
+            state.variables[cast] = make_shared<VarInt>(
+                static_pointer_cast<VarBool>(operand)->val ? 1 : 0);
+        } else {
+            state.variables[cast] = resolveValue(cast->getOperand(0), state);
+        }
     } else if (const auto gep = dyn_cast<GetElementPtrInst>(instr)) {
         state.variables[gep] = make_shared<VarInt>(resolveGEP(*gep, state));
     } else if (const auto load = dyn_cast<LoadInst>(instr)) {
@@ -287,7 +297,11 @@ shared_ptr<VarVal> resolveValue(const Value *val, const FastState &state) {
     if (isa<Instruction>(val) || isa<Argument>(val)) {
         return state.variables.at(val);
     } else if (const auto constInt = dyn_cast<ConstantInt>(val)) {
-        return make_shared<VarInt>(constInt->getSExtValue());
+        if (constInt->getBitWidth() == 1) {
+            return make_shared<VarBool>(constInt->isOne());
+        } else {
+            return make_shared<VarInt>(constInt->getSExtValue());
+        }
     }
     logErrorData("Operators are not yet handled\n", *val);
     return make_shared<VarInt>(42);
@@ -339,13 +353,37 @@ void interpretBinOp(const BinaryOperator *instr, FastState &state) {
     const auto op0 = resolveValue(instr->getOperand(0), state);
     const auto op1 = resolveValue(instr->getOperand(1), state);
     switch (instr->getOpcode()) {
-    default:
+    case Instruction::Or: {
+        assert(op0->getType() == VarType::Bool);
+        assert(op1->getType() == VarType::Bool);
+        bool b0 = static_pointer_cast<VarBool>(op0)->val;
+        bool b1 = static_pointer_cast<VarBool>(op1)->val;
+        interpretBoolBinOp(instr, instr->getOpcode(), b0, b1, state);
+        break;
+    }
+    default: {
         assert(op0->getType() == VarType::Int);
         assert(op1->getType() == VarType::Int);
         VarIntVal i0 = static_pointer_cast<VarInt>(op0)->val;
         VarIntVal i1 = static_pointer_cast<VarInt>(op1)->val;
         interpretIntBinOp(instr, instr->getOpcode(), i0, i1, state);
+        break;
     }
+    }
+}
+
+void interpretBoolBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
+                        bool b0, bool b1, FastState &state) {
+    bool result = false;
+    switch (op) {
+    case Instruction::Or:
+        result = b0 || b1;
+        break;
+    default:
+        logErrorData("Unsupported binop:\n", *instr);
+        llvm::errs() << "\n";
+    }
+    state.variables[instr] = make_shared<VarBool>(result);
 }
 
 void interpretIntBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,

@@ -33,7 +33,7 @@ struct VarVal {
     virtual VarIntVal unsafeIntVal() const = 0;
 };
 
-bool varValEq(const VarVal& lhs, const VarVal& rhs);
+bool varValEq(const VarVal &lhs, const VarVal &rhs);
 
 std::shared_ptr<VarVal> cborToVarVal(const cbor_item_t *item);
 
@@ -87,7 +87,7 @@ template <typename T> struct Step {
 
 std::shared_ptr<Step<std::string>> cborToStep(const cbor_item_t *item);
 
-template<typename T> struct BlockStep;
+template <typename T> struct BlockStep;
 
 template <typename T> struct Call : Step<T> {
     std::string functionName;
@@ -213,6 +213,9 @@ auto interpretBinOp(const llvm::BinaryOperator *instr, FastState &state)
 auto interpretIntBinOp(const llvm::BinaryOperator *instr,
                        llvm::Instruction::BinaryOps op, VarIntVal i0,
                        VarIntVal i1, FastState &state) -> void;
+auto interpretBoolBinOp(const llvm::BinaryOperator *instr,
+                        llvm::Instruction::BinaryOps op, bool b0, bool b1,
+                        FastState &state) -> void;
 
 cbor_item_t *stateToCBOR(FastState state);
 State<std::string> cborToState(const cbor_item_t *item);
@@ -256,4 +259,4 @@ std::vector<T> cborToVector(const cbor_item_t *item,
 std::map<std::string, const cbor_item_t *>
 cborToKeyMap(const cbor_item_t *item);
 
-std::string valueName(const llvm::Value* val);
+std::string valueName(const llvm::Value *val);
