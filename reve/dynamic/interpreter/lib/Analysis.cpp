@@ -1,6 +1,7 @@
 #include "Analysis.h"
 
 #include "CommonPattern.h"
+#include "Compat.h"
 #include "Interpreter.h"
 #include "Linear.h"
 #include "MarkAnalysis.h"
@@ -230,11 +231,10 @@ void findEqualities(MonoPair<Call<string>> calls,
                                std::cref(*commonpattern::eqPat), _1));
 }
 
-map<string, int> blockNameMap(BidirBlockMarkMap blockMap) {
-    map<string, int> ret;
+BlockNameMap blockNameMap(BidirBlockMarkMap blockMap) {
+    BlockNameMap ret;
     for (auto it : blockMap.BlockToMarksMap) {
-        assert(it.second.size() == 1);
-        ret[it.first->getName()] = *it.second.begin();
+        ret[it.first->getName()] = it.second;
     }
     return ret;
 }
@@ -261,23 +261,32 @@ void analyzeExecution(MonoPair<Call<std::string>> calls,
     auto prevStepIt2 = *stepsIt2;
     while (stepsIt1 != steps1.end() && stepsIt2 != steps2.end()) {
         // Advance until a mark is reached
-        while (!normalMarkBlock(nameMaps.first, (*stepsIt1)->blockName) &&
-               stepsIt1 != steps1.end()) {
+        while (stepsIt1 != steps1.end() &&
+               !normalMarkBlock(nameMaps.first, (*stepsIt1)->blockName)) {
             stepsIt1++;
         }
-        while (!normalMarkBlock(nameMaps.second, (*stepsIt2)->blockName) &&
-               stepsIt2 != steps2.end()) {
+        while (stepsIt2 != steps2.end() &&
+               !normalMarkBlock(nameMaps.second, (*stepsIt2)->blockName)) {
             stepsIt2++;
         }
         if (stepsIt1 == steps1.end() && stepsIt2 == steps2.end()) {
             break;
         }
         // Check marks
-        if (nameMaps.first.at((*stepsIt1)->blockName) ==
-            nameMaps.second.at((*stepsIt2)->blockName)) {
+        if (!intersection(nameMaps.first.at((*stepsIt1)->blockName),
+                          nameMaps.second.at((*stepsIt2)->blockName))
+                 .empty()) {
+            assert(intersection(nameMaps.first.at((*stepsIt1)->blockName),
+                                nameMaps.second.at((*stepsIt2)->blockName))
+                       .size() == 1);
+            // We resolve the ambiguity in the marks by hoping that for one
+            // program there is only one choice
+            int mark = *intersection(nameMaps.first.at((*stepsIt1)->blockName),
+                                     nameMaps.second.at((*stepsIt2)->blockName))
+                            .begin();
             // Perfect synchronization
             fun(MatchInfo(makeMonoPair(**stepsIt1, **stepsIt2), LoopInfo::None,
-                          nameMaps.first.at((*stepsIt1)->blockName)));
+                          mark));
             prevStepIt1 = *stepsIt1;
             prevStepIt2 = *stepsIt2;
             ++stepsIt1;
@@ -290,12 +299,12 @@ void analyzeExecution(MonoPair<Call<std::string>> calls,
 
             // One side has to wait for the other to finish its loop
             LoopInfo loop = LoopInfo::Left;
-            auto &stepsIt = stepsIt1;
+            auto stepsIt = stepsIt1;
             auto prevStepIt = prevStepIt1;
             auto prevStepItOther = prevStepIt2;
             auto end = steps1.end();
-            // Only a reference for performance reasons
-            auto &nameMap = nameMaps.first;
+            auto nameMap = nameMaps.first;
+            auto otherNameMap = nameMaps.second;
             if ((*stepsIt2)->blockName == prevStepIt2->blockName) {
                 loop = LoopInfo::Right;
                 stepsIt = stepsIt2;
@@ -303,16 +312,24 @@ void analyzeExecution(MonoPair<Call<std::string>> calls,
                 prevStepItOther = prevStepIt1;
                 end = steps2.end();
                 nameMap = nameMaps.second;
+                otherNameMap = nameMaps.first;
             }
             // Keep looping one program until it moves on
             do {
+                assert(intersection(nameMap.at(prevStepIt->blockName),
+                                    otherNameMap.at(prevStepItOther->blockName))
+                           .size() == 1);
+                int mark =
+                    *intersection(nameMap.at(prevStepIt->blockName),
+                                  otherNameMap.at(prevStepItOther->blockName))
+                         .begin();
                 // Make sure the first program is always the first argument
                 if (loop == LoopInfo::Left) {
                     fun(MatchInfo(makeMonoPair(**stepsIt, *prevStepItOther),
-                                  loop, nameMap.at(prevStepIt->blockName)));
+                                  loop, mark));
                 } else {
                     fun(MatchInfo(makeMonoPair(*prevStepItOther, **stepsIt),
-                                  loop, nameMap.at(prevStepIt->blockName)));
+                                  loop, mark));
                 }
                 // Go to the next mark
                 do {
@@ -338,7 +355,7 @@ bool normalMarkBlock(const BlockNameMap &map, BlockName &blockName) {
     if (it == map.end()) {
         return false;
     }
-    return it->second != ENTRY_MARK;
+    return it->second.count(ENTRY_MARK) == 0;
 }
 
 void debugAnalysis(MatchInfo match) {

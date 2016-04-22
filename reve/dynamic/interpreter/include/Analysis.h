@@ -10,7 +10,7 @@
 
 #include "llvm/IR/Module.h"
 
-using BlockNameMap = std::map<std::string, int>;
+using BlockNameMap = std::map<std::string, std::set<int>>;
 using PatternCandidates =
     std::list<std::vector<std::shared_ptr<pattern::InstantiatedValue>>>;
 using PatternCandidatesMap = std::map<int, PatternCandidates>;
