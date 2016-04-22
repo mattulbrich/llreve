@@ -257,17 +257,20 @@ void analyzeExecution(MonoPair<Call<std::string>> calls,
     auto steps2 = calls.second.steps;
     auto stepsIt1 = steps1.begin();
     auto stepsIt2 = steps2.begin();
+    auto prevStepIt1 = *stepsIt1;
+    auto prevStepIt2 = *stepsIt2;
     while (stepsIt1 != steps1.end() && stepsIt2 != steps2.end()) {
         // Advance until a mark is reached
-        auto prevStepIt1 = *stepsIt1;
         while (!normalMarkBlock(nameMaps.first, (*stepsIt1)->blockName) &&
                stepsIt1 != steps1.end()) {
             stepsIt1++;
         }
-        auto prevStepIt2 = *stepsIt2;
         while (!normalMarkBlock(nameMaps.second, (*stepsIt2)->blockName) &&
                stepsIt2 != steps2.end()) {
             stepsIt2++;
+        }
+        if (stepsIt1 == steps1.end() && stepsIt2 == steps2.end()) {
+            break;
         }
         // Check marks
         if (nameMaps.first.at((*stepsIt1)->blockName) ==
@@ -275,9 +278,16 @@ void analyzeExecution(MonoPair<Call<std::string>> calls,
             // Perfect synchronization
             fun(MatchInfo(makeMonoPair(**stepsIt1, **stepsIt2), LoopInfo::None,
                           nameMaps.first.at((*stepsIt1)->blockName)));
+            prevStepIt1 = *stepsIt1;
+            prevStepIt2 = *stepsIt2;
             ++stepsIt1;
             ++stepsIt2;
         } else {
+            // In the first round this is not true, but we should never fall in
+            // this case in the first round
+            assert(prevStepIt1 != *stepsIt1);
+            assert(prevStepIt2 != *stepsIt2);
+
             // One side has to wait for the other to finish its loop
             LoopInfo loop = LoopInfo::Left;
             auto &stepsIt = stepsIt1;
@@ -296,8 +306,14 @@ void analyzeExecution(MonoPair<Call<std::string>> calls,
             }
             // Keep looping one program until it moves on
             do {
-                fun(MatchInfo(makeMonoPair(**stepsIt, *prevStepItOther), loop,
-                              nameMap.at(prevStepIt->blockName)));
+                // Make sure the first program is always the first argument
+                if (loop == LoopInfo::Left) {
+                    fun(MatchInfo(makeMonoPair(**stepsIt, *prevStepItOther),
+                                  loop, nameMap.at(prevStepIt->blockName)));
+                } else {
+                    fun(MatchInfo(makeMonoPair(*prevStepItOther, **stepsIt),
+                                  loop, nameMap.at(prevStepIt->blockName)));
+                }
                 // Go to the next mark
                 do {
                     stepsIt++;
@@ -306,7 +322,7 @@ void analyzeExecution(MonoPair<Call<std::string>> calls,
                 // Did we return to the same mark?
             } while (stepsIt != end &&
                      (*stepsIt)->blockName == prevStepIt->blockName);
-            // Getting a reference to the iterator and modifying that doesn’t
+            // Getting a reference to the iterator and modifying that doesn't
             // seem to work so we copy it and set it again
             if (loop == LoopInfo::Left) {
                 stepsIt1 = stepsIt;
