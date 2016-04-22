@@ -120,7 +120,7 @@ int main(int argc, const char **argv) {
                                   GlobalConstantsFlag, OnlyRecursiveFlag,
                                   NoByteHeapFlag, EverythingSignedFlag,
                                   SingleInvariantFlag, MuZFlag, PerfectSyncFlag,
-                                  NestFlag, PassInputThroughFlag);
+                                  NestFlag, PassInputThroughFlag, {});
     InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,
                         FileName2Flag);
     SerializeOpts serializeOpts(OutputFileNameFlag);

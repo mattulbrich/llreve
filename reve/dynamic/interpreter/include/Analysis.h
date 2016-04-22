@@ -15,16 +15,18 @@ using PatternCandidates =
     std::list<std::vector<std::shared_ptr<pattern::InstantiatedValue>>>;
 using PatternCandidatesMap = std::map<int, PatternCandidates>;
 
-void analyse(MonoPair<std::shared_ptr<llvm::Module>> modules,
-             std::string outputDirectory,
-             std::vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
-             std::string mainFunctionName);
+std::map<int, smt::SharedSMTRef>
+analyse(std::string outputDirectory,
+        std::vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
+        std::string mainFunctionName);
 llvm::Optional<MonoPair<PreprocessedFunction>>
 findFunction(const std::vector<MonoPair<PreprocessedFunction>> functions,
              std::string functionName);
 
 using Equality = MonoPair<std::string>;
 using EquationsMap = std::map<int, std::vector<std::vector<mpq_class>>>;
+using EquationsSolutionsMap =
+    std::map<int, std::vector<std::vector<mpz_class>>>;
 
 void findEqualities(MonoPair<Call<std::string>> calls,
                     MonoPair<BlockNameMap> nameMap, FreeVarsMap freeVars,
@@ -73,3 +75,12 @@ void populateEquationsMap(EquationsMap &equationsMap, FreeVarsMap freeVarsMap,
                           MatchInfo match);
 void dumpEquationsMap(const EquationsMap &equationsMap,
                       const FreeVarsMap &freeVarsmap);
+std::map<int, smt::SharedSMTRef>
+makeInvariantDefinitions(const EquationsSolutionsMap &solutions,
+                         const FreeVarsMap &freeVarsMap);
+smt::SharedSMTRef
+makeInvariantDefinition(const std::vector<std::vector<mpz_class>> &solution,
+                        const std::vector<std::string> &freeVars);
+smt::SharedSMTRef makeEquation(const std::vector<mpz_class> &eq,
+                               const std::vector<std::string> &freeVars);
+EquationsSolutionsMap findSolutions(const EquationsMap &equationsMap);

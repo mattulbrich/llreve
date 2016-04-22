@@ -312,10 +312,16 @@ vector<SharedSMTRef> mainDeclarations(PathMap pathMap, string funName,
         if (startIndex != ENTRY_MARK &&
             !SMTGenerationOpts::getInstance().SingleInvariant) {
             // ignore entry node
-            const auto invariant =
-                mainInvariantDeclaration(startIndex, freeVarsMap.at(startIndex),
-                                         ProgramSelection::Both, funName);
-            declarations.push_back(invariant);
+            if (SMTGenerationOpts::getInstance().Invariants.find(startIndex) ==
+                SMTGenerationOpts::getInstance().Invariants.end()) {
+                const auto invariant = mainInvariantDeclaration(
+                    startIndex, freeVarsMap.at(startIndex),
+                    ProgramSelection::Both, funName);
+                declarations.push_back(invariant);
+            } else {
+                declarations.push_back(
+                    SMTGenerationOpts::getInstance().Invariants.at(startIndex));
+            }
         }
     }
     return declarations;

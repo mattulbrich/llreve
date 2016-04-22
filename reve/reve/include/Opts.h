@@ -31,7 +31,8 @@ class SMTGenerationOpts {
                            bool globalConstants, bool onlyRecursive,
                            bool noByteHeap, bool everythingSigned,
                            bool singleInvariant, bool muZ, bool perfectSync,
-                           bool nest, bool passInputThrough);
+                           bool nest, bool passInputThrough,
+                           std::map<int, smt::SharedSMTRef> invariants);
     std::string MainFunction;
     bool Heap;
     bool Stack;
@@ -44,6 +45,9 @@ class SMTGenerationOpts {
     bool PerfectSync;
     bool Nest;
     bool PassInputThrough;
+    // If an invariant is not in the map a declaration is added and it’s up to
+    // the SMT solver to find it
+    std::map<int, smt::SharedSMTRef> Invariants;
 
   private:
     SMTGenerationOpts() {}

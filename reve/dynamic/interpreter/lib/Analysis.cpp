@@ -29,15 +29,22 @@ using std::map;
 using std::set;
 using std::static_pointer_cast;
 
+using smt::FunDef;
+using smt::SharedSMTRef;
+using smt::Op;
+using smt::makeBinOp;
+using smt::SortedVar;
+
 using namespace std::placeholders;
 
 using pattern::Placeholder;
 using pattern::Variable;
 using pattern::InstantiatedValue;
 
-void analyse(MonoPair<shared_ptr<llvm::Module>> modules, string outputDirectory,
-             vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
-             string mainFunctionName) {
+map<int, SharedSMTRef>
+analyse(string outputDirectory,
+        vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
+        string mainFunctionName) {
     DIR *dir = opendir(outputDirectory.c_str());
     if (dir == nullptr) {
         std::cerr << "Couldn't open directory: " << outputDirectory << "\n";
@@ -98,8 +105,8 @@ void analyse(MonoPair<shared_ptr<llvm::Module>> modules, string outputDirectory,
         std::vector<char> buffer2(static_cast<size_t>(size2));
         if (!file1.read(buffer1.data(), size1) ||
             !file2.read(buffer2.data(), size2)) {
-            logError("Couldn’t read one of the files: " + fileName1 + "\n");
-            return;
+            logError("Couldn't read one of the files: " + fileName1 + "\n");
+            return {};
         }
 
         // deserialize
@@ -145,6 +152,8 @@ void analyse(MonoPair<shared_ptr<llvm::Module>> modules, string outputDirectory,
     std::cerr << "Equations\n";
     dumpEquationsMap(equationsMap, originalFreeVarsMap);
     closedir(dir);
+    return makeInvariantDefinitions(findSolutions(equationsMap),
+                                    originalFreeVarsMap);
 }
 
 void basicPatternCandidates(MonoPair<Call<string>> calls,
@@ -379,19 +388,100 @@ void dumpPatternCandidates(const PatternCandidatesMap &candidates,
     }
 }
 
-void dumpEquationsMap(const EquationsMap &equationsMap,
-                      const FreeVarsMap &freeVarsMap) {
+EquationsSolutionsMap findSolutions(const EquationsMap &equationsMap) {
+    EquationsSolutionsMap map;
     for (auto eqMapIt : equationsMap) {
-        std::cout << eqMapIt.first << ":\n";
-        for (const auto &varName : freeVarsMap.at(eqMapIt.first)) {
-            std::cout << varName << "\t";
-        }
-        std::cout << "constant\n";
         Matrix<mpq_class> m = nullSpace(eqMapIt.second);
         Matrix<mpz_class> n(m.size());
         for (size_t i = 0; i < n.size(); ++i) {
             n.at(i) = ratToInt(m.at(i));
         }
-        dumpMatrix(n);
+        map[eqMapIt.first] = n;
     }
+    return map;
+}
+
+void dumpEquationsMap(const EquationsMap &equationsMap,
+                      const FreeVarsMap &freeVarsMap) {
+    EquationsSolutionsMap solutions = findSolutions(equationsMap);
+    for (auto eqMapIt : solutions) {
+        std::cout << eqMapIt.first << ":\n";
+        for (const auto &varName : freeVarsMap.at(eqMapIt.first)) {
+            std::cout << varName << "\t";
+        }
+        std::cout << "constant\n";
+        dumpMatrix(eqMapIt.second);
+    }
+}
+
+SharedSMTRef makeEquation(const vector<mpz_class> &eq,
+                          const vector<string> &freeVars) {
+    vector<SharedSMTRef> left;
+    vector<SharedSMTRef> right;
+    assert(eq.size() == freeVars.size() + 1);
+    for (size_t i = 0; i < freeVars.size(); ++i) {
+        if (eq.at(i) > 0) {
+            if (eq.at(i) == 1) {
+                left.push_back(smt::stringExpr(freeVars.at(i)));
+            } else {
+                left.push_back(
+                    makeBinOp("*", eq.at(i).get_str(), freeVars.at(i)));
+            }
+        } else if (eq.at(i) < 0) {
+            mpz_class inv = -eq.at(i);
+            if (inv == 1) {
+                right.push_back(smt::stringExpr(freeVars.at(i)));
+            } else {
+                right.push_back(makeBinOp("*", inv.get_str(), freeVars.at(i)));
+            }
+        }
+    }
+    if (eq.back() > 0) {
+        left.push_back(smt::stringExpr(eq.back().get_str()));
+    } else if (eq.back() < 0) {
+        mpz_class inv = -eq.back();
+        right.push_back(smt::stringExpr(inv.get_str()));
+    }
+    SharedSMTRef leftSide = nullptr;
+    if (left.size() == 0) {
+        leftSide = smt::stringExpr("0");
+    } else if (left.size() == 1) {
+        leftSide = left.front();
+    } else {
+        leftSide = make_shared<Op>("+", left);
+    }
+    SharedSMTRef rightSide = nullptr;
+    if (right.size() == 0) {
+        rightSide = smt::stringExpr("0");
+    } else if (right.size() == 1) {
+        rightSide = right.front();
+    } else {
+        rightSide = make_shared<Op>("+", right);
+    }
+    return makeBinOp("=", leftSide, rightSide);
+}
+
+SharedSMTRef makeInvariantDefinition(const vector<vector<mpz_class>> &solution,
+                                     const vector<string> &freeVars) {
+    vector<SharedSMTRef> conjunction;
+    for (const auto &vec : solution) {
+        conjunction.push_back(makeEquation(vec, freeVars));
+    }
+    return make_shared<Op>("and", conjunction);
+}
+
+map<int, SharedSMTRef>
+makeInvariantDefinitions(const EquationsSolutionsMap &solutions,
+                         const FreeVarsMap &freeVarsMap) {
+    map<int, SharedSMTRef> definitions;
+    for (auto mapIt : solutions) {
+        vector<SortedVar> args;
+        for (auto &var : freeVarsMap.at(mapIt.first)) {
+            args.push_back(SortedVar(var, "Int"));
+        }
+        definitions[mapIt.first] = make_shared<FunDef>(
+            "INV_MAIN_" + std::to_string(mapIt.first), args, "Bool",
+            makeInvariantDefinition(mapIt.second, freeVarsMap.at(mapIt.first)));
+    }
+    return definitions;
 }
