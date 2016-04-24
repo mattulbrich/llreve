@@ -104,7 +104,11 @@ vector<mpq_class> multiplyRow(vector<mpq_class> vec, mpq_class c) {
 }
 
 vector<vector<mpq_class>> nullSpace(const Matrix<mpq_class> &m) {
-    assert(m.size() > 0);
+    if (m.empty()) {
+        // Not sure if this is correct mathematically but it’s the sensible
+        // thing to do here
+        return {};
+    }
     assert(m.at(0).size() >= m.size());
     Matrix<mpq_class> rowEchelon = rowEchelonForm(m);
     for (size_t row = 0; row < rowEchelon.size(); ++row) {

@@ -169,12 +169,12 @@ void basicPatternCandidates(MonoPair<Call<string>> calls,
 
 void populateEquationsMap(EquationsMap &equationsMap, FreeVarsMap freeVarsMap,
                           MatchInfo match) {
-    VarMap<std::string> variables;
+    VarMap<string> variables;
     variables.insert(match.steps.first.state.variables.begin(),
                      match.steps.first.state.variables.end());
     variables.insert(match.steps.second.state.variables.begin(),
                      match.steps.second.state.variables.end());
-    std::vector<mpq_class> equation(freeVarsMap.at(match.mark).size() + 1);
+    vector<mpq_class> equation(freeVarsMap.at(match.mark).size() + 1);
     for (size_t i = 0; i < equation.size() - 1; ++i) {
         string name = freeVarsMap.at(match.mark).at(i);
         equation.at(i) = variables.at(name)->unsafeIntVal();
@@ -185,14 +185,47 @@ void populateEquationsMap(EquationsMap &equationsMap, FreeVarsMap freeVarsMap,
         return;
     }
     if (equationsMap.find(match.mark) == equationsMap.end()) {
-        equationsMap[match.mark] = {equation};
+        equationsMap.insert(make_pair(
+            match.mark, LoopInfoData<vector<vector<mpq_class>>>({}, {}, {})));
+        switch (match.loopInfo) {
+        case LoopInfo::Left:
+            equationsMap.at(match.mark).left = {equation};
+            break;
+        case LoopInfo::Right:
+            equationsMap.at(match.mark).right = {equation};
+            break;
+        case LoopInfo::None:
+            equationsMap.at(match.mark).none = {equation};
+            break;
+        }
     } else {
-        vector<vector<mpq_class>> vecs = equationsMap.at(match.mark);
+        vector<vector<mpq_class>> vecs;
+        switch (match.loopInfo) {
+        case LoopInfo::Left:
+            vecs = equationsMap.at(match.mark).left;
+            break;
+        case LoopInfo::Right:
+            vecs = equationsMap.at(match.mark).right;
+            break;
+        case LoopInfo::None:
+            vecs = equationsMap.at(match.mark).none;
+            break;
+        }
         vecs.push_back(equation);
         if (!linearlyIndependent(vecs)) {
             return;
         }
-        equationsMap.at(match.mark).push_back(equation);
+        switch (match.loopInfo) {
+        case LoopInfo::Left:
+            equationsMap.at(match.mark).left.push_back(equation);
+            break;
+        case LoopInfo::Right:
+            equationsMap.at(match.mark).right.push_back(equation);
+            break;
+        case LoopInfo::None:
+            equationsMap.at(match.mark).none.push_back(equation);
+            break;
+        }
     }
 }
 
@@ -424,12 +457,25 @@ void dumpPatternCandidates(const PatternCandidatesMap &candidates,
 EquationsSolutionsMap findSolutions(const EquationsMap &equationsMap) {
     EquationsSolutionsMap map;
     for (auto eqMapIt : equationsMap) {
-        Matrix<mpq_class> m = nullSpace(eqMapIt.second);
-        Matrix<mpz_class> n(m.size());
-        for (size_t i = 0; i < n.size(); ++i) {
-            n.at(i) = ratToInt(m.at(i));
+        LoopInfoData<Matrix<mpq_class>> m = LoopInfoData<Matrix<mpq_class>>(
+            nullSpace(eqMapIt.second.left), nullSpace(eqMapIt.second.right),
+            nullSpace(eqMapIt.second.none));
+
+        Matrix<mpz_class> nLeft(m.left.size());
+        Matrix<mpz_class> nRight(m.right.size());
+        Matrix<mpz_class> nNone(m.none.size());
+        LoopInfoData<Matrix<mpz_class>> n =
+            LoopInfoData<Matrix<mpz_class>>(nLeft, nRight, nNone);
+        for (size_t i = 0; i < n.left.size(); ++i) {
+            n.left.at(i) = ratToInt(m.left.at(i));
         }
-        map[eqMapIt.first] = n;
+        for (size_t i = 0; i < n.right.size(); ++i) {
+            n.right.at(i) = ratToInt(m.right.at(i));
+        }
+        for (size_t i = 0; i < n.none.size(); ++i) {
+            n.none.at(i) = ratToInt(m.none.at(i));
+        }
+        map.insert(make_pair(eqMapIt.first, n));
     }
     return map;
 }
@@ -443,7 +489,12 @@ void dumpEquationsMap(const EquationsMap &equationsMap,
             std::cout << varName << "\t";
         }
         std::cout << "constant\n";
-        dumpMatrix(eqMapIt.second);
+        std::cout << "left loop\n";
+        dumpMatrix(eqMapIt.second.left);
+        std::cout << "right loop\n";
+        dumpMatrix(eqMapIt.second.right);
+        std::cout << "synced\n";
+        dumpMatrix(eqMapIt.second.none);
     }
 }
 
@@ -500,7 +551,11 @@ SharedSMTRef makeInvariantDefinition(const vector<vector<mpz_class>> &solution,
     for (const auto &vec : solution) {
         conjunction.push_back(makeEquation(vec, freeVars));
     }
-    return make_shared<Op>("and", conjunction);
+    if (conjunction.size() == 0) {
+        return smt::stringExpr("false");
+    } else {
+        return make_shared<Op>("and", conjunction);
+    }
 }
 
 map<int, SharedSMTRef>
@@ -512,9 +567,16 @@ makeInvariantDefinitions(const EquationsSolutionsMap &solutions,
         for (auto &var : freeVarsMap.at(mapIt.first)) {
             args.push_back(SortedVar(var, "Int"));
         }
+        SharedSMTRef left = makeInvariantDefinition(
+            mapIt.second.left, freeVarsMap.at(mapIt.first));
+        SharedSMTRef right = makeInvariantDefinition(
+            mapIt.second.right, freeVarsMap.at(mapIt.first));
+        SharedSMTRef none = makeInvariantDefinition(
+            mapIt.second.none, freeVarsMap.at(mapIt.first));
+        vector<SharedSMTRef> invariantDisjunction = {left, right, none};
         definitions[mapIt.first] = make_shared<FunDef>(
             "INV_MAIN_" + std::to_string(mapIt.first), args, "Bool",
-            makeInvariantDefinition(mapIt.second, freeVarsMap.at(mapIt.first)));
+            make_shared<Op>("or", invariantDisjunction));
     }
     return definitions;
 }

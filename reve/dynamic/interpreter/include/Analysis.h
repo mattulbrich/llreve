@@ -10,6 +10,20 @@
 
 #include "llvm/IR/Module.h"
 
+enum class LoopInfo {
+    Left,  // The left call is looping alone
+    Right, // The right call is looping alone
+    None   // perfect synchronization
+};
+
+template <typename T> struct LoopInfoData {
+    T left;
+    T right;
+    T none;
+    LoopInfoData(T left, T right, T none)
+        : left(left), right(right), none(none) {}
+};
+
 using BlockNameMap = std::map<std::string, std::set<int>>;
 using PatternCandidates =
     std::list<std::vector<std::shared_ptr<pattern::InstantiatedValue>>>;
@@ -24,9 +38,10 @@ findFunction(const std::vector<MonoPair<PreprocessedFunction>> functions,
              std::string functionName);
 
 using Equality = MonoPair<std::string>;
-using EquationsMap = std::map<int, std::vector<std::vector<mpq_class>>>;
+using EquationsMap =
+    std::map<int, LoopInfoData<std::vector<std::vector<mpq_class>>>>;
 using EquationsSolutionsMap =
-    std::map<int, std::vector<std::vector<mpz_class>>>;
+    std::map<int, LoopInfoData<std::vector<std::vector<mpz_class>>>>;
 
 void findEqualities(MonoPair<Call<std::string>> calls,
                     MonoPair<BlockNameMap> nameMap, FreeVarsMap freeVars,
@@ -37,11 +52,6 @@ void basicPatternCandidates(MonoPair<Call<std::string>> calls,
                             PatternCandidatesMap &candidates);
 template <typename T> T identity(T x) { return x; }
 BlockNameMap blockNameMap(BidirBlockMarkMap blockMap);
-enum class LoopInfo {
-    Left,  // The left call is looping alone
-    Right, // The right call is looping alone
-    None   // perfect synchronization
-};
 
 struct MatchInfo {
     MonoPair<BlockStep<std::string>> steps;
