@@ -41,4 +41,10 @@ const std::shared_ptr<const pattern::Expr> linearEqPat =
                 std::make_shared<pattern::Value>(
                     pattern::Placeholder::Variable))),
         std::make_shared<pattern::Value>(pattern::Placeholder::Variable));
+
+const std::shared_ptr<const pattern::Expr> lePat =
+    std::make_shared<pattern::BinaryOp>(
+        pattern::Operation::LE,
+        std::make_shared<pattern::Value>(pattern::Placeholder::Variable),
+        std::make_shared<pattern::Value>(pattern::Placeholder::Variable));
 }

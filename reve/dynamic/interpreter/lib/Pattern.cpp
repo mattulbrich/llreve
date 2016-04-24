@@ -32,6 +32,12 @@ bool BinaryOp::matches(VecIter begin, VecIter end) const {
         VarIntVal right = args.second->eval(mid, end);
         return left == right;
     }
+    case Operation::LE: {
+        VecIter mid = begin + static_cast<long>(args.first->arguments());
+        VarIntVal left = args.first->eval(begin, mid);
+        VarIntVal right = args.second->eval(mid, end);
+        return left <= right;
+    }
     case Operation::Add:
         logError("Matching on an addition is always true\n");
         return true;
@@ -49,8 +55,11 @@ VarIntVal BinaryOp::eval(VecIter begin, VecIter end) const {
     VarIntVal right = args.second->eval(mid, end);
     switch (op) {
     case Operation::Eq:
-        logWarning("Evaluating equality equality, converting to integer\n");
+        logWarning("Evaluating equality, converting to integer\n");
         return left == right;
+    case Operation::LE:
+        logWarning("Evaluating less than or equal, converting to integer\n");
+        return left < right;
     case Operation::Add:
         return left + right;
     case Operation::Mul:
@@ -79,6 +88,9 @@ BinaryOp::dump(ostream &os,
     switch (op) {
     case Operation::Eq:
         os << " = ";
+        break;
+    case Operation::LE:
+        os << " <= ";
         break;
     case Operation::Add:
         os << " + ";
@@ -133,12 +145,34 @@ Value::dump(ostream &os, vector<shared_ptr<InstantiatedValue>>::iterator begin,
 list<vector<shared_ptr<InstantiatedValue>>>
 BinaryOp::instantiate(vector<string> variables,
                       VarMap<string> variableValues) const {
-    if (op != Operation::Eq && this->variables() == arguments()) {
+    if ((op == Operation::Add || op == Operation::Mul) &&
+        this->variables() == arguments()) {
         list<vector<shared_ptr<InstantiatedValue>>> output;
         for (auto vec : kPermutations(variables, arguments())) {
             vector<shared_ptr<InstantiatedValue>> outputVec(vec.size());
             for (size_t i = 0; i < vec.size(); ++i) {
                 outputVec.at(i) = make_shared<Variable>(vec.at(i));
+            }
+            output.push_back(outputVec);
+        }
+        return output;
+    } else if (op == Operation::LE) {
+        list<vector<shared_ptr<InstantiatedValue>>> output;
+        for (auto vec : kPermutations(variables, arguments())) {
+            vector<VarIntVal> vecValues(vec.size());
+            for (size_t i = 0; i < vec.size(); ++i) {
+                vecValues.at(i) = variableValues.at(vec.at(i))->unsafeIntVal();
+            }
+            VecIter mid =
+                vecValues.begin() + static_cast<long>(args.first->arguments());
+            VarIntVal left = args.first->eval(vecValues.begin(), mid);
+            VarIntVal right = args.second->eval(mid, vecValues.end());
+            if (left <= right) {
+                vector<shared_ptr<InstantiatedValue>> outputVec(vec.size());
+                for (size_t i = 0; i < vec.size(); ++i) {
+                    outputVec.at(i) = make_shared<Variable>(vec.at(i));
+                }
+                output.push_back(outputVec);
             }
         }
         return output;
@@ -192,6 +226,9 @@ BinaryOp::instantiateToValue(vector<string> variables,
         case Operation::Eq:
             logError("Can't instantiate an equality to a value\n");
             return {};
+        case Operation::LE:
+            logError("Can’t instantiate LE to a value\n");
+            return {};
         }
     } else {
         switch (op) {
@@ -210,6 +247,9 @@ BinaryOp::instantiateToValue(vector<string> variables,
                 value, true);
         case Operation::Eq:
             logError("Can't instantiate an equality to a value\n");
+            return {};
+        case Operation::LE:
+            logError("Can’t instantiate LE to a value\n");
             return {};
         }
     }

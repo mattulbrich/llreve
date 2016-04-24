@@ -27,7 +27,8 @@ template <typename T> struct LoopInfoData {
 using BlockNameMap = std::map<std::string, std::set<int>>;
 using PatternCandidates =
     std::list<std::vector<std::shared_ptr<pattern::InstantiatedValue>>>;
-using PatternCandidatesMap = std::map<int, PatternCandidates>;
+using PatternCandidatesMap =
+    std::map<int, LoopInfoData<llvm::Optional<PatternCandidates>>>;
 
 std::map<int, smt::SharedSMTRef>
 analyse(std::string outputDirectory,
@@ -69,15 +70,8 @@ void analyzeExecution(MonoPair<Call<std::string>> calls,
                       std::function<void(MatchInfo)> fun);
 bool normalMarkBlock(const BlockNameMap &map, BlockName &blockName);
 void debugAnalysis(MatchInfo match);
-void removeEqualities(std::map<int, std::set<Equality>> &equalities,
-                      MatchInfo match);
-
 void dumpPatternCandidates(const PatternCandidatesMap &candidates,
                            const pattern::Expr &pat);
-
-FreeVarsMap removeEqualities(FreeVarsMap freeVars,
-                             const PatternCandidatesMap &candidates);
-
 void instantiatePattern(PatternCandidatesMap &patternCandidates,
                         const FreeVarsMap &freeVars, const pattern::Expr &pat,
                         MatchInfo match);

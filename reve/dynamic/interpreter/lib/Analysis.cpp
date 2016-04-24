@@ -82,6 +82,7 @@ analyse(string outputDirectory,
     PatternCandidatesMap equalityCandidates;
     PatternCandidatesMap patternCandidates;
     PatternCandidatesMap constantPatterns;
+    PatternCandidatesMap lePatterns;
     EquationsMap equationsMap;
 
     struct dirent *dirEntry;
@@ -129,7 +130,6 @@ analyse(string outputDirectory,
         // number of other patterns we need to instantiate
         findEqualities(makeMonoPair(c1, c2), nameMap, freeVarsMap,
                        equalityCandidates);
-        freeVarsMap = removeEqualities(freeVarsMap, equalityCandidates);
 
         basicPatternCandidates(makeMonoPair(c1, c2), nameMap, freeVarsMap,
                                patternCandidates);
@@ -141,6 +141,10 @@ analyse(string outputDirectory,
         analyzeExecution(makeMonoPair(c1, c2), nameMap,
                          std::bind(populateEquationsMap, std::ref(equationsMap),
                                    std::cref(originalFreeVarsMap), _1));
+        analyzeExecution(makeMonoPair(c1, c2), nameMap,
+                         std::bind(instantiatePattern, std::ref(lePatterns),
+                                   std::cref(freeVarsMap),
+                                   std::cref(*commonpattern::lePat), _1));
     }
 
     std::cerr << "A = B\n";
@@ -150,6 +154,8 @@ analyse(string outputDirectory,
     std::cerr << "A + b = C\n";
     dumpPatternCandidates(constantPatterns,
                           *commonpattern::constantAdditionPat);
+    std::cerr << "A <= B\n";
+    dumpPatternCandidates(lePatterns, *commonpattern::lePat);
     std::cerr << "Equations\n";
     dumpEquationsMap(equationsMap, originalFreeVarsMap);
     closedir(dir);
@@ -227,32 +233,6 @@ void populateEquationsMap(EquationsMap &equationsMap, FreeVarsMap freeVarsMap,
             break;
         }
     }
-}
-
-FreeVarsMap removeEqualities(FreeVarsMap freeVars,
-                             const PatternCandidatesMap &candidates) {
-    for (auto mapIt : candidates) {
-        list<string> vars;
-        vars.insert(vars.begin(), freeVars.at(mapIt.first).begin(),
-                    freeVars.at(mapIt.first).end());
-        for (auto vec : mapIt.second) {
-            assert(vec.size() == 2);
-            assert(vec.at(0)->getType() == Placeholder::Variable);
-            assert(vec.at(1)->getType() == Placeholder::Variable);
-            string varName1 = static_pointer_cast<Variable>(vec.at(0))->name;
-            string varName2 = static_pointer_cast<Variable>(vec.at(1))->name;
-            // Sorting makes sure we don't remove both sides of an equality
-            if (varName1 <= varName2) {
-                vars.remove(varName2);
-            } else {
-                vars.remove(varName1);
-            }
-        }
-        vector<string> varsVec;
-        varsVec.insert(varsVec.end(), vars.begin(), vars.end());
-        freeVars[mapIt.first] = varsVec;
-    }
-    return freeVars;
 }
 
 void findEqualities(MonoPair<Call<string>> calls,
@@ -423,18 +403,64 @@ void instantiatePattern(PatternCandidatesMap &patternCandidates,
                      match.steps.second.state.variables.end());
     if (patternCandidates.find(match.mark) == patternCandidates.end()) {
         // Instantiate the first time
-        patternCandidates[match.mark] =
-            pat.instantiate(freeVars.at(match.mark), variables);
+        patternCandidates.insert(
+            make_pair(match.mark, LoopInfoData<Optional<PatternCandidates>>(
+                                      Optional<PatternCandidates>(),
+                                      Optional<PatternCandidates>(),
+                                      Optional<PatternCandidates>())));
+        switch (match.loopInfo) {
+        case LoopInfo::Left:
+            patternCandidates.at(match.mark).left =
+                pat.instantiate(freeVars.at(match.mark), variables);
+            break;
+        case LoopInfo::Right:
+            patternCandidates.at(match.mark).right =
+                pat.instantiate(freeVars.at(match.mark), variables);
+            break;
+        case LoopInfo::None:
+            patternCandidates.at(match.mark).none =
+                pat.instantiate(freeVars.at(match.mark), variables);
+            break;
+        }
     } else {
+        PatternCandidates *list = nullptr;
+        switch (match.loopInfo) {
+        case LoopInfo::Left:
+            if (!patternCandidates.at(match.mark).left.hasValue()) {
+                patternCandidates.at(match.mark).left =
+                    pat.instantiate(freeVars.at(match.mark), variables);
+                return;
+            } else {
+                list = &patternCandidates.at(match.mark).left.getValue();
+            }
+            break;
+        case LoopInfo::Right:
+            if (!patternCandidates.at(match.mark).right.hasValue()) {
+                patternCandidates.at(match.mark).right =
+                    pat.instantiate(freeVars.at(match.mark), variables);
+                return;
+            } else {
+                list = &patternCandidates.at(match.mark).right.getValue();
+            }
+            break;
+        case LoopInfo::None:
+            if (!patternCandidates.at(match.mark).none.hasValue()) {
+                patternCandidates.at(match.mark).none =
+                    pat.instantiate(freeVars.at(match.mark), variables);
+                return;
+            } else {
+                list = &patternCandidates.at(match.mark).none.getValue();
+            }
+            break;
+        }
         // Already instantiated, remove the non matching instantiations
-        auto &list = patternCandidates.at(match.mark);
         vector<VarIntVal> candidateVals(pat.arguments());
-        for (auto listIt = list.begin(), e = list.end(); listIt != e;) {
+        for (auto listIt = list->begin(), e = list->end(); listIt != e;) {
             for (size_t i = 0; i < candidateVals.size(); ++i) {
                 candidateVals.at(i) = listIt->at(i)->getValue(variables);
             }
             if (!pat.matches(candidateVals)) {
-                listIt = list.erase(listIt);
+                listIt = list->erase(listIt);
             } else {
                 ++listIt;
             }
@@ -446,10 +472,29 @@ void dumpPatternCandidates(const PatternCandidatesMap &candidates,
                            const pattern::Expr &pat) {
     for (auto it : candidates) {
         std::cout << it.first << ":\n";
-        for (auto vec : it.second) {
-            std::cout << "\t";
-            pat.dump(std::cout, vec);
-            std::cout << std::endl;
+        if (it.second.left.hasValue()) {
+            std::cout << "left:\n";
+            for (auto vec : it.second.left.getValue()) {
+                std::cout << "\t";
+                pat.dump(std::cout, vec);
+                std::cout << std::endl;
+            }
+        }
+        if (it.second.right.hasValue()) {
+            std::cout << "right:\n";
+            for (auto vec : it.second.right.getValue()) {
+                std::cout << "\t";
+                pat.dump(std::cout, vec);
+                std::cout << std::endl;
+            }
+        }
+        if (it.second.none.hasValue()) {
+            std::cout << "none:\n";
+            for (auto vec : it.second.none.getValue()) {
+                std::cout << "\t";
+                pat.dump(std::cout, vec);
+                std::cout << std::endl;
+            }
         }
     }
 }

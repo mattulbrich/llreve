@@ -8,7 +8,7 @@
 
 namespace pattern {
 enum class Placeholder { Variable, Constant };
-enum class Operation { Eq, Add, Mul };
+ enum class Operation { Eq, Add, Mul, LE };
 enum class ExprType { BinOp, Val };
 using VecIter = typename std::vector<VarIntVal>::iterator;
 
