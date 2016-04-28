@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.8)
+cmake_minimum_required(VERSION 3.0)
 project(llvm-reve)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_COMPILER "clang++")
@@ -21,6 +21,15 @@ file(GLOB sources lib/*.cpp)
 file(GLOB headers include/*.h)
 
 add_library(libreve ${sources} ${headers})
+
+# Export libreve to be used within other projects.
+# Note that this is not designed for installation, yet.
+# Can only be used from build directory.
+export(TARGETS libreve FILE libreve-exports.cmake)
+target_include_directories(libreve PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
 add_executable(reve Reve.cpp ${headers})
 
 llvm_map_components_to_libnames(llvm_libs

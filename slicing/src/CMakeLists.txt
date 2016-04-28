@@ -1,0 +1,87 @@
+cmake_minimum_required(VERSION 3.0)
+project(llvm-reve-slicing)
+
+### =======================================================
+### ========== Macros for bedder readability ==============
+### =======================================================
+
+macro(set_compiler_settings)
+	set(CMAKE_CXX_COMPILER "clang++")
+	set(CXX_WARNINGS_FLAGS "-Weverything -Wno-c++98-compat -Wno-exit-time-destructors -Wno-global-constructors -Wno-padded -Wno-switch-enum -Wno-shadow")
+	set(CXX_OTHER_FLAGS "--system-header-prefix=llvm --system-header-prefix=clang")
+	set(CXX_STANDARD_FLAGS "-std=c++11 -stdlib=libc++ -fno-rtti")
+	set(CMAKE_CXX_FLAGS "${CXX_WARNINGS_FLAGS} ${CXX_STANDARD_FLAGS} ${CXX_OTHER_FLAGS}")
+	set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
+endmacro(set_compiler_settings)
+
+#Find llvm and make it aviable
+macro (load_llvm)
+	find_package(LLVM 3.8 REQUIRED CONFIG)
+	find_package(Clang REQUIRED CONFIG)
+
+	message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+	message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+
+	include_directories(${LLVM_INCLUDE_DIRS} include)
+	add_definitions(${LLVM_DEFINITIONS})	
+endmacro(load_llvm)
+
+#Compile libreve, make it aviable, make sure it is recompiled on change
+macro (load_libreve)
+	set(reve_build_dir ${CMAKE_BINARY_DIR}/reve)
+	set(reve_dir ${CMAKE_CURRENT_SOURCE_DIR}/../../reve/reve)
+	
+	file(MAKE_DIRECTORY ${reve_build_dir})
+
+	# First, we need to compile lib reve, otherwise we would not have
+	# 'libreve-exports.cmake' and cmake would not now where to find 
+	# the library to link against.
+	#
+	# Will be run on initial 'cmake' or after changes to this file.
+	execute_process(COMMAND ${CMAKE_COMMAND} ${reve_dir}
+			WORKING_DIRECTORY ${reve_build_dir}
+		)
+	execute_process(COMMAND ${CMAKE_COMMAND} --build .
+			WORKING_DIRECTORY ${reve_build_dir}
+		)
+
+	# This command will make libreve aviable.
+	# Note, that adding include directory is not neccessary as
+	# target_include_directories() was used in the other cmake file.
+	include(${reve_build_dir}/libreve-exports.cmake)
+
+	# Second, we add a custom target. This is neccessary to automaticaly
+	# recompile libreve on changes after the initial run of cmake.
+	#
+	# Will be run on every 'make'.
+	add_custom_target(librevebuild
+			COMMAND ${CMAKE_COMMAND} --build .
+			WORKING_DIRECTORY ${reve_build_dir}
+		)	
+endmacro(load_libreve)
+
+
+### =======================================================
+### ============ Start of doing things ====================
+### =======================================================
+
+set_compiler_settings()
+load_llvm()
+load_libreve()
+
+add_executable(slicing main.cpp)
+# Add a dependencie to librevebuild, to ensure it is build befor the main project.
+add_dependencies(slicing librevebuild)
+
+# Find librarys for components
+# To get a list of all aviable components use 'llvm-config --components'
+llvm_map_components_to_libnames(llvm_libs
+		support
+	)
+
+target_link_libraries(slicing
+		${llvm_libs}
+		libreve
+	)
+
+
