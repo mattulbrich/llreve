@@ -1,7 +1,7 @@
 #pragma once
 
-#include "SMT.h"
 #include "MarkAnalysis.h"
+#include "SMT.h"
 
 #include "llvm/IR/PassManager.h"
 
@@ -54,20 +54,22 @@ class SwitchDefault : public Condition {
     std::unique_ptr<const smt::SMTExpr> toSmt() const override;
 };
 
+// I really suck at finding nice names
 using Path_ = std::vector<Edge>;
 using Paths_ = std::vector<Path_>;
 using Paths = std::vector<Path>;
 using PathMap = std::map<int, std::map<int, Paths>>;
 
-class PathAnalysis {
+class PathAnalysis : public llvm::FunctionPass {
   public:
     using Result = PathMap;
     static llvm::StringRef name() { return "PathAnalysis"; }
-    static void *ID() { return static_cast<void *>(&PassID); }
-    Result run(llvm::Function &F, llvm::FunctionAnalysisManager *AM);
-
-  private:
-    static char PassID;
+    bool runOnFunction(llvm::Function &F) override;
+    PathAnalysis() : llvm::FunctionPass(ID) {}
+    PathMap getPathMap() const;
+    void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
+    static char ID;
+    PathMap PathsMap;
 };
 
 auto lastBlock(Path Path) -> llvm::BasicBlock *;

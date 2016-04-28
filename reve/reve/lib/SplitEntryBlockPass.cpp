@@ -1,9 +1,11 @@
 #include "SplitEntryBlockPass.h"
 
-llvm::PreservedAnalyses
-SplitEntryBlockPass::run(llvm::Function &Fun,
-                         llvm::FunctionAnalysisManager * /*unused*/) {
+bool SplitEntryBlockPass::runOnFunction(llvm::Function &Fun) {
     auto &Entry = Fun.getEntryBlock();
     Entry.splitBasicBlock(Entry.begin());
-    return llvm::PreservedAnalyses::none();
+    return true;
 }
+
+char SplitEntryBlockPass::ID = 0;
+static llvm::RegisterPass<SplitEntryBlockPass>
+    RegisterMarkAnalysis("split-entry-block", "Split Entry Block", false, false);

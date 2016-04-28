@@ -15,14 +15,13 @@ using smt::SharedSMTRef;
 using smt::SMTRef;
 using smt::SMTExpr;
 
-char PathAnalysis::PassID;
+char PathAnalysis::ID = 0;
 
-PathMap PathAnalysis::run(llvm::Function &F,
-                          llvm::FunctionAnalysisManager *AM) {
+bool PathAnalysis::runOnFunction(llvm::Function & /*unused*/) {
     PathMap MyPaths;
-    auto BidirMarkBlockMap = AM->getResult<MarkAnalysis>(F);
+    auto BidirMarkBlockMap = getAnalysis<MarkAnalysis>().getBlockMarkMap();
     for (auto BBTuple : BidirMarkBlockMap.MarkToBlocksMap) {
-        // don't start at return instructions
+        // don't start at return instructäions
         if (BBTuple.first != EXIT_MARK && BBTuple.first != UNREACHABLE_MARK) {
             for (auto BB : BBTuple.second) {
                 const std::map<int, Paths> NewPaths =
@@ -36,7 +35,15 @@ PathMap PathAnalysis::run(llvm::Function &F,
         }
     }
 
-    return MyPaths;
+    PathsMap = MyPaths;
+    return false;
+}
+
+PathMap PathAnalysis::getPathMap() const { return PathsMap; }
+
+void PathAnalysis::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
+    AU.setPreservesAll();
+    AU.addRequired<MarkAnalysis>();
 }
 
 std::map<int, Paths> findPaths(int For, llvm::BasicBlock *BB,
@@ -183,3 +190,6 @@ SMTRef SwitchDefault::toSmt() const {
     StringVals.push_back(instrNameOrVal(Cond, Cond->getType()));
     return llvm::make_unique<Op>("distinct", StringVals);
 }
+
+static llvm::RegisterPass<PathAnalysis>
+    RegisterMarkAnalysis("path-analysis", "Path Analysis", true, true);

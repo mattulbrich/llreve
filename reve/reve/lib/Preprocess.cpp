@@ -1,8 +1,6 @@
 #include "Preprocess.h"
 
 #include "AnnotStackPass.h"
-#include "CFGPrinter.h"
-#include "ConstantProp.h"
 #include "Helper.h"
 #include "InlinePass.h"
 #include "InlinePass.h"
@@ -12,13 +10,16 @@
 #include "RemoveMarkPass.h"
 #include "RemoveMarkRefsPass.h"
 #include "SplitEntryBlockPass.h"
-#include "UnifyFunctionExitNodes.h"
 #include "UniqueNamePass.h"
+#include "CFGPrinter.h"
 
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
+#include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/ADCE.h"
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
+#include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
 
 using std::vector;
 using std::shared_ptr;
@@ -32,11 +33,11 @@ preprocessFunctions(MonoPair<shared_ptr<llvm::Module>> modules,
     vector<MonoPair<PreprocessedFunction>> processedFuns;
     auto funs = zipFunctions(*modules.first, *modules.second);
     for (auto funPair : funs.get()) {
-        auto fam1 = preprocessFunction(*funPair.first, "1", opts);
-        auto fam2 = preprocessFunction(*funPair.second, "2", opts);
+        auto results1 = preprocessFunction(*funPair.first, "1", opts);
+        auto results2 = preprocessFunction(*funPair.second, "2", opts);
         processedFuns.push_back(
-            makeMonoPair(PreprocessedFunction(funPair.first, fam1),
-                         PreprocessedFunction(funPair.second, fam2)));
+            makeMonoPair(PreprocessedFunction(funPair.first, results1),
+                         PreprocessedFunction(funPair.second, results2)));
     }
     return processedFuns;
 }
@@ -75,38 +76,38 @@ zipFunctions(llvm::Module &mod1, llvm::Module &mod2) {
     return ErrorOr<std::vector<MonoPair<llvm::Function *>>>(funs);
 }
 
-shared_ptr<llvm::FunctionAnalysisManager>
-preprocessFunction(llvm::Function &fun, string prefix, PreprocessOpts opts) {
-    llvm::PassBuilder pb;
-    auto fam =
-        make_shared<llvm::FunctionAnalysisManager>(true); // enable debug log
-    pb.registerFunctionAnalyses(*fam); // register basic analyses
-    fam->registerPass(UnifyFunctionExitNodes());
+AnalysisResults preprocessFunction(llvm::Function &fun, string prefix,
+                                   PreprocessOpts opts) {
+    auto fpm = llvm::make_unique<llvm::legacy::FunctionPassManager>(fun.getParent());
+    fpm->add(llvm::createUnifyFunctionExitNodesPass());
 
-    llvm::FunctionPassManager fpm(true); // enable debug log
-
-    fpm.addPass(InlinePass());
-    fpm.addPass(PromotePass()); // mem2reg
-    fpm.addPass(llvm::SimplifyCFGPass());
-    fpm.addPass(SplitEntryBlockPass());
-    fam->registerPass(MarkAnalysis());
-    fpm.addPass(RemoveMarkRefsPass());
-    fpm.addPass(InstCombinePass());
-    fpm.addPass(llvm::ADCEPass());
-    fpm.addPass(ConstantProp());
-    fam->registerPass(PathAnalysis());
-    fpm.addPass(UniqueNamePass(prefix)); // prefix register names
+    fpm->add(new InlinePass());
+    fpm->add(llvm::createPromoteMemoryToRegisterPass()); // mem2reg
+    fpm->add(llvm::createCFGSimplificationPass());
+    fpm->add(new SplitEntryBlockPass());
+    MarkAnalysis* markAnalysis = new MarkAnalysis();
+    fpm->add(markAnalysis);
+    fpm->add(new RemoveMarkRefsPass());
+    fpm->add(new InstCombinePass());
+    fpm->add(llvm::createAggressiveDCEPass());
+    fpm->add(llvm::createConstantPropagationPass());
+    PathAnalysis* pathAnalysis = new PathAnalysis();
+    fpm->add(pathAnalysis);
+    // Passes need to have a default ctor
+    UniqueNamePass::Prefix = prefix;
+    fpm->add(new UniqueNamePass()); // prefix register names
     if (opts.ShowMarkedCFG) {
-        fpm.addPass(CFGViewerPass()); // show marked cfg
+        fpm->add(new CFGViewerPass()); // show marked cfg
     }
-    fpm.addPass(RemoveMarkPass());
+    fpm->add(new RemoveMarkPass());
     if (opts.ShowCFG) {
-        fpm.addPass(CFGViewerPass()); // show cfg
+        fpm->add(new CFGViewerPass()); // show cfg
     }
-    fpm.addPass(AnnotStackPass()); // annotate load/store of stack variables
-    fpm.addPass(llvm::VerifierPass());
+    fpm->add(new AnnotStackPass()); // annotate load/store of stack variables
+    fpm->add(llvm::createVerifierPass());
     // FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
-    fpm.run(fun, fam.get());
+    fpm->doInitialization();
+    fpm->run(fun);
 
-    return fam;
+    return AnalysisResults(markAnalysis->BlockMarkMap, pathAnalysis->PathsMap);
 }

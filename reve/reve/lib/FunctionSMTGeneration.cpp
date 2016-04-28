@@ -38,15 +38,12 @@ using std::vector;
 vector<SharedSMTRef>
 functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
                   vector<SharedSMTRef> &declarations, Memory memory) {
-    const MonoPair<PathMap> pathMaps =
-        preprocessedFuns.map<PathMap>([](PreprocessedFunction pair) {
-            return pair.fam->getResult<PathAnalysis>(*pair.fun);
-        });
+    const MonoPair<PathMap> pathMaps = preprocessedFuns.map<PathMap>(
+        [](PreprocessedFunction fun) { return fun.results.paths; });
     checkPathMaps(pathMaps.first, pathMaps.second);
     const MonoPair<BidirBlockMarkMap> marked =
-        preprocessedFuns.map<BidirBlockMarkMap>([](PreprocessedFunction pair) {
-            return pair.fam->getResult<MarkAnalysis>(*pair.fun);
-        });
+        preprocessedFuns.map<BidirBlockMarkMap>(
+            [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
     const string funName = preprocessedFuns.first.fun->getName();
     const MonoPair<vector<string>> funArgsPair =
         functionArgs(*preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
@@ -153,15 +150,12 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
 vector<SharedSMTRef>
 mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
               vector<SharedSMTRef> &declarations, bool onlyRec, Memory memory) {
-    const MonoPair<PathMap> pathMaps =
-        preprocessedFuns.map<PathMap>([](PreprocessedFunction pair) {
-            return pair.fam->getResult<PathAnalysis>(*pair.fun);
-        });
+    const MonoPair<PathMap> pathMaps = preprocessedFuns.map<PathMap>(
+        [](PreprocessedFunction fun) { return fun.results.paths; });
     checkPathMaps(pathMaps.first, pathMaps.second);
     const MonoPair<BidirBlockMarkMap> marked =
-        preprocessedFuns.map<BidirBlockMarkMap>([](PreprocessedFunction pair) {
-            return pair.fam->getResult<MarkAnalysis>(*pair.fun);
-        });
+        preprocessedFuns.map<BidirBlockMarkMap>(
+            [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
     const string funName = preprocessedFuns.first.fun->getName();
     const MonoPair<vector<string>> funArgsPair =
         functionArgs(*preprocessedFuns.first.fun, *preprocessedFuns.second.fun);

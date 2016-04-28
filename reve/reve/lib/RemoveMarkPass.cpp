@@ -1,10 +1,13 @@
 #include "RemoveMarkPass.h"
+
 #include "Helper.h"
+#include "PathAnalysis.h"
 #include "llvm/IR/Constants.h"
 
-llvm::PreservedAnalyses RemoveMarkPass::run(llvm::Function &Fun,
-                                            llvm::FunctionAnalysisManager *AM) {
-    auto BidirMarkBlockMap = AM->getResult<MarkAnalysis>(Fun);
+char RemoveMarkPass::ID = 0;
+
+bool RemoveMarkPass::runOnFunction(llvm::Function & /*unused */) {
+    auto BidirMarkBlockMap = getAnalysis<MarkAnalysis>().getBlockMarkMap();
     std::set<llvm::Instruction *> ToDelete;
     for (auto BBTuple : BidirMarkBlockMap.MarkToBlocksMap) {
         // no need to remove anything in exit and entry nodes
@@ -26,5 +29,15 @@ llvm::PreservedAnalyses RemoveMarkPass::run(llvm::Function &Fun,
         // kill the call instruction
         Instr->eraseFromParent();
     }
-    return llvm::PreservedAnalyses::all();
+    return true;
 }
+
+void RemoveMarkPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
+    AU.addPreserved<MarkAnalysis>();
+    AU.addPreserved<PathAnalysis>();
+    AU.addRequired<MarkAnalysis>();
+    AU.setPreservesCFG();
+}
+
+static llvm::RegisterPass<RemoveMarkPass>
+    RemoveMarkPass("remove-marks", "Remove marks", false, false);

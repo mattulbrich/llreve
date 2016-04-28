@@ -1,12 +1,15 @@
 #pragma once
 
-#include "llvm/IR/PassManager.h"
+#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/Instruction.h"
 
-class AnnotStackPass {
+class AnnotStackPass : public llvm::FunctionPass {
   public:
-    auto run(llvm::Function &F, llvm::FunctionAnalysisManager *AM)
-        -> llvm::PreservedAnalyses;
+    bool runOnFunction(llvm::Function &F) override;
     static auto name() -> llvm::StringRef { return "AnnotStackPass"; }
+    AnnotStackPass() : llvm::FunctionPass(ID) {}
+    void getAnalysisUsage(llvm::AnalysisUsage& AU) const override;
+    static char ID;
 };
 
 auto markStackInstruction(llvm::Instruction &Inst, std::string MetadataName,

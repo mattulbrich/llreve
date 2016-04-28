@@ -1,13 +1,12 @@
-#ifndef CFGPRINTER_H
-#define CFGPRINTER_H
+#pragma once
 
-#include "MarkAnalysis.h"
+#include "llvm/IR/LegacyPassManager.h"
 
-class CFGViewerPass {
+class CFGViewerPass : public llvm::FunctionPass {
   public:
-    auto run(llvm::Function &F, llvm::FunctionAnalysisManager *AM)
-        -> llvm::PreservedAnalyses;
+    CFGViewerPass() : llvm::FunctionPass(ID) {}
+    bool runOnFunction(llvm::Function &F) override;
     static auto name() -> llvm::StringRef { return "CFGViewerPass"; }
+    void getAnalysisUsage(llvm::AnalysisUsage& AU) const override;
+    static char ID;
 };
-
-#endif // CFGPRINTER_H

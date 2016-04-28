@@ -1,22 +1,25 @@
 #include "MarkAnalysis.h"
-#include "UnifyFunctionExitNodes.h"
+
+#include <iostream>
 
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
 
 using std::make_pair;
 using std::set;
 
-char MarkAnalysis::PassID;
+char MarkAnalysis::ID = 0;
 
-BidirBlockMarkMap
-MarkAnalysis::run(llvm::Function &Fun, llvm::FunctionAnalysisManager *AM) {
+bool MarkAnalysis::runOnFunction(llvm::Function &Fun) {
     std::map<int, set<llvm::BasicBlock *>> MarkedBlocks;
     std::map<llvm::BasicBlock *, set<int>> BlockedMarks;
     MarkedBlocks[ENTRY_MARK].insert(&Fun.getEntryBlock());
     BlockedMarks[&Fun.getEntryBlock()].insert(ENTRY_MARK);
-    MarkedBlocks[EXIT_MARK].insert(AM->getResult<UnifyFunctionExitNodes>(Fun));
-    BlockedMarks[AM->getResult<UnifyFunctionExitNodes>(Fun)].insert(EXIT_MARK);
+    MarkedBlocks[EXIT_MARK].insert(
+        getAnalysis<llvm::UnifyFunctionExitNodes>().ReturnBlock);
+    BlockedMarks[getAnalysis<llvm::UnifyFunctionExitNodes>().ReturnBlock]
+        .insert(EXIT_MARK);
     for (auto &BB : Fun) {
         for (auto &Inst : BB) {
             if (const auto CallInst = llvm::dyn_cast<llvm::CallInst>(&Inst)) {
@@ -42,5 +45,16 @@ MarkAnalysis::run(llvm::Function &Fun, llvm::FunctionAnalysisManager *AM) {
             BlockedMarks[&BB].insert(UNREACHABLE_MARK);
         }
     }
-    return BidirBlockMarkMap(BlockedMarks, MarkedBlocks);
+    BlockMarkMap = BidirBlockMarkMap(BlockedMarks, MarkedBlocks);
+    return false; // Did not modify CFG
 }
+
+void MarkAnalysis::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
+    AU.setPreservesAll();
+    AU.addRequired<llvm::UnifyFunctionExitNodes>();
+}
+
+BidirBlockMarkMap MarkAnalysis::getBlockMarkMap() const { return BlockMarkMap; }
+
+static llvm::RegisterPass<MarkAnalysis>
+    RegisterMarkAnalysis("mark-analysis", "Mark Analysis", true, true);

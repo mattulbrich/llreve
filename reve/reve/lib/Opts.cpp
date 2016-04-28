@@ -179,7 +179,7 @@ std::multimap<string, string> searchFunctionConditionsInFile(std::string file) {
 FileOptions getFileOptions(MonoPair<string> fileNames) {
     std::multimap<string, string> funConds =
         searchFunctionConditions(fileNames);
-    bool additionalIn;
+    bool additionalIn = false;
     auto relationPair = searchCustomRelations(fileNames, additionalIn);
     return FileOptions(funConds, relationPair.first, relationPair.second,
                        additionalIn);

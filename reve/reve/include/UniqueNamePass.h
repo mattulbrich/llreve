@@ -1,16 +1,20 @@
 #pragma once
 
-#include "llvm/IR/PassManager.h"
+#include <map>
 
-class UniqueNamePass {
+#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/Value.h"
+
+class UniqueNamePass : public llvm::FunctionPass {
   public:
-    explicit UniqueNamePass(const std::string Prefix) : Prefix(Prefix) {}
-    llvm::PreservedAnalyses run(llvm::Function &F,
-                                llvm::FunctionAnalysisManager *AM);
+    explicit UniqueNamePass() : llvm::FunctionPass(ID) {}
+    bool runOnFunction(llvm::Function &F) override;
     static llvm::StringRef name() { return "UniqueNamePass"; }
-
-  private:
-    const std::string Prefix;
+    static char ID;
+    // I haven’t figured out how to pass parameters to a pass
+    static std::string Prefix;
+    void getAnalysisUsage(llvm::AnalysisUsage& AU) const override;
 };
 
-void makePrefixed(llvm::Value& Val, std::string Prefix, std::map<std::string, int> &InstructionNames);
+void makePrefixed(llvm::Value &Val, std::string Prefix,
+                  std::map<std::string, int> &InstructionNames);

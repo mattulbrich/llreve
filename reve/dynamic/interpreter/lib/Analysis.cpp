@@ -58,13 +58,11 @@ analyse(string outputDirectory,
 
     // Get analysis results
     const MonoPair<BidirBlockMarkMap> markMaps =
-        mainFunctionPair.map<BidirBlockMarkMap>([](PreprocessedFunction pair) {
-            return pair.fam->getResult<MarkAnalysis>(*pair.fun);
+        mainFunctionPair.map<BidirBlockMarkMap>([](PreprocessedFunction fun) {
+            return fun.results.blockMarkMap;
         });
-    const MonoPair<PathMap> pathMaps =
-        mainFunctionPair.map<PathMap>([](PreprocessedFunction pair) {
-            return pair.fam->getResult<PathAnalysis>(*pair.fun);
-        });
+    const MonoPair<PathMap> pathMaps = mainFunctionPair.map<PathMap>(
+        [](PreprocessedFunction fun) { return fun.results.paths; });
     const MonoPair<vector<string>> funArgsPair =
         functionArgs(*mainFunctionPair.first.fun, *mainFunctionPair.second.fun);
     // TODO this should use concat

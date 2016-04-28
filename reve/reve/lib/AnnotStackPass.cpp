@@ -2,13 +2,14 @@
 
 #include "Helper.h"
 #include "MarkAnalysis.h"
+#include "PathAnalysis.h"
 
 #include <iostream>
 
-llvm::PreservedAnalyses AnnotStackPass::run(llvm::Function &F,
-                                            llvm::FunctionAnalysisManager *AM) {
+char AnnotStackPass::ID = 0;
+
+bool AnnotStackPass::runOnFunction(llvm::Function &F) {
     int StackIndex = -1;
-    (void)AM;
     std::set<llvm::Value *> StackOps;
     for (auto &Block : F) {
         for (auto &Inst : Block) {
@@ -48,9 +49,13 @@ llvm::PreservedAnalyses AnnotStackPass::run(llvm::Function &F,
             markStackInstruction(*Inst, "reve.stackop", 0);
         }
     }
-    llvm::PreservedAnalyses PreservedAnalysis;
-    PreservedAnalysis.preserve<MarkAnalysis>();
-    return PreservedAnalysis;
+    return true;
+}
+
+void AnnotStackPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
+    AU.addPreserved<MarkAnalysis>();
+    AU.addPreserved<PathAnalysis>();
+    AU.setPreservesCFG();
 }
 
 void markStackInstruction(llvm::Instruction &Inst, std::string MetadataName,
@@ -61,3 +66,7 @@ void markStackInstruction(llvm::Instruction &Inst, std::string MetadataName,
         llvm::MDString::get(Ctxt, "(- " + std::to_string(-Pointer) + ")"));
     Inst.setMetadata(MetadataName, N);
 }
+
+static llvm::RegisterPass<AnnotStackPass>
+    RemoveMarkPass("annotate-stack", "Annotate stack instructions", false,
+                   false);
