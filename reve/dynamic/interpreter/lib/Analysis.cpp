@@ -82,6 +82,7 @@ analyse(string outputDirectory,
     PatternCandidatesMap constantPatterns;
     PatternCandidatesMap lePatterns;
     EquationsMap equationsMap;
+    BoundsMap boundsMap;
 
     struct dirent *dirEntry;
     std::regex firstFileRegex("^(.*_)1(_\\d+.cbor)$", std::regex::ECMAScript);
@@ -143,6 +144,11 @@ analyse(string outputDirectory,
                          std::bind(instantiatePattern, std::ref(lePatterns),
                                    std::cref(freeVarsMap),
                                    std::cref(*commonpattern::lePat), _1));
+        map<int, map<string, Bound<VarIntVal>>> bounds;
+        analyzeExecution(makeMonoPair(c1, c2), nameMap,
+                         std::bind(instantiateBounds, std::ref(bounds),
+                                   std::cref(freeVarsMap), _1));
+        boundsMap = updateBounds(boundsMap, bounds);
     }
 
     std::cerr << "A = B\n";
@@ -154,10 +160,11 @@ analyse(string outputDirectory,
                           *commonpattern::constantAdditionPat);
     std::cerr << "A <= B\n";
     dumpPatternCandidates(lePatterns, *commonpattern::lePat);
+    dumpBounds(boundsMap);
     std::cerr << "Equations\n";
     dumpEquationsMap(equationsMap, originalFreeVarsMap);
     closedir(dir);
-    return makeInvariantDefinitions(findSolutions(equationsMap),
+    return makeInvariantDefinitions(findSolutions(equationsMap), boundsMap,
                                     originalFreeVarsMap);
 }
 
@@ -601,8 +608,26 @@ SharedSMTRef makeInvariantDefinition(const vector<vector<mpz_class>> &solution,
     }
 }
 
+SharedSMTRef
+makeBoundsDefinitions(const map<string, Bound<Optional<VarIntVal>>> &bounds) {
+    vector<SharedSMTRef> constraints;
+    std::cout << "map size " << bounds.size() << "\n";
+    for (auto mapIt : bounds) {
+        if (mapIt.second.lower.hasValue()) {
+            constraints.push_back(makeBinOp(
+                "<=", mapIt.second.lower.getValue().get_str(), mapIt.first));
+        }
+        if (mapIt.second.upper.hasValue()) {
+            constraints.push_back(smt::makeBinOp(
+                "<=", mapIt.first, mapIt.second.upper.getValue().get_str()));
+        }
+    }
+    return make_shared<Op>("and", constraints);
+}
+
 map<int, SharedSMTRef>
 makeInvariantDefinitions(const EquationsSolutionsMap &solutions,
+                         const BoundsMap &bounds,
                          const FreeVarsMap &freeVarsMap) {
     map<int, SharedSMTRef> definitions;
     for (auto mapIt : solutions) {
@@ -617,9 +642,94 @@ makeInvariantDefinitions(const EquationsSolutionsMap &solutions,
         SharedSMTRef none = makeInvariantDefinition(
             mapIt.second.none, freeVarsMap.at(mapIt.first));
         vector<SharedSMTRef> invariantDisjunction = {left, right, none};
+        SharedSMTRef invariant = make_shared<Op>("or", invariantDisjunction);
+        if (bounds.find(mapIt.first) != bounds.end()) {
+            invariant =
+                makeBinOp("and", invariant,
+                          makeBoundsDefinitions(bounds.at(mapIt.first)));
+        }
         definitions[mapIt.first] = make_shared<FunDef>(
-            "INV_MAIN_" + std::to_string(mapIt.first), args, "Bool",
-            make_shared<Op>("or", invariantDisjunction));
+            "INV_MAIN_" + std::to_string(mapIt.first), args, "Bool", invariant);
     }
     return definitions;
+}
+
+void instantiateBounds(map<int, map<string, Bound<VarIntVal>>> &boundsMap,
+                       const FreeVarsMap &freeVars, MatchInfo match) {
+    VarMap<string> variables;
+    variables.insert(match.steps.first.state.variables.begin(),
+                     match.steps.first.state.variables.end());
+    variables.insert(match.steps.second.state.variables.begin(),
+                     match.steps.second.state.variables.end());
+    for (auto var : freeVars.at(match.mark)) {
+        VarIntVal val = variables.at(var)->unsafeIntVal();
+        if (boundsMap[match.mark].find(var) == boundsMap[match.mark].end()) {
+            boundsMap.at(match.mark)
+                .insert(make_pair(var, Bound<VarIntVal>(val, val)));
+        } else {
+            // Update bounds
+            boundsMap.at(match.mark).at(var).lower =
+                std::min(boundsMap.at(match.mark).at(var).lower, val);
+            boundsMap.at(match.mark).at(var).upper =
+                std::max(boundsMap.at(match.mark).at(var).upper, val);
+        }
+    }
+}
+
+BoundsMap updateBounds(
+    BoundsMap accumulator,
+    const std::map<int, std::map<std::string, Bound<VarIntVal>>> &update) {
+    for (auto updateIt : update) {
+        int mark = updateIt.first;
+        for (auto varIt : updateIt.second) {
+            if (accumulator[mark].find(varIt.first) ==
+                accumulator[mark].end()) {
+                // copy the bounds
+                accumulator[mark].insert(make_pair(
+                    varIt.first, Bound<Optional<VarIntVal>>(
+                                     varIt.second.lower, varIt.second.upper)));
+            } else {
+                // We are only interested in bounds that are the same in all
+                // iterations
+                // Other bounds are probably false positives
+                if (accumulator.at(mark).at(varIt.first).lower.hasValue() &&
+                    accumulator.at(mark).at(varIt.first).lower.getValue() !=
+                        varIt.second.lower) {
+                    // delete lower bound
+                    accumulator.at(mark).at(varIt.first).lower =
+                        Optional<VarIntVal>();
+                }
+                if (accumulator.at(mark).at(varIt.first).upper.hasValue() &&
+                    accumulator.at(mark).at(varIt.first).upper.getValue() !=
+                        varIt.second.upper) {
+                    accumulator.at(mark).at(varIt.first).upper =
+                        Optional<VarIntVal>();
+                }
+            }
+        }
+    }
+    return accumulator;
+}
+
+void dumpBounds(const BoundsMap &bounds) {
+    std::cout << "Bounds\n";
+    for (auto markMapIt : bounds) {
+        std::cout << markMapIt.first << ":\n";
+        for (auto varIt : markMapIt.second) {
+            if (varIt.second.lower.hasValue()) {
+                std::cout << varIt.second.lower.getValue().get_str() << " <= ";
+            }
+            if (varIt.second.lower.hasValue() ||
+                varIt.second.upper.hasValue()) {
+                std::cout << varIt.first;
+            }
+            if (varIt.second.upper.hasValue()) {
+                std::cout << " <= " << varIt.second.upper.getValue().get_str();
+            }
+            if (varIt.second.lower.hasValue() ||
+                varIt.second.upper.hasValue()) {
+                std::cout << "\n";
+            }
+        }
+    }
 }

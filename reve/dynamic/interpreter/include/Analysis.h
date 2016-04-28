@@ -16,6 +16,12 @@ enum class LoopInfo {
     None   // perfect synchronization
 };
 
+template <typename T> struct Bound {
+    T lower;
+    T upper;
+    Bound(T lower, T upper) : lower(lower), upper(upper) {}
+};
+
 template <typename T> struct LoopInfoData {
     T left;
     T right;
@@ -29,6 +35,8 @@ using PatternCandidates =
     std::list<std::vector<std::shared_ptr<pattern::InstantiatedValue>>>;
 using PatternCandidatesMap =
     std::map<int, LoopInfoData<llvm::Optional<PatternCandidates>>>;
+using BoundsMap =
+    std::map<int, std::map<std::string, Bound<llvm::Optional<VarIntVal>>>>;
 
 std::map<int, smt::SharedSMTRef>
 analyse(std::string outputDirectory,
@@ -75,16 +83,26 @@ void dumpPatternCandidates(const PatternCandidatesMap &candidates,
 void instantiatePattern(PatternCandidatesMap &patternCandidates,
                         const FreeVarsMap &freeVars, const pattern::Expr &pat,
                         MatchInfo match);
+void instantiateBounds(
+    std::map<int, std::map<std::string, Bound<VarIntVal>>> &boundsMap,
+    const FreeVarsMap &freeVars, MatchInfo match);
+BoundsMap updateBounds(
+    BoundsMap accumulator,
+    const std::map<int, std::map<std::string, Bound<VarIntVal>>> &update);
 void populateEquationsMap(EquationsMap &equationsMap, FreeVarsMap freeVarsMap,
                           MatchInfo match);
 void dumpEquationsMap(const EquationsMap &equationsMap,
                       const FreeVarsMap &freeVarsmap);
 std::map<int, smt::SharedSMTRef>
 makeInvariantDefinitions(const EquationsSolutionsMap &solutions,
+                         const BoundsMap &bounds,
                          const FreeVarsMap &freeVarsMap);
 smt::SharedSMTRef
 makeInvariantDefinition(const std::vector<std::vector<mpz_class>> &solution,
                         const std::vector<std::string> &freeVars);
 smt::SharedSMTRef makeEquation(const std::vector<mpz_class> &eq,
                                const std::vector<std::string> &freeVars);
+smt::SharedSMTRef makeBoundsDefinitions(
+    const std::map<std::string, Bound<llvm::Optional<VarIntVal>>> &bounds);
 EquationsSolutionsMap findSolutions(const EquationsMap &equationsMap);
+void dumpBounds(const BoundsMap &bounds);
