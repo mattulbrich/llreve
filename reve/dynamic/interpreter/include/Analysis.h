@@ -106,3 +106,7 @@ smt::SharedSMTRef makeBoundsDefinitions(
     const std::map<std::string, Bound<llvm::Optional<VarIntVal>>> &bounds);
 EquationsSolutionsMap findSolutions(const EquationsMap &equationsMap);
 void dumpBounds(const BoundsMap &bounds);
+
+std::map<int, LoopInfoData<std::set<MonoPair<std::string>>>>
+extractEqualities(const EquationsMap &equations,
+                  const std::vector<std::string> &freeVars);

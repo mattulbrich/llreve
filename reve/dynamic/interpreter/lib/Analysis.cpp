@@ -58,9 +58,8 @@ analyse(string outputDirectory,
 
     // Get analysis results
     const MonoPair<BidirBlockMarkMap> markMaps =
-        mainFunctionPair.map<BidirBlockMarkMap>([](PreprocessedFunction fun) {
-            return fun.results.blockMarkMap;
-        });
+        mainFunctionPair.map<BidirBlockMarkMap>(
+            [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
     const MonoPair<PathMap> pathMaps = mainFunctionPair.map<PathMap>(
         [](PreprocessedFunction fun) { return fun.results.paths; });
     const MonoPair<vector<string>> funArgsPair =
@@ -732,4 +731,42 @@ void dumpBounds(const BoundsMap &bounds) {
             }
         }
     }
+}
+
+map<int, LoopInfoData<set<MonoPair<string>>>>
+extractEqualities(const EquationsMap &equations,
+                  const vector<string> &freeVars) {
+    map<int, LoopInfoData<set<MonoPair<string>>>> result;
+    for (auto mapIt : equations) {
+        result.insert(make_pair(
+            mapIt.first, LoopInfoData<set<MonoPair<string>>>({}, {}, {})));
+        for (size_t i = 0; i < freeVars.size(); ++i) {
+            for (size_t j = i + 1; j < freeVars.size(); ++j) {
+                vector<mpq_class> test(freeVars.size(), 0);
+                test.at(i) = 1;
+                test.at(j) = -1;
+                string firstVar = freeVars.at(i);
+                string secondVar = freeVars.at(j);
+                if (isZero(matrixTimesVector(mapIt.second.left, test))) {
+                    result.at(mapIt.first)
+                        .left.insert(makeMonoPair(firstVar, secondVar));
+                    result.at(mapIt.first)
+                        .left.insert(makeMonoPair(secondVar, firstVar));
+                }
+                if (isZero(matrixTimesVector(mapIt.second.right, test))) {
+                    result.at(mapIt.first)
+                        .right.insert(makeMonoPair(firstVar, secondVar));
+                    result.at(mapIt.first)
+                        .right.insert(makeMonoPair(secondVar, firstVar));
+                }
+                if (isZero(matrixTimesVector(mapIt.second.none, test))) {
+                    result.at(mapIt.first)
+                        .none.insert(makeMonoPair(firstVar, secondVar));
+                    result.at(mapIt.first)
+                        .none.insert(makeMonoPair(secondVar, firstVar));
+                }
+            }
+        }
+    }
+    return result;
 }
