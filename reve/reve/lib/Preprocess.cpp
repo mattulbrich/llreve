@@ -1,6 +1,7 @@
 #include "Preprocess.h"
 
 #include "AnnotStackPass.h"
+#include "CFGPrinter.h"
 #include "Helper.h"
 #include "InlinePass.h"
 #include "InlinePass.h"
@@ -11,8 +12,9 @@
 #include "RemoveMarkRefsPass.h"
 #include "SplitEntryBlockPass.h"
 #include "UniqueNamePass.h"
-#include "CFGPrinter.h"
+#include "Unroll.h"
 
+#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
@@ -78,20 +80,21 @@ zipFunctions(llvm::Module &mod1, llvm::Module &mod2) {
 
 AnalysisResults preprocessFunction(llvm::Function &fun, string prefix,
                                    PreprocessOpts opts) {
-    auto fpm = llvm::make_unique<llvm::legacy::FunctionPassManager>(fun.getParent());
+    auto fpm =
+        llvm::make_unique<llvm::legacy::FunctionPassManager>(fun.getParent());
     fpm->add(llvm::createUnifyFunctionExitNodesPass());
 
     fpm->add(new InlinePass());
     fpm->add(llvm::createPromoteMemoryToRegisterPass()); // mem2reg
     fpm->add(llvm::createCFGSimplificationPass());
     fpm->add(new SplitEntryBlockPass());
-    MarkAnalysis* markAnalysis = new MarkAnalysis();
+    MarkAnalysis *markAnalysis = new MarkAnalysis();
     fpm->add(markAnalysis);
     fpm->add(new RemoveMarkRefsPass());
     fpm->add(new InstCombinePass());
     fpm->add(llvm::createAggressiveDCEPass());
     fpm->add(llvm::createConstantPropagationPass());
-    PathAnalysis* pathAnalysis = new PathAnalysis();
+    PathAnalysis *pathAnalysis = new PathAnalysis();
     fpm->add(pathAnalysis);
     // Passes need to have a default ctor
     UniqueNamePass::Prefix = prefix;
@@ -104,10 +107,19 @@ AnalysisResults preprocessFunction(llvm::Function &fun, string prefix,
         fpm->add(new CFGViewerPass()); // show cfg
     }
     fpm->add(new AnnotStackPass()); // annotate load/store of stack variables
+    llvm::LoopInfoWrapperPass *loopInfo = new llvm::LoopInfoWrapperPass();
+    fpm->add(loopInfo);
     fpm->add(llvm::createVerifierPass());
     // FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
     fpm->doInitialization();
     fpm->run(fun);
 
-    return AnalysisResults(markAnalysis->BlockMarkMap, pathAnalysis->PathsMap);
+    if(prefix == "2") {
+        unrollAtMark(fun, 42, markAnalysis->BlockMarkMap);
+        fun.viewCFG();
+        fun.print(llvm::errs());
+        llvm::verifyFunction(fun, &llvm::errs());
+    }
+    return AnalysisResults(markAnalysis->BlockMarkMap, pathAnalysis->PathsMap,
+                           loopInfo);
 }
