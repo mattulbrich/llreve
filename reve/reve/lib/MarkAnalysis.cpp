@@ -5,6 +5,7 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
+#include "llvm/Analysis/LoopInfo.h"
 
 using std::make_pair;
 using std::set;
@@ -32,9 +33,6 @@ bool MarkAnalysis::runOnFunction(llvm::Function &Fun) {
                         ID = static_cast<int>(
                             ConstInt->getValue().getSExtValue());
                     }
-                    // the [] operator constructs an element using the default
-                    // constructor if it doesn't exist, so we don't need to
-                    // check for that here
                     MarkedBlocks[ID].insert(&BB);
                     BlockedMarks[&BB].insert(ID);
                 }
@@ -45,6 +43,25 @@ bool MarkAnalysis::runOnFunction(llvm::Function &Fun) {
             BlockedMarks[&BB].insert(UNREACHABLE_MARK);
         }
     }
+    // loop rotation duplicates marks, so we need to remove the marks that are outside the loop
+    llvm::LoopInfo& LI = getAnalysis<llvm::LoopInfoWrapperPass>().getLoopInfo();
+    for (auto it : MarkedBlocks) {
+        set<llvm::BasicBlock*> newMarkedBlocks;
+        if (it.second.size() > 1) {
+            for (auto block : it.second) {
+                if (LI.getLoopFor(block)) {
+                    newMarkedBlocks.insert(block);
+                } else {
+                    BlockedMarks.at(block).erase(it.first);
+                    if (BlockedMarks.at(block).empty()) {
+                        BlockedMarks.erase(block);
+                    }
+                }
+            }
+            assert(newMarkedBlocks.size() == 1);
+            it.second = newMarkedBlocks;
+        }
+    }
     BlockMarkMap = BidirBlockMarkMap(BlockedMarks, MarkedBlocks);
     return false; // Did not modify CFG
 }
@@ -52,6 +69,7 @@ bool MarkAnalysis::runOnFunction(llvm::Function &Fun) {
 void MarkAnalysis::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
     AU.setPreservesAll();
     AU.addRequired<llvm::UnifyFunctionExitNodes>();
+    AU.addRequired<llvm::LoopInfoWrapperPass>();
 }
 
 BidirBlockMarkMap MarkAnalysis::getBlockMarkMap() const { return BlockMarkMap; }
