@@ -8,7 +8,7 @@ int f(int n) {
         n = 1;
     }
 
-    while (__mark(42) & i < n) {
+    while (__mark(42) & (i < n)) {
         j = j + 2;
         i++;
     }
