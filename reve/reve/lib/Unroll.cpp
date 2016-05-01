@@ -167,17 +167,96 @@ void unrollAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
         }
     }
 
+    std::map<BasicBlock *, BasicBlock *> exitEdges;
+    set<BasicBlock *> loopExitSet;
+
+    for (auto bb : loopBlocks) {
+        if (!vmap[bb]) {
+            continue;
+        }
+        vector<BasicBlock *> edgeTargets;
+        for (auto succ : successors(bb)) {
+            if (loopBlocks.count(succ) == 0) {
+                loopExitSet.insert(llvm::cast<llvm::BasicBlock>(vmap[bb]));
+                edgeTargets.push_back(succ);
+            }
+        }
+        // Split all edges that go outside of the loop
+        for (auto target : edgeTargets) {
+            BasicBlock *newBB = llvm::cast<llvm::BasicBlock>(vmap[bb]);
+            exitEdges.insert(std::make_pair(newBB, SplitEdge(newBB, target)));
+        }
+    }
+    for (auto edge : exitEdges) {
+        edge.second->replaceAllUsesWith(markedBlock);
+    }
+    vector<BasicBlock *> loopExits;
+    loopExits.insert(loopExits.begin(), loopExitSet.begin(), loopExitSet.end());
+
+    BasicBlock *split = SplitBlock(markedBlock, markedBlock->getTerminator());
+    loopBlocks.insert(split);
+    for (auto &instr : *split) {
+        loopInstructions.insert(&instr);
+    }
+
+    // Create a phi node with the index of the loop exit
+    llvm::PHINode *exitIndex = llvm::PHINode::Create(
+        llvm::Type::getInt32Ty(markedBlock->getContext()), exitEdges.size(),
+        "exitIndex", &markedBlock->front());
+    for (size_t i = 0; i < exitEdges.size(); ++i) {
+        exitIndex->addIncoming(
+            llvm::ConstantInt::get(exitIndex->getType(), i + 1),
+            loopExits.at(i));
+        exitIndex->setName("exitIndex$1_0");
+    }
+    exitIndex->addIncoming(llvm::ConstantInt::get(exitIndex->getType(), 0),
+                           newPreHeader);
+    exitIndex->addIncoming(llvm::ConstantInt::get(exitIndex->getType(), 0),
+                           backEdge);
+
+    // Now switch based on the phi node to jump to the correct block
+    llvm::SwitchInst *switchExit =
+        llvm::SwitchInst::Create(exitIndex, split, 0);
+    llvm::ReplaceInstWithInst(markedBlock->getTerminator(), switchExit);
+    for (size_t i = 0; i < loopExits.size(); ++i) {
+        llvm::ConstantInt *c = llvm::ConstantInt::get(
+            llvm::Type::getInt32Ty(markedBlock->getContext()), i + 1);
+        switchExit->addCase(c, exitEdges.at(loopExits.at(i)));
+    }
+
+    // Set phi values for loopexits
+    for (auto &instr : *markedBlock) {
+        llvm::PHINode *phi = llvm::dyn_cast<llvm::PHINode>(&instr);
+        if (!phi) {
+            break;
+        }
+        if (!vmap[phi]) {
+            continue;
+        }
+        for (auto exitBlock : loopExits) {
+            phi->addIncoming(vmap[phi], exitBlock);
+        }
+    }
+
     // We cloned instructions so we need to merge their uses
     for (auto bb : loopBlocks) {
         for (auto &instr : *bb) {
             llvm::SSAUpdater ssaUpdate;
-            if (instr.getType()->isVoidTy())
+            if (instr.getType()->isVoidTy() || !vmap[&instr])
                 continue;
+            llvm::Instruction *otherInstr =
+                llvm::cast<llvm::Instruction>(vmap[&instr]);
             ssaUpdate.Initialize(instr.getType(), instr.getName());
             ssaUpdate.AddAvailableValue(instr.getParent(), &instr);
-            ssaUpdate.AddAvailableValue(
-                llvm::cast<llvm::Instruction>(vmap[&instr])->getParent(),
-                vmap[&instr]);
+            if (exitEdges.count(otherInstr->getParent()) == 0) {
+                ssaUpdate.AddAvailableValue(
+                    llvm::cast<llvm::Instruction>(vmap[&instr])->getParent(),
+                    vmap[&instr]);
+            } else {
+                ssaUpdate.AddAvailableValue(
+                    llvm::cast<llvm::Instruction>(vmap[&instr])->getParent(),
+                    vmap[&instr]);
+            }
             vector<llvm::Use *> usesOutsideLoop;
             for (auto &use : instr.uses()) {
                 llvm::Instruction *user =
@@ -195,7 +274,7 @@ void unrollAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
             }
         }
     }
-    f.viewCFG();
+    // f.viewCFG();
 }
 
 set<BasicBlock *> blocksInLoop(llvm::BasicBlock *markedBlock,
@@ -228,6 +307,7 @@ void UnrollPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
 }
 
 bool UnrollPass::runOnFunction(llvm::Function &f) {
+    llvm::errs() << "unrolling\n";
     llvm::LoopInfo &li = getAnalysis<llvm::LoopInfoWrapperPass>().getLoopInfo();
     llvm::DominatorTree &dt =
         getAnalysis<llvm::DominatorTreeWrapperPass>().getDomTree();
