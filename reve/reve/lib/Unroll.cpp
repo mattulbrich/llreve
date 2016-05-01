@@ -23,6 +23,107 @@ using llvm::BasicBlock;
 using llvm::ValueToValueMapTy;
 using llvm::BranchInst;
 
+void unrollFactor(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
+                  size_t factor) {
+    if (factor <= 1) {
+        return;
+    }
+    assert(marks.MarkToBlocksMap.at(mark).size() == 1);
+    BasicBlock *markedBlock = *marks.MarkToBlocksMap.at(mark).begin();
+    set<BasicBlock *> loopBlocks = blocksInLoop(markedBlock, marks);
+    set<llvm::Instruction *> loopInstruction;
+    for (auto bb : loopBlocks) {
+        for (llvm::Instruction &i : *bb) {
+            loopInstruction.insert(&i);
+        }
+    }
+
+    vector<BasicBlock *> outsideBlocks;
+    vector<BasicBlock *> backedgeBlocks;
+    for (auto pred : predecessors(markedBlock)) {
+        if (loopBlocks.count(pred) == 0) {
+            outsideBlocks.push_back(pred);
+        } else {
+            backedgeBlocks.push_back(pred);
+        }
+    }
+
+    BasicBlock *preHeader = createPreheader(markedBlock, outsideBlocks);
+    BasicBlock *backEdge =
+        createUniqueBackedge(markedBlock, preHeader, backedgeBlocks, f);
+    loopBlocks.insert(backEdge);
+
+    vector<BasicBlock *> newBlocks;
+    vector<BasicBlock *> lastLoop;
+    lastLoop.insert(lastLoop.begin(), loopBlocks.begin(), loopBlocks.end());
+    ValueToValueMapTy vmap;
+    for (size_t i = 1; i < factor; ++i) {
+        vector<BasicBlock *> currentLoop;
+        for (auto bb : lastLoop) {
+            BasicBlock *newBB =
+                CloneBasicBlock(bb, vmap, "." + std::to_string(i + 1), &f);
+            currentLoop.push_back(newBB);
+            newBlocks.push_back(newBB);
+            vmap[bb] = newBB;
+        }
+        for (auto bb : currentLoop) {
+            for (auto &i : *bb) {
+                RemapInstruction(&i, vmap);
+            }
+        }
+        lastLoop = currentLoop;
+    }
+    // f.viewCFG();
+    // Connect the end of the last cloned loop back to the top
+    BasicBlock *lastHeader = markedBlock;
+    BasicBlock *lastBackEdge = backEdge;
+    for (size_t i = 0; i < factor; ++i) {
+        if (vmap[lastHeader]) {
+            lastBackEdge->getTerminator()->setSuccessor(
+                0, llvm::cast<llvm::BasicBlock>(vmap[lastHeader]));
+        } else {
+            lastBackEdge->getTerminator()->setSuccessor(
+                0, llvm::cast<llvm::BasicBlock>(markedBlock));
+            break;
+        }
+        lastBackEdge = llvm::cast<llvm::BasicBlock>(vmap[lastBackEdge]);
+        lastHeader = llvm::cast<llvm::BasicBlock>(vmap[lastHeader]);
+    }
+
+    // Remap phis
+    for (auto &instr : *markedBlock) {
+        auto phi = llvm::dyn_cast<llvm::PHINode>(&instr);
+        if (phi == nullptr) {
+            break;
+        }
+        auto val = phi->getIncomingValueForBlock(backEdge);
+        // Find the corresponding value in the last header
+        for (size_t i = 0; i < factor - 1; ++i) {
+            val = vmap[val];
+        }
+        phi->addIncoming(val, lastBackEdge);
+        phi->removeIncomingValue(backEdge);
+
+        auto oldPhi = phi;
+        auto mappedPhi = llvm::dyn_cast<llvm::PHINode>(vmap[phi]);
+        auto lastEdge = backEdge;
+        for (size_t i = 0; i < factor - 1; ++i) {
+            mappedPhi->removeIncomingValue(preHeader);
+            mappedPhi->setIncomingValue(0, oldPhi);
+            mappedPhi->setIncomingBlock(0, lastEdge);
+            if (!vmap[mappedPhi]) {
+                break;
+            }
+            oldPhi = mappedPhi;
+            mappedPhi = llvm::dyn_cast<llvm::PHINode>(vmap[mappedPhi]);
+            lastEdge = llvm::dyn_cast<llvm::BasicBlock>(vmap[lastEdge]);
+        }
+    }
+
+    f.getBasicBlockList().splice(backEdge->getIterator(), f.getBasicBlockList(),
+                                 newBlocks[0]->getIterator(), f.end());
+}
+
 void unrollAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
                   llvm::LoopInfo &loopInfo, llvm::DominatorTree &dt) {
     assert(marks.MarkToBlocksMap.at(mark).size() ==
@@ -159,8 +260,9 @@ void unrollAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
             newPN->addIncoming(v, prologLatch);
 
             if (loopInstructions.count(pn) > 0) {
-                pn->setIncomingValue(pn->getBasicBlockIndex(newPreHeader),
-                                     newPN);
+                pn->setIncomingValue(
+                    static_cast<uint32_t>(pn->getBasicBlockIndex(newPreHeader)),
+                    newPN);
             } else {
                 pn->addIncoming(newPN, prologExit);
             }
@@ -200,9 +302,10 @@ void unrollAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
     }
 
     // Create a phi node with the index of the loop exit
-    llvm::PHINode *exitIndex = llvm::PHINode::Create(
-        llvm::Type::getInt32Ty(markedBlock->getContext()), exitEdges.size(),
-        "exitIndex", &markedBlock->front());
+    llvm::PHINode *exitIndex =
+        llvm::PHINode::Create(llvm::Type::getInt32Ty(markedBlock->getContext()),
+                              static_cast<uint32_t>(exitEdges.size()),
+                              "exitIndex", &markedBlock->front());
     for (size_t i = 0; i < exitEdges.size(); ++i) {
         exitIndex->addIncoming(
             llvm::ConstantInt::get(exitIndex->getType(), i + 1),
@@ -312,7 +415,8 @@ bool UnrollPass::runOnFunction(llvm::Function &f) {
     llvm::DominatorTree &dt =
         getAnalysis<llvm::DominatorTreeWrapperPass>().getDomTree();
     auto map = getAnalysis<MarkAnalysis>().getBlockMarkMap();
-    unrollAtMark(f, 42, map, li, dt);
+    unrollFactor(f, 42, map, 3);
+    // unrollAtMark(f, 42, map, li, dt);
     return true;
 }
 

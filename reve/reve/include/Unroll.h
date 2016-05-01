@@ -25,3 +25,6 @@ class UnrollPass : public llvm::FunctionPass {
     bool runOnFunction(llvm::Function &Fun) override;
     UnrollPass() : llvm::FunctionPass(ID) {}
 };
+
+void unrollFactor(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
+                  size_t factor);
