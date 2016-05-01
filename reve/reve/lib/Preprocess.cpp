@@ -86,6 +86,7 @@ AnalysisResults preprocessFunction(llvm::Function &fun, string prefix,
 
     fpm->add(new InlinePass());
     fpm->add(llvm::createPromoteMemoryToRegisterPass()); // mem2reg
+    fpm->add(llvm::createLoopSimplifyPass());
     fpm->add(llvm::createCFGSimplificationPass());
     fpm->add(new SplitEntryBlockPass());
     MarkAnalysis *markAnalysis = new MarkAnalysis();
@@ -122,4 +123,5 @@ AnalysisResults preprocessFunction(llvm::Function &fun, string prefix,
     }
     return AnalysisResults(markAnalysis->BlockMarkMap, pathAnalysis->PathsMap,
                            loopInfo);
+    return AnalysisResults(markAnalysis->BlockMarkMap, pathAnalysis->PathsMap);
 }
