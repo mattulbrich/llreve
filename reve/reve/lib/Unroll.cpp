@@ -31,12 +31,6 @@ void unrollFactor(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
     assert(marks.MarkToBlocksMap.at(mark).size() == 1);
     BasicBlock *markedBlock = *marks.MarkToBlocksMap.at(mark).begin();
     set<BasicBlock *> loopBlocks = blocksInLoop(markedBlock, marks);
-    set<llvm::Instruction *> loopInstruction;
-    for (auto bb : loopBlocks) {
-        for (llvm::Instruction &i : *bb) {
-            loopInstruction.insert(&i);
-        }
-    }
 
     vector<BasicBlock *> outsideBlocks;
     vector<BasicBlock *> backedgeBlocks;
@@ -102,15 +96,24 @@ void unrollFactor(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
             val = vmap[val];
         }
         phi->addIncoming(val, lastBackEdge);
-        phi->removeIncomingValue(backEdge);
 
         auto oldPhi = phi;
         auto mappedPhi = llvm::dyn_cast<llvm::PHINode>(vmap[phi]);
         auto lastEdge = backEdge;
+        auto oldPhiVal = oldPhi->getIncomingValueForBlock(backEdge);
+
+        phi->removeIncomingValue(backEdge);
         for (size_t i = 0; i < factor - 1; ++i) {
+            mappedPhi->addIncoming(oldPhiVal, lastEdge);
+            if (vmap[lastEdge]) {
+                oldPhiVal = mappedPhi->getIncomingValueForBlock(
+                    llvm::cast<llvm::BasicBlock>(vmap[lastEdge]));
+            }
             mappedPhi->removeIncomingValue(preHeader);
-            mappedPhi->setIncomingValue(0, oldPhi);
-            mappedPhi->setIncomingBlock(0, lastEdge);
+            // Remove the value from the old backedge, addIncoming is guaranteed
+            // to add to the end so we can just reomve the first value
+            unsigned idx = 0;
+            mappedPhi->removeIncomingValue(idx);
             if (!vmap[mappedPhi]) {
                 break;
             }
@@ -122,6 +125,51 @@ void unrollFactor(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
 
     f.getBasicBlockList().splice(backEdge->getIterator(), f.getBasicBlockList(),
                                  newBlocks[0]->getIterator(), f.end());
+
+    set<BasicBlock *> originalLoopBlocks = loopBlocks;
+    loopBlocks.insert(newBlocks.begin(), newBlocks.end());
+    set<llvm::Instruction *> loopInstructions;
+    for (auto bb : loopBlocks) {
+        for (auto &instr : *bb) {
+            loopInstructions.insert(&instr);
+        }
+    }
+
+    // Merge uses outside the loop
+    for (auto bb : originalLoopBlocks) {
+        for (auto &instr : *bb) {
+            if (instr.getType()->isVoidTy() || !vmap[&instr])
+                continue;
+            llvm::SSAUpdater ssaUpdate;
+            ssaUpdate.Initialize(instr.getType(), instr.getName());
+            ssaUpdate.AddAvailableValue(instr.getParent(), &instr);
+            // Add all mappings
+            auto mappedInstr = llvm::cast<llvm::Instruction>(vmap[&instr]);
+            while (true) {
+                ssaUpdate.AddAvailableValue(mappedInstr->getParent(),
+                                            mappedInstr);
+                if (!vmap[mappedInstr]) {
+                    break;
+                }
+                mappedInstr = llvm::cast<llvm::Instruction>(vmap[mappedInstr]);
+            }
+            vector<llvm::Use *> usesOutsideLoop;
+            for (auto &use : instr.uses()) {
+                llvm::Instruction *user =
+                    llvm::dyn_cast<llvm::Instruction>(use.getUser());
+                if (!user) {
+                    continue;
+                }
+                if (loopInstructions.count(user) == 0) {
+                    // Find uses outside the loop
+                    usesOutsideLoop.push_back(&use);
+                }
+            }
+            for (auto use : usesOutsideLoop) {
+                ssaUpdate.RewriteUse(*use);
+            }
+        }
+    }
 }
 
 void unrollAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
@@ -410,12 +458,11 @@ void UnrollPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
 }
 
 bool UnrollPass::runOnFunction(llvm::Function &f) {
-    llvm::errs() << "unrolling\n";
     llvm::LoopInfo &li = getAnalysis<llvm::LoopInfoWrapperPass>().getLoopInfo();
     llvm::DominatorTree &dt =
         getAnalysis<llvm::DominatorTreeWrapperPass>().getDomTree();
     auto map = getAnalysis<MarkAnalysis>().getBlockMarkMap();
-    unrollFactor(f, 42, map, 3);
+    unrollFactor(f, 42, map, 4);
     // unrollAtMark(f, 42, map, li, dt);
     return true;
 }
