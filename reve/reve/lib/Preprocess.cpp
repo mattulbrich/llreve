@@ -95,8 +95,6 @@ AnalysisResults preprocessFunction(llvm::Function &fun, string prefix,
     fpm->add(new InstCombinePass());
     fpm->add(llvm::createAggressiveDCEPass());
     fpm->add(llvm::createConstantPropagationPass());
-    PathAnalysis *pathAnalysis = new PathAnalysis();
-    fpm->add(pathAnalysis);
     // Passes need to have a default ctor
     UniqueNamePass::Prefix = prefix;
     fpm->add(new UniqueNamePass()); // prefix register names
@@ -104,24 +102,15 @@ AnalysisResults preprocessFunction(llvm::Function &fun, string prefix,
         fpm->add(new CFGViewerPass()); // show marked cfg
     }
     fpm->add(new RemoveMarkPass());
+    PathAnalysis *pathAnalysis = new PathAnalysis();
+    fpm->add(pathAnalysis);
     if (opts.ShowCFG) {
         fpm->add(new CFGViewerPass()); // show cfg
     }
     fpm->add(new AnnotStackPass()); // annotate load/store of stack variables
-    llvm::LoopInfoWrapperPass *loopInfo = new llvm::LoopInfoWrapperPass();
-    fpm->add(loopInfo);
     fpm->add(llvm::createVerifierPass());
     // FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
     fpm->doInitialization();
     fpm->run(fun);
-
-    if(prefix == "2") {
-        unrollAtMark(fun, 42, markAnalysis->BlockMarkMap);
-        fun.viewCFG();
-        fun.print(llvm::errs());
-        llvm::verifyFunction(fun, &llvm::errs());
-    }
-    return AnalysisResults(markAnalysis->BlockMarkMap, pathAnalysis->PathsMap,
-                           loopInfo);
     return AnalysisResults(markAnalysis->BlockMarkMap, pathAnalysis->PathsMap);
 }
