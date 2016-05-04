@@ -52,6 +52,8 @@ using EquationsMap =
 using EquationsSolutionsMap =
     std::map<int, LoopInfoData<std::vector<std::vector<mpz_class>>>>;
 
+using LoopCountMap = std::map<int, std::vector<MonoPair<int>>>;
+
 void findEqualities(MonoPair<Call<std::string>> calls,
                     MonoPair<BlockNameMap> nameMap, FreeVarsMap freeVars,
                     PatternCandidatesMap &candidates);
@@ -80,9 +82,12 @@ bool normalMarkBlock(const BlockNameMap &map, BlockName &blockName);
 void debugAnalysis(MatchInfo match);
 void dumpPatternCandidates(const PatternCandidatesMap &candidates,
                            const pattern::Expr &pat);
+void dumpLoopCounts(const LoopCountMap &loopCounts);
+std::map<int, mpq_class> suggestUnrollFactor(LoopCountMap &map);
 void instantiatePattern(PatternCandidatesMap &patternCandidates,
                         const FreeVarsMap &freeVars, const pattern::Expr &pat,
                         MatchInfo match);
+void findLoopCounts(int &lastMark, LoopCountMap &map, MatchInfo match);
 void instantiateBounds(
     std::map<int, std::map<std::string, Bound<VarIntVal>>> &boundsMap,
     const FreeVarsMap &freeVars, MatchInfo match);

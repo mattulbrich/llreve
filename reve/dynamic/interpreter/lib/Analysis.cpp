@@ -82,6 +82,7 @@ analyse(string outputDirectory,
     PatternCandidatesMap lePatterns;
     EquationsMap equationsMap;
     BoundsMap boundsMap;
+    LoopCountMap loopCounts;
 
     struct dirent *dirEntry;
     std::regex firstFileRegex("^(.*_)1(_\\d+.cbor)$", std::regex::ECMAScript);
@@ -98,8 +99,8 @@ analyse(string outputDirectory,
         std::streamsize size2 = file2.tellg();
         file1.seekg(0, ios::beg);
         file2.seekg(0, ios::beg);
-        std::cout << fileName1 << "\n";
-        std::cout << fileName2 << "\n";
+        std::cerr << fileName1 << "\n";
+        std::cerr << fileName2 << "\n";
 
         std::vector<char> buffer1(static_cast<size_t>(size1));
         std::vector<char> buffer2(static_cast<size_t>(size2));
@@ -147,21 +148,38 @@ analyse(string outputDirectory,
         analyzeExecution(makeMonoPair(c1, c2), nameMap,
                          std::bind(instantiateBounds, std::ref(bounds),
                                    std::cref(freeVarsMap), _1));
+        int lastMark = -5; // -5 is unused
+        analyzeExecution(makeMonoPair(c1, c2), nameMap,
+                         std::bind(findLoopCounts, std::ref(lastMark),
+                                   std::ref(loopCounts), _1));
         boundsMap = updateBounds(boundsMap, bounds);
     }
 
+    std::cerr << "----------\n";
     std::cerr << "A = B\n";
     dumpPatternCandidates(equalityCandidates, *commonpattern::eqPat);
+    std::cerr << "----------\n";
     std::cerr << "A + B = C\n";
     dumpPatternCandidates(patternCandidates, *commonpattern::additionPat);
+    std::cerr << "----------\n";
     std::cerr << "A + b = C\n";
     dumpPatternCandidates(constantPatterns,
                           *commonpattern::constantAdditionPat);
+    std::cerr << "----------\n";
     std::cerr << "A <= B\n";
     dumpPatternCandidates(lePatterns, *commonpattern::lePat);
     dumpBounds(boundsMap);
+    std::cerr << "----------\n";
     std::cerr << "Equations\n";
     dumpEquationsMap(equationsMap, originalFreeVarsMap);
+    dumpLoopCounts(loopCounts);
+
+    map<int, mpq_class> unrollSuggestions = suggestUnrollFactor(loopCounts);
+    std::cerr << "----------\n";
+    std::cerr << "Unroll factors\n";
+    for (auto mapIt : unrollSuggestions) {
+        std::cerr << mapIt.first << ": " << mapIt.second.get_str() << "\n";
+    }
     closedir(dir);
     return makeInvariantDefinitions(findSolutions(equationsMap), boundsMap,
                                     originalFreeVarsMap);
@@ -175,6 +193,75 @@ void basicPatternCandidates(MonoPair<Call<string>> calls,
                      std::bind(instantiatePattern, std::ref(candidates),
                                std::cref(freeVarsMap),
                                std::cref(*commonpattern::additionPat), _1));
+}
+
+void findLoopCounts(int &lastMark, LoopCountMap &map, MatchInfo match) {
+    if (lastMark == match.mark) {
+        switch (match.loopInfo) {
+        case LoopInfo::Left:
+            map[match.mark].back().first++;
+            break;
+        case LoopInfo::Right:
+            map[match.mark].back().second++;
+            break;
+        case LoopInfo::None:
+            map[match.mark].back().first++;
+            map[match.mark].back().second++;
+            break;
+        }
+    } else {
+        switch (match.loopInfo) {
+        case LoopInfo::None:
+            map[match.mark].push_back(makeMonoPair(0, 0));
+            break;
+        default:
+            assert(false);
+            break;
+        }
+        lastMark = match.mark;
+    }
+}
+
+map<int, mpq_class> suggestUnrollFactor(LoopCountMap &map) {
+    std::map<int, mpq_class> unrollFactors;
+    for (auto mapIt : map) {
+        size_t maxFactor = 0;
+        bool unrollRight = true;
+        for (auto sample : mapIt.second) {
+            if (sample.first == 0 || sample.second == 0) {
+                continue;
+            }
+            // For now only off-by-1 is supported so if the loop counts are
+            // off by more than 1 we try to unroll
+            if (abs(sample.second - sample.first) <= 1) {
+                continue;
+            }
+            if (sample.second > sample.first) {
+                unrollRight = false;
+                maxFactor = std::max(
+                    maxFactor,
+                    static_cast<size_t>(static_cast<double>(sample.second) /
+                                            static_cast<double>(sample.first) +
+                                        0.5));
+            } else {
+                unrollRight = true;
+                maxFactor = std::max(
+                    maxFactor,
+                    static_cast<size_t>(static_cast<double>(sample.first) /
+                                            static_cast<double>(sample.second) +
+                                        0.5));
+            }
+        }
+        if (maxFactor > 0) {
+            if (unrollRight) {
+                unrollFactors.insert(
+                    std::make_pair(mapIt.first, 1 / maxFactor));
+            } else {
+                unrollFactors.insert(std::make_pair(mapIt.first, maxFactor));
+            }
+        }
+    }
+    return unrollFactors;
 }
 
 void populateEquationsMap(EquationsMap &equationsMap, FreeVarsMap freeVarsMap,
@@ -378,23 +465,23 @@ bool normalMarkBlock(const BlockNameMap &map, BlockName &blockName) {
 void debugAnalysis(MatchInfo match) {
     switch (match.loopInfo) {
     case LoopInfo::None:
-        std::cout << "Perfect sync";
+        std::cerr << "Perfect sync";
         break;
     case LoopInfo::Left:
-        std::cout << "Left program is looping";
+        std::cerr << "Left program is looping";
         break;
     case LoopInfo::Right:
-        std::cout << "Right program is looping";
+        std::cerr << "Right program is looping";
         break;
     }
-    std::cout << std::endl;
-    std::cout << "First state:" << std::endl;
-    std::cout << match.steps.first.toJSON(identity<string>).dump(4)
+    std::cerr << std::endl;
+    std::cerr << "First state:" << std::endl;
+    std::cerr << match.steps.first.toJSON(identity<string>).dump(4)
               << std::endl;
-    std::cout << "Second state:" << std::endl;
-    std::cout << match.steps.second.toJSON(identity<string>).dump(4)
+    std::cerr << "Second state:" << std::endl;
+    std::cerr << match.steps.second.toJSON(identity<string>).dump(4)
               << std::endl;
-    std::cout << std::endl << std::endl;
+    std::cerr << std::endl << std::endl;
 }
 
 void instantiatePattern(PatternCandidatesMap &patternCandidates,
@@ -475,29 +562,29 @@ void instantiatePattern(PatternCandidatesMap &patternCandidates,
 void dumpPatternCandidates(const PatternCandidatesMap &candidates,
                            const pattern::Expr &pat) {
     for (auto it : candidates) {
-        std::cout << it.first << ":\n";
+        std::cerr << it.first << ":\n";
         if (it.second.left.hasValue()) {
-            std::cout << "left:\n";
+            std::cerr << "left:\n";
             for (auto vec : it.second.left.getValue()) {
-                std::cout << "\t";
-                pat.dump(std::cout, vec);
-                std::cout << std::endl;
+                std::cerr << "\t";
+                pat.dump(std::cerr, vec);
+                std::cerr << std::endl;
             }
         }
         if (it.second.right.hasValue()) {
-            std::cout << "right:\n";
+            std::cerr << "right:\n";
             for (auto vec : it.second.right.getValue()) {
-                std::cout << "\t";
-                pat.dump(std::cout, vec);
-                std::cout << std::endl;
+                std::cerr << "\t";
+                pat.dump(std::cerr, vec);
+                std::cerr << std::endl;
             }
         }
         if (it.second.none.hasValue()) {
-            std::cout << "none:\n";
+            std::cerr << "none:\n";
             for (auto vec : it.second.none.getValue()) {
-                std::cout << "\t";
-                pat.dump(std::cout, vec);
-                std::cout << std::endl;
+                std::cerr << "\t";
+                pat.dump(std::cerr, vec);
+                std::cerr << std::endl;
             }
         }
     }
@@ -533,16 +620,16 @@ void dumpEquationsMap(const EquationsMap &equationsMap,
                       const FreeVarsMap &freeVarsMap) {
     EquationsSolutionsMap solutions = findSolutions(equationsMap);
     for (auto eqMapIt : solutions) {
-        std::cout << eqMapIt.first << ":\n";
+        std::cerr << eqMapIt.first << ":\n";
         for (const auto &varName : freeVarsMap.at(eqMapIt.first)) {
-            std::cout << varName << "\t";
+            std::cerr << varName << "\t";
         }
-        std::cout << "constant\n";
-        std::cout << "left loop\n";
+        std::cerr << "constant\n";
+        std::cerr << "left loop\n";
         dumpMatrix(eqMapIt.second.left);
-        std::cout << "right loop\n";
+        std::cerr << "right loop\n";
         dumpMatrix(eqMapIt.second.right);
-        std::cout << "synced\n";
+        std::cerr << "synced\n";
         dumpMatrix(eqMapIt.second.none);
     }
 }
@@ -610,7 +697,6 @@ SharedSMTRef makeInvariantDefinition(const vector<vector<mpz_class>> &solution,
 SharedSMTRef
 makeBoundsDefinitions(const map<string, Bound<Optional<VarIntVal>>> &bounds) {
     vector<SharedSMTRef> constraints;
-    std::cout << "map size " << bounds.size() << "\n";
     for (auto mapIt : bounds) {
         if (mapIt.second.lower.hasValue()) {
             constraints.push_back(makeBinOp(
@@ -711,23 +797,23 @@ BoundsMap updateBounds(
 }
 
 void dumpBounds(const BoundsMap &bounds) {
-    std::cout << "Bounds\n";
+    std::cerr << "Bounds\n";
     for (auto markMapIt : bounds) {
-        std::cout << markMapIt.first << ":\n";
+        std::cerr << markMapIt.first << ":\n";
         for (auto varIt : markMapIt.second) {
             if (varIt.second.lower.hasValue()) {
-                std::cout << varIt.second.lower.getValue().get_str() << " <= ";
+                std::cerr << varIt.second.lower.getValue().get_str() << " <= ";
             }
             if (varIt.second.lower.hasValue() ||
                 varIt.second.upper.hasValue()) {
-                std::cout << varIt.first;
+                std::cerr << varIt.first;
             }
             if (varIt.second.upper.hasValue()) {
-                std::cout << " <= " << varIt.second.upper.getValue().get_str();
+                std::cerr << " <= " << varIt.second.upper.getValue().get_str();
             }
             if (varIt.second.lower.hasValue() ||
                 varIt.second.upper.hasValue()) {
-                std::cout << "\n";
+                std::cerr << "\n";
             }
         }
     }
@@ -769,4 +855,16 @@ extractEqualities(const EquationsMap &equations,
         }
     }
     return result;
+}
+
+void dumpLoopCounts(const LoopCountMap &loopCounts) {
+    std::cerr << "----------\n";
+    std::cerr << "LOOP COUNTS\n";
+    for (auto mapIt : loopCounts) {
+        std::cerr << mapIt.first << "\n";
+        for (auto countIt : mapIt.second) {
+            std::cerr << "\t" << countIt << "\n";
+        }
+    }
+    std::cerr << "----------\n";
 }
