@@ -352,12 +352,14 @@ void unrollAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
                     }
                 }
                 // For each of these values add a new incoming value for the
-                // duplicated instructions in the prolog
+                // original instructions in the prolog, at this point the
+                // original instruction is not accessible but we redirect the
+                // control flow via markedBlock so it is guaranteed to be
+                // accessible when we are done
                 for (auto bb : toAdd) {
                     llvm::Value *val = phi->getIncomingValueForBlock(bb);
                     if (vmap[val]) {
-                        phi->addIncoming(
-                            vmap[val], newBB);
+                        phi->addIncoming(val, newBB);
                     }
                 }
             }
