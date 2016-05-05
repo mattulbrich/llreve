@@ -10,7 +10,7 @@ extern int __mark(int);
 int f(int n) {
   int i = 0;
   int x = 0;
-  while (__mark(1) & i <= n) {
+  while (__mark(1) & (i <= n)) {
     x = x + i;
     i++;
   }
