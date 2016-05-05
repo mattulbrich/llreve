@@ -4,11 +4,13 @@
 #include <queue>
 #include <set>
 
+#include "MonoPair.h"
 #include "llvm/Analysis/LoopIterator.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
@@ -317,8 +319,7 @@ void unrollAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
         }
     }
 
-    std::map<BasicBlock *, BasicBlock *> exitEdges;
-    set<BasicBlock *> loopExitSet;
+    std::map<BasicBlock *, MonoPair<BasicBlock *>> exitEdges;
 
     for (auto bb : loopBlocks) {
         if (!vmap[bb]) {
@@ -327,22 +328,51 @@ void unrollAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
         vector<BasicBlock *> edgeTargets;
         for (auto succ : successors(bb)) {
             if (loopBlocks.count(succ) == 0) {
-                loopExitSet.insert(llvm::cast<llvm::BasicBlock>(vmap[bb]));
                 edgeTargets.push_back(succ);
             }
         }
         // Split all edges that go outside of the loop
         for (auto target : edgeTargets) {
             BasicBlock *newBB = llvm::cast<llvm::BasicBlock>(vmap[bb]);
-            exitEdges.insert(std::make_pair(newBB, SplitEdge(newBB, target)));
+            // SplitEdge segfaults if the phi nodes in target are not valid
+            // To make them valid at this point we need to add incoming values
+            // for each early exit in the prolog
+            for (auto &instr : *target) {
+                llvm::PHINode *phi = llvm::dyn_cast<llvm::PHINode>(&instr);
+                if (!phi) {
+                    break;
+                }
+                // Find all incoming values for the target that come from inside
+                // of the loop
+                vector<BasicBlock *> toAdd;
+                for (auto bbIt = phi->block_begin(); bbIt != phi->block_end();
+                     ++bbIt) {
+                    if (loopBlocks.count(*bbIt) == 1) {
+                        toAdd.push_back(*bbIt);
+                    }
+                }
+                // For each of these values add a new incoming value for the
+                // duplicated instructions in the prolog
+                for (auto bb : toAdd) {
+                    llvm::Value *val = phi->getIncomingValueForBlock(bb);
+                    if (vmap[val]) {
+                        phi->addIncoming(
+                            vmap[val], newBB);
+                    }
+                }
+            }
+            // edgeBlock will later be changed to point to markedBlock
+            BasicBlock *edgeBlock = SplitEdge(newBB, target, &dt, &loopInfo);
+            // markedBlock then jumps to split if it came from edgeBlock
+            BasicBlock *split =
+                SplitBlock(edgeBlock, edgeBlock->getTerminator());
+            edgeBlock->getTerminator()->setSuccessor(0, markedBlock);
+            exitEdges.insert(
+                std::make_pair(newBB, makeMonoPair(edgeBlock, split)));
         }
     }
-    for (auto edge : exitEdges) {
-        edge.second->replaceAllUsesWith(markedBlock);
-    }
-    vector<BasicBlock *> loopExits;
-    loopExits.insert(loopExits.begin(), loopExitSet.begin(), loopExitSet.end());
 
+    // Split the original markedBlock since we want to use a switch here
     BasicBlock *split = SplitBlock(markedBlock, markedBlock->getTerminator());
     loopBlocks.insert(split);
     for (auto &instr : *split) {
@@ -354,25 +384,35 @@ void unrollAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
         llvm::PHINode::Create(llvm::Type::getInt32Ty(markedBlock->getContext()),
                               static_cast<uint32_t>(exitEdges.size()),
                               "exitIndex", &markedBlock->front());
-    for (size_t i = 0; i < exitEdges.size(); ++i) {
-        exitIndex->addIncoming(
-            llvm::ConstantInt::get(exitIndex->getType(), i + 1),
-            loopExits.at(i));
-        exitIndex->setName("exitIndex$1_0");
+    exitIndex->setName("exitIndex$1_0");
+    {
+        // For loop exit i (the numbering is arbitrary) we set exitIndex to i
+        size_t i = 1;
+        for (auto edge : exitEdges) {
+
+            exitIndex->addIncoming(
+                llvm::ConstantInt::get(exitIndex->getType(), i),
+                edge.second.first);
+            ++i;
+        }
     }
     exitIndex->addIncoming(llvm::ConstantInt::get(exitIndex->getType(), 0),
                            newPreHeader);
     exitIndex->addIncoming(llvm::ConstantInt::get(exitIndex->getType(), 0),
                            backEdge);
 
-    // Now switch based on the phi node to jump to the correct block
+    // Switch based on the value of exitIndex to jump to the correct block
     llvm::SwitchInst *switchExit =
         llvm::SwitchInst::Create(exitIndex, split, 0);
     llvm::ReplaceInstWithInst(markedBlock->getTerminator(), switchExit);
-    for (size_t i = 0; i < loopExits.size(); ++i) {
-        llvm::ConstantInt *c = llvm::ConstantInt::get(
-            llvm::Type::getInt32Ty(markedBlock->getContext()), i + 1);
-        switchExit->addCase(c, exitEdges.at(loopExits.at(i)));
+    {
+        size_t i = 1;
+        for (auto edge : exitEdges) {
+            llvm::ConstantInt *c = llvm::ConstantInt::get(
+                llvm::Type::getInt32Ty(markedBlock->getContext()), i);
+            switchExit->addCase(c, edge.second.second);
+            ++i;
+        }
     }
 
     // Set phi values for loopexits
@@ -384,12 +424,12 @@ void unrollAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
         if (!vmap[phi]) {
             continue;
         }
-        for (auto exitBlock : loopExits) {
-            phi->addIncoming(vmap[phi], exitBlock);
+        for (auto edge : exitEdges) {
+            phi->addIncoming(vmap[phi], edge.second.first);
         }
     }
 
-    // We cloned instructions so we need to merge their uses
+    // We cloned instructions so we need to merge their uses outside of the loop
     for (auto bb : loopBlocks) {
         for (auto &instr : *bb) {
             llvm::SSAUpdater ssaUpdate;
@@ -425,7 +465,7 @@ void unrollAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
             }
         }
     }
-    // f.viewCFG();
+    f.viewCFG();
 }
 
 set<BasicBlock *> blocksInLoop(llvm::BasicBlock *markedBlock,
@@ -462,7 +502,9 @@ bool UnrollPass::runOnFunction(llvm::Function &f) {
     llvm::DominatorTree &dt =
         getAnalysis<llvm::DominatorTreeWrapperPass>().getDomTree();
     auto map = getAnalysis<MarkAnalysis>().getBlockMarkMap();
-    unrollFactor(f, 42, map, 4);
+    unrollAtMark(f, 2, map, li, dt);
+    unrollAtMark(f, 4, map, li, dt);
+    // unrollFactor(f, 42, map, 4);
     // unrollAtMark(f, 42, map, li, dt);
     return true;
 }
