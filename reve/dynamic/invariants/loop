@@ -49,7 +49,7 @@
   (or (and (= i$2 (+ i$1 1)) (= n$1 n$2) (= (+ x$1 i$1) x$2) (<= i$1 n$1))
       (and (= n$1 n$2) (= x$1 x$2) (<= i$1 i$2) (> i$1 n$1))))
 (define-fun INV_MAIN_3 ((A Int) (B Int) (C Int) (D Int) (E Int) (F Int)) Bool
-  (and (= (+ A E) (+ D B)) (= C F) (>= A 1) (>= D 1)))
+  (and (= A D) (= E B) (= C F) (= C F)))
 
 ../../reve-test-suite/build/loop/loop.smt2:
 (define-fun INV_MAIN_42 ((A Int) (B Int) (C Int) (D Int) (E Int)) Bool
