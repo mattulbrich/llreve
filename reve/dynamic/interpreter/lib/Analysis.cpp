@@ -174,11 +174,29 @@ analyse(string outputDirectory,
     dumpEquationsMap(equationsMap, originalFreeVarsMap);
     dumpLoopCounts(loopCounts);
 
-    map<int, mpq_class> unrollSuggestions = suggestUnrollFactor(loopCounts);
+    map<int, LoopTransformation> unrollSuggestions =
+        findLoopTransformations(loopCounts);
     std::cerr << "----------\n";
-    std::cerr << "Unroll factors\n";
+    std::cerr << "Loop transformations\n";
     for (auto mapIt : unrollSuggestions) {
-        std::cerr << mapIt.first << ": " << mapIt.second.get_str() << "\n";
+        std::cerr << mapIt.first << ": ";
+        switch (mapIt.second.side) {
+        case LoopTransformSide::Left:
+            std::cerr << "Left:\t";
+            break;
+        case LoopTransformSide::Right:
+            std::cerr << "Right:\t";
+            break;
+        }
+        switch (mapIt.second.type) {
+        case LoopTransformType::Unroll:
+            std::cerr << "Unroll:\t";
+            break;
+        case LoopTransformType::Peel:
+            std::cerr << "Peel:\t";
+            break;
+        }
+        std::cerr << mapIt.second.count << "\n";
     }
     closedir(dir);
     return makeInvariantDefinitions(findSolutions(equationsMap), boundsMap,
@@ -222,46 +240,64 @@ void findLoopCounts(int &lastMark, LoopCountMap &map, MatchInfo match) {
     }
 }
 
-map<int, mpq_class> suggestUnrollFactor(LoopCountMap &map) {
-    std::map<int, mpq_class> unrollFactors;
+map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map) {
+    std::map<int, int64_t> peelCount;
+    std::map<int, float> unrollQuotients;
     for (auto mapIt : map) {
-        size_t maxFactor = 0;
-        bool unrollRight = true;
+        int mark = mapIt.first;
         for (auto sample : mapIt.second) {
-            if (sample.first == 0 || sample.second == 0) {
-                continue;
-            }
-            // For now only off-by-1 is supported so if the loop counts are
-            // off by more than 1 we try to unroll
-            if (abs(sample.second - sample.first) <= 1) {
-                continue;
-            }
-            if (sample.second > sample.first) {
-                unrollRight = false;
-                maxFactor = std::max(
-                    maxFactor,
-                    static_cast<size_t>(static_cast<double>(sample.second) /
-                                            static_cast<double>(sample.first) +
-                                        0.5));
+            if (peelCount.count(mark) == 0) {
+                peelCount.insert(
+                    std::make_pair(mark, sample.first - sample.second));
             } else {
-                unrollRight = true;
-                maxFactor = std::max(
-                    maxFactor,
-                    static_cast<size_t>(static_cast<double>(sample.first) /
-                                            static_cast<double>(sample.second) +
-                                        0.5));
+                if (abs(peelCount.at(mark)) <
+                    abs(sample.first - sample.second)) {
+                    peelCount.at(mark) = sample.first - sample.second;
+                }
             }
-        }
-        if (maxFactor > 0) {
-            if (unrollRight) {
-                unrollFactors.insert(
-                    std::make_pair(mapIt.first, 1 / maxFactor));
-            } else {
-                unrollFactors.insert(std::make_pair(mapIt.first, maxFactor));
+            if (sample.first != 0 && sample.second != 0) {
+                if (unrollQuotients.count(mark) == 0) {
+                    unrollQuotients.insert(std::make_pair(
+                        mark, static_cast<float>(sample.first) /
+                                  static_cast<float>(sample.second)));
+                } else {
+                    float quotient = unrollQuotients.at(mark);
+                    quotient = quotient < 1 ? 1 / quotient : quotient;
+                    float newQuotient = static_cast<float>(sample.first) /
+                                        static_cast<float>(sample.second);
+                    newQuotient =
+                        newQuotient < 1 ? 1 / newQuotient : newQuotient;
+                    if (newQuotient > quotient) {
+                        unrollQuotients.at(mark) =
+                            static_cast<float>(sample.first) /
+                            static_cast<float>(sample.second);
+                    }
+                }
             }
         }
     }
-    return unrollFactors;
+    std::map<int, LoopTransformation> transforms;
+    for (auto it : peelCount) {
+        int mark = it.first;
+        if (abs(it.second) <= 4) {
+            LoopTransformSide side = it.second >= 0 ? LoopTransformSide::Left
+                                                    : LoopTransformSide::Right;
+            // Fun fact: abs is not guaranteed to return a positive result
+            transforms.insert(std::make_pair(
+                mark, LoopTransformation(LoopTransformType::Peel, side,
+                                         static_cast<size_t>(abs(it.second)))));
+        } else if (unrollQuotients.count(mark) == 1) {
+            float factor = unrollQuotients.at(mark);
+            LoopTransformSide side =
+                factor < 1 ? LoopTransformSide::Left : LoopTransformSide::Right;
+            factor = factor < 1 ? 1 / factor : factor;
+            transforms.insert(std::make_pair(
+                mark,
+                LoopTransformation(LoopTransformType::Unroll, side,
+                                   static_cast<size_t>(std::round(factor)))));
+        }
+    }
+    return transforms;
 }
 
 void populateEquationsMap(EquationsMap &equationsMap, FreeVarsMap freeVarsMap,

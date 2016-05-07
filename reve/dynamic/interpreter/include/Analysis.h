@@ -64,6 +64,18 @@ void basicPatternCandidates(MonoPair<Call<std::string>> calls,
 template <typename T> T identity(T x) { return x; }
 BlockNameMap blockNameMap(BidirBlockMarkMap blockMap);
 
+enum class LoopTransformType { Unroll, Peel };
+enum class LoopTransformSide { Left, Right };
+
+struct LoopTransformation {
+    LoopTransformType type;
+    LoopTransformSide side;
+    size_t count;
+    LoopTransformation(LoopTransformType type, LoopTransformSide side,
+                       size_t count)
+        : type(type), side(side), count(count) {}
+};
+
 struct MatchInfo {
     MonoPair<BlockStep<std::string>> steps;
     LoopInfo loopInfo;
@@ -83,7 +95,7 @@ void debugAnalysis(MatchInfo match);
 void dumpPatternCandidates(const PatternCandidatesMap &candidates,
                            const pattern::Expr &pat);
 void dumpLoopCounts(const LoopCountMap &loopCounts);
-std::map<int, mpq_class> suggestUnrollFactor(LoopCountMap &map);
+std::map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map);
 void instantiatePattern(PatternCandidatesMap &patternCandidates,
                         const FreeVarsMap &freeVars, const pattern::Expr &pat,
                         MatchInfo match);
