@@ -67,13 +67,15 @@ int main(int argc, const char **argv) {
         compileToModules(argv[0], inputOpts, acts);
     vector<MonoPair<PreprocessedFunction>> preprocessedFuns =
         preprocessFunctions(modules, preprocessOpts);
-    map<int, smt::SharedSMTRef> invariantDefinitions =
-        analyse(OutputDirectoryFlag, preprocessedFuns, MainFunctionFlag);
-    SMTGenerationOpts::initialize(MainFunctionFlag, false, false, false, false,
-                                  false, false, false, false, false, false,
-                                  false, invariantDefinitions);
-    vector<smt::SharedSMTRef> smtExprs = generateSMT(
-        modules, preprocessedFuns, FileOptions({}, nullptr, nullptr, false));
+    vector<smt::SharedSMTRef> smtExprs =
+        driver(modules, OutputDirectoryFlag, preprocessedFuns, MainFunctionFlag);
+    // map<int, smt::SharedSMTRef> invariantDefinitions =
+    //     analyse(OutputDirectoryFlag, preprocessedFuns, MainFunctionFlag);
+    // SMTGenerationOpts::initialize(MainFunctionFlag, false, false, false, false,
+    //                               false, false, false, false, false, false,
+    //                               false, invariantDefinitions);
+    // vector<smt::SharedSMTRef> smtExprs = generateSMT(
+    //     modules, preprocessedFuns, FileOptions({}, nullptr, nullptr, false));
     serializeSMT(smtExprs, false, SerializeOpts(OutputFileNameFlag));
 
     llvm::llvm_shutdown();

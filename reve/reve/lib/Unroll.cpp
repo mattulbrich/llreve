@@ -25,7 +25,7 @@ using llvm::BasicBlock;
 using llvm::ValueToValueMapTy;
 using llvm::BranchInst;
 
-void unrollFactor(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
+void unrollAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
                   size_t factor) {
     if (factor <= 1) {
         return;
@@ -174,8 +174,8 @@ void unrollFactor(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
     }
 }
 
-void unrollAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
-                  llvm::LoopInfo &loopInfo, llvm::DominatorTree &dt) {
+void peelAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
+                std::string prefix) {
     assert(marks.MarkToBlocksMap.at(mark).size() ==
            1); // For now we assume that there is only block per mark
     BasicBlock *markedBlock = *marks.MarkToBlocksMap.at(mark).begin();
@@ -364,7 +364,7 @@ void unrollAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
                 }
             }
             // edgeBlock will later be changed to point to markedBlock
-            BasicBlock *edgeBlock = SplitEdge(newBB, target, &dt, &loopInfo);
+            BasicBlock *edgeBlock = SplitEdge(newBB, target);
             // markedBlock then jumps to split if it came from edgeBlock
             BasicBlock *split =
                 SplitBlock(edgeBlock, edgeBlock->getTerminator());
@@ -386,7 +386,7 @@ void unrollAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
         llvm::PHINode::Create(llvm::Type::getInt32Ty(markedBlock->getContext()),
                               static_cast<uint32_t>(exitEdges.size()),
                               "exitIndex", &markedBlock->front());
-    exitIndex->setName("exitIndex$1_0");
+    exitIndex->setName("exitIndex$" + prefix + "_" + std::to_string(mark));
     {
         // For loop exit i (the numbering is arbitrary) we set exitIndex to i
         size_t i = 1;
@@ -467,7 +467,6 @@ void unrollAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
             }
         }
     }
-    f.viewCFG();
 }
 
 set<BasicBlock *> blocksInLoop(llvm::BasicBlock *markedBlock,
@@ -504,8 +503,8 @@ bool UnrollPass::runOnFunction(llvm::Function &f) {
     llvm::DominatorTree &dt =
         getAnalysis<llvm::DominatorTreeWrapperPass>().getDomTree();
     auto map = getAnalysis<MarkAnalysis>().getBlockMarkMap();
-    unrollAtMark(f, 2, map, li, dt);
-    unrollAtMark(f, 4, map, li, dt);
+    // peelAtMark(f, 2, map);
+    // peelAtMark(f, 4, map);
     // unrollFactor(f, 42, map, 4);
     // unrollAtMark(f, 42, map, li, dt);
     return true;

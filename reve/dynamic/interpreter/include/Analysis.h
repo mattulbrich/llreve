@@ -42,15 +42,23 @@ std::map<int, smt::SharedSMTRef>
 analyse(std::string outputDirectory,
         std::vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
         std::string mainFunctionName);
+std::vector<smt::SharedSMTRef>
+driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
+       std::string outputDirectory,
+       std::vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
+       std::string mainFunctionName);
 llvm::Optional<MonoPair<PreprocessedFunction>>
 findFunction(const std::vector<MonoPair<PreprocessedFunction>> functions,
              std::string functionName);
 
 using Equality = MonoPair<std::string>;
+using ExitIndex = mpz_class;
 using EquationsMap =
-    std::map<int, LoopInfoData<std::vector<std::vector<mpq_class>>>>;
+    std::map<int, std::map<ExitIndex,
+                           LoopInfoData<std::vector<std::vector<mpq_class>>>>>;
 using EquationsSolutionsMap =
-    std::map<int, LoopInfoData<std::vector<std::vector<mpz_class>>>>;
+    std::map<int, std::map<ExitIndex,
+                           LoopInfoData<std::vector<std::vector<mpz_class>>>>>;
 
 using LoopCountMap = std::map<int, std::vector<MonoPair<int>>>;
 
@@ -124,9 +132,16 @@ smt::SharedSMTRef makeBoundsDefinitions(
 EquationsSolutionsMap findSolutions(const EquationsMap &equationsMap);
 void dumpBounds(const BoundsMap &bounds);
 
-std::map<int, LoopInfoData<std::set<MonoPair<std::string>>>>
+std::map<int,
+         std::map<ExitIndex, LoopInfoData<std::set<MonoPair<std::string>>>>>
 extractEqualities(const EquationsMap &equations,
                   const std::vector<std::string> &freeVars);
 void iterateDeserialized(
     std::string directory,
     std::function<void(MonoPair<Call<std::string>> &)> callback);
+void dumpLoopTransformations(
+    std::map<int, LoopTransformation> loopTransformations);
+void applyLoopTransformation(
+    MonoPair<PreprocessedFunction> &functions,
+    const std::map<int, LoopTransformation> &loopTransformations,
+    const MonoPair<BidirBlockMarkMap> &mark);
