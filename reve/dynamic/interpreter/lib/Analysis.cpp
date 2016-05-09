@@ -164,14 +164,14 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules, string outputDirectory,
     serializeValuesInRange(functions, -20, 20, unrolledOutputDirectory);
 
     loopCounts = {};
-    EquationsMap equationsMap;
+    PolynomialEquations polynomialEquations;
     const MonoPair<PathMap> pathMaps =
         preprocessedFunctions.getValue().map<PathMap>(
             [](PreprocessedFunction fun) { return fun.results.paths; });
     FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
     iterateDeserialized(
-        unrolledOutputDirectory, [&loopCounts, &nameMap, &equationsMap,
+        unrolledOutputDirectory, [&loopCounts, &nameMap, &polynomialEquations,
                                   &freeVarsMap](MonoPair<Call<string>> &calls) {
             int lastMark = -5; // -5 is unused
             analyzeExecution(calls, nameMap,
@@ -179,15 +179,15 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules, string outputDirectory,
                                        std::ref(loopCounts), _1));
             analyzeExecution(calls, nameMap,
                              std::bind(populateEquationsMap,
-                                       std::ref(equationsMap),
+                                       std::ref(polynomialEquations),
                                        std::cref(freeVarsMap), _1));
         });
     loopTransformations = findLoopTransformations(loopCounts);
     dumpLoopTransformations(loopTransformations);
-    dumpEquationsMap(equationsMap, freeVarsMap);
+    dumpPolynomials(polynomialEquations, freeVarsMap);
 
-    auto invariantCandidates =
-        makeInvariantDefinitions(findSolutions(equationsMap), {}, freeVarsMap);
+    auto invariantCandidates = makeInvariantDefinitions(
+        findSolutions(polynomialEquations), {}, freeVarsMap);
     SMTGenerationOpts::initialize(mainFunctionName, false, false, false, false,
                                   false, false, false, false, false, false,
                                   false, invariantCandidates);
@@ -260,45 +260,46 @@ analyse(string outputDirectory,
     PatternCandidatesMap patternCandidates;
     PatternCandidatesMap constantPatterns;
     PatternCandidatesMap lePatterns;
-    EquationsMap equationsMap;
+    PolynomialEquations polynomialEquations;
     BoundsMap boundsMap;
     LoopCountMap loopCounts;
 
-    iterateDeserialized(outputDirectory, [&nameMap, &freeVarsMap, &boundsMap,
-                                          &lePatterns, &originalFreeVarsMap,
-                                          &equationsMap, &equalityCandidates,
-                                          &patternCandidates, &loopCounts,
-                                          &constantPatterns](
-                                             MonoPair<Call<string>> &calls) {
+    iterateDeserialized(
+        outputDirectory,
+        [&nameMap, &freeVarsMap, &boundsMap, &lePatterns, &originalFreeVarsMap,
+         &polynomialEquations, &equalityCandidates, &patternCandidates,
+         &loopCounts, &constantPatterns](MonoPair<Call<string>> &calls) {
 
-        // Debug output
-        // analyzeExecution(makeMonoPair(c1, c2), nameMap, debugAnalysis);
+            // Debug output
+            // analyzeExecution(makeMonoPair(c1, c2), nameMap, debugAnalysis);
 
-        findEqualities(calls, nameMap, freeVarsMap, equalityCandidates);
+            findEqualities(calls, nameMap, freeVarsMap, equalityCandidates);
 
-        basicPatternCandidates(calls, nameMap, freeVarsMap, patternCandidates);
-        analyzeExecution(
-            calls, nameMap,
-            std::bind(instantiatePattern, std::ref(constantPatterns),
-                      std::cref(freeVarsMap),
-                      std::cref(*commonpattern::constantAdditionPat), _1));
-        analyzeExecution(calls, nameMap,
-                         std::bind(populateEquationsMap, std::ref(equationsMap),
-                                   std::cref(originalFreeVarsMap), _1));
-        analyzeExecution(calls, nameMap,
-                         std::bind(instantiatePattern, std::ref(lePatterns),
-                                   std::cref(freeVarsMap),
-                                   std::cref(*commonpattern::lePat), _1));
-        map<int, map<string, Bound<VarIntVal>>> bounds;
-        analyzeExecution(calls, nameMap,
-                         std::bind(instantiateBounds, std::ref(bounds),
-                                   std::cref(freeVarsMap), _1));
-        int lastMark = -5; // -5 is unused
-        analyzeExecution(calls, nameMap,
-                         std::bind(findLoopCounts, std::ref(lastMark),
-                                   std::ref(loopCounts), _1));
-        boundsMap = updateBounds(boundsMap, bounds);
-    });
+            basicPatternCandidates(calls, nameMap, freeVarsMap,
+                                   patternCandidates);
+            analyzeExecution(
+                calls, nameMap,
+                std::bind(instantiatePattern, std::ref(constantPatterns),
+                          std::cref(freeVarsMap),
+                          std::cref(*commonpattern::constantAdditionPat), _1));
+            analyzeExecution(calls, nameMap,
+                             std::bind(populateEquationsMap,
+                                       std::ref(polynomialEquations),
+                                       std::cref(originalFreeVarsMap), _1));
+            analyzeExecution(calls, nameMap,
+                             std::bind(instantiatePattern, std::ref(lePatterns),
+                                       std::cref(freeVarsMap),
+                                       std::cref(*commonpattern::lePat), _1));
+            map<int, map<string, Bound<VarIntVal>>> bounds;
+            analyzeExecution(calls, nameMap,
+                             std::bind(instantiateBounds, std::ref(bounds),
+                                       std::cref(freeVarsMap), _1));
+            int lastMark = -5; // -5 is unused
+            analyzeExecution(calls, nameMap,
+                             std::bind(findLoopCounts, std::ref(lastMark),
+                                       std::ref(loopCounts), _1));
+            boundsMap = updateBounds(boundsMap, bounds);
+        });
 
     std::cerr << "----------\n";
     std::cerr << "A = B\n";
@@ -316,7 +317,7 @@ analyse(string outputDirectory,
     dumpBounds(boundsMap);
     std::cerr << "----------\n";
     std::cerr << "Equations\n";
-    dumpEquationsMap(equationsMap, originalFreeVarsMap);
+    dumpPolynomials(polynomialEquations, originalFreeVarsMap);
     dumpLoopCounts(loopCounts);
 
     map<int, LoopTransformation> unrollSuggestions =
@@ -343,8 +344,8 @@ analyse(string outputDirectory,
         }
         std::cerr << mapIt.second.count << "\n";
     }
-    return makeInvariantDefinitions(findSolutions(equationsMap), boundsMap,
-                                    originalFreeVarsMap);
+    return makeInvariantDefinitions(findSolutions(polynomialEquations),
+                                    boundsMap, originalFreeVarsMap);
 }
 
 void dumpLoopTransformations(map<int, LoopTransformation> loopTransformations) {
@@ -468,8 +469,8 @@ map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map) {
     return transforms;
 }
 
-void populateEquationsMap(EquationsMap &equationsMap, FreeVarsMap freeVarsMap,
-                          MatchInfo match) {
+void populateEquationsMap(PolynomialEquations &polynomialEquations,
+                          FreeVarsMap freeVarsMap, MatchInfo match) {
     VarMap<string> variables;
     variables.insert(match.steps.first.state.variables.begin(),
                      match.steps.first.state.variables.end());
@@ -494,33 +495,33 @@ void populateEquationsMap(EquationsMap &equationsMap, FreeVarsMap freeVarsMap,
         exitIndex = variables.at("exitIndex$2_" + std::to_string(match.mark))
                         ->unsafeIntVal();
     }
-    if (equationsMap[match.mark].count(exitIndex) == 0) {
-        equationsMap.at(match.mark)
+    if (polynomialEquations[match.mark].count(exitIndex) == 0) {
+        polynomialEquations.at(match.mark)
             .insert(
                 make_pair(exitIndex,
                           LoopInfoData<vector<vector<mpq_class>>>({}, {}, {})));
         switch (match.loopInfo) {
         case LoopInfo::Left:
-            equationsMap.at(match.mark).at(exitIndex).left = {equation};
+            polynomialEquations.at(match.mark).at(exitIndex).left = {equation};
             break;
         case LoopInfo::Right:
-            equationsMap.at(match.mark).at(exitIndex).right = {equation};
+            polynomialEquations.at(match.mark).at(exitIndex).right = {equation};
             break;
         case LoopInfo::None:
-            equationsMap.at(match.mark).at(exitIndex).none = {equation};
+            polynomialEquations.at(match.mark).at(exitIndex).none = {equation};
             break;
         }
     } else {
         vector<vector<mpq_class>> vecs;
         switch (match.loopInfo) {
         case LoopInfo::Left:
-            vecs = equationsMap.at(match.mark).at(exitIndex).left;
+            vecs = polynomialEquations.at(match.mark).at(exitIndex).left;
             break;
         case LoopInfo::Right:
-            vecs = equationsMap.at(match.mark).at(exitIndex).right;
+            vecs = polynomialEquations.at(match.mark).at(exitIndex).right;
             break;
         case LoopInfo::None:
-            vecs = equationsMap.at(match.mark).at(exitIndex).none;
+            vecs = polynomialEquations.at(match.mark).at(exitIndex).none;
             break;
         }
         vecs.push_back(equation);
@@ -529,13 +530,19 @@ void populateEquationsMap(EquationsMap &equationsMap, FreeVarsMap freeVarsMap,
         }
         switch (match.loopInfo) {
         case LoopInfo::Left:
-            equationsMap.at(match.mark).at(exitIndex).left.push_back(equation);
+            polynomialEquations.at(match.mark)
+                .at(exitIndex)
+                .left.push_back(equation);
             break;
         case LoopInfo::Right:
-            equationsMap.at(match.mark).at(exitIndex).right.push_back(equation);
+            polynomialEquations.at(match.mark)
+                .at(exitIndex)
+                .right.push_back(equation);
             break;
         case LoopInfo::None:
-            equationsMap.at(match.mark).at(exitIndex).none.push_back(equation);
+            polynomialEquations.at(match.mark)
+                .at(exitIndex)
+                .none.push_back(equation);
             break;
         }
     }
@@ -805,9 +812,10 @@ void dumpPatternCandidates(const PatternCandidatesMap &candidates,
     }
 }
 
-EquationsSolutionsMap findSolutions(const EquationsMap &equationsMap) {
-    EquationsSolutionsMap map;
-    for (auto eqMapIt : equationsMap) {
+PolynomialSolutions
+findSolutions(const PolynomialEquations &polynomialEquations) {
+    PolynomialSolutions map;
+    for (auto eqMapIt : polynomialEquations) {
         int mark = eqMapIt.first;
         for (auto exitMapIt : eqMapIt.second) {
             ExitIndex exitIndex = exitMapIt.first;
@@ -836,10 +844,10 @@ EquationsSolutionsMap findSolutions(const EquationsMap &equationsMap) {
     return map;
 }
 
-void dumpEquationsMap(const EquationsMap &equationsMap,
-                      const FreeVarsMap &freeVarsMap) {
+void dumpPolynomials(const PolynomialEquations &equationsMap,
+                     const FreeVarsMap &freeVarsMap) {
     llvm::errs() << "------------------\n";
-    EquationsSolutionsMap solutions = findSolutions(equationsMap);
+    PolynomialSolutions solutions = findSolutions(equationsMap);
     for (auto eqMapIt : solutions) {
         std::cerr << eqMapIt.first << ":\n";
         for (const auto &varName : freeVarsMap.at(eqMapIt.first)) {
@@ -935,7 +943,7 @@ makeBoundsDefinitions(const map<string, Bound<Optional<VarIntVal>>> &bounds) {
 }
 
 map<int, SharedSMTRef>
-makeInvariantDefinitions(const EquationsSolutionsMap &solutions,
+makeInvariantDefinitions(const PolynomialSolutions &solutions,
                          const BoundsMap &bounds,
                          const FreeVarsMap &freeVarsMap) {
     map<int, SharedSMTRef> definitions;
@@ -1051,10 +1059,10 @@ void dumpBounds(const BoundsMap &bounds) {
 }
 
 map<int, map<ExitIndex, LoopInfoData<set<MonoPair<string>>>>>
-extractEqualities(const EquationsMap &equations,
+extractEqualities(const PolynomialEquations &polynomialEquations,
                   const vector<string> &freeVars) {
     map<int, map<ExitIndex, LoopInfoData<set<MonoPair<string>>>>> result;
-    for (auto mapIt : equations) {
+    for (auto mapIt : polynomialEquations) {
         int mark = mapIt.first;
         for (auto exitIndex : mapIt.second) {
             result[mark].insert(

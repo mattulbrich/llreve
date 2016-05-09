@@ -53,10 +53,10 @@ findFunction(const std::vector<MonoPair<PreprocessedFunction>> functions,
 
 using Equality = MonoPair<std::string>;
 using ExitIndex = mpz_class;
-using EquationsMap =
+using PolynomialEquations =
     std::map<int, std::map<ExitIndex,
                            LoopInfoData<std::vector<std::vector<mpq_class>>>>>;
-using EquationsSolutionsMap =
+using PolynomialSolutions =
     std::map<int, std::map<ExitIndex,
                            LoopInfoData<std::vector<std::vector<mpz_class>>>>>;
 
@@ -114,12 +114,12 @@ void instantiateBounds(
 BoundsMap updateBounds(
     BoundsMap accumulator,
     const std::map<int, std::map<std::string, Bound<VarIntVal>>> &update);
-void populateEquationsMap(EquationsMap &equationsMap, FreeVarsMap freeVarsMap,
-                          MatchInfo match);
-void dumpEquationsMap(const EquationsMap &equationsMap,
+void populateEquationsMap(PolynomialEquations &equationsMap,
+                          FreeVarsMap freeVarsMap, MatchInfo match);
+void dumpPolynomials(const PolynomialEquations &equationsMap,
                       const FreeVarsMap &freeVarsmap);
 std::map<int, smt::SharedSMTRef>
-makeInvariantDefinitions(const EquationsSolutionsMap &solutions,
+makeInvariantDefinitions(const PolynomialSolutions &solutions,
                          const BoundsMap &bounds,
                          const FreeVarsMap &freeVarsMap);
 smt::SharedSMTRef
@@ -129,12 +129,12 @@ smt::SharedSMTRef makeEquation(const std::vector<mpz_class> &eq,
                                const std::vector<std::string> &freeVars);
 smt::SharedSMTRef makeBoundsDefinitions(
     const std::map<std::string, Bound<llvm::Optional<VarIntVal>>> &bounds);
-EquationsSolutionsMap findSolutions(const EquationsMap &equationsMap);
+PolynomialSolutions findSolutions(const PolynomialEquations &equationsMap);
 void dumpBounds(const BoundsMap &bounds);
 
 std::map<int,
          std::map<ExitIndex, LoopInfoData<std::set<MonoPair<std::string>>>>>
-extractEqualities(const EquationsMap &equations,
+extractEqualities(const PolynomialEquations &equations,
                   const std::vector<std::string> &freeVars);
 void iterateDeserialized(
     std::string directory,
