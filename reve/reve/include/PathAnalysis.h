@@ -74,7 +74,10 @@ class PathAnalysis : public llvm::FunctionPass {
 
 auto lastBlock(Path Path) -> llvm::BasicBlock *;
 
-auto findPaths(int For, llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks)
+auto findPaths(BidirBlockMarkMap markedBlocks) -> PathMap;
+
+auto findPathsStartingAt(int For, llvm::BasicBlock *BB,
+                         BidirBlockMarkMap MarkedBlocks)
     -> std::map<int, Paths>;
 
 auto traverse(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks, bool First,

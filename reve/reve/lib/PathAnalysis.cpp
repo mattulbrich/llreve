@@ -18,14 +18,19 @@ using smt::SMTExpr;
 char PathAnalysis::ID = 0;
 
 bool PathAnalysis::runOnFunction(llvm::Function & /*unused*/) {
+    auto markedBlocks = getAnalysis<MarkAnalysis>().getBlockMarkMap();
+    PathsMap = findPaths(markedBlocks);
+    return false;
+}
+
+PathMap findPaths(BidirBlockMarkMap markedBlocks) {
     PathMap MyPaths;
-    auto BidirMarkBlockMap = getAnalysis<MarkAnalysis>().getBlockMarkMap();
-    for (auto BBTuple : BidirMarkBlockMap.MarkToBlocksMap) {
+    for (auto BBTuple : markedBlocks.MarkToBlocksMap) {
         // don't start at return instructäions
         if (BBTuple.first != EXIT_MARK && BBTuple.first != UNREACHABLE_MARK) {
             for (auto BB : BBTuple.second) {
                 const std::map<int, Paths> NewPaths =
-                    findPaths(BBTuple.first, BB, BidirMarkBlockMap);
+                    findPathsStartingAt(BBTuple.first, BB, markedBlocks);
                 for (auto NewPathTuple : NewPaths) {
                     MyPaths[BBTuple.first][NewPathTuple.first].insert(
                         MyPaths[BBTuple.first][NewPathTuple.first].end(),
@@ -34,9 +39,7 @@ bool PathAnalysis::runOnFunction(llvm::Function & /*unused*/) {
             }
         }
     }
-
-    PathsMap = MyPaths;
-    return false;
+    return MyPaths;
 }
 
 PathMap PathAnalysis::getPathMap() const { return PathsMap; }
@@ -46,8 +49,8 @@ void PathAnalysis::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
     AU.addRequired<MarkAnalysis>();
 }
 
-std::map<int, Paths> findPaths(int For, llvm::BasicBlock *BB,
-                               BidirBlockMarkMap BidirBlockMarkMap) {
+std::map<int, Paths> findPathsStartingAt(int For, llvm::BasicBlock *BB,
+                                         BidirBlockMarkMap BidirBlockMarkMap) {
     std::map<int, Paths> FoundPaths;
     const auto MyPaths = traverse(BB, BidirBlockMarkMap, true, {});
     for (auto &PathIt : MyPaths) {
