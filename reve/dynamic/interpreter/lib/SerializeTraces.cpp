@@ -108,7 +108,7 @@ void workerThread(MonoPair<const llvm::Function *> funs,
         }
         Heap heap;
         MonoPair<Call<const llvm::Value *>> calls =
-            interpretFunctionPair(funs, map, heap, 1000);
+            interpretFunctionPair(funs, map, heap, 10000);
 
         std::string baseName = outputDirectory + "/";
         baseName += funs.first->getName();
