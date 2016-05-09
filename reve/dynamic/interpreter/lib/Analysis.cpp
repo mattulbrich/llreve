@@ -42,52 +42,16 @@ using pattern::Placeholder;
 using pattern::Variable;
 using pattern::InstantiatedValue;
 
-map<int, SharedSMTRef>
-analyse(string outputDirectory,
-        vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
-        string mainFunctionName) {
-    DIR *dir = opendir(outputDirectory.c_str());
+void iterateDeserialized(
+    string directory, std::function<void(MonoPair<Call<string>> &)> callback) {
+    DIR *dir = opendir(directory.c_str());
     if (dir == nullptr) {
-        std::cerr << "Couldn't open directory: " << outputDirectory << "\n";
-        exit(1);
+        logError("Couldn't open directory: " + directory + "\n");
     }
-
-    // Error handling? who needs that anyway
-    MonoPair<PreprocessedFunction> mainFunctionPair =
-        findFunction(preprocessedFuns, mainFunctionName).getValue();
-
-    // Get analysis results
-    const MonoPair<BidirBlockMarkMap> markMaps =
-        mainFunctionPair.map<BidirBlockMarkMap>(
-            [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
-    const MonoPair<PathMap> pathMaps = mainFunctionPair.map<PathMap>(
-        [](PreprocessedFunction fun) { return fun.results.paths; });
-    const MonoPair<vector<string>> funArgsPair =
-        functionArgs(*mainFunctionPair.first.fun, *mainFunctionPair.second.fun);
-    // TODO this should use concat
-    const vector<string> funArgs = funArgsPair.foldl<vector<string>>(
-        {},
-        [](vector<string> acc, vector<string> args) -> vector<string> {
-            acc.insert(acc.end(), args.begin(), args.end());
-            return acc;
-        });
-    FreeVarsMap freeVarsMap =
-        freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
-    const FreeVarsMap originalFreeVarsMap = freeVarsMap;
-    MonoPair<BlockNameMap> nameMap = markMaps.map<BlockNameMap>(blockNameMap);
-
-    PatternCandidatesMap equalityCandidates;
-    PatternCandidatesMap patternCandidates;
-    PatternCandidatesMap constantPatterns;
-    PatternCandidatesMap lePatterns;
-    EquationsMap equationsMap;
-    BoundsMap boundsMap;
-    LoopCountMap loopCounts;
-
     struct dirent *dirEntry;
     std::regex firstFileRegex("^(.*_)1(_\\d+.cbor)$", std::regex::ECMAScript);
     while ((dirEntry = readdir(dir))) {
-        string fileName1 = outputDirectory + "/" + dirEntry->d_name;
+        string fileName1 = directory + "/" + dirEntry->d_name;
         std::smatch sm;
         if (!std::regex_match(fileName1, sm, firstFileRegex)) {
             continue;
@@ -107,7 +71,6 @@ analyse(string outputDirectory,
         if (!file1.read(buffer1.data(), size1) ||
             !file2.read(buffer2.data(), size2)) {
             logError("Couldn't read one of the files: " + fileName1 + "\n");
-            return {};
         }
 
         // deserialize
@@ -121,39 +84,82 @@ analyse(string outputDirectory,
                          static_cast<size_t>(size2), &res);
         Call<std::string> c2 = cborToCall(root);
         cbor_decref(&root);
+        MonoPair<Call<string>> calls = makeMonoPair(c1, c2);
+        callback(calls);
+    }
+    closedir(dir);
+}
+map<int, SharedSMTRef>
+analyse(string outputDirectory,
+        vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
+        string mainFunctionName) {
+
+    // Error handling? who needs that anyway
+    MonoPair<PreprocessedFunction> mainFunctionPair =
+        findFunction(preprocessedFuns, mainFunctionName).getValue();
+
+    // Get analysis results
+    const MonoPair<BidirBlockMarkMap> markMaps =
+        mainFunctionPair.map<BidirBlockMarkMap>(
+            [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
+    const MonoPair<PathMap> pathMaps = mainFunctionPair.map<PathMap>(
+        [](PreprocessedFunction fun) { return fun.results.paths; });
+    const MonoPair<vector<string>> funArgsPair =
+        functionArgs(*mainFunctionPair.first.fun, *mainFunctionPair.second.fun);
+    const vector<string> funArgs = funArgsPair.foldl<vector<string>>(
+        {},
+        [](vector<string> acc, vector<string> args) -> vector<string> {
+            acc.insert(acc.end(), args.begin(), args.end());
+            return acc;
+        });
+    FreeVarsMap freeVarsMap =
+        freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
+    const FreeVarsMap originalFreeVarsMap = freeVarsMap;
+    MonoPair<BlockNameMap> nameMap = markMaps.map<BlockNameMap>(blockNameMap);
+
+    PatternCandidatesMap equalityCandidates;
+    PatternCandidatesMap patternCandidates;
+    PatternCandidatesMap constantPatterns;
+    PatternCandidatesMap lePatterns;
+    EquationsMap equationsMap;
+    BoundsMap boundsMap;
+    LoopCountMap loopCounts;
+
+    iterateDeserialized(outputDirectory, [&nameMap, &freeVarsMap, &boundsMap,
+                                          &lePatterns, &originalFreeVarsMap,
+                                          &equationsMap, &equalityCandidates,
+                                          &patternCandidates, &loopCounts,
+                                          &constantPatterns](
+                                             MonoPair<Call<string>> &calls) {
 
         // Debug output
         // analyzeExecution(makeMonoPair(c1, c2), nameMap, debugAnalysis);
 
-        // We search for equalities first, because that way we can limit the
-        // number of other patterns we need to instantiate
-        findEqualities(makeMonoPair(c1, c2), nameMap, freeVarsMap,
-                       equalityCandidates);
+        findEqualities(calls, nameMap, freeVarsMap, equalityCandidates);
 
-        basicPatternCandidates(makeMonoPair(c1, c2), nameMap, freeVarsMap,
-                               patternCandidates);
+        basicPatternCandidates(calls, nameMap, freeVarsMap, patternCandidates);
         analyzeExecution(
-            makeMonoPair(c1, c2), nameMap,
+            calls, nameMap,
             std::bind(instantiatePattern, std::ref(constantPatterns),
                       std::cref(freeVarsMap),
                       std::cref(*commonpattern::constantAdditionPat), _1));
-        analyzeExecution(makeMonoPair(c1, c2), nameMap,
+        analyzeExecution(calls, nameMap,
                          std::bind(populateEquationsMap, std::ref(equationsMap),
                                    std::cref(originalFreeVarsMap), _1));
-        analyzeExecution(makeMonoPair(c1, c2), nameMap,
+        analyzeExecution(calls, nameMap,
                          std::bind(instantiatePattern, std::ref(lePatterns),
                                    std::cref(freeVarsMap),
                                    std::cref(*commonpattern::lePat), _1));
         map<int, map<string, Bound<VarIntVal>>> bounds;
-        analyzeExecution(makeMonoPair(c1, c2), nameMap,
+        analyzeExecution(calls, nameMap,
                          std::bind(instantiateBounds, std::ref(bounds),
                                    std::cref(freeVarsMap), _1));
         int lastMark = -5; // -5 is unused
-        analyzeExecution(makeMonoPair(c1, c2), nameMap,
+        analyzeExecution(calls, nameMap,
                          std::bind(findLoopCounts, std::ref(lastMark),
                                    std::ref(loopCounts), _1));
         boundsMap = updateBounds(boundsMap, bounds);
-    }
+    });
 
     std::cerr << "----------\n";
     std::cerr << "A = B\n";
@@ -198,7 +204,6 @@ analyse(string outputDirectory,
         }
         std::cerr << mapIt.second.count << "\n";
     }
-    closedir(dir);
     return makeInvariantDefinitions(findSolutions(equationsMap), boundsMap,
                                     originalFreeVarsMap);
 }

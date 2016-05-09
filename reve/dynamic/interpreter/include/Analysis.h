@@ -127,3 +127,6 @@ void dumpBounds(const BoundsMap &bounds);
 std::map<int, LoopInfoData<std::set<MonoPair<std::string>>>>
 extractEqualities(const EquationsMap &equations,
                   const std::vector<std::string> &freeVars);
+void iterateDeserialized(
+    std::string directory,
+    std::function<void(MonoPair<Call<std::string>> &)> callback);
