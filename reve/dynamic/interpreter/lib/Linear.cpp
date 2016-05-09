@@ -47,11 +47,12 @@ bool linearlyIndependent(const vector<VarIntVal> &a,
 }
 
 Matrix<mpq_class> rowEchelonForm(Matrix<mpq_class> input) {
-    for (size_t currentRow = 0; currentRow < input.at(0).size(); ++currentRow) {
+    size_t currentRow = 0;
+    for (size_t currentCol = 0; currentCol < input.at(0).size(); ++currentCol) {
         // Find non-zero entry in this column
         int64_t nonZeroRow = -1;
         for (size_t i = currentRow; i < input.size(); ++i) {
-            if (input.at(i).at(currentRow) != 0) {
+            if (input.at(i).at(currentCol) != mpq_class(0)) {
                 nonZeroRow = static_cast<int64_t>(i);
                 break;
             }
@@ -66,12 +67,13 @@ Matrix<mpq_class> rowEchelonForm(Matrix<mpq_class> input) {
                  input.at(currentRow));
         }
         for (size_t i = currentRow + 1; i < input.size(); ++i) {
-            mpq_class multiple = input.at(i).at(currentRow) /
-                                 input.at(currentRow).at(currentRow);
-            for (size_t j = currentRow; j < input.at(i).size(); ++j) {
+            mpq_class multiple = input.at(i).at(currentCol) /
+                                 input.at(currentRow).at(currentCol);
+            for (size_t j = currentCol; j < input.at(i).size(); ++j) {
                 input.at(i).at(j) -= multiple * input.at(currentRow).at(j);
             }
         }
+        ++currentRow;
     }
     return input;
 }
