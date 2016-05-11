@@ -106,7 +106,7 @@ void iterateDeserialized(
 }
 
 vector<SharedSMTRef>
-driver(MonoPair<std::shared_ptr<llvm::Module>> modules, string outputDirectory,
+driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
        vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
        string mainFunctionName) {
     auto preprocessedFunctions =
@@ -131,26 +131,17 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules, string outputDirectory,
             return acc;
         });
 
-    // Create the directory for the interpreter
-    mkdir(outputDirectory.c_str(),
-          S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IWOTH);
-    if (errno == EEXIST) {
-        logError("Directory already exists\n");
-        return {};
-    }
-
-    // Run the interpreter the first time
-    serializeValuesInRange(functions, -100, 100, outputDirectory);
-
     // Collect loop info
     LoopCountMap loopCounts;
-    iterateDeserialized(outputDirectory, [&loopCounts, &nameMap](
-                                             MonoPair<Call<string>> &calls) {
-        int lastMark = -5; // -5 is unused
-        analyzeExecution(calls, nameMap,
-                         std::bind(findLoopCounts, std::ref(lastMark),
-                                   std::ref(loopCounts), _1));
-    });
+    iterateTracesInRange(
+        functions, -100, 100,
+        [&loopCounts, &nameMap](MonoPair<Call<const llvm::Value *>> &calls) {
+            int lastMark = -5; // -5 is unused
+            analyzeExecution<const llvm::Value *>(
+                calls, nameMap,
+                std::bind(findLoopCounts<const llvm::Value *>,
+                          std::ref(lastMark), std::ref(loopCounts), _1));
+        });
     map<int, LoopTransformation> loopTransformations =
         findLoopTransformations(loopCounts);
     dumpLoopTransformations(loopTransformations);
@@ -159,18 +150,7 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules, string outputDirectory,
     applyLoopTransformation(preprocessedFunctions.getValue(),
                             loopTransformations, markMaps);
 
-    // Create the directory for interpreting the unrolled code
-    string unrolledOutputDirectory = outputDirectory + "_unrolled";
-    mkdir(unrolledOutputDirectory.c_str(),
-          S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IWOTH);
-    if (errno == EEXIST) {
-        logError("Directory already exists\n");
-        return {};
-    }
-
     // Run the interpreter on the unrolled code
-    serializeValuesInRange(functions, -100, 100, unrolledOutputDirectory);
-
     loopCounts = {};
     PolynomialEquations polynomialEquations;
     const MonoPair<PathMap> pathMaps =
@@ -179,18 +159,19 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules, string outputDirectory,
     FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
     size_t degree = DegreeFlag;
-    iterateDeserialized(
-        unrolledOutputDirectory,
+    iterateTracesInRange(
+        functions, -100, 100,
         [&loopCounts, &nameMap, &polynomialEquations, &freeVarsMap,
-         degree](MonoPair<Call<string>> &calls) {
+         degree](MonoPair<Call<const llvm::Value *>> &calls) {
             int lastMark = -5; // -5 is unused
-            analyzeExecution(calls, nameMap,
-                             std::bind(findLoopCounts, std::ref(lastMark),
-                                       std::ref(loopCounts), _1));
-            analyzeExecution(calls, nameMap,
-                             std::bind(populateEquationsMap,
-                                       std::ref(polynomialEquations),
-                                       std::cref(freeVarsMap), _1, degree));
+            analyzeExecution<const llvm::Value *>(
+                calls, nameMap,
+                std::bind(findLoopCounts<const llvm::Value *>,
+                          std::ref(lastMark), std::ref(loopCounts), _1));
+            analyzeExecution<const llvm::Value *>(
+                calls, nameMap,
+                std::bind(populateEquationsMap, std::ref(polynomialEquations),
+                          std::cref(freeVarsMap), _1, degree));
         });
     loopTransformations = findLoopTransformations(loopCounts);
     dumpLoopTransformations(loopTransformations);
@@ -279,127 +260,6 @@ void applyLoopTransformation(
     functions.second.results.paths = findPaths(marks.second);
 }
 
-map<int, SharedSMTRef>
-analyse(string outputDirectory,
-        vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
-        string mainFunctionName) {
-
-    // Error handling? who needs that anyway
-    MonoPair<PreprocessedFunction> mainFunctionPair =
-        findFunction(preprocessedFuns, mainFunctionName).getValue();
-
-    // Get analysis results
-    const MonoPair<BidirBlockMarkMap> markMaps =
-        mainFunctionPair.map<BidirBlockMarkMap>(
-            [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
-    const MonoPair<PathMap> pathMaps = mainFunctionPair.map<PathMap>(
-        [](PreprocessedFunction fun) { return fun.results.paths; });
-    const MonoPair<vector<string>> funArgsPair =
-        functionArgs(*mainFunctionPair.first.fun, *mainFunctionPair.second.fun);
-    const vector<string> funArgs = funArgsPair.foldl<vector<string>>(
-        {},
-        [](vector<string> acc, vector<string> args) -> vector<string> {
-            acc.insert(acc.end(), args.begin(), args.end());
-            return acc;
-        });
-    FreeVarsMap freeVarsMap =
-        freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
-    const FreeVarsMap originalFreeVarsMap = freeVarsMap;
-    MonoPair<BlockNameMap> nameMap = markMaps.map<BlockNameMap>(blockNameMap);
-
-    PatternCandidatesMap equalityCandidates;
-    PatternCandidatesMap patternCandidates;
-    PatternCandidatesMap constantPatterns;
-    PatternCandidatesMap lePatterns;
-    PolynomialEquations polynomialEquations;
-    BoundsMap boundsMap;
-    LoopCountMap loopCounts;
-
-    iterateDeserialized(
-        outputDirectory,
-        [&nameMap, &freeVarsMap, &boundsMap, &lePatterns, &originalFreeVarsMap,
-         &polynomialEquations, &equalityCandidates, &patternCandidates,
-         &loopCounts, &constantPatterns](MonoPair<Call<string>> &calls) {
-
-            // Debug output
-            // analyzeExecution(makeMonoPair(c1, c2), nameMap, debugAnalysis);
-
-            findEqualities(calls, nameMap, freeVarsMap, equalityCandidates);
-
-            basicPatternCandidates(calls, nameMap, freeVarsMap,
-                                   patternCandidates);
-            analyzeExecution(
-                calls, nameMap,
-                std::bind(instantiatePattern, std::ref(constantPatterns),
-                          std::cref(freeVarsMap),
-                          std::cref(*commonpattern::constantAdditionPat), _1));
-            analyzeExecution(calls, nameMap,
-                             std::bind(populateEquationsMap,
-                                       std::ref(polynomialEquations),
-                                       std::cref(originalFreeVarsMap), _1, 1));
-            analyzeExecution(calls, nameMap,
-                             std::bind(instantiatePattern, std::ref(lePatterns),
-                                       std::cref(freeVarsMap),
-                                       std::cref(*commonpattern::lePat), _1));
-            map<int, map<string, Bound<VarIntVal>>> bounds;
-            analyzeExecution(calls, nameMap,
-                             std::bind(instantiateBounds, std::ref(bounds),
-                                       std::cref(freeVarsMap), _1));
-            int lastMark = -5; // -5 is unused
-            analyzeExecution(calls, nameMap,
-                             std::bind(findLoopCounts, std::ref(lastMark),
-                                       std::ref(loopCounts), _1));
-            boundsMap = updateBounds(boundsMap, bounds);
-        });
-
-    std::cerr << "----------\n";
-    std::cerr << "A = B\n";
-    dumpPatternCandidates(equalityCandidates, *commonpattern::eqPat);
-    std::cerr << "----------\n";
-    std::cerr << "A + B = C\n";
-    dumpPatternCandidates(patternCandidates, *commonpattern::additionPat);
-    std::cerr << "----------\n";
-    std::cerr << "A + b = C\n";
-    dumpPatternCandidates(constantPatterns,
-                          *commonpattern::constantAdditionPat);
-    std::cerr << "----------\n";
-    std::cerr << "A <= B\n";
-    dumpPatternCandidates(lePatterns, *commonpattern::lePat);
-    dumpBounds(boundsMap);
-    std::cerr << "----------\n";
-    std::cerr << "Equations\n";
-    dumpPolynomials(polynomialEquations, originalFreeVarsMap, 1);
-    dumpLoopCounts(loopCounts);
-
-    map<int, LoopTransformation> unrollSuggestions =
-        findLoopTransformations(loopCounts);
-    std::cerr << "----------\n";
-    std::cerr << "Loop transformations\n";
-    for (auto mapIt : unrollSuggestions) {
-        std::cerr << mapIt.first << ": ";
-        switch (mapIt.second.side) {
-        case LoopTransformSide::Left:
-            std::cerr << "Left:\t";
-            break;
-        case LoopTransformSide::Right:
-            std::cerr << "Right:\t";
-            break;
-        }
-        switch (mapIt.second.type) {
-        case LoopTransformType::Unroll:
-            std::cerr << "Unroll:\t";
-            break;
-        case LoopTransformType::Peel:
-            std::cerr << "Peel:\t";
-            break;
-        }
-        std::cerr << mapIt.second.count << "\n";
-    }
-    return {};
-    // return makeInvariantDefinitions(findSolutions(polynomialEquations),
-    //                                 boundsMap, originalFreeVarsMap);
-}
-
 void dumpLoopTransformations(map<int, LoopTransformation> loopTransformations) {
     std::cerr << "Loop transformations\n";
     for (auto mapIt : loopTransformations) {
@@ -428,37 +288,10 @@ void basicPatternCandidates(MonoPair<Call<string>> calls,
                             MonoPair<BlockNameMap> nameMap,
                             FreeVarsMap freeVarsMap,
                             PatternCandidatesMap &candidates) {
-    analyzeExecution(calls, nameMap,
-                     std::bind(instantiatePattern, std::ref(candidates),
-                               std::cref(freeVarsMap),
-                               std::cref(*commonpattern::additionPat), _1));
-}
-
-void findLoopCounts(int &lastMark, LoopCountMap &map, MatchInfo match) {
-    if (lastMark == match.mark) {
-        switch (match.loopInfo) {
-        case LoopInfo::Left:
-            map[match.mark].back().first++;
-            break;
-        case LoopInfo::Right:
-            map[match.mark].back().second++;
-            break;
-        case LoopInfo::None:
-            map[match.mark].back().first++;
-            map[match.mark].back().second++;
-            break;
-        }
-    } else {
-        switch (match.loopInfo) {
-        case LoopInfo::None:
-            map[match.mark].push_back(makeMonoPair(0, 0));
-            break;
-        default:
-            assert(false);
-            break;
-        }
-        lastMark = match.mark;
-    }
+    analyzeExecution<string>(
+        calls, nameMap, std::bind(instantiatePattern, std::ref(candidates),
+                                  std::cref(freeVarsMap),
+                                  std::cref(*commonpattern::additionPat), _1));
 }
 
 map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map) {
@@ -536,13 +369,15 @@ vector<vector<string>> polynomialTermsOfDegree(vector<string> variables,
 }
 
 void populateEquationsMap(PolynomialEquations &polynomialEquations,
-                          FreeVarsMap freeVarsMap, MatchInfo match,
-                          size_t degree) {
+                          FreeVarsMap freeVarsMap,
+                          MatchInfo<const llvm::Value *> match, size_t degree) {
     VarMap<string> variables;
-    variables.insert(match.steps.first.state.variables.begin(),
-                     match.steps.first.state.variables.end());
-    variables.insert(match.steps.second.state.variables.begin(),
-                     match.steps.second.state.variables.end());
+    for (auto varIt : match.steps.first.state.variables) {
+        variables.insert(std::make_pair(varIt.first->getName(), varIt.second));
+    }
+    for (auto varIt : match.steps.second.state.variables) {
+        variables.insert(std::make_pair(varIt.first->getName(), varIt.second));
+    }
     vector<mpq_class> equation;
     for (size_t i = 1; i <= degree; ++i) {
         auto polynomialTerms =
@@ -622,10 +457,10 @@ void populateEquationsMap(PolynomialEquations &polynomialEquations,
 void findEqualities(MonoPair<Call<string>> calls,
                     MonoPair<BlockNameMap> nameMap, FreeVarsMap freeVarsMap,
                     PatternCandidatesMap &candidates) {
-    analyzeExecution(calls, nameMap,
-                     std::bind(instantiatePattern, std::ref(candidates),
-                               std::cref(freeVarsMap),
-                               std::cref(*commonpattern::eqPat), _1));
+    analyzeExecution<string>(calls, nameMap,
+                             std::bind(instantiatePattern, std::ref(candidates),
+                                       std::cref(freeVarsMap),
+                                       std::cref(*commonpattern::eqPat), _1));
 }
 
 BlockNameMap blockNameMap(BidirBlockMarkMap blockMap) {
@@ -647,106 +482,6 @@ findFunction(const vector<MonoPair<PreprocessedFunction>> functions,
     return Optional<MonoPair<PreprocessedFunction>>();
 }
 
-void analyzeExecution(MonoPair<Call<std::string>> calls,
-                      MonoPair<BlockNameMap> nameMaps,
-                      std::function<void(MatchInfo)> fun) {
-    auto steps1 = calls.first.steps;
-    auto steps2 = calls.second.steps;
-    auto stepsIt1 = steps1.begin();
-    auto stepsIt2 = steps2.begin();
-    auto prevStepIt1 = *stepsIt1;
-    auto prevStepIt2 = *stepsIt2;
-    while (stepsIt1 != steps1.end() && stepsIt2 != steps2.end()) {
-        // Advance until a mark is reached
-        while (stepsIt1 != steps1.end() &&
-               !normalMarkBlock(nameMaps.first, (*stepsIt1)->blockName)) {
-            stepsIt1++;
-        }
-        while (stepsIt2 != steps2.end() &&
-               !normalMarkBlock(nameMaps.second, (*stepsIt2)->blockName)) {
-            stepsIt2++;
-        }
-        if (stepsIt1 == steps1.end() && stepsIt2 == steps2.end()) {
-            break;
-        }
-        // Check marks
-        if (!intersection(nameMaps.first.at((*stepsIt1)->blockName),
-                          nameMaps.second.at((*stepsIt2)->blockName))
-                 .empty()) {
-            assert(intersection(nameMaps.first.at((*stepsIt1)->blockName),
-                                nameMaps.second.at((*stepsIt2)->blockName))
-                       .size() == 1);
-            // We resolve the ambiguity in the marks by hoping that for one
-            // program there is only one choice
-            int mark = *intersection(nameMaps.first.at((*stepsIt1)->blockName),
-                                     nameMaps.second.at((*stepsIt2)->blockName))
-                            .begin();
-            // Perfect synchronization
-            fun(MatchInfo(makeMonoPair(**stepsIt1, **stepsIt2), LoopInfo::None,
-                          mark));
-            prevStepIt1 = *stepsIt1;
-            prevStepIt2 = *stepsIt2;
-            ++stepsIt1;
-            ++stepsIt2;
-        } else {
-            // In the first round this is not true, but we should never fall in
-            // this case in the first round
-            assert(prevStepIt1 != *stepsIt1);
-            assert(prevStepIt2 != *stepsIt2);
-
-            // One side has to wait for the other to finish its loop
-            LoopInfo loop = LoopInfo::Left;
-            auto stepsIt = stepsIt1;
-            auto prevStepIt = prevStepIt1;
-            auto prevStepItOther = prevStepIt2;
-            auto end = steps1.end();
-            auto nameMap = nameMaps.first;
-            auto otherNameMap = nameMaps.second;
-            if ((*stepsIt2)->blockName == prevStepIt2->blockName) {
-                loop = LoopInfo::Right;
-                stepsIt = stepsIt2;
-                prevStepIt = prevStepIt2;
-                prevStepItOther = prevStepIt1;
-                end = steps2.end();
-                nameMap = nameMaps.second;
-                otherNameMap = nameMaps.first;
-            }
-            // Keep looping one program until it moves on
-            do {
-                assert(intersection(nameMap.at(prevStepIt->blockName),
-                                    otherNameMap.at(prevStepItOther->blockName))
-                           .size() == 1);
-                int mark =
-                    *intersection(nameMap.at(prevStepIt->blockName),
-                                  otherNameMap.at(prevStepItOther->blockName))
-                         .begin();
-                // Make sure the first program is always the first argument
-                if (loop == LoopInfo::Left) {
-                    fun(MatchInfo(makeMonoPair(**stepsIt, *prevStepItOther),
-                                  loop, mark));
-                } else {
-                    fun(MatchInfo(makeMonoPair(*prevStepItOther, **stepsIt),
-                                  loop, mark));
-                }
-                // Go to the next mark
-                do {
-                    stepsIt++;
-                } while (stepsIt != end &&
-                         !normalMarkBlock(nameMap, (*stepsIt)->blockName));
-                // Did we return to the same mark?
-            } while (stepsIt != end &&
-                     (*stepsIt)->blockName == prevStepIt->blockName);
-            // Getting a reference to the iterator and modifying that doesn't
-            // seem to work so we copy it and set it again
-            if (loop == LoopInfo::Left) {
-                stepsIt1 = stepsIt;
-            } else {
-                stepsIt2 = stepsIt;
-            }
-        }
-    }
-}
-
 bool normalMarkBlock(const BlockNameMap &map, BlockName &blockName) {
     auto it = map.find(blockName);
     if (it == map.end()) {
@@ -755,7 +490,7 @@ bool normalMarkBlock(const BlockNameMap &map, BlockName &blockName) {
     return it->second.count(ENTRY_MARK) == 0;
 }
 
-void debugAnalysis(MatchInfo match) {
+void debugAnalysis(MatchInfo<string> match) {
     switch (match.loopInfo) {
     case LoopInfo::None:
         std::cerr << "Perfect sync";
@@ -779,7 +514,7 @@ void debugAnalysis(MatchInfo match) {
 
 void instantiatePattern(PatternCandidatesMap &patternCandidates,
                         const FreeVarsMap &freeVars, const pattern::Expr &pat,
-                        MatchInfo match) {
+                        MatchInfo<string> match) {
     VarMap<string> variables;
     variables.insert(match.steps.first.state.variables.begin(),
                      match.steps.first.state.variables.end());
@@ -1074,7 +809,7 @@ makeInvariantDefinitions(const PolynomialSolutions &solutions,
 }
 
 void instantiateBounds(map<int, map<string, Bound<VarIntVal>>> &boundsMap,
-                       const FreeVarsMap &freeVars, MatchInfo match) {
+                       const FreeVarsMap &freeVars, MatchInfo<string> match) {
     VarMap<string> variables;
     variables.insert(match.steps.first.state.variables.begin(),
                      match.steps.first.state.variables.end());
@@ -1214,4 +949,29 @@ void dumpLoopCounts(const LoopCountMap &loopCounts) {
         }
     }
     std::cerr << "----------\n";
+}
+
+void iterateTracesInRange(
+    MonoPair<llvm::Function *> funs, VarIntVal lowerBound, VarIntVal upperBound,
+    std::function<void(MonoPair<Call<const llvm::Value *>> &)> callback) {
+    assert(!(funs.first->isVarArg() || funs.second->isVarArg()));
+    vector<VarIntVal> argValues;
+    vector<string> varNames;
+
+    for (auto &arg : funs.first->args()) {
+        // The variables are already renamed so we need to remove the suffix
+        std::string varName = arg.getName();
+        size_t i = varName.find_first_of('$');
+        varNames.push_back(varName.substr(0, i));
+    }
+    for (const auto &vals : Range(lowerBound, upperBound, varNames.size())) {
+        map<string, std::shared_ptr<VarVal>> map;
+        for (size_t i = 0; i < vals.size(); ++i) {
+            map.insert({varNames[i], make_shared<VarInt>(vals[i])});
+        }
+        Heap heap;
+        MonoPair<Call<const llvm::Value *>> calls =
+            interpretFunctionPair(funs, map, heap, 10000);
+        callback(calls);
+    }
 }

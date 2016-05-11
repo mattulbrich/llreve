@@ -33,8 +33,7 @@ static llvm::cl::opt<string> FileName2Flag(llvm::cl::Positional,
                                            llvm::cl::Required);
 static llvm::cl::opt<string> OutputDirectoryFlag(
     "output",
-    llvm::cl::desc("Directory containing the output of the interpreter"),
-    llvm::cl::Required);
+    llvm::cl::desc("Directory containing the output of the interpreter"));
 static llvm::cl::list<string> IncludesFlag("I", llvm::cl::desc("Include path"));
 static llvm::cl::opt<string> ResourceDirFlag(
     "resource-dir",
@@ -67,8 +66,8 @@ int main(int argc, const char **argv) {
         compileToModules(argv[0], inputOpts, acts);
     vector<MonoPair<PreprocessedFunction>> preprocessedFuns =
         preprocessFunctions(modules, preprocessOpts);
-    vector<smt::SharedSMTRef> smtExprs = driver(
-        modules, OutputDirectoryFlag, preprocessedFuns, MainFunctionFlag);
+    vector<smt::SharedSMTRef> smtExprs =
+        driver(modules, preprocessedFuns, MainFunctionFlag);
     // map<int, smt::SharedSMTRef> invariantDefinitions =
     //     analyse(OutputDirectoryFlag, preprocessedFuns, MainFunctionFlag);
     // SMTGenerationOpts::initialize(MainFunctionFlag, false, false, false,

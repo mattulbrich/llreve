@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Compat.h"
 #include "FunctionSMTGeneration.h"
 #include "Interpreter.h"
 #include "MarkAnalysis.h"
@@ -38,13 +39,8 @@ using PatternCandidatesMap =
 using BoundsMap =
     std::map<int, std::map<std::string, Bound<llvm::Optional<VarIntVal>>>>;
 
-std::map<int, smt::SharedSMTRef>
-analyse(std::string outputDirectory,
-        std::vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
-        std::string mainFunctionName);
 std::vector<smt::SharedSMTRef>
 driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
-       std::string outputDirectory,
        std::vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
        std::string mainFunctionName);
 llvm::Optional<MonoPair<PreprocessedFunction>>
@@ -84,39 +80,61 @@ struct LoopTransformation {
         : type(type), side(side), count(count) {}
 };
 
-struct MatchInfo {
-    MonoPair<BlockStep<std::string>> steps;
+template <typename T> struct MatchInfo {
+    MonoPair<BlockStep<T>> steps;
     LoopInfo loopInfo;
     int mark;
-    MatchInfo(MonoPair<const BlockStep<std::string> &> steps, LoopInfo loopInfo,
-              int mark)
+    MatchInfo(MonoPair<const BlockStep<T> &> steps, LoopInfo loopInfo, int mark)
         : steps(steps), loopInfo(loopInfo), mark(mark) {}
 };
 
 // Walks through the two calls and calls the function for every pair of matching
 // marks
-void analyzeExecution(MonoPair<Call<std::string>> calls,
-                      MonoPair<BlockNameMap> nameMap,
-                      std::function<void(MatchInfo)> fun);
 bool normalMarkBlock(const BlockNameMap &map, BlockName &blockName);
-void debugAnalysis(MatchInfo match);
+void debugAnalysis(MatchInfo<std::string> match);
 void dumpPatternCandidates(const PatternCandidatesMap &candidates,
                            const pattern::Expr &pat);
 void dumpLoopCounts(const LoopCountMap &loopCounts);
 std::map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map);
 void instantiatePattern(PatternCandidatesMap &patternCandidates,
                         const FreeVarsMap &freeVars, const pattern::Expr &pat,
-                        MatchInfo match);
-void findLoopCounts(int &lastMark, LoopCountMap &map, MatchInfo match);
+                        MatchInfo<std::string> match);
+template <typename T>
+void findLoopCounts(int &lastMark, LoopCountMap &map, MatchInfo<T> match) {
+    if (lastMark == match.mark) {
+        switch (match.loopInfo) {
+        case LoopInfo::Left:
+            map[match.mark].back().first++;
+            break;
+        case LoopInfo::Right:
+            map[match.mark].back().second++;
+            break;
+        case LoopInfo::None:
+            map[match.mark].back().first++;
+            map[match.mark].back().second++;
+            break;
+        }
+    } else {
+        switch (match.loopInfo) {
+        case LoopInfo::None:
+            map[match.mark].push_back(makeMonoPair(0, 0));
+            break;
+        default:
+            assert(false);
+            break;
+        }
+        lastMark = match.mark;
+    }
+}
 void instantiateBounds(
     std::map<int, std::map<std::string, Bound<VarIntVal>>> &boundsMap,
-    const FreeVarsMap &freeVars, MatchInfo match);
+    const FreeVarsMap &freeVars, MatchInfo<std::string> match);
 BoundsMap updateBounds(
     BoundsMap accumulator,
     const std::map<int, std::map<std::string, Bound<VarIntVal>>> &update);
 void populateEquationsMap(PolynomialEquations &equationsMap,
-                          FreeVarsMap freeVarsMap, MatchInfo match,
-                          size_t degree);
+                          FreeVarsMap freeVarsMap,
+                          MatchInfo<const llvm::Value *> match, size_t degree);
 void dumpPolynomials(const PolynomialEquations &equationsMap,
                      const FreeVarsMap &freeVarsmap, size_t degree);
 std::map<int, smt::SharedSMTRef>
@@ -142,6 +160,9 @@ extractEqualities(const PolynomialEquations &equations,
 void iterateDeserialized(
     std::string directory,
     std::function<void(MonoPair<Call<std::string>> &)> callback);
+void iterateTracesInRange(
+    MonoPair<llvm::Function *> funs, VarIntVal lowerBound, VarIntVal upperBound,
+    std::function<void(MonoPair<Call<const llvm::Value *>> &)> callback);
 void dumpLoopTransformations(
     std::map<int, LoopTransformation> loopTransformations);
 void applyLoopTransformation(
@@ -150,3 +171,103 @@ void applyLoopTransformation(
     const MonoPair<BidirBlockMarkMap> &mark);
 std::vector<std::vector<std::string>>
 polynomialTermsOfDegree(std::vector<std::string> variables, size_t degree);
+
+template <typename T>
+void analyzeExecution(MonoPair<Call<T>> calls, MonoPair<BlockNameMap> nameMaps,
+                      std::function<void(MatchInfo<T>)> fun) {
+    auto steps1 = calls.first.steps;
+    auto steps2 = calls.second.steps;
+    auto stepsIt1 = steps1.begin();
+    auto stepsIt2 = steps2.begin();
+    auto prevStepIt1 = *stepsIt1;
+    auto prevStepIt2 = *stepsIt2;
+    while (stepsIt1 != steps1.end() && stepsIt2 != steps2.end()) {
+        // Advance until a mark is reached
+        while (stepsIt1 != steps1.end() &&
+               !normalMarkBlock(nameMaps.first, (*stepsIt1)->blockName)) {
+            stepsIt1++;
+        }
+        while (stepsIt2 != steps2.end() &&
+               !normalMarkBlock(nameMaps.second, (*stepsIt2)->blockName)) {
+            stepsIt2++;
+        }
+        if (stepsIt1 == steps1.end() && stepsIt2 == steps2.end()) {
+            break;
+        }
+        // Check marks
+        if (!intersection(nameMaps.first.at((*stepsIt1)->blockName),
+                          nameMaps.second.at((*stepsIt2)->blockName))
+                 .empty()) {
+            assert(intersection(nameMaps.first.at((*stepsIt1)->blockName),
+                                nameMaps.second.at((*stepsIt2)->blockName))
+                       .size() == 1);
+            // We resolve the ambiguity in the marks by hoping that for one
+            // program there is only one choice
+            int mark = *intersection(nameMaps.first.at((*stepsIt1)->blockName),
+                                     nameMaps.second.at((*stepsIt2)->blockName))
+                            .begin();
+            // Perfect synchronization
+            fun(MatchInfo<T>(makeMonoPair(**stepsIt1, **stepsIt2),
+                             LoopInfo::None, mark));
+            prevStepIt1 = *stepsIt1;
+            prevStepIt2 = *stepsIt2;
+            ++stepsIt1;
+            ++stepsIt2;
+        } else {
+            // In the first round this is not true, but we should never fall in
+            // this case in the first round
+            assert(prevStepIt1 != *stepsIt1);
+            assert(prevStepIt2 != *stepsIt2);
+
+            // One side has to wait for the other to finish its loop
+            LoopInfo loop = LoopInfo::Left;
+            auto stepsIt = stepsIt1;
+            auto prevStepIt = prevStepIt1;
+            auto prevStepItOther = prevStepIt2;
+            auto end = steps1.end();
+            auto nameMap = nameMaps.first;
+            auto otherNameMap = nameMaps.second;
+            if ((*stepsIt2)->blockName == prevStepIt2->blockName) {
+                loop = LoopInfo::Right;
+                stepsIt = stepsIt2;
+                prevStepIt = prevStepIt2;
+                prevStepItOther = prevStepIt1;
+                end = steps2.end();
+                nameMap = nameMaps.second;
+                otherNameMap = nameMaps.first;
+            }
+            // Keep looping one program until it moves on
+            do {
+                assert(intersection(nameMap.at(prevStepIt->blockName),
+                                    otherNameMap.at(prevStepItOther->blockName))
+                           .size() == 1);
+                int mark =
+                    *intersection(nameMap.at(prevStepIt->blockName),
+                                  otherNameMap.at(prevStepItOther->blockName))
+                         .begin();
+                // Make sure the first program is always the first argument
+                if (loop == LoopInfo::Left) {
+                    fun(MatchInfo<T>(makeMonoPair(**stepsIt, *prevStepItOther),
+                                     loop, mark));
+                } else {
+                    fun(MatchInfo<T>(makeMonoPair(*prevStepItOther, **stepsIt),
+                                     loop, mark));
+                }
+                // Go to the next mark
+                do {
+                    stepsIt++;
+                } while (stepsIt != end &&
+                         !normalMarkBlock(nameMap, (*stepsIt)->blockName));
+                // Did we return to the same mark?
+            } while (stepsIt != end &&
+                     (*stepsIt)->blockName == prevStepIt->blockName);
+            // Getting a reference to the iterator and modifying that doesn't
+            // seem to work so we copy it and set it again
+            if (loop == LoopInfo::Left) {
+                stepsIt1 = stepsIt;
+            } else {
+                stepsIt2 = stepsIt;
+            }
+        }
+    }
+}
