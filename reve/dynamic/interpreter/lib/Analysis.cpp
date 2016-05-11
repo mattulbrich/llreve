@@ -228,7 +228,8 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules, string outputDirectory,
             string candidateName = invariantName + "_INFERRED";
             SharedSMTRef candidate =
                 smt::makeOp(candidateName, freeVarsMap.at(mark));
-            SharedSMTRef invariant = smt::makeOp(invariantName, freeVarsMap.at(mark));
+            SharedSMTRef invariant =
+                smt::makeOp(invariantName, freeVarsMap.at(mark));
             SharedSMTRef impl = makeBinOp("=>", invariant, candidate);
             SharedSMTRef forall = make_shared<smt::Forall>(args, impl);
             clauses.push_back(invariantIt.second);
@@ -260,7 +261,17 @@ void applyLoopTransformation(
             }
             break;
         case LoopTransformType::Unroll:
-            std::cerr << "Automatic unrolling not yet supported\n";
+            switch (mapIt.second.side) {
+            case LoopTransformSide::Left:
+                unrollAtMark(*functions.first.fun, mapIt.first, marks.first,
+                             mapIt.second.count);
+                break;
+            case LoopTransformSide::Right:
+                unrollAtMark(*functions.second.fun, mapIt.first, marks.second,
+                             mapIt.second.count);
+                break;
+            }
+            break;
         }
     }
     // Update path analysis
