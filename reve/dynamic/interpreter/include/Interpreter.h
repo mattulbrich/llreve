@@ -123,9 +123,10 @@ template <typename T> struct Call : Step<T> {
     }
 };
 
-Call<std::string> cborToCall(const cbor_item_t *item);
-
 using FastCall = Call<const llvm::Value *>;
+template <> cbor_item_t *FastCall::toCBOR() const;
+
+Call<std::string> cborToCall(const cbor_item_t *item);
 
 template <typename T> struct BlockStep : Step<T> {
     BlockName blockName;
