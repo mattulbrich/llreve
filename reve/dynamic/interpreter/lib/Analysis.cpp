@@ -52,6 +52,9 @@ using pattern::InstantiatedValue;
 
 static llvm::cl::opt<bool>
     MultinomialsFlag("multinomials", llvm::cl::desc("Use true multinomials"));
+static llvm::cl::opt<unsigned>
+    DegreeFlag("degree", llvm::cl::desc("Degree of the polynomial invariants"),
+               llvm::cl::init(1));
 
 void iterateDeserialized(
     string directory, std::function<void(MonoPair<Call<string>> &)> callback) {
@@ -170,9 +173,9 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules, string outputDirectory,
     const MonoPair<PathMap> pathMaps =
         preprocessedFunctions.getValue().map<PathMap>(
             [](PreprocessedFunction fun) { return fun.results.paths; });
-    size_t degree = 2;
     FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
+    size_t degree = DegreeFlag;
     iterateDeserialized(
         unrolledOutputDirectory,
         [&loopCounts, &nameMap, &polynomialEquations, &freeVarsMap,
@@ -188,10 +191,10 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules, string outputDirectory,
         });
     loopTransformations = findLoopTransformations(loopCounts);
     dumpLoopTransformations(loopTransformations);
-    dumpPolynomials(polynomialEquations, freeVarsMap, degree);
+    dumpPolynomials(polynomialEquations, freeVarsMap, DegreeFlag);
 
     auto invariantCandidates = makeInvariantDefinitions(
-        findSolutions(polynomialEquations), {}, freeVarsMap, degree);
+        findSolutions(polynomialEquations), {}, freeVarsMap, DegreeFlag);
     SMTGenerationOpts::initialize(mainFunctionName, false, false, false, false,
                                   false, false, false, false, false, false,
                                   false, invariantCandidates);
