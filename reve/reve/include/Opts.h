@@ -14,8 +14,10 @@ class PreprocessOpts {
   public:
     bool ShowCFG;
     bool ShowMarkedCFG;
-    PreprocessOpts(bool showCFG, bool showMarkedCFG)
-        : ShowCFG(showCFG), ShowMarkedCFG(showMarkedCFG) {}
+    bool InferMarks;
+    PreprocessOpts(bool showCFG, bool showMarkedCFG, bool inferMarks)
+        : ShowCFG(showCFG), ShowMarkedCFG(showMarkedCFG),
+          InferMarks(inferMarks) {}
 };
 
 /// Singleton for the options used for SMT generation to avoid having to pass

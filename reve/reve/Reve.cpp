@@ -56,6 +56,10 @@ static llvm::cl::opt<bool>
     ShowMarkedCFGFlag("show-marked-cfg",
                       llvm::cl::desc("Show cfg before mark removal"),
                       llvm::cl::cat(ReveCategory));
+static llvm::cl::opt<bool> InferMarksFlag(
+    "infer-marks",
+    llvm::cl::desc("Infer marks instead of relying on annotations"),
+    llvm::cl::cat(ReveCategory));
 
 // SMT generation opts
 static llvm::cl::opt<string> MainFunctionFlag(
@@ -115,7 +119,8 @@ static llvm::cl::opt<bool> PassInputThroughFlag(
 int main(int argc, const char **argv) {
     parseCommandLineArguments(argc, argv);
 
-    PreprocessOpts preprocessOpts(ShowCFGFlag, ShowMarkedCFGFlag);
+    PreprocessOpts preprocessOpts(ShowCFGFlag, ShowMarkedCFGFlag,
+                                  InferMarksFlag);
     SMTGenerationOpts::initialize(MainFunctionFlag, HeapFlag, StackFlag,
                                   GlobalConstantsFlag, OnlyRecursiveFlag,
                                   NoByteHeapFlag, EverythingSignedFlag,

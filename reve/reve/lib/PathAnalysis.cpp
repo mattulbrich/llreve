@@ -1,6 +1,7 @@
 #include "PathAnalysis.h"
 
 #include "Helper.h"
+#include "InferMarks.h"
 
 #include <iostream>
 
@@ -18,8 +19,13 @@ using smt::SMTExpr;
 char PathAnalysis::ID = 0;
 
 bool PathAnalysis::runOnFunction(llvm::Function & /*unused*/) {
-    auto markedBlocks = getAnalysis<MarkAnalysis>().getBlockMarkMap();
-    PathsMap = findPaths(markedBlocks);
+    if (InferMarks) {
+        auto markedBlocks = getAnalysis<InferMarksAnalysis>().getBlockMarkMap();
+        PathsMap = findPaths(markedBlocks);
+    } else {
+        auto markedBlocks = getAnalysis<MarkAnalysis>().getBlockMarkMap();
+        PathsMap = findPaths(markedBlocks);
+    }
     return false;
 }
 
@@ -47,6 +53,7 @@ PathMap PathAnalysis::getPathMap() const { return PathsMap; }
 void PathAnalysis::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
     AU.setPreservesAll();
     AU.addRequired<MarkAnalysis>();
+    AU.addRequired<InferMarksAnalysis>();
 }
 
 std::map<int, Paths> findPathsStartingAt(int For, llvm::BasicBlock *BB,

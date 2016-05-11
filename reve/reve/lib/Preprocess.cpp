@@ -3,6 +3,7 @@
 #include "AnnotStackPass.h"
 #include "CFGPrinter.h"
 #include "Helper.h"
+#include "InferMarks.h"
 #include "InlinePass.h"
 #include "InlinePass.h"
 #include "InstCombine.h"
@@ -90,8 +91,12 @@ AnalysisResults preprocessFunction(llvm::Function &fun, string prefix,
     fpm->add(llvm::createCFGSimplificationPass());
     fpm->add(new SplitEntryBlockPass());
     MarkAnalysis *markAnalysis = new MarkAnalysis();
+    InferMarksAnalysis *inferMarkAnalysis = new InferMarksAnalysis();
+    fpm->add(inferMarkAnalysis);
     fpm->add(markAnalysis);
-    fpm->add(new RemoveMarkRefsPass());
+    if (!opts.InferMarks) {
+        fpm->add(new RemoveMarkRefsPass());
+    }
     fpm->add(new InstCombinePass());
     fpm->add(llvm::createAggressiveDCEPass());
     fpm->add(llvm::createConstantPropagationPass());
@@ -101,8 +106,11 @@ AnalysisResults preprocessFunction(llvm::Function &fun, string prefix,
     if (opts.ShowMarkedCFG) {
         fpm->add(new CFGViewerPass()); // show marked cfg
     }
-    fpm->add(new RemoveMarkPass());
+    if (!opts.InferMarks) {
+        fpm->add(new RemoveMarkPass());
+    }
     PathAnalysis *pathAnalysis = new PathAnalysis();
+    pathAnalysis->InferMarks = opts.InferMarks;
     fpm->add(pathAnalysis);
     if (opts.ShowCFG) {
         fpm->add(new CFGViewerPass()); // show cfg
@@ -112,5 +120,11 @@ AnalysisResults preprocessFunction(llvm::Function &fun, string prefix,
     // FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
     fpm->doInitialization();
     fpm->run(fun);
-    return AnalysisResults(markAnalysis->BlockMarkMap, pathAnalysis->PathsMap);
+    if (opts.InferMarks) {
+        return AnalysisResults(inferMarkAnalysis->BlockMarkMap,
+                               pathAnalysis->PathsMap);
+    } else {
+        return AnalysisResults(markAnalysis->BlockMarkMap,
+                               pathAnalysis->PathsMap);
+    }
 }

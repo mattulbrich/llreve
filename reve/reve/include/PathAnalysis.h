@@ -70,6 +70,7 @@ class PathAnalysis : public llvm::FunctionPass {
     void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
     static char ID;
     PathMap PathsMap;
+    bool InferMarks;
 };
 
 auto lastBlock(Path Path) -> llvm::BasicBlock *;
