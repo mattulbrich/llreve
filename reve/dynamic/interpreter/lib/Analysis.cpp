@@ -36,6 +36,7 @@ using std::ios;
 using std::map;
 using std::set;
 using std::static_pointer_cast;
+using std::multiset;
 
 using smt::FunDef;
 using smt::SharedSMTRef;
@@ -48,6 +49,9 @@ using namespace std::placeholders;
 using pattern::Placeholder;
 using pattern::Variable;
 using pattern::InstantiatedValue;
+
+static llvm::cl::opt<bool>
+    MultinomialsFlag("multinomials", llvm::cl::desc("Use true multinomials"));
 
 void iterateDeserialized(
     string directory, std::function<void(MonoPair<Call<string>> &)> callback) {
@@ -70,8 +74,6 @@ void iterateDeserialized(
         std::streamsize size2 = file2.tellg();
         file1.seekg(0, ios::beg);
         file2.seekg(0, ios::beg);
-        std::cerr << fileName1 << "\n";
-        std::cerr << fileName2 << "\n";
 
         std::vector<char> buffer1(static_cast<size_t>(size1));
         std::vector<char> buffer2(static_cast<size_t>(size2));
@@ -132,7 +134,7 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules, string outputDirectory,
     }
 
     // Run the interpreter the first time
-    serializeValuesInRange(functions, -20, 20, outputDirectory);
+    serializeValuesInRange(functions, -100, 100, outputDirectory);
 
     // Collect loop info
     LoopCountMap loopCounts;
@@ -161,18 +163,20 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules, string outputDirectory,
     }
 
     // Run the interpreter on the unrolled code
-    serializeValuesInRange(functions, -20, 20, unrolledOutputDirectory);
+    serializeValuesInRange(functions, -100, 100, unrolledOutputDirectory);
 
     loopCounts = {};
     PolynomialEquations polynomialEquations;
     const MonoPair<PathMap> pathMaps =
         preprocessedFunctions.getValue().map<PathMap>(
             [](PreprocessedFunction fun) { return fun.results.paths; });
+    size_t degree = 2;
     FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
     iterateDeserialized(
-        unrolledOutputDirectory, [&loopCounts, &nameMap, &polynomialEquations,
-                                  &freeVarsMap](MonoPair<Call<string>> &calls) {
+        unrolledOutputDirectory,
+        [&loopCounts, &nameMap, &polynomialEquations, &freeVarsMap,
+         degree](MonoPair<Call<string>> &calls) {
             int lastMark = -5; // -5 is unused
             analyzeExecution(calls, nameMap,
                              std::bind(findLoopCounts, std::ref(lastMark),
@@ -180,14 +184,14 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules, string outputDirectory,
             analyzeExecution(calls, nameMap,
                              std::bind(populateEquationsMap,
                                        std::ref(polynomialEquations),
-                                       std::cref(freeVarsMap), _1));
+                                       std::cref(freeVarsMap), _1, degree));
         });
     loopTransformations = findLoopTransformations(loopCounts);
     dumpLoopTransformations(loopTransformations);
-    dumpPolynomials(polynomialEquations, freeVarsMap);
+    dumpPolynomials(polynomialEquations, freeVarsMap, degree);
 
     auto invariantCandidates = makeInvariantDefinitions(
-        findSolutions(polynomialEquations), {}, freeVarsMap);
+        findSolutions(polynomialEquations), {}, freeVarsMap, degree);
     SMTGenerationOpts::initialize(mainFunctionName, false, false, false, false,
                                   false, false, false, false, false, false,
                                   false, invariantCandidates);
@@ -285,7 +289,7 @@ analyse(string outputDirectory,
             analyzeExecution(calls, nameMap,
                              std::bind(populateEquationsMap,
                                        std::ref(polynomialEquations),
-                                       std::cref(originalFreeVarsMap), _1));
+                                       std::cref(originalFreeVarsMap), _1, 1));
             analyzeExecution(calls, nameMap,
                              std::bind(instantiatePattern, std::ref(lePatterns),
                                        std::cref(freeVarsMap),
@@ -317,7 +321,7 @@ analyse(string outputDirectory,
     dumpBounds(boundsMap);
     std::cerr << "----------\n";
     std::cerr << "Equations\n";
-    dumpPolynomials(polynomialEquations, originalFreeVarsMap);
+    dumpPolynomials(polynomialEquations, originalFreeVarsMap, 1);
     dumpLoopCounts(loopCounts);
 
     map<int, LoopTransformation> unrollSuggestions =
@@ -344,8 +348,9 @@ analyse(string outputDirectory,
         }
         std::cerr << mapIt.second.count << "\n";
     }
-    return makeInvariantDefinitions(findSolutions(polynomialEquations),
-                                    boundsMap, originalFreeVarsMap);
+    return {};
+    // return makeInvariantDefinitions(findSolutions(polynomialEquations),
+    //                                 boundsMap, originalFreeVarsMap);
 }
 
 void dumpLoopTransformations(map<int, LoopTransformation> loopTransformations) {
@@ -469,23 +474,42 @@ map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map) {
     return transforms;
 }
 
+vector<vector<string>> polynomialTermsOfDegree(vector<string> variables,
+                                               size_t degree) {
+    if (MultinomialsFlag) {
+        return kCombinationsWithRepetitions(variables, degree);
+    } else {
+        vector<vector<string>> terms;
+        for (auto var : variables) {
+            vector<string> term(degree, var);
+            terms.push_back(term);
+        }
+        return terms;
+    }
+}
+
 void populateEquationsMap(PolynomialEquations &polynomialEquations,
-                          FreeVarsMap freeVarsMap, MatchInfo match) {
+                          FreeVarsMap freeVarsMap, MatchInfo match,
+                          size_t degree) {
     VarMap<string> variables;
     variables.insert(match.steps.first.state.variables.begin(),
                      match.steps.first.state.variables.end());
     variables.insert(match.steps.second.state.variables.begin(),
                      match.steps.second.state.variables.end());
-    vector<mpq_class> equation(freeVarsMap.at(match.mark).size() + 1);
-    for (size_t i = 0; i < equation.size() - 1; ++i) {
-        string name = freeVarsMap.at(match.mark).at(i);
-        equation.at(i) = variables.at(name)->unsafeIntVal();
+    vector<mpq_class> equation;
+    for (size_t i = 1; i <= degree; ++i) {
+        auto polynomialTerms =
+            polynomialTermsOfDegree(freeVarsMap.at(match.mark), i);
+        for (auto term : polynomialTerms) {
+            VarIntVal termVal = 1;
+            for (auto var : term) {
+                termVal *= variables.at(var)->unsafeIntVal();
+            }
+            equation.push_back(termVal);
+        }
     }
     // Add a constant at the end of each vector
-    equation.at(equation.size() - 1) = 1;
-    if (isZero(equation)) {
-        return;
-    }
+    equation.push_back(1);
     ExitIndex exitIndex = 0;
     if (variables.count("exitIndex$1_" + std::to_string(match.mark)) == 1) {
         exitIndex = variables.at("exitIndex$1_" + std::to_string(match.mark))
@@ -845,7 +869,7 @@ findSolutions(const PolynomialEquations &polynomialEquations) {
 }
 
 void dumpPolynomials(const PolynomialEquations &equationsMap,
-                     const FreeVarsMap &freeVarsMap) {
+                     const FreeVarsMap &freeVarsMap, size_t degree) {
     llvm::errs() << "------------------\n";
     PolynomialSolutions solutions = findSolutions(equationsMap);
     for (auto eqMapIt : solutions) {
@@ -867,24 +891,43 @@ void dumpPolynomials(const PolynomialEquations &equationsMap,
 }
 
 SharedSMTRef makeEquation(const vector<mpz_class> &eq,
-                          const vector<string> &freeVars) {
+                          const vector<string> &freeVars, size_t degree) {
     vector<SharedSMTRef> left;
     vector<SharedSMTRef> right;
-    assert(eq.size() == freeVars.size() + 1);
-    for (size_t i = 0; i < freeVars.size(); ++i) {
+    vector<SharedSMTRef> polynomialTerms;
+    for (size_t i = 1; i <= degree; ++i) {
+        auto kCombinations = polynomialTermsOfDegree(freeVars, i);
+        for (auto vec : kCombinations) {
+            multiset<string> vars;
+            vars.insert(vec.begin(), vec.end());
+            vector<SharedSMTRef> args;
+            for (auto var : vars) {
+                args.push_back(smt::stringExpr(var));
+            }
+            if (args.size() == 1) {
+                polynomialTerms.push_back(args.front());
+            } else {
+                polynomialTerms.push_back(make_shared<Op>("*", args));
+            }
+        }
+    }
+    assert(polynomialTerms.size() + 1 == eq.size());
+    for (size_t i = 0; i < polynomialTerms.size(); ++i) {
         if (eq.at(i) > 0) {
             if (eq.at(i) == 1) {
-                left.push_back(smt::stringExpr(freeVars.at(i)));
+                left.push_back(polynomialTerms.at(i));
             } else {
-                left.push_back(
-                    makeBinOp("*", eq.at(i).get_str(), freeVars.at(i)));
+                left.push_back(makeBinOp("*",
+                                         smt::stringExpr(eq.at(i).get_str()),
+                                         polynomialTerms.at(i)));
             }
         } else if (eq.at(i) < 0) {
             mpz_class inv = -eq.at(i);
             if (inv == 1) {
-                right.push_back(smt::stringExpr(freeVars.at(i)));
+                right.push_back(polynomialTerms.at(i));
             } else {
-                right.push_back(makeBinOp("*", inv.get_str(), freeVars.at(i)));
+                right.push_back(makeBinOp("*", smt::stringExpr(inv.get_str()),
+                                          polynomialTerms.at(i)));
             }
         }
     }
@@ -914,10 +957,11 @@ SharedSMTRef makeEquation(const vector<mpz_class> &eq,
 }
 
 SharedSMTRef makeInvariantDefinition(const vector<vector<mpz_class>> &solution,
-                                     const vector<string> &freeVars) {
+                                     const vector<string> &freeVars,
+                                     size_t degree) {
     vector<SharedSMTRef> conjunction;
     for (const auto &vec : solution) {
-        conjunction.push_back(makeEquation(vec, freeVars));
+        conjunction.push_back(makeEquation(vec, freeVars, degree));
     }
     if (conjunction.size() == 0) {
         return smt::stringExpr("false");
@@ -945,7 +989,7 @@ makeBoundsDefinitions(const map<string, Bound<Optional<VarIntVal>>> &bounds) {
 map<int, SharedSMTRef>
 makeInvariantDefinitions(const PolynomialSolutions &solutions,
                          const BoundsMap &bounds,
-                         const FreeVarsMap &freeVarsMap) {
+                         const FreeVarsMap &freeVarsMap, size_t degree) {
     map<int, SharedSMTRef> definitions;
     for (auto mapIt : solutions) {
         int mark = mapIt.first;
@@ -955,12 +999,12 @@ makeInvariantDefinitions(const PolynomialSolutions &solutions,
         }
         vector<SharedSMTRef> exitClauses;
         for (auto exitIt : mapIt.second) {
-            SharedSMTRef left = makeInvariantDefinition(exitIt.second.left,
-                                                        freeVarsMap.at(mark));
-            SharedSMTRef right = makeInvariantDefinition(exitIt.second.right,
-                                                         freeVarsMap.at(mark));
-            SharedSMTRef none = makeInvariantDefinition(exitIt.second.none,
-                                                        freeVarsMap.at(mark));
+            SharedSMTRef left = makeInvariantDefinition(
+                exitIt.second.left, freeVarsMap.at(mark), degree);
+            SharedSMTRef right = makeInvariantDefinition(
+                exitIt.second.right, freeVarsMap.at(mark), degree);
+            SharedSMTRef none = makeInvariantDefinition(
+                exitIt.second.none, freeVarsMap.at(mark), degree);
             vector<SharedSMTRef> invariantDisjunction = {left, right, none};
             SharedSMTRef invariant =
                 make_shared<Op>("or", invariantDisjunction);

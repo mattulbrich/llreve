@@ -1,5 +1,9 @@
 #pragma once
 
+#include <iostream>
+#include <list>
+#include <vector>
+
 template <typename T>
 std::list<std::vector<T>> kSubset(std::vector<T> input, size_t k) {
     if (k > input.size()) {
@@ -42,4 +46,22 @@ std::list<std::vector<T>> kPermutations(std::vector<T> input, size_t k) {
         } while (std::next_permutation(vec.begin(), vec.end()));
     }
     return output;
+}
+
+std::vector<std::vector<size_t>> kCombinationsWithRepetitionsInt(size_t n,
+                                                                 size_t k);
+
+template <typename T>
+std::vector<std::vector<T>> kCombinationsWithRepetitions(std::vector<T> input,
+                                                         size_t k) {
+    auto ints = kCombinationsWithRepetitionsInt(input.size(), k);
+    std::vector<std::vector<T>> result;
+    for (auto vec : ints) {
+        std::vector<T> vecT(k);
+        for (size_t i = 0; i < k; ++i) {
+            vecT.at(i) = input.at(vec[i]);
+        }
+        result.push_back(vecT);
+    }
+    return result;
 }

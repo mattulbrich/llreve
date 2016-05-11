@@ -115,18 +115,21 @@ BoundsMap updateBounds(
     BoundsMap accumulator,
     const std::map<int, std::map<std::string, Bound<VarIntVal>>> &update);
 void populateEquationsMap(PolynomialEquations &equationsMap,
-                          FreeVarsMap freeVarsMap, MatchInfo match);
+                          FreeVarsMap freeVarsMap, MatchInfo match,
+                          size_t degree);
 void dumpPolynomials(const PolynomialEquations &equationsMap,
-                      const FreeVarsMap &freeVarsmap);
+                     const FreeVarsMap &freeVarsmap, size_t degree);
 std::map<int, smt::SharedSMTRef>
 makeInvariantDefinitions(const PolynomialSolutions &solutions,
                          const BoundsMap &bounds,
-                         const FreeVarsMap &freeVarsMap);
+                         const FreeVarsMap &freeVarsMap, size_t degree);
 smt::SharedSMTRef
 makeInvariantDefinition(const std::vector<std::vector<mpz_class>> &solution,
-                        const std::vector<std::string> &freeVars);
+                        const std::vector<std::string> &freeVars,
+                        size_t degree);
 smt::SharedSMTRef makeEquation(const std::vector<mpz_class> &eq,
-                               const std::vector<std::string> &freeVars);
+                               const std::vector<std::string> &freeVars,
+                               size_t degree);
 smt::SharedSMTRef makeBoundsDefinitions(
     const std::map<std::string, Bound<llvm::Optional<VarIntVal>>> &bounds);
 PolynomialSolutions findSolutions(const PolynomialEquations &equationsMap);
@@ -145,3 +148,5 @@ void applyLoopTransformation(
     MonoPair<PreprocessedFunction> &functions,
     const std::map<int, LoopTransformation> &loopTransformations,
     const MonoPair<BidirBlockMarkMap> &mark);
+std::vector<std::vector<std::string>>
+polynomialTermsOfDegree(std::vector<std::string> variables, size_t degree);
