@@ -55,6 +55,9 @@ static llvm::cl::opt<bool>
 static llvm::cl::opt<unsigned>
     DegreeFlag("degree", llvm::cl::desc("Degree of the polynomial invariants"),
                llvm::cl::init(1));
+static llvm::cl::opt<bool> ImplicationsFlag(
+    "implications",
+    llvm::cl::desc("Add implications instead of replacing invariants"));
 
 void iterateDeserialized(
     string directory, std::function<void(MonoPair<Call<string>> &)> callback) {
@@ -195,14 +198,44 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules, string outputDirectory,
 
     auto invariantCandidates = makeInvariantDefinitions(
         findSolutions(polynomialEquations), {}, freeVarsMap, DegreeFlag);
-    SMTGenerationOpts::initialize(mainFunctionName, false, false, false, false,
-                                  false, false, false, false, false, false,
-                                  false, invariantCandidates);
+    if (ImplicationsFlag) {
+        SMTGenerationOpts::initialize(mainFunctionName, false, false, false,
+                                      false, false, false, false, false, false,
+                                      false, false, {});
+    } else {
+        SMTGenerationOpts::initialize(mainFunctionName, false, false, false,
+                                      false, false, false, false, false, false,
+                                      false, false, invariantCandidates);
+    }
     llvm::verifyModule(*modules.first);
     llvm::verifyModule(*modules.second);
     // TODO pass all functions
-    return generateSMT(modules, {preprocessedFunctions.getValue()},
-                       FileOptions({}, nullptr, nullptr, false));
+    vector<SharedSMTRef> clauses =
+        generateSMT(modules, {preprocessedFunctions.getValue()},
+                    FileOptions({}, nullptr, nullptr, false));
+    if (ImplicationsFlag) {
+        // Add the necessary implications
+        for (auto invariantIt : invariantCandidates) {
+            auto mark = invariantIt.first;
+            if (mark < 0) {
+                continue;
+            }
+            vector<SortedVar> args;
+            for (auto var : freeVarsMap.at(mark)) {
+                args.push_back(SortedVar(var, "Int"));
+            }
+            string invariantName = "INV_MAIN_" + std::to_string(mark);
+            string candidateName = invariantName + "_INFERRED";
+            SharedSMTRef candidate =
+                smt::makeOp(candidateName, freeVarsMap.at(mark));
+            SharedSMTRef invariant = smt::makeOp(invariantName, freeVarsMap.at(mark));
+            SharedSMTRef impl = makeBinOp("=>", invariant, candidate);
+            SharedSMTRef forall = make_shared<smt::Forall>(args, impl);
+            clauses.push_back(invariantIt.second);
+            clauses.push_back(make_shared<smt::Assert>(forall));
+        }
+    }
+    return clauses;
 }
 
 void applyLoopTransformation(
@@ -1018,9 +1051,13 @@ makeInvariantDefinitions(const PolynomialSolutions &solutions,
             //                   makeBoundsDefinitions(bounds.at(mark)));
             // }
         }
-        definitions[mark] = make_shared<FunDef>(
-            "INV_MAIN_" + std::to_string(mark), args, "Bool",
-            std::make_shared<Op>("or", exitClauses));
+        string invariantName = "INV_MAIN_" + std::to_string(mark);
+        if (ImplicationsFlag) {
+            invariantName += "_INFERRED";
+        }
+        definitions[mark] =
+            make_shared<FunDef>(invariantName, args, "Bool",
+                                std::make_shared<Op>("or", exitClauses));
     }
     return definitions;
 }
