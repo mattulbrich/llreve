@@ -47,7 +47,8 @@ std::map<Key, Val> cborToMap(const cbor_item_t *item,
     std::map<Key, Val> map;
     struct cbor_pair *handle = cbor_map_handle(item);
     for (size_t i = 0; i < cbor_map_size(item); ++i) {
-        map[keyFun(handle[i].key)] = valFun(handle[i].value);
+        map.insert(
+            std::make_pair(keyFun(handle[i].key), valFun(handle[i].value)));
     }
     return map;
 }
