@@ -53,7 +53,7 @@ int main(int argc, const char **argv) {
     llvm::cl::ParseCommandLineOptions(argc, argv);
     InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,
                         FileName2Flag);
-    PreprocessOpts preprocessOpts(ShowCFGFlag, ShowMarkedCFGFlag);
+    PreprocessOpts preprocessOpts(ShowCFGFlag, ShowMarkedCFGFlag, false);
 
     MonoPair<shared_ptr<CodeGenAction>> acts =
         makeMonoPair(make_shared<clang::EmitLLVMOnlyAction>(),
@@ -67,7 +67,7 @@ int main(int argc, const char **argv) {
                     S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IWOTH);
     if (ret != 0) {
         if (errno != EEXIST) {
-            logError("Couldn’t create directory " + OutputDirectoryFlag + "\n");
+            logError("Couldn't create directory " + OutputDirectoryFlag + "\n");
             exit(1);
         }
     }

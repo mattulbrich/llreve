@@ -58,7 +58,7 @@ int main(int argc, const char **argv) {
     llvm::cl::ParseCommandLineOptions(argc, argv);
     InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,
                         FileName2Flag);
-    PreprocessOpts preprocessOpts(ShowCFGFlag, ShowMarkedCFGFlag);
+    PreprocessOpts preprocessOpts(ShowCFGFlag, ShowMarkedCFGFlag, false);
 
     MonoPair<shared_ptr<CodeGenAction>> acts =
         makeMonoPair(make_shared<clang::EmitLLVMOnlyAction>(),
@@ -67,11 +67,12 @@ int main(int argc, const char **argv) {
         compileToModules(argv[0], inputOpts, acts);
     vector<MonoPair<PreprocessedFunction>> preprocessedFuns =
         preprocessFunctions(modules, preprocessOpts);
-    vector<smt::SharedSMTRef> smtExprs =
-        driver(modules, OutputDirectoryFlag, preprocessedFuns, MainFunctionFlag);
+    vector<smt::SharedSMTRef> smtExprs = driver(
+        modules, OutputDirectoryFlag, preprocessedFuns, MainFunctionFlag);
     // map<int, smt::SharedSMTRef> invariantDefinitions =
     //     analyse(OutputDirectoryFlag, preprocessedFuns, MainFunctionFlag);
-    // SMTGenerationOpts::initialize(MainFunctionFlag, false, false, false, false,
+    // SMTGenerationOpts::initialize(MainFunctionFlag, false, false, false,
+    // false,
     //                               false, false, false, false, false, false,
     //                               false, invariantDefinitions);
     // vector<smt::SharedSMTRef> smtExprs = generateSMT(
