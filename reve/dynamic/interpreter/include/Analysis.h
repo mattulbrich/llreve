@@ -6,7 +6,6 @@
 #include "Interpreter.h"
 #include "MarkAnalysis.h"
 #include "MonoPair.h"
-#include "Pattern.h"
 #include "Permutation.h"
 #include "Preprocess.h"
 
@@ -35,10 +34,6 @@ template <typename T> struct LoopInfoData {
 using ExitIndex = mpz_class;
 
 using BlockNameMap = std::map<std::string, std::set<int>>;
-using PatternCandidates =
-    std::list<std::vector<std::shared_ptr<pattern::InstantiatedValue>>>;
-using PatternCandidatesMap =
-    std::map<int, LoopInfoData<llvm::Optional<PatternCandidates>>>;
 using HeapPatternCandidates =
     std::list<std::shared_ptr<HeapPattern<std::string>>>;
 using HeapPatternCandidatesMap = std::map<
@@ -65,13 +60,6 @@ using PolynomialSolutions =
 
 using LoopCountMap = std::map<int, std::vector<MonoPair<int>>>;
 
-void findEqualities(MonoPair<Call<std::string>> calls,
-                    MonoPair<BlockNameMap> nameMap, FreeVarsMap freeVars,
-                    PatternCandidatesMap &candidates);
-void basicPatternCandidates(MonoPair<Call<std::string>> calls,
-                            MonoPair<BlockNameMap> nameMap,
-                            FreeVarsMap freeVarsMap,
-                            PatternCandidatesMap &candidates);
 template <typename T> T identity(T x) { return x; }
 BlockNameMap blockNameMap(BidirBlockMarkMap blockMap);
 
@@ -99,13 +87,8 @@ template <typename T> struct MatchInfo {
 // marks
 bool normalMarkBlock(const BlockNameMap &map, BlockName &blockName);
 void debugAnalysis(MatchInfo<std::string> match);
-void dumpPatternCandidates(const PatternCandidatesMap &candidates,
-                           const pattern::Expr &pat);
 void dumpLoopCounts(const LoopCountMap &loopCounts);
 std::map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map);
-void instantiatePattern(PatternCandidatesMap &patternCandidates,
-                        const FreeVarsMap &freeVars, const pattern::Expr &pat,
-                        MatchInfo<std::string> match);
 template <typename T>
 void findLoopCounts(int &lastMark, LoopCountMap &map, MatchInfo<T> match) {
     if (lastMark == match.mark) {

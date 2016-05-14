@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Pattern.h"
 #include "Permutation.h"
+#include "Interpreter.h"
 
 // Used before a pattern is instantiated
 struct VariablePlaceholder {};

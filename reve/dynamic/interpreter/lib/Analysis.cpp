@@ -1,6 +1,5 @@
 #include "Analysis.h"
 
-#include "CommonPattern.h"
 #include "Compat.h"
 #include "HeapPattern.h"
 #include "Interpreter.h"
@@ -8,7 +7,6 @@
 #include "MarkAnalysis.h"
 #include "MonoPair.h"
 #include "PathAnalysis.h"
-#include "Pattern.h"
 #include "SerializeTraces.h"
 #include "Unroll.h"
 
@@ -46,10 +44,6 @@ using smt::makeBinOp;
 using smt::SortedVar;
 
 using namespace std::placeholders;
-
-using pattern::Placeholder;
-using pattern::Variable;
-using pattern::InstantiatedValue;
 
 static llvm::cl::opt<bool>
     MultinomialsFlag("multinomials", llvm::cl::desc("Use true multinomials"));
@@ -302,16 +296,6 @@ void dumpLoopTransformations(map<int, LoopTransformation> loopTransformations) {
     }
 }
 
-void basicPatternCandidates(MonoPair<Call<string>> calls,
-                            MonoPair<BlockNameMap> nameMap,
-                            FreeVarsMap freeVarsMap,
-                            PatternCandidatesMap &candidates) {
-    analyzeExecution<string>(
-        calls, nameMap, std::bind(instantiatePattern, std::ref(candidates),
-                                  std::cref(freeVarsMap),
-                                  std::cref(*commonpattern::additionPat), _1));
-}
-
 map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map) {
     std::map<int, int64_t> peelCount;
     std::map<int, float> unrollQuotients;
@@ -545,15 +529,6 @@ void populateHeapPatterns(HeapPatternCandidatesMap &heapPatternCandidates,
     }
 }
 
-void findEqualities(MonoPair<Call<string>> calls,
-                    MonoPair<BlockNameMap> nameMap, FreeVarsMap freeVarsMap,
-                    PatternCandidatesMap &candidates) {
-    analyzeExecution<string>(calls, nameMap,
-                             std::bind(instantiatePattern, std::ref(candidates),
-                                       std::cref(freeVarsMap),
-                                       std::cref(*commonpattern::eqPat), _1));
-}
-
 BlockNameMap blockNameMap(BidirBlockMarkMap blockMap) {
     BlockNameMap ret;
     for (auto it : blockMap.BlockToMarksMap) {
@@ -601,112 +576,6 @@ void debugAnalysis(MatchInfo<string> match) {
     std::cerr << match.steps.second.toJSON(identity<string>).dump(4)
               << std::endl;
     std::cerr << std::endl << std::endl;
-}
-
-void instantiatePattern(PatternCandidatesMap &patternCandidates,
-                        const FreeVarsMap &freeVars, const pattern::Expr &pat,
-                        MatchInfo<string> match) {
-    VarMap<string> variables;
-    variables.insert(match.steps.first.state.variables.begin(),
-                     match.steps.first.state.variables.end());
-    variables.insert(match.steps.second.state.variables.begin(),
-                     match.steps.second.state.variables.end());
-    if (patternCandidates.find(match.mark) == patternCandidates.end()) {
-        // Instantiate the first time
-        patternCandidates.insert(
-            make_pair(match.mark, LoopInfoData<Optional<PatternCandidates>>(
-                                      Optional<PatternCandidates>(),
-                                      Optional<PatternCandidates>(),
-                                      Optional<PatternCandidates>())));
-        switch (match.loopInfo) {
-        case LoopInfo::Left:
-            patternCandidates.at(match.mark).left =
-                pat.instantiate(freeVars.at(match.mark), variables);
-            break;
-        case LoopInfo::Right:
-            patternCandidates.at(match.mark).right =
-                pat.instantiate(freeVars.at(match.mark), variables);
-            break;
-        case LoopInfo::None:
-            patternCandidates.at(match.mark).none =
-                pat.instantiate(freeVars.at(match.mark), variables);
-            break;
-        }
-    } else {
-        PatternCandidates *list = nullptr;
-        switch (match.loopInfo) {
-        case LoopInfo::Left:
-            if (!patternCandidates.at(match.mark).left.hasValue()) {
-                patternCandidates.at(match.mark).left =
-                    pat.instantiate(freeVars.at(match.mark), variables);
-                return;
-            } else {
-                list = &patternCandidates.at(match.mark).left.getValue();
-            }
-            break;
-        case LoopInfo::Right:
-            if (!patternCandidates.at(match.mark).right.hasValue()) {
-                patternCandidates.at(match.mark).right =
-                    pat.instantiate(freeVars.at(match.mark), variables);
-                return;
-            } else {
-                list = &patternCandidates.at(match.mark).right.getValue();
-            }
-            break;
-        case LoopInfo::None:
-            if (!patternCandidates.at(match.mark).none.hasValue()) {
-                patternCandidates.at(match.mark).none =
-                    pat.instantiate(freeVars.at(match.mark), variables);
-                return;
-            } else {
-                list = &patternCandidates.at(match.mark).none.getValue();
-            }
-            break;
-        }
-        // Already instantiated, remove the non matching instantiations
-        vector<VarIntVal> candidateVals(pat.arguments());
-        for (auto listIt = list->begin(), e = list->end(); listIt != e;) {
-            for (size_t i = 0; i < candidateVals.size(); ++i) {
-                candidateVals.at(i) = listIt->at(i)->getValue(variables);
-            }
-            if (!pat.matches(candidateVals)) {
-                listIt = list->erase(listIt);
-            } else {
-                ++listIt;
-            }
-        }
-    }
-}
-
-void dumpPatternCandidates(const PatternCandidatesMap &candidates,
-                           const pattern::Expr &pat) {
-    for (auto it : candidates) {
-        std::cerr << it.first << ":\n";
-        if (it.second.left.hasValue()) {
-            std::cerr << "left:\n";
-            for (auto vec : it.second.left.getValue()) {
-                std::cerr << "\t";
-                pat.dump(std::cerr, vec);
-                std::cerr << std::endl;
-            }
-        }
-        if (it.second.right.hasValue()) {
-            std::cerr << "right:\n";
-            for (auto vec : it.second.right.getValue()) {
-                std::cerr << "\t";
-                pat.dump(std::cerr, vec);
-                std::cerr << std::endl;
-            }
-        }
-        if (it.second.none.hasValue()) {
-            std::cerr << "none:\n";
-            for (auto vec : it.second.none.getValue()) {
-                std::cerr << "\t";
-                pat.dump(std::cerr, vec);
-                std::cerr << std::endl;
-            }
-        }
-    }
 }
 
 PolynomialSolutions
