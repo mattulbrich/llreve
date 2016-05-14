@@ -104,14 +104,14 @@ interpretFunctionPair(MonoPair<const Function *> funs,
         size_t i = varName.find_first_of('$');
         varName = varName.substr(0, i);
         const llvm::Value *a = &arg;
-        var1[a] = variables.at(varName);
+        var1.insert(make_pair(a, variables.at(varName)));
     }
     for (auto &arg : funs.second->args()) {
         std::string varName = arg.getName();
         size_t i = varName.find_first_of('$');
         varName = varName.substr(0, i);
         const llvm::Value *a = &arg;
-        var2[a] = variables.at(varName);
+        var2.insert(make_pair(a, variables.at(varName)));
     }
     return makeMonoPair(
         interpretFunction(*funs.first, FastState(var1, heap), maxSteps),
@@ -303,6 +303,8 @@ shared_ptr<VarVal> resolveValue(const Value *val, const FastState &state) {
         } else {
             return make_shared<VarInt>(constInt->getSExtValue());
         }
+    } else if (llvm::isa<llvm::ConstantPointerNull>(val)) {
+        return make_shared<VarInt>(0);
     }
     logErrorData("Operators are not yet handled\n", *val);
     return make_shared<VarInt>(42);

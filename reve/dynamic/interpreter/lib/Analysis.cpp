@@ -2,6 +2,7 @@
 
 #include "CommonPattern.h"
 #include "Compat.h"
+#include "HeapPattern.h"
 #include "Interpreter.h"
 #include "Linear.h"
 #include "MarkAnalysis.h"
@@ -153,6 +154,16 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     // Run the interpreter on the unrolled code
     loopCounts = {};
     PolynomialEquations polynomialEquations;
+    HeapPatternCandidatesMap heapPatternCandidates;
+    std::shared_ptr<HeapPattern<VariablePlaceholder>> heapPatternExample =
+        std::make_shared<HeapExprEq<VariablePlaceholder>>(
+            makeMonoPair<std::shared_ptr<HeapExpr<VariablePlaceholder>>>(
+                std::make_shared<Variable<VariablePlaceholder>>(
+                    VariablePlaceholder()),
+                std::make_shared<HeapAccess<VariablePlaceholder>>(
+                    ProgramIndex::First,
+                    std::make_shared<Variable<VariablePlaceholder>>(
+                        VariablePlaceholder()))));
     const MonoPair<PathMap> pathMaps =
         preprocessedFunctions.getValue().map<PathMap>(
             [](PreprocessedFunction fun) { return fun.results.paths; });
@@ -162,6 +173,7 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     iterateTracesInRange(
         functions, -100, 100,
         [&loopCounts, &nameMap, &polynomialEquations, &freeVarsMap,
+         &heapPatternCandidates, &heapPatternExample,
          degree](MonoPair<Call<const llvm::Value *>> &calls) {
             int lastMark = -5; // -5 is unused
             analyzeExecution<const llvm::Value *>(
@@ -172,10 +184,16 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                 calls, nameMap,
                 std::bind(populateEquationsMap, std::ref(polynomialEquations),
                           std::cref(freeVarsMap), _1, degree));
+            analyzeExecution<const llvm::Value *>(
+                calls, nameMap,
+                std::bind(populateHeapPatterns, std::ref(heapPatternCandidates),
+                          std::cref(*heapPatternExample),
+                          std::cref(freeVarsMap), _1));
         });
     loopTransformations = findLoopTransformations(loopCounts);
     dumpLoopTransformations(loopTransformations);
     dumpPolynomials(polynomialEquations, freeVarsMap, DegreeFlag);
+    dumpHeapPatterns(heapPatternCandidates);
 
     auto invariantCandidates = makeInvariantDefinitions(
         findSolutions(polynomialEquations), {}, freeVarsMap, DegreeFlag);
@@ -454,6 +472,79 @@ void populateEquationsMap(PolynomialEquations &polynomialEquations,
     }
 }
 
+void populateHeapPatterns(HeapPatternCandidatesMap &heapPatternCandidates,
+                          const HeapPattern<VariablePlaceholder> &pattern,
+                          FreeVarsMap freeVarsMap,
+                          MatchInfo<const llvm::Value *> match) {
+    VarMap<string> variables;
+    for (auto varIt : match.steps.first.state.variables) {
+        variables.insert(std::make_pair(varIt.first->getName(), varIt.second));
+    }
+    for (auto varIt : match.steps.second.state.variables) {
+        variables.insert(std::make_pair(varIt.first->getName(), varIt.second));
+    }
+    MonoPair<Heap> heaps = makeMonoPair(match.steps.first.state.heap,
+                                        match.steps.second.state.heap);
+    ExitIndex exitIndex = 0;
+    if (variables.count("exitIndex$1_" + std::to_string(match.mark)) == 1) {
+        exitIndex = variables.at("exitIndex$1_" + std::to_string(match.mark))
+                        ->unsafeIntVal();
+    } else if (variables.count("exitIndex$2_" + std::to_string(match.mark)) ==
+               1) {
+        exitIndex = variables.at("exitIndex$2_" + std::to_string(match.mark))
+                        ->unsafeIntVal();
+    }
+    if (heapPatternCandidates[match.mark].count(exitIndex) == 0) {
+        auto candidates =
+            pattern.instantiate(freeVarsMap.at(match.mark), variables, heaps);
+        heapPatternCandidates.at(match.mark)
+            .insert(make_pair(exitIndex,
+                              LoopInfoData<Optional<HeapPatternCandidates>>(
+                                  Optional<HeapPatternCandidates>(),
+                                  Optional<HeapPatternCandidates>(),
+                                  Optional<HeapPatternCandidates>())));
+        switch (match.loopInfo) {
+        case LoopInfo::Left:
+            heapPatternCandidates.at(match.mark).at(exitIndex).left =
+                candidates;
+            break;
+        case LoopInfo::Right:
+            heapPatternCandidates.at(match.mark).at(exitIndex).right =
+                candidates;
+            break;
+        case LoopInfo::None:
+            heapPatternCandidates.at(match.mark).at(exitIndex).none =
+                candidates;
+            break;
+        }
+    } else {
+        HeapPatternCandidates *patterns = nullptr;
+        switch (match.loopInfo) {
+        case LoopInfo::Left:
+            patterns = &heapPatternCandidates.at(match.mark)
+                            .at(exitIndex)
+                            .left.getValue();
+            break;
+        case LoopInfo::Right:
+            patterns = &heapPatternCandidates.at(match.mark)
+                            .at(exitIndex)
+                            .right.getValue();
+            break;
+        case LoopInfo::None:
+            patterns = &heapPatternCandidates.at(match.mark)
+                            .at(exitIndex)
+                            .none.getValue();
+            break;
+        }
+        for (auto listIt = patterns->begin(); listIt != patterns->end();
+             ++listIt) {
+            if (!(*listIt)->matches(variables, heaps)) {
+                listIt = patterns->erase(listIt);
+            }
+        }
+    }
+}
+
 void findEqualities(MonoPair<Call<string>> calls,
                     MonoPair<BlockNameMap> nameMap, FreeVarsMap freeVarsMap,
                     PatternCandidatesMap &candidates) {
@@ -668,6 +759,38 @@ void dumpPolynomials(const PolynomialEquations &equationsMap,
             dumpMatrix(exitMapIt.second.right);
             std::cerr << "synced\n";
             dumpMatrix(exitMapIt.second.none);
+        }
+    }
+}
+
+void dumpHeapPatterns(const HeapPatternCandidatesMap &heapPatternsMap) {
+    llvm::errs() << "------------------\n";
+    for (auto eqMapIt : heapPatternsMap) {
+        std::cerr << eqMapIt.first << ":\n";
+        for (auto exitMapIt : eqMapIt.second) {
+            std::cerr << "exit " << exitMapIt.first.get_str() << "\n";
+            if (exitMapIt.second.left.hasValue()) {
+                std::cerr << "left loop\n";
+                for (auto pat : exitMapIt.second.left.getValue()) {
+                    pat->dump(std::cerr);
+                    std::cerr << "\n";
+                }
+            }
+            if (exitMapIt.second.right.hasValue()) {
+                std::cerr << "right loop\n";
+                for (auto pat : exitMapIt.second.right.getValue()) {
+                    pat->dump(std::cerr);
+                    std::cerr << "\n";
+                }
+            }
+            if (exitMapIt.second.none.hasValue()) {
+                std::cerr << "synced\n";
+                std::cerr << exitMapIt.second.none.getValue().size() << "\n";
+                for (auto pat : exitMapIt.second.none.getValue()) {
+                    pat->dump(std::cerr);
+                    std::cerr << "\n";
+                }
+            }
         }
     }
 }
@@ -956,22 +1079,44 @@ void iterateTracesInRange(
     std::function<void(MonoPair<Call<const llvm::Value *>> &)> callback) {
     assert(!(funs.first->isVarArg() || funs.second->isVarArg()));
     vector<VarIntVal> argValues;
-    vector<string> varNames;
+    vector<string> varNamesFirst;
+    vector<string> varNamesSecond;
 
     for (auto &arg : funs.first->args()) {
         // The variables are already renamed so we need to remove the suffix
         std::string varName = arg.getName();
         size_t i = varName.find_first_of('$');
-        varNames.push_back(varName.substr(0, i));
+        varNamesFirst.push_back(varName.substr(0, i));
     }
-    for (const auto &vals : Range(lowerBound, upperBound, varNames.size())) {
+    for (auto &arg : funs.second->args()) {
+        std::string varName = arg.getName();
+        size_t i = varName.find_first_of('$');
+        varNamesSecond.push_back(varName.substr(0, i));
+    }
+    assert(varNamesFirst.size() == varNamesSecond.size());
+    Heap heap;
+    // Insert two null terminated strings for testing purposes
+    for (VarIntVal i = 0; i < 10; ++i) {
+        VarIntVal j = i + 1;
+        heap.insert(std::make_pair(i, j));
+    }
+    for (VarIntVal i = 11; i < 20; ++i) {
+        VarIntVal j = i + 1;
+        heap.insert(std::make_pair(i, j));
+    }
+    for (const auto &vals :
+         Range(lowerBound, upperBound, varNamesFirst.size())) {
         map<string, std::shared_ptr<VarVal>> map;
+        // TODO this is ugly
         for (size_t i = 0; i < vals.size(); ++i) {
-            map.insert({varNames[i], make_shared<VarInt>(vals[i])});
+            map.insert({varNamesFirst.at(i), make_shared<VarInt>(vals[i])});
+            if (varNamesFirst.at(i) != varNamesSecond.at(i)) {
+                map.insert(
+                    {varNamesSecond.at(i), make_shared<VarInt>(vals[i])});
+            }
         }
-        Heap heap;
         MonoPair<Call<const llvm::Value *>> calls =
-            interpretFunctionPair(funs, map, heap, 10000);
+            interpretFunctionPair(funs, map, heap, 1000);
         callback(calls);
     }
 }

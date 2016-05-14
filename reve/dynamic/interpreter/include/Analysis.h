@@ -2,6 +2,7 @@
 
 #include "Compat.h"
 #include "FunctionSMTGeneration.h"
+#include "HeapPattern.h"
 #include "Interpreter.h"
 #include "MarkAnalysis.h"
 #include "MonoPair.h"
@@ -31,11 +32,18 @@ template <typename T> struct LoopInfoData {
         : left(left), right(right), none(none) {}
 };
 
+using ExitIndex = mpz_class;
+
 using BlockNameMap = std::map<std::string, std::set<int>>;
 using PatternCandidates =
     std::list<std::vector<std::shared_ptr<pattern::InstantiatedValue>>>;
 using PatternCandidatesMap =
     std::map<int, LoopInfoData<llvm::Optional<PatternCandidates>>>;
+using HeapPatternCandidates =
+    std::list<std::shared_ptr<HeapPattern<std::string>>>;
+using HeapPatternCandidatesMap = std::map<
+    int,
+    std::map<ExitIndex, LoopInfoData<llvm::Optional<HeapPatternCandidates>>>>;
 using BoundsMap =
     std::map<int, std::map<std::string, Bound<llvm::Optional<VarIntVal>>>>;
 
@@ -48,7 +56,6 @@ findFunction(const std::vector<MonoPair<PreprocessedFunction>> functions,
              std::string functionName);
 
 using Equality = MonoPair<std::string>;
-using ExitIndex = mpz_class;
 using PolynomialEquations =
     std::map<int, std::map<ExitIndex,
                            LoopInfoData<std::vector<std::vector<mpq_class>>>>>;
@@ -135,8 +142,13 @@ BoundsMap updateBounds(
 void populateEquationsMap(PolynomialEquations &equationsMap,
                           FreeVarsMap freeVarsMap,
                           MatchInfo<const llvm::Value *> match, size_t degree);
+void populateHeapPatterns(HeapPatternCandidatesMap &heapPatternCandidates,
+                          const HeapPattern<VariablePlaceholder> &pattern,
+                          FreeVarsMap freeVarsMap,
+                          MatchInfo<const llvm::Value *> match);
 void dumpPolynomials(const PolynomialEquations &equationsMap,
                      const FreeVarsMap &freeVarsmap, size_t degree);
+void dumpHeapPatterns(const HeapPatternCandidatesMap &heapPatternsMap);
 std::map<int, smt::SharedSMTRef>
 makeInvariantDefinitions(const PolynomialSolutions &solutions,
                          const BoundsMap &bounds,
