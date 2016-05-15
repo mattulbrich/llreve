@@ -35,7 +35,7 @@ using ExitIndex = mpz_class;
 
 using BlockNameMap = std::map<std::string, std::set<int>>;
 using HeapPatternCandidates =
-    std::list<std::shared_ptr<HeapPattern<std::string>>>;
+    std::list<std::shared_ptr<HeapPattern<const llvm::Value *>>>;
 using HeapPatternCandidatesMap = std::map<
     int,
     std::map<ExitIndex, LoopInfoData<llvm::Optional<HeapPatternCandidates>>>>;
@@ -130,11 +130,10 @@ void populateHeapPatterns(HeapPatternCandidatesMap &heapPatternCandidates,
                           FreeVarsMap freeVarsMap,
                           MatchInfo<const llvm::Value *> match);
 void dumpPolynomials(const PolynomialEquations &equationsMap,
-                     const FreeVarsMap &freeVarsmap, size_t degree);
+                     const FreeVarsMap &freeVarsmap);
 void dumpHeapPatterns(const HeapPatternCandidatesMap &heapPatternsMap);
 std::map<int, smt::SharedSMTRef>
 makeInvariantDefinitions(const PolynomialSolutions &solutions,
-                         const BoundsMap &bounds,
                          const FreeVarsMap &freeVarsMap, size_t degree);
 smt::SharedSMTRef
 makeInvariantDefinition(const std::vector<std::vector<mpz_class>> &solution,

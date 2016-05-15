@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Permutation.h"
 #include "Interpreter.h"
+#include "Permutation.h"
 
 // Used before a pattern is instantiated
 struct VariablePlaceholder {};
@@ -11,12 +11,24 @@ VarIntVal getHeapVal(HeapAddress addr, Heap heap);
 template <typename T> struct HeapPattern {
     virtual size_t arguments() const = 0;
     virtual ~HeapPattern() = default;
-    std::list<std::shared_ptr<HeapPattern<std::string>>>
+    std::list<std::shared_ptr<HeapPattern<const llvm::Value *>>>
     instantiate(std::vector<std::string> variables,
-                VarMap<std::string> variableValues,
+                VarMap<const llvm::Value *> variableValues,
                 MonoPair<Heap> heaps) const {
         size_t k = this->arguments();
-        std::list<std::shared_ptr<HeapPattern<std::string>>> matchingPatterns;
+        std::list<std::shared_ptr<HeapPattern<const llvm::Value *>>>
+            matchingPatterns;
+        // Find the llvm::Value*s corresponding to the variables
+        // TODO the free vars map should simply use llvm::Value* to avoid this
+        // search
+        std::vector<const llvm::Value *> variablePointers;
+        for (auto var : variables) {
+            for (auto val : variableValues) {
+                if (var == val.first->getName()) {
+                    variablePointers.push_back(val.first);
+                }
+            }
+        }
         /*
         std::cerr << "Variables:\n";
         for (auto var : variables) {
@@ -35,7 +47,7 @@ template <typename T> struct HeapPattern {
                       << heap.second.val.get_str() << "\n";
         }
         */
-        for (auto vec : kPermutations(variables, k)) {
+        for (auto vec : kPermutations(variablePointers, k)) {
             auto pattern = this->distributeArguments(vec);
 
             if (pattern->matches(variableValues, heaps)) {
@@ -44,9 +56,9 @@ template <typename T> struct HeapPattern {
         }
         return matchingPatterns;
     }
-    virtual std::shared_ptr<HeapPattern<std::string>>
-    distributeArguments(std::vector<std::string> variables) const = 0;
-    virtual bool matches(VarMap<std::string> variables,
+    virtual std::shared_ptr<HeapPattern<const llvm::Value *>>
+    distributeArguments(std::vector<const llvm::Value *> variables) const = 0;
+    virtual bool matches(VarMap<const llvm::Value *> variables,
                          MonoPair<Heap> heaps) const = 0;
     virtual std::ostream &dump(std::ostream &os) const = 0;
 };
@@ -62,18 +74,18 @@ template <typename T> struct BinaryHeapPattern : public HeapPattern<T> {
     size_t arguments() const override {
         return args.first->arguments() + args.second->arguments();
     }
-    std::shared_ptr<HeapPattern<std::string>>
-    distributeArguments(std::vector<std::string> variables) const override {
-        std::vector<std::string> argsFirst;
-        std::vector<std::string> argsSecond;
+    std::shared_ptr<HeapPattern<const llvm::Value *>> distributeArguments(
+        std::vector<const llvm::Value *> variables) const override {
+        std::vector<const llvm::Value *> argsFirst;
+        std::vector<const llvm::Value *> argsSecond;
         auto mid = variables.begin() + args.first->arguments();
         argsFirst.insert(argsFirst.begin(), variables.begin(), mid);
         argsSecond.insert(argsSecond.begin(), mid, variables.end());
-        return std::make_shared<BinaryHeapPattern<std::string>>(
+        return std::make_shared<BinaryHeapPattern<const llvm::Value *>>(
             op, makeMonoPair(args.first->distributeArguments(argsFirst),
                              args.second->distributeArguments(argsSecond)));
     }
-    bool matches(VarMap<std::string> variables,
+    bool matches(VarMap<const llvm::Value *> variables,
                  MonoPair<Heap> heaps) const override {
         MonoPair<bool> argMatches = args.template map<bool>(
             [&variables, &heaps](std::shared_ptr<HeapPattern<T>> pat) {
@@ -118,12 +130,11 @@ template <typename T> struct UnaryHeapPattern : public HeapPattern<T> {
 template <typename T> struct HeapEqual : public HeapPattern<T> {
     // All elements of the two heaps are equal
     size_t arguments() const override { return 0; }
-    std::shared_ptr<HeapPattern<std::string>>
-    distributeArguments(std::vector<std::string> variables) const override {
-        assert(variables.size() == 0);
-        return std::make_shared<HeapEqual<std::string>>();
+    std::shared_ptr<HeapPattern<const llvm::Value *>> distributeArguments(
+        std::vector<const llvm::Value *> /* unused */) const override {
+        return std::make_shared<HeapEqual<const llvm::Value *>>();
     }
-    bool matches(VarMap<std::string> /* unused */,
+    bool matches(VarMap<const llvm::Value *> /* unused */,
                  MonoPair<Heap> heaps) const override {
         return heaps.first == heaps.second;
     }
@@ -136,10 +147,10 @@ template <typename T> struct HeapEqual : public HeapPattern<T> {
 template <typename T> struct HeapExpr {
     virtual size_t arguments() const = 0;
     virtual ~HeapExpr() = default;
-    virtual VarIntVal eval(VarMap<std::string> variables,
+    virtual VarIntVal eval(VarMap<const llvm::Value *> variables,
                            MonoPair<Heap> heaps) const = 0;
-    virtual std::shared_ptr<HeapExpr<std::string>>
-    distributeArguments(std::vector<std::string> variables) const = 0;
+    virtual std::shared_ptr<HeapExpr<const llvm::Value *>>
+    distributeArguments(std::vector<const llvm::Value *> variables) const = 0;
     virtual std::ostream &dump(std::ostream &os) const = 0;
 };
 
@@ -152,12 +163,12 @@ template <typename T> struct HeapAccess : public HeapExpr<T> {
     HeapAccess(ProgramIndex programIndex, std::shared_ptr<HeapExpr<T>> atVal)
         : programIndex(programIndex), atVal(atVal) {}
     size_t arguments() const override { return atVal->arguments(); }
-    std::shared_ptr<HeapExpr<std::string>>
-    distributeArguments(std::vector<std::string> variables) const override {
-        return std::make_shared<HeapAccess<std::string>>(
+    std::shared_ptr<HeapExpr<const llvm::Value *>> distributeArguments(
+        std::vector<const llvm::Value *> variables) const override {
+        return std::make_shared<HeapAccess<const llvm::Value *>>(
             programIndex, atVal->distributeArguments(variables));
     }
-    VarIntVal eval(VarMap<std::string> variables,
+    VarIntVal eval(VarMap<const llvm::Value *> variables,
                    MonoPair<Heap> heaps) const override {
         VarIntVal atEval = atVal->eval(variables, heaps);
         switch (programIndex) {
@@ -187,11 +198,11 @@ template <typename T> struct HeapAccess : public HeapExpr<T> {
 template <typename T> struct Constant : public HeapExpr<T> {
     VarIntVal value;
     size_t arguments() const override { return 0; }
-    std::shared_ptr<HeapExpr<std::string>> distributeArguments(
-        std::vector<std::string> /* unused */) const override {
-        return std::make_shared<Constant<std::string>>(value);
+    std::shared_ptr<HeapExpr<const llvm::Value *>> distributeArguments(
+        std::vector<const llvm::Value *> /* unused */) const override {
+        return std::make_shared<Constant<const llvm::Value *>>(value);
     }
-    VarIntVal eval(VarMap<std::string> /* unused */,
+    VarIntVal eval(VarMap<const llvm::Value *> /* unused */,
                    MonoPair<Heap> /* unused */) const override {
         return value;
     }
@@ -205,12 +216,13 @@ template <typename T> struct Variable : public HeapExpr<T> {
     T varName;
     Variable(T varName) : varName(varName) {}
     size_t arguments() const override { return 1; }
-    std::shared_ptr<HeapExpr<std::string>>
-    distributeArguments(std::vector<std::string> variables) const override {
+    std::shared_ptr<HeapExpr<const llvm::Value *>> distributeArguments(
+        std::vector<const llvm::Value *> variables) const override {
         assert(variables.size() == 1);
-        return std::make_shared<Variable<std::string>>(variables.front());
+        return std::make_shared<Variable<const llvm::Value *>>(
+            variables.front());
     }
-    VarIntVal eval(VarMap<std::string> /* unused */,
+    VarIntVal eval(VarMap<const llvm::Value *> /* unused */,
                    MonoPair<Heap> /* unused */) const override {
         logError("Can only evaluate specialized version of variable\n");
         return 0;
@@ -221,11 +233,13 @@ template <typename T> struct Variable : public HeapExpr<T> {
     }
 };
 
-template <> std::ostream &Variable<std::string>::dump(std::ostream &os) const;
+template <>
+std::ostream &Variable<const llvm::Value *>::dump(std::ostream &os) const;
 
 template <>
-VarIntVal Variable<std::string>::eval(VarMap<std::string> variables,
-                                      MonoPair<Heap> heaps) const;
+VarIntVal
+Variable<const llvm::Value *>::eval(VarMap<const llvm::Value *> variables,
+                                    MonoPair<Heap> heaps) const;
 
 template <typename T> struct BinaryIntExpr : public HeapExpr<T> {
     BinaryIntOp op;
@@ -233,15 +247,15 @@ template <typename T> struct BinaryIntExpr : public HeapExpr<T> {
     size_t arguments() const override {
         return args.first->arguments() + args.second->arguments();
     }
-    std::shared_ptr<HeapExpr<std::string>>
-    distributeArguments(std::vector<std::string> variables) const override {
+    std::shared_ptr<HeapExpr<const llvm::Value *>> distributeArguments(
+        std::vector<const llvm::Value *> variables) const override {
         auto mid = variables.begin() + args.first->arguments();
-        return std::make_shared<BinaryIntExpr<std::string>>(
+        return std::make_shared<BinaryIntExpr<const llvm::Value *>>(
             op, makeMonoPair(
                     args.first->distributeArguments(variables.begin(), mid),
                     args.second->distributeArguments(mid, variables.end())));
     }
-    VarIntVal eval(VarMap<std::string> variables,
+    VarIntVal eval(VarMap<const llvm::Value *> variables,
                    MonoPair<Heap> heaps) const override {
         MonoPair<VarIntVal> vals = args.template map<VarIntVal>(
             [&variables, &heaps](std::shared_ptr<HeapExpr<T>> arg) {
@@ -288,19 +302,19 @@ template <typename T> struct HeapExprEq : public HeapPattern<T> {
     size_t arguments() const override {
         return args.first->arguments() + args.second->arguments();
     }
-    std::shared_ptr<HeapPattern<std::string>>
-    distributeArguments(std::vector<std::string> variables) const override {
+    std::shared_ptr<HeapPattern<const llvm::Value *>> distributeArguments(
+        std::vector<const llvm::Value *> variables) const override {
         auto mid =
             variables.begin() + static_cast<long>(args.first->arguments());
-        std::vector<std::string> firstArgs;
+        std::vector<const llvm::Value *> firstArgs;
         firstArgs.insert(firstArgs.begin(), variables.begin(), mid);
-        std::vector<std::string> secondArgs;
+        std::vector<const llvm::Value *> secondArgs;
         secondArgs.insert(secondArgs.begin(), mid, variables.end());
-        return std::make_shared<HeapExprEq<std::string>>(
+        return std::make_shared<HeapExprEq<const llvm::Value *>>(
             makeMonoPair(args.first->distributeArguments(firstArgs),
                          args.second->distributeArguments(secondArgs)));
     }
-    bool matches(VarMap<std::string> variables,
+    bool matches(VarMap<const llvm::Value *> variables,
                  MonoPair<Heap> heaps) const override {
         MonoPair<VarIntVal> vals = args.template map<VarIntVal>(
             [&variables, &heaps](std::shared_ptr<HeapExpr<T>> arg) {

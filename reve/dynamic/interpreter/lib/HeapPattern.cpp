@@ -1,15 +1,16 @@
 #include "HeapPattern.h"
 
-using std::string;
-
 template <>
-VarIntVal Variable<string>::eval(VarMap<string> variables,
-                                 MonoPair<Heap> /* unused */) const {
+VarIntVal
+Variable<const llvm::Value *>::eval(VarMap<const llvm::Value *> variables,
+                                    MonoPair<Heap> /* unused */) const {
     return variables.at(varName)->unsafeIntVal();
 }
 
-template <> std::ostream &Variable<std::string>::dump(std::ostream &os) const {
-    os << varName;
+template <>
+std::ostream &Variable<const llvm::Value *>::dump(std::ostream &os) const {
+    std::string name = varName ->getName();
+    os << name;
     return os;
 }
 

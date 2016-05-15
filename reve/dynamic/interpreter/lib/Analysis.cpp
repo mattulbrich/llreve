@@ -186,11 +186,11 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         });
     loopTransformations = findLoopTransformations(loopCounts);
     dumpLoopTransformations(loopTransformations);
-    dumpPolynomials(polynomialEquations, freeVarsMap, DegreeFlag);
+    dumpPolynomials(polynomialEquations, freeVarsMap);
     dumpHeapPatterns(heapPatternCandidates);
 
     auto invariantCandidates = makeInvariantDefinitions(
-        findSolutions(polynomialEquations), {}, freeVarsMap, DegreeFlag);
+        findSolutions(polynomialEquations), freeVarsMap, DegreeFlag);
     if (ImplicationsFlag) {
         SMTGenerationOpts::initialize(mainFunctionName, false, false, false,
                                       false, false, false, false, false, false,
@@ -460,23 +460,24 @@ void populateHeapPatterns(HeapPatternCandidatesMap &heapPatternCandidates,
                           const HeapPattern<VariablePlaceholder> &pattern,
                           FreeVarsMap freeVarsMap,
                           MatchInfo<const llvm::Value *> match) {
-    VarMap<string> variables;
+    VarMap<const llvm::Value *> variables;
     for (auto varIt : match.steps.first.state.variables) {
-        variables.insert(std::make_pair(varIt.first->getName(), varIt.second));
+        variables.insert(std::make_pair(varIt.first, varIt.second));
     }
     for (auto varIt : match.steps.second.state.variables) {
-        variables.insert(std::make_pair(varIt.first->getName(), varIt.second));
+        variables.insert(std::make_pair(varIt.first, varIt.second));
     }
     MonoPair<Heap> heaps = makeMonoPair(match.steps.first.state.heap,
                                         match.steps.second.state.heap);
     ExitIndex exitIndex = 0;
-    if (variables.count("exitIndex$1_" + std::to_string(match.mark)) == 1) {
-        exitIndex = variables.at("exitIndex$1_" + std::to_string(match.mark))
-                        ->unsafeIntVal();
-    } else if (variables.count("exitIndex$2_" + std::to_string(match.mark)) ==
-               1) {
-        exitIndex = variables.at("exitIndex$2_" + std::to_string(match.mark))
-                        ->unsafeIntVal();
+    for (auto var : variables) {
+        if (var.first->getName() ==
+            "exitIndex$1" + std::to_string(match.mark)) {
+            exitIndex = var.second->unsafeIntVal();
+        } else if (var.first->getName() ==
+                   "exitIndex$2" + std::to_string(match.mark)) {
+            exitIndex = var.second->unsafeIntVal();
+        }
     }
     if (heapPatternCandidates[match.mark].count(exitIndex) == 0) {
         auto candidates =
@@ -611,7 +612,7 @@ findSolutions(const PolynomialEquations &polynomialEquations) {
 }
 
 void dumpPolynomials(const PolynomialEquations &equationsMap,
-                     const FreeVarsMap &freeVarsMap, size_t degree) {
+                     const FreeVarsMap &freeVarsMap) {
     llvm::errs() << "------------------\n";
     PolynomialSolutions solutions = findSolutions(equationsMap);
     for (auto eqMapIt : solutions) {
@@ -762,7 +763,6 @@ makeBoundsDefinitions(const map<string, Bound<Optional<VarIntVal>>> &bounds) {
 
 map<int, SharedSMTRef>
 makeInvariantDefinitions(const PolynomialSolutions &solutions,
-                         const BoundsMap &bounds,
                          const FreeVarsMap &freeVarsMap, size_t degree) {
     map<int, SharedSMTRef> definitions;
     for (auto mapIt : solutions) {
