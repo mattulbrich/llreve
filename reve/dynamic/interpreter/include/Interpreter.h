@@ -176,8 +176,8 @@ template <typename T> struct BlockUpdate {
     BlockUpdate(State<T> step, // State end,
                 const llvm::BasicBlock *nextBlock, std::vector<Call<T>> calls,
                 bool earlyExit, uint32_t blocksVisited)
-        : step(step), nextBlock(nextBlock), calls(calls), earlyExit(earlyExit),
-          blocksVisited(blocksVisited) {}
+        : step(std::move(step)), nextBlock(nextBlock), calls(std::move(calls)),
+          earlyExit(earlyExit), blocksVisited(blocksVisited) {}
     BlockUpdate() = default;
 };
 
