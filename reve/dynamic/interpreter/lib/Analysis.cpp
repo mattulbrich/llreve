@@ -498,15 +498,15 @@ void populateHeapPatterns(HeapPatternCandidatesMap &heapPatternCandidates,
         switch (match.loopInfo) {
         case LoopInfo::Left:
             heapPatternCandidates.at(match.mark).at(exitIndex).left =
-                candidates;
+                std::move(candidates);
             break;
         case LoopInfo::Right:
             heapPatternCandidates.at(match.mark).at(exitIndex).right =
-                candidates;
+                std::move(candidates);
             break;
         case LoopInfo::None:
             heapPatternCandidates.at(match.mark).at(exitIndex).none =
-                candidates;
+                std::move(candidates);
             break;
         }
     } else {
