@@ -100,9 +100,11 @@ template <typename T> struct Call : Step<T> {
     Call(std::string functionName, State<T> entryState, State<T> returnState,
          std::vector<std::shared_ptr<BlockStep<T>>> steps, bool earlyExit,
          uint32_t blocksVisited)
-        : functionName(functionName), entryState(entryState),
-          returnState(returnState), steps(steps), earlyExit(earlyExit),
-          blocksVisited(blocksVisited) {}
+        : functionName(std::move(functionName)),
+          entryState(std::move(entryState)),
+          returnState(std::move(returnState)), steps(std::move(steps)),
+          earlyExit(std::move(earlyExit)),
+          blocksVisited(std::move(blocksVisited)) {}
     nlohmann::json
     toJSON(std::function<std::string(T)> varName) const override {
         nlohmann::json j;
@@ -134,7 +136,8 @@ template <typename T> struct BlockStep : Step<T> {
     // The calls performed in this block
     std::vector<Call<T>> calls;
     BlockStep(BlockName blockName, State<T> state, std::vector<Call<T>> calls)
-        : blockName(blockName), state(state), calls(calls) {}
+        : blockName(std::move(blockName)), state(std::move(state)),
+          calls(std::move(calls)) {}
     nlohmann::json
     toJSON(std::function<std::string(T)> varName) const override {
         nlohmann::json j;

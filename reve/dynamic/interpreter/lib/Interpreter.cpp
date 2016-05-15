@@ -135,12 +135,13 @@ FastCall interpretFunction(const Function &fun, FastState entry,
         prevBlock = currentBlock;
         currentBlock = update.nextBlock;
         if (blocksVisited > maxSteps || update.earlyExit) {
-            return FastCall(fun.getName(), entry, currentState, steps, true,
+            return FastCall(fun.getName(), std::move(entry),
+                            std::move(currentState), std::move(steps), true,
                             blocksVisited);
         }
     } while (currentBlock != nullptr);
-    return FastCall(fun.getName(), entry, currentState, steps, false,
-                    blocksVisited);
+    return FastCall(fun.getName(), std::move(entry), std::move(currentState),
+                    std::move(steps), false, blocksVisited);
 }
 
 BlockUpdate<const llvm::Value *> interpretBlock(const BasicBlock &block,
@@ -175,12 +176,13 @@ BlockUpdate<const llvm::Value *> interpretBlock(const BasicBlock &block,
                                            maxSteps - blocksVisited);
             blocksVisited += c.blocksVisited;
             if (blocksVisited > maxSteps || c.earlyExit) {
-                return BlockUpdate<const llvm::Value *>(step, nullptr, calls,
-                                                        true, blocksVisited);
+                return BlockUpdate<const llvm::Value *>(
+                    std::move(step), nullptr, std::move(calls), true,
+                    blocksVisited);
             }
-            calls.push_back(c);
             state.heap = c.returnState.heap;
             state.variables[call] = c.returnState.variables[ReturnName];
+            calls.push_back(std::move(c));
         } else {
             interpretInstruction(&*instrIterator, state);
         }
@@ -189,8 +191,9 @@ BlockUpdate<const llvm::Value *> interpretBlock(const BasicBlock &block,
     // Terminator instruction
     TerminatorUpdate update = interpretTerminator(block.getTerminator(), state);
 
-    return BlockUpdate<const llvm::Value *>(step, update.nextBlock, calls,
-                                            false, blocksVisited);
+    return BlockUpdate<const llvm::Value *>(std::move(step), update.nextBlock,
+                                            std::move(calls), false,
+                                            blocksVisited);
 }
 
 void interpretInstruction(const Instruction *instr, FastState &state) {
