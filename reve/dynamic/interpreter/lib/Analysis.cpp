@@ -467,13 +467,9 @@ void populateHeapPatterns(HeapPatternCandidatesMap &heapPatternCandidates,
                           const HeapPattern<VariablePlaceholder> &pattern,
                           FreeVarsMap freeVarsMap,
                           MatchInfo<const llvm::Value *> match) {
-    VarMap<const llvm::Value *> variables;
-    for (auto varIt : match.steps.first->state.variables) {
-        variables.insert(std::make_pair(varIt.first, varIt.second));
-    }
-    for (auto varIt : match.steps.second->state.variables) {
-        variables.insert(std::make_pair(varIt.first, varIt.second));
-    }
+    VarMap<const llvm::Value *> variables(match.steps.first->state.variables);
+    variables.insert(match.steps.second->state.variables.begin(),
+                     match.steps.second->state.variables.end());
     // TODO don’t copy heaps
     MonoPair<Heap> heaps = makeMonoPair(match.steps.first->state.heap,
                                         match.steps.second->state.heap);
