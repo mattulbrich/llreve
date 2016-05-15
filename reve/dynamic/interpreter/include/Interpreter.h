@@ -56,7 +56,7 @@ struct VarBool : VarVal {
     VarIntVal unsafeIntVal() const override;
 };
 
-using Heap = std::map<HeapAddress, VarInt>;
+using Heap = std::map<HeapAddress, VarIntVal>;
 template <typename T> using VarMap = std::map<T, std::shared_ptr<VarVal>>;
 using FastVarMap = VarMap<const llvm::Value *>;
 

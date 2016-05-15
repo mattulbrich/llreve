@@ -229,7 +229,7 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
         shared_ptr<VarVal> val = resolveValue(store->getValueOperand(), state);
         assert(val->getType() == VarType::Int);
         HeapAddress addr = static_pointer_cast<VarInt>(ptr)->val;
-        state.heap[addr] = *static_pointer_cast<VarInt>(val);
+        state.heap[addr] = static_pointer_cast<VarInt>(val)->val;
     } else if (const auto select = dyn_cast<SelectInst>(instr)) {
         shared_ptr<VarVal> cond = resolveValue(select->getCondition(), state);
         assert(cond->getType() == VarType::Bool);
@@ -540,7 +540,7 @@ json stateToJSON(State<T> state, function<string(T)> getName) {
         jsonVariables.insert({varName, var.second->toJSON()});
     }
     for (auto index : state.heap) {
-        jsonHeap.insert({index.first.get_str(), index.second.val.get_str()});
+        jsonHeap.insert({index.first.get_str(), index.second.get_str()});
     }
     json j;
     j["variables"] = jsonVariables;
@@ -559,11 +559,11 @@ cbor_item_t *stateToCBOR(FastState state) {
                          .value = cbor_move(var.second->toCBOR())});
     }
     for (const auto &index : state.heap) {
-        cbor_map_add(cborHeap, (struct cbor_pair){
-                                   .key = cbor_move(cbor_build_string(
-                                       index.first.get_str().c_str())),
-                                   .value = cbor_move(cbor_build_string(
-                                       index.second.val.get_str().c_str()))});
+        cbor_map_add(cborHeap,
+                     (struct cbor_pair){.key = cbor_move(cbor_build_string(
+                                            index.first.get_str().c_str())),
+                                        .value = cbor_move(cbor_build_string(
+                                            index.second.get_str().c_str()))});
     }
     cbor_item_t *map = cbor_new_definite_map(2);
     cbor_map_add(map, (struct cbor_pair){
@@ -599,9 +599,9 @@ State<string> cborToState(const cbor_item_t *item) {
     // heap
     cbor_item_t *cborHeap = map[1].value;
     assert(cbor_isa_map(cborHeap));
-    Heap heap = cborToMap<VarIntVal, VarInt>(
-        cborHeap, cborToVarIntVal, [](const cbor_item_t *item) -> VarInt {
-            return VarInt(cborToVarIntVal(item));
+    Heap heap = cborToMap<VarIntVal, VarIntVal>(
+        cborHeap, cborToVarIntVal, [](const cbor_item_t *item) -> VarIntVal {
+            return cborToVarIntVal(item);
         });
     return State<string>(variables, heap);
 }

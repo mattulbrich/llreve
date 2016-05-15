@@ -17,7 +17,7 @@ std::ostream &Variable<const llvm::Value *>::dump(std::ostream &os) const {
 VarIntVal getHeapVal(HeapAddress addr, Heap heap) {
     auto it = heap.find(addr);
     if (it != heap.end()) {
-        return it->second.val;
+        return it->second;
     } else {
         return 0;
     }
