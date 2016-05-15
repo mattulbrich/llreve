@@ -130,7 +130,8 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     LoopCountMap loopCounts;
     iterateTracesInRange(
         functions, -100, 100,
-        [&loopCounts, &nameMap](MonoPair<Call<const llvm::Value *>> &calls) {
+        [&loopCounts,
+         &nameMap](const MonoPair<Call<const llvm::Value *>> &calls) {
             int lastMark = -5; // -5 is unused
             analyzeExecution<const llvm::Value *>(
                 calls, nameMap,
@@ -168,21 +169,28 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         functions, -100, 100,
         [&loopCounts, &nameMap, &polynomialEquations, &freeVarsMap,
          &heapPatternCandidates, &heapPatternExample,
-         degree](MonoPair<Call<const llvm::Value *>> &calls) {
+         degree](const MonoPair<Call<const llvm::Value *>> &calls) {
             int lastMark = -5; // -5 is unused
             analyzeExecution<const llvm::Value *>(
                 calls, nameMap,
-                std::bind(findLoopCounts<const llvm::Value *>,
-                          std::ref(lastMark), std::ref(loopCounts), _1));
+                [&lastMark, &loopCounts](MatchInfo<const llvm::Value *> match) {
+                    findLoopCounts<const llvm::Value *>(lastMark, loopCounts,
+                                                        match);
+                });
+            analyzeExecution<const llvm::Value *>(
+                calls, nameMap, [&polynomialEquations, &freeVarsMap,
+                                 degree](MatchInfo<const llvm::Value *> match) {
+                    populateEquationsMap(polynomialEquations, freeVarsMap,
+                                         match, degree);
+                });
             analyzeExecution<const llvm::Value *>(
                 calls, nameMap,
-                std::bind(populateEquationsMap, std::ref(polynomialEquations),
-                          std::cref(freeVarsMap), _1, degree));
-            analyzeExecution<const llvm::Value *>(
-                calls, nameMap,
-                std::bind(populateHeapPatterns, std::ref(heapPatternCandidates),
-                          std::cref(*heapPatternExample),
-                          std::cref(freeVarsMap), _1));
+                [&heapPatternCandidates, &heapPatternExample,
+                 &freeVarsMap](MatchInfo<const llvm::Value *> match) {
+                    populateHeapPatterns(heapPatternCandidates,
+                                         *heapPatternExample, freeVarsMap,
+                                         match);
+                });
         });
     loopTransformations = findLoopTransformations(loopCounts);
     dumpLoopTransformations(loopTransformations);
@@ -945,7 +953,7 @@ void dumpLoopCounts(const LoopCountMap &loopCounts) {
 
 void iterateTracesInRange(
     MonoPair<llvm::Function *> funs, VarIntVal lowerBound, VarIntVal upperBound,
-    std::function<void(MonoPair<Call<const llvm::Value *>> &)> callback) {
+    std::function<void(const MonoPair<Call<const llvm::Value *>> &)> callback) {
     assert(!(funs.first->isVarArg() || funs.second->isVarArg()));
     vector<VarIntVal> argValues;
     vector<string> varNamesFirst;

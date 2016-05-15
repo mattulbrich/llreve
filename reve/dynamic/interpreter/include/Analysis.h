@@ -76,7 +76,7 @@ struct LoopTransformation {
 };
 
 template <typename T> struct MatchInfo {
-    MonoPair<BlockStep<T>> steps;
+    MonoPair<const BlockStep<T> &> steps;
     LoopInfo loopInfo;
     int mark;
     MatchInfo(MonoPair<const BlockStep<T> &> steps, LoopInfo loopInfo, int mark)
@@ -156,7 +156,7 @@ void iterateDeserialized(
     std::function<void(MonoPair<Call<std::string>> &)> callback);
 void iterateTracesInRange(
     MonoPair<llvm::Function *> funs, VarIntVal lowerBound, VarIntVal upperBound,
-    std::function<void(MonoPair<Call<const llvm::Value *>> &)> callback);
+    std::function<void(const MonoPair<Call<const llvm::Value *>> &)> callback);
 void dumpLoopTransformations(
     std::map<int, LoopTransformation> loopTransformations);
 void applyLoopTransformation(
@@ -167,7 +167,8 @@ std::vector<std::vector<std::string>>
 polynomialTermsOfDegree(std::vector<std::string> variables, size_t degree);
 
 template <typename T>
-void analyzeExecution(MonoPair<Call<T>> calls, MonoPair<BlockNameMap> nameMaps,
+void analyzeExecution(const MonoPair<Call<T>> &calls,
+                      MonoPair<BlockNameMap> nameMaps,
                       std::function<void(MatchInfo<T>)> fun) {
     auto steps1 = calls.first.steps;
     auto steps2 = calls.second.steps;
