@@ -4,48 +4,6 @@
 
 using std::vector;
 
-bool linearlyIndependent(const vector<VarIntVal> &a,
-                         const vector<VarIntVal> &b) {
-    assert(a.size() == b.size());
-    size_t i = 0;
-    while (i < a.size() && a.at(i) == 0 && b.at(i) == 0) {
-        ++i;
-    }
-    if (i == a.size()) {
-        return false;
-    }
-    if (a.at(i) == 0 || b.at(i) == 0) {
-        return true;
-    }
-    if (a.at(i) >= b.at(i)) {
-        if (i == a.size() - 1) {
-            return true;
-        }
-        mpq_class multiple = mpq_class(a.at(i)) / mpq_class(b.at(i));
-        ++i;
-        while (i < a.size()) {
-            if (a.at(i) != multiple * b.at(i)) {
-                return true;
-            }
-            ++i;
-        }
-        return false;
-    } else {
-        if (i == a.size() - 1) {
-            return true;
-        }
-        mpq_class multiple = mpq_class(b.at(i)) / mpq_class(a.at(i));
-        ++i;
-        while (i < a.size()) {
-            if (b.at(i) != multiple * a.at(i)) {
-                return true;
-            }
-            ++i;
-        }
-        return false;
-    }
-}
-
 Matrix<mpq_class> rowEchelonForm(Matrix<mpq_class> input) {
     size_t currentRow = 0;
     for (size_t currentCol = 0; currentCol < input.at(0).size(); ++currentCol) {
@@ -87,7 +45,7 @@ size_t rank(const Matrix<mpq_class> &m) {
     return static_cast<size_t>(i + 1);
 }
 
-bool linearlyIndependent(vector<vector<mpq_class>> vectors) {
+bool linearlyIndependent(const vector<vector<mpq_class>> &vectors) {
     size_t rows = vectors.at(0).size();
     Matrix<mpq_class> m(rows);
     for (size_t row = 0; row < vectors.at(0).size(); ++row) {

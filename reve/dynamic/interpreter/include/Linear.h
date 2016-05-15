@@ -2,8 +2,6 @@
 
 #include "Interpreter.h"
 
-bool linearlyIndependent(const std::vector<VarIntVal> &a,
-                         const std::vector<VarIntVal> &b);
 template <typename T> bool isZero(const std::vector<T> &a) {
     for (auto &val : a) {
         if (val != 0) {
@@ -28,14 +26,16 @@ template <typename T> void dumpMatrix(const Matrix<T> &m) {
     }
 }
 
-bool linearlyIndependent(std::vector<std::vector<mpq_class>> vectors);
+bool linearlyIndependent(const std::vector<std::vector<mpq_class>> &vectors);
 std::vector<std::vector<mpq_class>> nullSpace(const Matrix<mpq_class> &m);
 std::vector<mpq_class> multiplyRow(std::vector<mpq_class> vec, mpq_class c);
 std::vector<mpz_class> ratToInt(std::vector<mpq_class> vec);
-template <typename T> std::vector<T> matrixTimesVector(const Matrix<T>& m, const std::vector<T>& vec) {
-    std::vector<T> result(m.size(),0);
+template <typename T>
+std::vector<T> matrixTimesVector(const Matrix<T> &m,
+                                 const std::vector<T> &vec) {
+    std::vector<T> result(m.size(), 0);
     size_t j = 0;
-    for (const auto& row : m) {
+    for (const auto &row : m) {
         assert(row.size() == vec.size());
         for (size_t i = 0; i < vec.size(); ++i) {
             result.at(j) += row.at(i) * vec.at(i);
