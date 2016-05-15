@@ -474,6 +474,7 @@ void populateHeapPatterns(HeapPatternCandidatesMap &heapPatternCandidates,
     for (auto varIt : match.steps.second->state.variables) {
         variables.insert(std::make_pair(varIt.first, varIt.second));
     }
+    // TODO don’t copy heaps
     MonoPair<Heap> heaps = makeMonoPair(match.steps.first->state.heap,
                                         match.steps.second->state.heap);
     ExitIndex exitIndex = 0;

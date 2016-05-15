@@ -170,7 +170,7 @@ BlockUpdate<const llvm::Value *> interpretBlock(const BasicBlock &block,
             FastVarMap args;
             auto argIt = fun->getArgumentList().begin();
             for (const auto &arg : call->arg_operands()) {
-                args[&*argIt] = resolveValue(arg, state);
+                args.insert(std::make_pair(&*argIt, resolveValue(arg, state)));
                 ++argIt;
             }
             FastCall c = interpretFunction(*fun, FastState(args, state.heap),
