@@ -47,10 +47,12 @@ size_t rank(const Matrix<mpq_class> &m) {
 
 bool linearlyIndependent(const vector<vector<mpq_class>> &vectors) {
     size_t rows = vectors.at(0).size();
-    Matrix<mpq_class> m(rows);
+    Matrix<mpq_class> m(rows, vector<mpq_class>(vectors.size()));
     for (size_t row = 0; row < vectors.at(0).size(); ++row) {
+        size_t i = 0;
         for (const auto &vec : vectors) {
-            m.at(row).push_back(vec.at(row));
+            m.at(row).at(i) = vec.at(row);
+            ++i;
         }
     }
     return rank(m) == vectors.size();
