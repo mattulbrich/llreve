@@ -13,8 +13,8 @@ template <typename T> struct HeapPattern {
     virtual ~HeapPattern() = default;
     std::list<std::shared_ptr<HeapPattern<const llvm::Value *>>>
     instantiate(std::vector<std::string> variables,
-                VarMap<const llvm::Value *> variableValues,
-                MonoPair<Heap> heaps) const {
+                const VarMap<const llvm::Value *> &variableValues,
+                const MonoPair<Heap> &heaps) const {
         size_t k = this->arguments();
         std::list<std::shared_ptr<HeapPattern<const llvm::Value *>>>
             matchingPatterns;
@@ -58,8 +58,8 @@ template <typename T> struct HeapPattern {
     }
     virtual std::shared_ptr<HeapPattern<const llvm::Value *>>
     distributeArguments(std::vector<const llvm::Value *> variables) const = 0;
-    virtual bool matches(VarMap<const llvm::Value *> variables,
-                         MonoPair<Heap> heaps) const = 0;
+    virtual bool matches(const VarMap<const llvm::Value *> &variables,
+                         const MonoPair<Heap> &heaps) const = 0;
     virtual std::ostream &dump(std::ostream &os) const = 0;
 };
 
@@ -85,8 +85,8 @@ template <typename T> struct BinaryHeapPattern : public HeapPattern<T> {
             op, makeMonoPair(args.first->distributeArguments(argsFirst),
                              args.second->distributeArguments(argsSecond)));
     }
-    bool matches(VarMap<const llvm::Value *> variables,
-                 MonoPair<Heap> heaps) const override {
+    bool matches(const VarMap<const llvm::Value *> &variables,
+                 const MonoPair<Heap> &heaps) const override {
         MonoPair<bool> argMatches = args.template map<bool>(
             [&variables, &heaps](std::shared_ptr<HeapPattern<T>> pat) {
                 return pat->matches(variables, heaps);
@@ -134,8 +134,8 @@ template <typename T> struct HeapEqual : public HeapPattern<T> {
         std::vector<const llvm::Value *> /* unused */) const override {
         return std::make_shared<HeapEqual<const llvm::Value *>>();
     }
-    bool matches(VarMap<const llvm::Value *> /* unused */,
-                 MonoPair<Heap> heaps) const override {
+    bool matches(const VarMap<const llvm::Value *> & /* unused */,
+                 const MonoPair<Heap> &heaps) const override {
         return heaps.first == heaps.second;
     }
     std::ostream &dump(std::ostream &os) const override {
@@ -147,8 +147,8 @@ template <typename T> struct HeapEqual : public HeapPattern<T> {
 template <typename T> struct HeapExpr {
     virtual size_t arguments() const = 0;
     virtual ~HeapExpr() = default;
-    virtual VarIntVal eval(VarMap<const llvm::Value *> variables,
-                           MonoPair<Heap> heaps) const = 0;
+    virtual VarIntVal eval(const VarMap<const llvm::Value *> &variables,
+                           const MonoPair<Heap> &heaps) const = 0;
     virtual std::shared_ptr<HeapExpr<const llvm::Value *>>
     distributeArguments(std::vector<const llvm::Value *> variables) const = 0;
     virtual std::ostream &dump(std::ostream &os) const = 0;
@@ -168,8 +168,8 @@ template <typename T> struct HeapAccess : public HeapExpr<T> {
         return std::make_shared<HeapAccess<const llvm::Value *>>(
             programIndex, atVal->distributeArguments(variables));
     }
-    VarIntVal eval(VarMap<const llvm::Value *> variables,
-                   MonoPair<Heap> heaps) const override {
+    VarIntVal eval(const VarMap<const llvm::Value *> &variables,
+                   const MonoPair<Heap> &heaps) const override {
         VarIntVal atEval = atVal->eval(variables, heaps);
         switch (programIndex) {
         case ProgramIndex::First:
@@ -202,8 +202,8 @@ template <typename T> struct Constant : public HeapExpr<T> {
         std::vector<const llvm::Value *> /* unused */) const override {
         return std::make_shared<Constant<const llvm::Value *>>(value);
     }
-    VarIntVal eval(VarMap<const llvm::Value *> /* unused */,
-                   MonoPair<Heap> /* unused */) const override {
+    VarIntVal eval(const VarMap<const llvm::Value *> & /* unused */,
+                   const MonoPair<Heap> & /* unused */) const override {
         return value;
     }
     std::ostream &dump(std::ostream &os) const override {
@@ -222,8 +222,8 @@ template <typename T> struct Variable : public HeapExpr<T> {
         return std::make_shared<Variable<const llvm::Value *>>(
             variables.front());
     }
-    VarIntVal eval(VarMap<const llvm::Value *> /* unused */,
-                   MonoPair<Heap> /* unused */) const override {
+    VarIntVal eval(const VarMap<const llvm::Value *> & /* unused */,
+                   const MonoPair<Heap> & /* unused */) const override {
         logError("Can only evaluate specialized version of variable\n");
         return 0;
     }
@@ -237,9 +237,9 @@ template <>
 std::ostream &Variable<const llvm::Value *>::dump(std::ostream &os) const;
 
 template <>
-VarIntVal
-Variable<const llvm::Value *>::eval(VarMap<const llvm::Value *> variables,
-                                    MonoPair<Heap> heaps) const;
+VarIntVal Variable<const llvm::Value *>::eval(
+    const VarMap<const llvm::Value *> &variables,
+    const MonoPair<Heap> &heaps) const;
 
 template <typename T> struct BinaryIntExpr : public HeapExpr<T> {
     BinaryIntOp op;
@@ -255,8 +255,8 @@ template <typename T> struct BinaryIntExpr : public HeapExpr<T> {
                     args.first->distributeArguments(variables.begin(), mid),
                     args.second->distributeArguments(mid, variables.end())));
     }
-    VarIntVal eval(VarMap<const llvm::Value *> variables,
-                   MonoPair<Heap> heaps) const override {
+    VarIntVal eval(const VarMap<const llvm::Value *> &variables,
+                   const MonoPair<Heap> &heaps) const override {
         MonoPair<VarIntVal> vals = args.template map<VarIntVal>(
             [&variables, &heaps](std::shared_ptr<HeapExpr<T>> arg) {
                 return arg->eval(variables, heaps);
@@ -314,8 +314,8 @@ template <typename T> struct HeapExprEq : public HeapPattern<T> {
             makeMonoPair(args.first->distributeArguments(firstArgs),
                          args.second->distributeArguments(secondArgs)));
     }
-    bool matches(VarMap<const llvm::Value *> variables,
-                 MonoPair<Heap> heaps) const override {
+    bool matches(const VarMap<const llvm::Value *> &variables,
+                 const MonoPair<Heap> &heaps) const override {
         MonoPair<VarIntVal> vals = args.template map<VarIntVal>(
             [&variables, &heaps](std::shared_ptr<HeapExpr<T>> arg) {
                 return arg->eval(variables, heaps);
