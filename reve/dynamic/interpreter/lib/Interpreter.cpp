@@ -279,7 +279,7 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
         shared_ptr<VarVal> cond =
             resolveValue(switchInst->getCondition(), state);
         assert(cond->getType() == VarType::Int);
-        VarIntVal condVal = static_pointer_cast<VarInt>(cond)->val;
+        const VarIntVal &condVal = static_pointer_cast<VarInt>(cond)->val;
         for (auto c : switchInst->cases()) {
             VarIntVal caseVal = c.getCaseValue()->getSExtValue();
             if (caseVal == condVal) {
@@ -318,14 +318,15 @@ void interpretICmpInst(const ICmpInst *instr, FastState &state) {
     default:
         assert(op0->getType() == VarType::Int);
         assert(op1->getType() == VarType::Int);
-        VarIntVal i0 = static_pointer_cast<VarInt>(op0)->val;
-        VarIntVal i1 = static_pointer_cast<VarInt>(op1)->val;
+        const VarIntVal &i0 = static_pointer_cast<VarInt>(op0)->val;
+        const VarIntVal &i1 = static_pointer_cast<VarInt>(op1)->val;
         interpretIntPredicate(instr, instr->getPredicate(), i0, i1, state);
     }
 }
 
 void interpretIntPredicate(const ICmpInst *instr, CmpInst::Predicate pred,
-                           VarIntVal i0, VarIntVal i1, FastState &state) {
+                           const VarIntVal &i0, const VarIntVal &i1,
+                           FastState &state) {
     bool predVal = false;
     switch (pred) {
     case CmpInst::ICMP_SGE:
@@ -367,8 +368,8 @@ void interpretBinOp(const BinaryOperator *instr, FastState &state) {
     default: {
         assert(op0->getType() == VarType::Int);
         assert(op1->getType() == VarType::Int);
-        VarIntVal i0 = static_pointer_cast<VarInt>(op0)->val;
-        VarIntVal i1 = static_pointer_cast<VarInt>(op1)->val;
+        const VarIntVal &i0 = static_pointer_cast<VarInt>(op0)->val;
+        const VarIntVal &i1 = static_pointer_cast<VarInt>(op1)->val;
         interpretIntBinOp(instr, instr->getOpcode(), i0, i1, state);
         break;
     }
@@ -390,7 +391,8 @@ void interpretBoolBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
 }
 
 void interpretIntBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
-                       VarIntVal i0, VarIntVal i1, FastState &state) {
+                       const VarIntVal &i0, const VarIntVal &i1,
+                       FastState &state) {
     VarIntVal result = 0;
     switch (op) {
     case Instruction::Add:

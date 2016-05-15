@@ -207,13 +207,13 @@ auto resolveValue(const llvm::Value *val, const FastState &state)
     -> std::shared_ptr<VarVal>;
 auto interpretICmpInst(const llvm::ICmpInst *instr, FastState &state) -> void;
 auto interpretIntPredicate(const llvm::ICmpInst *instr,
-                           llvm::CmpInst::Predicate pred, VarIntVal i0,
-                           VarIntVal i1, FastState &state) -> void;
+                           llvm::CmpInst::Predicate pred, const VarIntVal &i0,
+                           const VarIntVal &i1, FastState &state) -> void;
 auto interpretBinOp(const llvm::BinaryOperator *instr, FastState &state)
     -> void;
 auto interpretIntBinOp(const llvm::BinaryOperator *instr,
-                       llvm::Instruction::BinaryOps op, VarIntVal i0,
-                       VarIntVal i1, FastState &state) -> void;
+                       llvm::Instruction::BinaryOps op, const VarIntVal &i0,
+                       const VarIntVal &i1, FastState &state) -> void;
 auto interpretBoolBinOp(const llvm::BinaryOperator *instr,
                         llvm::Instruction::BinaryOps op, bool b0, bool b1,
                         FastState &state) -> void;
