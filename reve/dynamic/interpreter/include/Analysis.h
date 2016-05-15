@@ -156,7 +156,7 @@ void iterateDeserialized(
     std::function<void(MonoPair<Call<std::string>> &)> callback);
 void iterateTracesInRange(
     MonoPair<llvm::Function *> funs, VarIntVal lowerBound, VarIntVal upperBound,
-    std::function<void(const MonoPair<Call<const llvm::Value *>> &)> callback);
+    std::function<void(MonoPair<Call<const llvm::Value *>>)> callback);
 void dumpLoopTransformations(
     std::map<int, LoopTransformation> loopTransformations);
 void applyLoopTransformation(
@@ -170,8 +170,10 @@ template <typename T>
 void analyzeExecution(const MonoPair<Call<T>> &calls,
                       MonoPair<BlockNameMap> nameMaps,
                       std::function<void(MatchInfo<T>)> fun) {
-    auto steps1 = calls.first.steps;
-    auto steps2 = calls.second.steps;
+    const std::vector<std::shared_ptr<BlockStep<T>>> &steps1 =
+        calls.first.steps;
+    const std::vector<std::shared_ptr<BlockStep<T>>> &steps2 =
+        calls.second.steps;
     auto stepsIt1 = steps1.begin();
     auto stepsIt2 = steps2.begin();
     auto prevStepIt1 = *stepsIt1;

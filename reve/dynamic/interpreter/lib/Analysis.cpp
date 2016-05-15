@@ -130,8 +130,7 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     LoopCountMap loopCounts;
     iterateTracesInRange(
         functions, -100, 100,
-        [&loopCounts,
-         &nameMap](const MonoPair<Call<const llvm::Value *>> &calls) {
+        [&loopCounts, &nameMap](MonoPair<Call<const llvm::Value *>> calls) {
             int lastMark = -5; // -5 is unused
             analyzeExecution<const llvm::Value *>(
                 calls, nameMap,
@@ -169,7 +168,7 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         functions, -100, 100,
         [&loopCounts, &nameMap, &polynomialEquations, &freeVarsMap,
          &heapPatternCandidates, &heapPatternExample,
-         degree](const MonoPair<Call<const llvm::Value *>> &calls) {
+         degree](MonoPair<Call<const llvm::Value *>> calls) {
             int lastMark = -5; // -5 is unused
             analyzeExecution<const llvm::Value *>(
                 calls, nameMap,
@@ -953,7 +952,7 @@ void dumpLoopCounts(const LoopCountMap &loopCounts) {
 
 void iterateTracesInRange(
     MonoPair<llvm::Function *> funs, VarIntVal lowerBound, VarIntVal upperBound,
-    std::function<void(const MonoPair<Call<const llvm::Value *>> &)> callback) {
+    std::function<void(MonoPair<Call<const llvm::Value *>>)> callback) {
     assert(!(funs.first->isVarArg() || funs.second->isVarArg()));
     vector<VarIntVal> argValues;
     vector<string> varNamesFirst;
@@ -994,6 +993,6 @@ void iterateTracesInRange(
         }
         MonoPair<Call<const llvm::Value *>> calls =
             interpretFunctionPair(funs, map, heap, 1000);
-        callback(calls);
+        callback(std::move(calls));
     }
 }
