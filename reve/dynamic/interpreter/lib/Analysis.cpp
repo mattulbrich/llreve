@@ -5,6 +5,7 @@
 #include "Interpreter.h"
 #include "Linear.h"
 #include "MarkAnalysis.h"
+#include "ModuleSMTGeneration.h"
 #include "MonoPair.h"
 #include "PathAnalysis.h"
 #include "SerializeTraces.h"
@@ -13,12 +14,11 @@
 #include <fstream>
 #include <iostream>
 #include <regex>
+#include <thread>
 
 // I don't care about windows
 #include <dirent.h>
 #include <sys/stat.h>
-
-#include "ModuleSMTGeneration.h"
 
 #include "llvm/IR/Verifier.h"
 
@@ -53,6 +53,9 @@ static llvm::cl::opt<unsigned>
 static llvm::cl::opt<bool> ImplicationsFlag(
     "implications",
     llvm::cl::desc("Add implications instead of replacing invariants"));
+static llvm::cl::opt<unsigned>
+    ThreadsFlag("j", llvm::cl::desc("The number of threads to use"),
+                llvm::cl::init(1));
 
 void iterateDeserialized(
     string directory, std::function<void(MonoPair<Call<string>> &)> callback) {
@@ -128,14 +131,18 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
 
     // Collect loop info
     LoopCountMap loopCounts;
+    std::mutex loopMtx;
     iterateTracesInRange(
         functions, -100, 100,
-        [&loopCounts, &nameMap](MonoPair<Call<const llvm::Value *>> calls) {
+        [&loopCounts, &nameMap, &loopMtx](MonoPair<Call<const llvm::Value *>> calls) {
             int lastMark = -5; // -5 is unused
-            analyzeExecution<const llvm::Value *>(
-                calls, nameMap,
-                std::bind(findLoopCounts<const llvm::Value *>,
-                          std::ref(lastMark), std::ref(loopCounts), _1));
+            {
+                std::lock_guard<std::mutex> lock(loopMtx);
+                analyzeExecution<const llvm::Value *>(
+                    calls, nameMap,
+                    std::bind(findLoopCounts<const llvm::Value *>,
+                              std::ref(lastMark), std::ref(loopCounts), _1));
+            }
         });
     map<int, LoopTransformation> loopTransformations =
         findLoopTransformations(loopCounts);
@@ -164,31 +171,43 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
     size_t degree = DegreeFlag;
+    std::mutex patternMtx;
+    std::mutex polynomMtx;
     iterateTracesInRange(
         functions, -100, 100,
         [&loopCounts, &nameMap, &polynomialEquations, &freeVarsMap,
-         &heapPatternCandidates, &heapPatternExample,
-         degree](MonoPair<Call<const llvm::Value *>> calls) {
+         &heapPatternCandidates, &heapPatternExample, degree, &loopMtx,
+         &polynomMtx, &patternMtx](MonoPair<Call<const llvm::Value *>> calls) {
             int lastMark = -5; // -5 is unused
+            {
+                std::lock_guard<std::mutex> lock(loopMtx);
+                analyzeExecution<const llvm::Value *>(
+                    calls, nameMap, [&lastMark, &loopCounts](
+                                        MatchInfo<const llvm::Value *> match) {
+                        findLoopCounts<const llvm::Value *>(lastMark,
+                                                            loopCounts, match);
+                    });
+            }
             analyzeExecution<const llvm::Value *>(
                 calls, nameMap,
-                [&lastMark, &loopCounts](MatchInfo<const llvm::Value *> match) {
-                    findLoopCounts<const llvm::Value *>(lastMark, loopCounts,
-                                                        match);
-                });
-            analyzeExecution<const llvm::Value *>(
-                calls, nameMap, [&polynomialEquations, &freeVarsMap,
-                                 degree](MatchInfo<const llvm::Value *> match) {
-                    populateEquationsMap(polynomialEquations, freeVarsMap,
-                                         match, degree);
+                [&polynomialEquations, &freeVarsMap, degree,
+                 &polynomMtx](MatchInfo<const llvm::Value *> match) {
+                    {
+                        std::lock_guard<std::mutex> lock(polynomMtx);
+                        populateEquationsMap(polynomialEquations, freeVarsMap,
+                                             match, degree);
+                    }
                 });
             analyzeExecution<const llvm::Value *>(
                 calls, nameMap,
-                [&heapPatternCandidates, &heapPatternExample,
-                 &freeVarsMap](MatchInfo<const llvm::Value *> match) {
-                    populateHeapPatterns(heapPatternCandidates,
-                                         *heapPatternExample, freeVarsMap,
-                                         match);
+                [&heapPatternCandidates, &heapPatternExample, &freeVarsMap,
+                 &patternMtx](MatchInfo<const llvm::Value *> match) {
+                    {
+                        std::lock_guard<std::mutex> lock(patternMtx);
+                        populateHeapPatterns(heapPatternCandidates,
+                                             *heapPatternExample, freeVarsMap,
+                                             match);
+                    }
                 });
         });
     loopTransformations = findLoopTransformations(loopCounts);
@@ -977,19 +996,42 @@ void iterateTracesInRange(
         VarIntVal j = i + 1;
         heap.insert(std::make_pair(i, j));
     }
+
+    ThreadSafeQueue<WorkItem> q;
+    vector<std::thread> threads(ThreadsFlag);
+    std::function<void()> worker = [&q, &varNamesFirst, &varNamesSecond,
+                                    &callback, &heap, &funs]() {
+        for (WorkItem item = q.pop(); item.counter >= 0; item = q.pop()) {
+            map<string, std::shared_ptr<VarVal>> map;
+            // TODO this is ugly
+            for (size_t i = 0; i < item.vals.size(); ++i) {
+                map.insert(
+                    {varNamesFirst.at(i), make_shared<VarInt>(item.vals[i])});
+                if (varNamesFirst.at(i) != varNamesSecond.at(i)) {
+                    map.insert({varNamesSecond.at(i),
+                                make_shared<VarInt>(item.vals[i])});
+                }
+            }
+            MonoPair<Call<const llvm::Value *>> calls =
+                interpretFunctionPair(funs, map, heap, 1000);
+            callback(std::move(calls));
+        }
+    };
+    for (size_t i = 0; i < ThreadsFlag; ++i) {
+        threads[i] = std::thread(worker);
+    }
+
+    int counter = 0;
     for (const auto &vals :
          Range(lowerBound, upperBound, varNamesFirst.size())) {
-        map<string, std::shared_ptr<VarVal>> map;
-        // TODO this is ugly
-        for (size_t i = 0; i < vals.size(); ++i) {
-            map.insert({varNamesFirst.at(i), make_shared<VarInt>(vals[i])});
-            if (varNamesFirst.at(i) != varNamesSecond.at(i)) {
-                map.insert(
-                    {varNamesSecond.at(i), make_shared<VarInt>(vals[i])});
-            }
-        }
-        MonoPair<Call<const llvm::Value *>> calls =
-            interpretFunctionPair(funs, map, heap, 1000);
-        callback(std::move(calls));
+        q.push({vals, counter});
+        ++counter;
+    }
+    for (size_t i = 0; i < ThreadsFlag; ++i) {
+        // Each of these items will terminate exactly one thread
+        q.push({{}, -1});
+    }
+    for (auto &t : threads) {
+        t.join();
     }
 }
