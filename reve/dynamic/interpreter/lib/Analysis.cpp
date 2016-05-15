@@ -382,10 +382,10 @@ void populateEquationsMap(PolynomialEquations &polynomialEquations,
                           FreeVarsMap freeVarsMap,
                           MatchInfo<const llvm::Value *> match, size_t degree) {
     VarMap<string> variables;
-    for (auto varIt : match.steps.first.state.variables) {
+    for (auto varIt : match.steps.first->state.variables) {
         variables.insert(std::make_pair(varIt.first->getName(), varIt.second));
     }
-    for (auto varIt : match.steps.second.state.variables) {
+    for (auto varIt : match.steps.second->state.variables) {
         variables.insert(std::make_pair(varIt.first->getName(), varIt.second));
     }
     vector<mpq_class> equation;
@@ -469,14 +469,14 @@ void populateHeapPatterns(HeapPatternCandidatesMap &heapPatternCandidates,
                           FreeVarsMap freeVarsMap,
                           MatchInfo<const llvm::Value *> match) {
     VarMap<const llvm::Value *> variables;
-    for (auto varIt : match.steps.first.state.variables) {
+    for (auto varIt : match.steps.first->state.variables) {
         variables.insert(std::make_pair(varIt.first, varIt.second));
     }
-    for (auto varIt : match.steps.second.state.variables) {
+    for (auto varIt : match.steps.second->state.variables) {
         variables.insert(std::make_pair(varIt.first, varIt.second));
     }
-    MonoPair<Heap> heaps = makeMonoPair(match.steps.first.state.heap,
-                                        match.steps.second.state.heap);
+    MonoPair<Heap> heaps = makeMonoPair(match.steps.first->state.heap,
+                                        match.steps.second->state.heap);
     ExitIndex exitIndex = 0;
     for (auto var : variables) {
         if (var.first->getName() ==
@@ -579,10 +579,10 @@ void debugAnalysis(MatchInfo<string> match) {
     }
     std::cerr << std::endl;
     std::cerr << "First state:" << std::endl;
-    std::cerr << match.steps.first.toJSON(identity<string>).dump(4)
+    std::cerr << match.steps.first->toJSON(identity<string>).dump(4)
               << std::endl;
     std::cerr << "Second state:" << std::endl;
-    std::cerr << match.steps.second.toJSON(identity<string>).dump(4)
+    std::cerr << match.steps.second->toJSON(identity<string>).dump(4)
               << std::endl;
     std::cerr << std::endl << std::endl;
 }
@@ -811,10 +811,10 @@ makeInvariantDefinitions(const PolynomialSolutions &solutions,
 void instantiateBounds(map<int, map<string, Bound<VarIntVal>>> &boundsMap,
                        const FreeVarsMap &freeVars, MatchInfo<string> match) {
     VarMap<string> variables;
-    variables.insert(match.steps.first.state.variables.begin(),
-                     match.steps.first.state.variables.end());
-    variables.insert(match.steps.second.state.variables.begin(),
-                     match.steps.second.state.variables.end());
+    variables.insert(match.steps.first->state.variables.begin(),
+                     match.steps.first->state.variables.end());
+    variables.insert(match.steps.second->state.variables.begin(),
+                     match.steps.second->state.variables.end());
     for (auto var : freeVars.at(match.mark)) {
         VarIntVal val = variables.at(var)->unsafeIntVal();
         if (boundsMap[match.mark].find(var) == boundsMap[match.mark].end()) {

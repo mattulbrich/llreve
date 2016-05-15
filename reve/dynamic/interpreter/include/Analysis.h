@@ -76,10 +76,10 @@ struct LoopTransformation {
 };
 
 template <typename T> struct MatchInfo {
-    MonoPair<const BlockStep<T> &> steps;
+    MonoPair<const BlockStep<T> *> steps;
     LoopInfo loopInfo;
     int mark;
-    MatchInfo(MonoPair<const BlockStep<T> &> steps, LoopInfo loopInfo, int mark)
+    MatchInfo(MonoPair<const BlockStep<T> *> steps, LoopInfo loopInfo, int mark)
         : steps(steps), loopInfo(loopInfo), mark(mark) {}
 };
 
@@ -202,7 +202,7 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
                                      nameMaps.second.at((*stepsIt2)->blockName))
                             .begin();
             // Perfect synchronization
-            fun(MatchInfo<T>(makeMonoPair(**stepsIt1, **stepsIt2),
+            fun(MatchInfo<T>(makeMonoPair(&**stepsIt1, &**stepsIt2),
                              LoopInfo::None, mark));
             prevStepIt1 = *stepsIt1;
             prevStepIt2 = *stepsIt2;
@@ -242,11 +242,15 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
                          .begin();
                 // Make sure the first program is always the first argument
                 if (loop == LoopInfo::Left) {
-                    fun(MatchInfo<T>(makeMonoPair(**stepsIt, *prevStepItOther),
-                                     loop, mark));
+                    const BlockStep<T> *firstStep = &**stepsIt;
+                    const BlockStep<T> *secondStep = &*prevStepItOther;
+                    fun(MatchInfo<T>(makeMonoPair(firstStep, secondStep), loop,
+                                     mark));
                 } else {
-                    fun(MatchInfo<T>(makeMonoPair(*prevStepItOther, **stepsIt),
-                                     loop, mark));
+                    const BlockStep<T> *secondStep = &**stepsIt;
+                    const BlockStep<T> *firstStep = &*prevStepItOther;
+                    fun(MatchInfo<T>(makeMonoPair(firstStep, secondStep), loop,
+                                     mark));
                 }
                 // Go to the next mark
                 do {
