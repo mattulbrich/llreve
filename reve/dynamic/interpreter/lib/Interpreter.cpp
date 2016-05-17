@@ -220,12 +220,10 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
     } else if (const auto load = dyn_cast<LoadInst>(instr)) {
         shared_ptr<VarVal> ptr = resolveValue(load->getPointerOperand(), state);
         assert(ptr->getType() == VarType::Int);
-        VarInt heapVal = VarInt(0);
-        auto heapIt = state.heap.find(static_pointer_cast<VarInt>(ptr)->val);
-        if (heapIt != state.heap.end()) {
-            heapVal = heapIt->second;
-        }
-        state.variables[load] = make_shared<VarInt>(heapVal);
+        // This will only insert 0 if there is not already a different element
+        auto heapIt = state.heap.insert(
+            std::make_pair(static_pointer_cast<VarInt>(ptr)->val, 0));
+        state.variables[load] = make_shared<VarInt>(heapIt.first->second);
     } else if (const auto store = dyn_cast<StoreInst>(instr)) {
         shared_ptr<VarVal> ptr =
             resolveValue(store->getPointerOperand(), state);
