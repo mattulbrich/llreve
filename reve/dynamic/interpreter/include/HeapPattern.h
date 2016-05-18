@@ -4,6 +4,8 @@
 #include "Interpreter.h"
 #include "Permutation.h"
 
+using HoleMap = std::map<size_t, VarIntVal>;
+
 // Used before a pattern is instantiated
 struct VariablePlaceholder {};
 
@@ -60,7 +62,13 @@ template <typename T> struct HeapPattern {
     virtual std::shared_ptr<HeapPattern<const llvm::Value *>>
     distributeArguments(std::vector<const llvm::Value *> variables) const = 0;
     virtual bool matches(const VarMap<const llvm::Value *> &variables,
-                         const MonoPair<Heap> &heaps) const = 0;
+                         const MonoPair<Heap> &heaps,
+                         const HoleMap &holes) const = 0;
+    bool matches(const VarMap<const llvm::Value *> &variables,
+                 const MonoPair<Heap> &heaps) {
+        const HoleMap holes;
+        return this->matches(variables, heaps, holes);
+    }
     virtual std::ostream &dump(std::ostream &os) const = 0;
 };
 
@@ -88,10 +96,11 @@ template <typename T> struct BinaryHeapPattern : public HeapPattern<T> {
                              args.second->distributeArguments(argsSecond)));
     }
     bool matches(const VarMap<const llvm::Value *> &variables,
-                 const MonoPair<Heap> &heaps) const override {
+                 const MonoPair<Heap> &heaps,
+                 const HoleMap &holes) const override {
         MonoPair<bool> argMatches = args.template map<bool>(
-            [&variables, &heaps](std::shared_ptr<HeapPattern<T>> pat) {
-                return pat->matches(variables, heaps);
+            [&variables, &heaps, &holes](std::shared_ptr<HeapPattern<T>> pat) {
+                return pat->matches(variables, heaps, holes);
             });
         switch (op) {
         case BinaryBooleanOp::And:
@@ -138,8 +147,9 @@ template <typename T> struct UnaryHeapPattern : public HeapPattern<T> {
         return os;
     }
     bool matches(const VarMap<const llvm::Value *> &variables,
-                 const MonoPair<Heap> &heaps) const override {
-        bool argMatches = arg->matches(variables, heaps);
+                 const MonoPair<Heap> &heaps,
+                 const HoleMap &holes) const override {
+        bool argMatches = arg->matches(variables, heaps, holes);
         switch (op) {
         case UnaryBooleanOp::Neg:
             return !argMatches;
@@ -157,7 +167,8 @@ template <typename T> struct HeapEqual : public HeapPattern<T> {
         return std::make_shared<HeapEqual<const llvm::Value *>>();
     }
     bool matches(const VarMap<const llvm::Value *> &variables,
-                 const MonoPair<Heap> &heaps) const override {
+                 const MonoPair<Heap> &heaps,
+                 const HoleMap & /* unused */) const override {
         assert(variables.empty());
         unused(variables);
         return heaps.first == heaps.second;
@@ -172,7 +183,8 @@ template <typename T> struct HeapExpr {
     virtual size_t arguments() const = 0;
     virtual ~HeapExpr() = default;
     virtual VarIntVal eval(const VarMap<const llvm::Value *> &variables,
-                           const MonoPair<Heap> &heaps) const = 0;
+                           const MonoPair<Heap> &heaps,
+                           const HoleMap &holes) const = 0;
     virtual std::shared_ptr<HeapExpr<const llvm::Value *>>
     distributeArguments(std::vector<const llvm::Value *> variables) const = 0;
     virtual std::ostream &dump(std::ostream &os) const = 0;
@@ -193,8 +205,9 @@ template <typename T> struct HeapAccess : public HeapExpr<T> {
             programIndex, atVal->distributeArguments(variables));
     }
     VarIntVal eval(const VarMap<const llvm::Value *> &variables,
-                   const MonoPair<Heap> &heaps) const override {
-        VarIntVal atEval = atVal->eval(variables, heaps);
+                   const MonoPair<Heap> &heaps,
+                   const HoleMap &holes) const override {
+        VarIntVal atEval = atVal->eval(variables, heaps, holes);
         switch (programIndex) {
         case ProgramIndex::First:
             return getHeapVal(atEval, heaps.first);
@@ -229,7 +242,8 @@ template <typename T> struct Constant : public HeapExpr<T> {
         return std::make_shared<Constant<const llvm::Value *>>(value);
     }
     VarIntVal eval(const VarMap<const llvm::Value *> &variables,
-                   const MonoPair<Heap> & /* unused */) const override {
+                   const MonoPair<Heap> & /* unused */,
+                   const HoleMap & /* unused */) const override {
         assert(variables.empty());
         unused(variables);
         return value;
@@ -251,7 +265,8 @@ template <typename T> struct Variable : public HeapExpr<T> {
             variables.front());
     }
     VarIntVal eval(const VarMap<const llvm::Value *> & /* unused */,
-                   const MonoPair<Heap> & /* unused */) const override {
+                   const MonoPair<Heap> & /* unused */,
+                   const HoleMap & /* unused */) const override {
         logError("Can only evaluate specialized version of variable\n");
         return 0;
     }
@@ -261,13 +276,33 @@ template <typename T> struct Variable : public HeapExpr<T> {
     }
 };
 
+template <typename T> struct Hole : public HeapExpr<T> {
+    // Ensuring that these indices are unique and match between the range and
+    // the corresponding pattern is up to the user
+    size_t index;
+    size_t arguments() const override { return 0; }
+    Hole() {}
+    std::shared_ptr<HeapExpr<const llvm::Value *>> distributeArguments(
+        std::vector<const llvm::Value *> variables) const override {
+        assert(variables.empty());
+        unused(variables);
+        return std::make_shared<Hole<const llvm::Value *>>();
+    }
+    VarIntVal eval(const VarMap<const llvm::Value *> & /* unused */,
+                   const MonoPair<Heap> & /* unused */,
+                   const HoleMap &hole) const override {
+        assert(hole.count(index) == 1);
+        return hole.at(index);
+    }
+};
+
 template <>
 std::ostream &Variable<const llvm::Value *>::dump(std::ostream &os) const;
 
 template <>
 VarIntVal Variable<const llvm::Value *>::eval(
-    const VarMap<const llvm::Value *> &variables,
-    const MonoPair<Heap> &heaps) const;
+    const VarMap<const llvm::Value *> &variables, const MonoPair<Heap> &heaps,
+    const HoleMap &holes) const;
 
 template <typename T> struct BinaryIntExpr : public HeapExpr<T> {
     BinaryIntOp op;
@@ -284,10 +319,11 @@ template <typename T> struct BinaryIntExpr : public HeapExpr<T> {
                     args.second->distributeArguments(mid, variables.end())));
     }
     VarIntVal eval(const VarMap<const llvm::Value *> &variables,
-                   const MonoPair<Heap> &heaps) const override {
+                   const MonoPair<Heap> &heaps,
+                   const HoleMap &holes) const override {
         MonoPair<VarIntVal> vals = args.template map<VarIntVal>(
-            [&variables, &heaps](std::shared_ptr<HeapExpr<T>> arg) {
-                return arg->eval(variables, heaps);
+            [&variables, &heaps, &holes](std::shared_ptr<HeapExpr<T>> arg) {
+                return arg->eval(variables, heaps, holes);
             });
         switch (op) {
         case BinaryIntOp::Mul:
@@ -330,8 +366,9 @@ template <typename T> struct UnaryIntExpr : public HeapExpr<T> {
         return os;
     }
     VarIntVal eval(const VarMap<const llvm::Value *> &variables,
-                   const MonoPair<Heap> &heaps) const override {
-        VarIntVal argVal = arg->eval(variables, heaps);
+                   const MonoPair<Heap> &heaps,
+                   const HoleMap &holes) const override {
+        VarIntVal argVal = arg->eval(variables, heaps, holes);
         switch (op) {
         case UnaryIntOp::Minus:
             return -argVal;
@@ -341,6 +378,69 @@ template <typename T> struct UnaryIntExpr : public HeapExpr<T> {
         std::vector<const llvm::Value *> variables) const override {
         return std::make_shared<UnaryIntExpr<const llvm::Value>>(
             op, arg->distributeArguments(variables));
+    }
+};
+
+enum class RangeQuantifier { All, Any };
+
+template <typename T> struct RangeProp : public HeapPattern<T> {
+    RangeQuantifier quant;
+    MonoPair<std::shared_ptr<HeapExpr<T>>> bounds;
+    size_t index;
+    // This pattern needs to have exactly one hole for the variable in the range
+    HeapPattern<T> pat;
+    RangeProp(RangeQuantifier quant,
+              MonoPair<std::shared_ptr<HeapExpr<T>>> bounds, size_t index,
+              HeapPattern<T> pat)
+        : quant(quant), bounds(bounds), index(index), pat(pat) {}
+    size_t arguments() const override {
+        return bounds.first->arguments() + bounds.second->arguments() +
+               pat->arguments();
+    }
+    std::shared_ptr<HeapPattern<const llvm::Value *>> distributeArguments(
+        std::vector<const llvm::Value *> variables) const override {
+        auto mid1 =
+            variables.begin() + static_cast<long>(bounds.first->arguments());
+        auto mid2 = mid1 + static_cast<long>(bounds.second->arguments());
+        std::vector<const llvm::Value *> firstArgs;
+        firstArgs.insert(firstArgs.begin(), variables.begin(), mid1);
+        std::vector<const llvm::Value *> secondArgs;
+        secondArgs.insert(secondArgs.begin(), mid1, mid2);
+        std::vector<const llvm::Value *> thirdArgs;
+        thirdArgs.insert(thirdArgs.begin(), mid2, variables.end());
+        return std::make_shared<RangeProp<const llvm::Value *>>(
+            quant, makeMonoPair(bounds.first->distributeArguments(firstArgs),
+                                bounds.second->distributeArguments(secondArgs)),
+
+            pat->distributeArguments(thirdArgs));
+    }
+    bool matches(const VarMap<const llvm::Value *> &variables,
+                 const MonoPair<Heap> &heaps,
+                 const HoleMap &holes) const override {
+        assert(holes.count(index) == 0);
+        MonoPair<VarIntVal> bounds = bounds.map<VarIntVal>(
+            [&variables, &heaps, &holes](std::shared_ptr<HeapExpr<T>> arg) {
+                return arg->eval(variables, heaps, holes);
+            });
+        for (VarIntVal i = bounds.first; i <= bounds.second; ++i) {
+            holes[index] = i;
+            bool result = pat->matches(variables, heaps, holes);
+            if (result && quant == RangeQuantifier::Any) {
+                holes.erase(index);
+                return true;
+            } else if (!result && quant == RangeQuantifier::All) {
+                holes.erase(index);
+                return false;
+            }
+        }
+        holes.erase(index);
+        switch (quant) {
+        case RangeQuantifier::Any:
+            return false;
+        case RangeQuantifier::All:
+            return true;
+        }
+
     }
 };
 
@@ -365,10 +465,11 @@ template <typename T> struct HeapExprProp : public HeapPattern<T> {
                              args.second->distributeArguments(secondArgs)));
     }
     bool matches(const VarMap<const llvm::Value *> &variables,
-                 const MonoPair<Heap> &heaps) const override {
+                 const MonoPair<Heap> &heaps,
+                 const HoleMap &holes) const override {
         MonoPair<VarIntVal> vals = args.template map<VarIntVal>(
-            [&variables, &heaps](std::shared_ptr<HeapExpr<T>> arg) {
-                return arg->eval(variables, heaps);
+            [&variables, &heaps, &holes](std::shared_ptr<HeapExpr<T>> arg) {
+                return arg->eval(variables, heaps, holes);
             });
         switch (op) {
         case BinaryIntProp::LT:
