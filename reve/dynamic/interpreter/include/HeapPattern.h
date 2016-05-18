@@ -1,8 +1,8 @@
 #pragma once
 
+#include "Compat.h"
 #include "Interpreter.h"
 #include "Permutation.h"
-#include "Compat.h"
 
 // Used before a pattern is instantiated
 struct VariablePlaceholder {};
@@ -65,9 +65,10 @@ template <typename T> struct HeapPattern {
 };
 
 enum class UnaryBooleanOp { Neg };
-enum class BinaryBooleanOp { And, Or };
+enum class BinaryBooleanOp { And, Or, Impl };
 enum class UnaryIntOp { Minus };
 enum class BinaryIntOp { Mul, Add, Subtract };
+enum class BinaryIntProp { LT, LE, EQ, GE, GT };
 
 template <typename T> struct BinaryHeapPattern : public HeapPattern<T> {
     BinaryBooleanOp op;
@@ -97,6 +98,8 @@ template <typename T> struct BinaryHeapPattern : public HeapPattern<T> {
             return argMatches.first && argMatches.second;
         case BinaryBooleanOp::Or:
             return argMatches.first || argMatches.second;
+        case BinaryBooleanOp::Impl:
+            return !argMatches.first || argMatches.second;
         }
     }
     std::ostream &dump(std::ostream &os) const override {
@@ -108,6 +111,9 @@ template <typename T> struct BinaryHeapPattern : public HeapPattern<T> {
             break;
         case BinaryBooleanOp::Or:
             os << " \\/ ";
+            break;
+        case BinaryBooleanOp::Impl:
+            os << " -> ";
             break;
         }
         args.second->dump(os);
@@ -150,7 +156,7 @@ template <typename T> struct HeapEqual : public HeapPattern<T> {
         unused(arguments);
         return std::make_shared<HeapEqual<const llvm::Value *>>();
     }
-    bool matches(const VarMap<const llvm::Value *> & variables,
+    bool matches(const VarMap<const llvm::Value *> &variables,
                  const MonoPair<Heap> &heaps) const override {
         assert(variables.empty());
         unused(variables);
@@ -222,7 +228,7 @@ template <typename T> struct Constant : public HeapExpr<T> {
         unused(arguments);
         return std::make_shared<Constant<const llvm::Value *>>(value);
     }
-    VarIntVal eval(const VarMap<const llvm::Value *> & variables,
+    VarIntVal eval(const VarMap<const llvm::Value *> &variables,
                    const MonoPair<Heap> & /* unused */) const override {
         assert(variables.empty());
         unused(variables);
@@ -338,9 +344,11 @@ template <typename T> struct UnaryIntExpr : public HeapExpr<T> {
     }
 };
 
-template <typename T> struct HeapExprEq : public HeapPattern<T> {
+template <typename T> struct HeapExprProp : public HeapPattern<T> {
+    BinaryIntProp op;
     MonoPair<std::shared_ptr<HeapExpr<T>>> args;
-    HeapExprEq(MonoPair<std::shared_ptr<HeapExpr<T>>> args) : args(args) {}
+    HeapExprProp(BinaryIntProp op, MonoPair<std::shared_ptr<HeapExpr<T>>> args)
+        : op(op), args(args) {}
     size_t arguments() const override {
         return args.first->arguments() + args.second->arguments();
     }
@@ -352,9 +360,9 @@ template <typename T> struct HeapExprEq : public HeapPattern<T> {
         firstArgs.insert(firstArgs.begin(), variables.begin(), mid);
         std::vector<const llvm::Value *> secondArgs;
         secondArgs.insert(secondArgs.begin(), mid, variables.end());
-        return std::make_shared<HeapExprEq<const llvm::Value *>>(
-            makeMonoPair(args.first->distributeArguments(firstArgs),
-                         args.second->distributeArguments(secondArgs)));
+        return std::make_shared<HeapExprProp<const llvm::Value *>>(
+            op, makeMonoPair(args.first->distributeArguments(firstArgs),
+                             args.second->distributeArguments(secondArgs)));
     }
     bool matches(const VarMap<const llvm::Value *> &variables,
                  const MonoPair<Heap> &heaps) const override {
@@ -362,12 +370,39 @@ template <typename T> struct HeapExprEq : public HeapPattern<T> {
             [&variables, &heaps](std::shared_ptr<HeapExpr<T>> arg) {
                 return arg->eval(variables, heaps);
             });
-        return vals.first == vals.second;
+        switch (op) {
+        case BinaryIntProp::LT:
+            return vals.first < vals.second;
+        case BinaryIntProp::LE:
+            return vals.first <= vals.second;
+        case BinaryIntProp::EQ:
+            return vals.first == vals.second;
+        case BinaryIntProp::GE:
+            return vals.first >= vals.second;
+        case BinaryIntProp::GT:
+            return vals.first > vals.second;
+        }
     }
     std::ostream &dump(std::ostream &os) const override {
         os << "(";
         args.first->dump(os);
-        os << " = ";
+        switch (op) {
+        case BinaryIntProp::LE:
+            os << " < ";
+            break;
+        case BinaryIntProp::LT:
+            os << " <= ";
+            break;
+        case BinaryIntProp::EQ:
+            os << " = ";
+            break;
+        case BinaryIntProp::GE:
+            os << " >= ";
+            break;
+        case BinaryIntProp::GT:
+            os << " > ";
+            break;
+        }
         args.second->dump(os);
         os << ")";
         return os;

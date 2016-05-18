@@ -133,8 +133,8 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     LoopCountMap loopCounts;
     std::mutex loopMtx;
     iterateTracesInRange(
-        functions, -100, 100,
-        [&loopCounts, &nameMap, &loopMtx](MonoPair<Call<const llvm::Value *>> calls) {
+        functions, -100, 100, [&loopCounts, &nameMap, &loopMtx](
+                                  MonoPair<Call<const llvm::Value *>> calls) {
             int lastMark = -5; // -5 is unused
             {
                 std::lock_guard<std::mutex> lock(loopMtx);
@@ -157,7 +157,8 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     PolynomialEquations polynomialEquations;
     HeapPatternCandidatesMap heapPatternCandidates;
     std::shared_ptr<HeapPattern<VariablePlaceholder>> heapPatternExample =
-        std::make_shared<HeapExprEq<VariablePlaceholder>>(
+        std::make_shared<HeapExprProp<VariablePlaceholder>>(
+            BinaryIntProp::EQ,
             makeMonoPair<std::shared_ptr<HeapExpr<VariablePlaceholder>>>(
                 std::make_shared<Variable<VariablePlaceholder>>(
                     VariablePlaceholder()),
