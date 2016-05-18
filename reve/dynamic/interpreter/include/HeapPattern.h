@@ -2,6 +2,7 @@
 
 #include "Interpreter.h"
 #include "Permutation.h"
+#include "Compat.h"
 
 // Used before a pattern is instantiated
 struct VariablePlaceholder {};
@@ -144,11 +145,15 @@ template <typename T> struct HeapEqual : public HeapPattern<T> {
     // All elements of the two heaps are equal
     size_t arguments() const override { return 0; }
     std::shared_ptr<HeapPattern<const llvm::Value *>> distributeArguments(
-        std::vector<const llvm::Value *> /* unused */) const override {
+        std::vector<const llvm::Value *> arguments) const override {
+        assert(arguments.empty());
+        unused(arguments);
         return std::make_shared<HeapEqual<const llvm::Value *>>();
     }
-    bool matches(const VarMap<const llvm::Value *> & /* unused */,
+    bool matches(const VarMap<const llvm::Value *> & variables,
                  const MonoPair<Heap> &heaps) const override {
+        assert(variables.empty());
+        unused(variables);
         return heaps.first == heaps.second;
     }
     std::ostream &dump(std::ostream &os) const override {
@@ -212,11 +217,15 @@ template <typename T> struct Constant : public HeapExpr<T> {
     VarIntVal value;
     size_t arguments() const override { return 0; }
     std::shared_ptr<HeapExpr<const llvm::Value *>> distributeArguments(
-        std::vector<const llvm::Value *> /* unused */) const override {
+        std::vector<const llvm::Value *> arguments) const override {
+        assert(arguments.empty());
+        unused(arguments);
         return std::make_shared<Constant<const llvm::Value *>>(value);
     }
-    VarIntVal eval(const VarMap<const llvm::Value *> & /* unused */,
+    VarIntVal eval(const VarMap<const llvm::Value *> & variables,
                    const MonoPair<Heap> & /* unused */) const override {
+        assert(variables.empty());
+        unused(variables);
         return value;
     }
     std::ostream &dump(std::ostream &os) const override {

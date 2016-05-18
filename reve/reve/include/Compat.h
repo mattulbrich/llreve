@@ -1,8 +1,12 @@
 #pragma once
 
-#include <iterator>
 #include <algorithm>
+#include <iterator>
 #include <set>
+
+// Used to silence unused variable warnings when something is only used in an
+// assert
+#define unused(x) ((void)(x))
 
 template <class T> class Reverse {
   private:

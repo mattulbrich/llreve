@@ -499,14 +499,9 @@ void UnrollPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
 }
 
 bool UnrollPass::runOnFunction(llvm::Function &f) {
-    llvm::LoopInfo &li = getAnalysis<llvm::LoopInfoWrapperPass>().getLoopInfo();
-    llvm::DominatorTree &dt =
-        getAnalysis<llvm::DominatorTreeWrapperPass>().getDomTree();
+    getAnalysis<llvm::DominatorTreeWrapperPass>().getDomTree();
     auto map = getAnalysis<MarkAnalysis>().getBlockMarkMap();
-    // peelAtMark(f, 2, map);
-    // peelAtMark(f, 4, map);
-    // unrollFactor(f, 42, map, 4);
-    // unrollAtMark(f, 42, map, li, dt);
+    peelAtMark(f, 2, map, "1");
     return true;
 }
 

@@ -1,6 +1,8 @@
 #include "SMT.h"
+
 #include "Memory.h"
 #include "Opts.h"
+#include "Compat.h"
 
 #include <iostream>
 
@@ -178,16 +180,19 @@ template <> set<string> Primitive<string>::uses() const {
 
 SharedSMTRef SMTExpr::compressLets(std::vector<Assignment> defs) const {
     assert(defs.empty());
+    unused(defs);
     return shared_from_this();
 }
 
 SharedSMTRef Assert::compressLets(std::vector<Assignment> defs) const {
     assert(defs.empty());
+    unused(defs);
     return make_shared<Assert>(expr->compressLets());
 }
 
 SharedSMTRef SortedVar::compressLets(std::vector<Assignment> defs) const {
     assert(defs.empty());
+    unused(defs);
     return make_shared<SortedVar>(name, type);
 }
 
@@ -197,11 +202,13 @@ SharedSMTRef Forall::compressLets(std::vector<Assignment> defs) const {
 
 SharedSMTRef CheckSat::compressLets(std::vector<Assignment> defs) const {
     assert(defs.empty());
+    unused(defs);
     return shared_from_this();
 }
 
 SharedSMTRef GetModel::compressLets(std::vector<Assignment> defs) const {
     assert(defs.empty());
+    unused(defs);
     return shared_from_this();
 }
 
