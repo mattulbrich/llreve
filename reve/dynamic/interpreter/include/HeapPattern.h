@@ -51,8 +51,8 @@ template <typename T> struct HeapPattern {
                       << heap.second.val.get_str() << "\n";
         }
         */
-        std::cout << "size: " << variablePointers.size() << "\n";
-        for (const auto& vec : Range(0,static_cast<VarIntVal>(variablePointers.size())-1,k)) {
+        for (const auto &vec :
+             Range(0, static_cast<VarIntVal>(variablePointers.size()) - 1, k)) {
             std::vector<const llvm::Value *> args(vec.size());
             for (size_t i = 0; i < args.size(); ++i) {
                 args[i] = variablePointers[vec[i].get_ui()];
@@ -122,13 +122,13 @@ template <typename T> struct BinaryHeapPattern : public HeapPattern<T> {
         args.first->dump(os);
         switch (op) {
         case BinaryBooleanOp::And:
-            os << " /\\ ";
+            os << " ∧ ";
             break;
         case BinaryBooleanOp::Or:
-            os << " \\/ ";
+            os << " ∨ ";
             break;
         case BinaryBooleanOp::Impl:
-            os << " -> ";
+            os << " → ";
             break;
         }
         args.second->dump(os);
@@ -147,7 +147,7 @@ template <typename T> struct UnaryHeapPattern : public HeapPattern<T> {
             op, arg->distributeArguments(variables));
     }
     std::ostream &dump(std::ostream &os) const override {
-        os << "(~";
+        os << "(¬";
         arg->dump(os);
         os << ")";
         return os;
@@ -300,6 +300,11 @@ template <typename T> struct Hole : public HeapExpr<T> {
         assert(hole.count(index) == 1);
         return hole.at(index);
     }
+    std::ostream &dump(std::ostream &os) const override {
+        os << "i_";
+        os << index;
+        return os;
+    }
 };
 
 template <>
@@ -345,7 +350,7 @@ template <typename T> struct BinaryIntExpr : public HeapExpr<T> {
         args.first->dump(os);
         switch (op) {
         case BinaryIntOp::Mul:
-            os << " * ";
+            os << " × ";
             break;
         case BinaryIntOp::Add:
             os << " + ";
@@ -446,7 +451,26 @@ template <typename T> struct RangeProp : public HeapPattern<T> {
         case RangeQuantifier::All:
             return true;
         }
-
+    }
+    std::ostream &dump(std::ostream &os) const override {
+        os << "(";
+        switch (quant) {
+        case RangeQuantifier::Any:
+            os << "∃";
+            break;
+        case RangeQuantifier::All:
+            os << "∀";
+            break;
+        }
+        std::string indexName = "i_" + std::to_string(index);
+        os << indexName;
+        os << ".";
+        bounds.first.dump(os);
+        os << indexName;
+        bounds.second.dump(os);
+        os << ": ";
+        pat->dump(os);
+        os << ")";
     }
 };
 

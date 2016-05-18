@@ -53,8 +53,6 @@ void serializeValuesInRange(MonoPair<const Function *> funs,
 
 Range::RangeIterator Range::begin() {
     vector<VarIntVal> vals(n);
-    std::cout << "lowerBound " << lowerBound.get_str() << ", upperBound "
-              << upperBound.get_str() << "\n";
     if (lowerBound > upperBound) {
         return end();
     }
