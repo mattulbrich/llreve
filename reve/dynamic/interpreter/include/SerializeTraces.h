@@ -33,13 +33,12 @@ class Range {
         VarIntVal lowerBound;
         VarIntVal upperBound;
         std::vector<VarIntVal> vals;
-        size_t index;
 
       public:
         RangeIterator(VarIntVal lowerBound, VarIntVal upperBound,
                       std::vector<VarIntVal> vals)
-            : lowerBound(lowerBound), upperBound(upperBound), vals(vals),
-              index(vals.size() - 1) {}
+            : lowerBound(lowerBound), upperBound(upperBound), vals(vals)
+              {}
         RangeIterator &operator++();
         bool operator==(const RangeIterator &other) {
             return vals == other.vals;

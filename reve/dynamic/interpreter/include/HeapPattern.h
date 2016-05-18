@@ -3,6 +3,7 @@
 #include "Compat.h"
 #include "Interpreter.h"
 #include "Permutation.h"
+#include "SerializeTraces.h"
 
 using HoleMap = std::map<size_t, VarIntVal>;
 
@@ -50,8 +51,13 @@ template <typename T> struct HeapPattern {
                       << heap.second.val.get_str() << "\n";
         }
         */
-        for (auto vec : kPermutations(variablePointers, k)) {
-            auto pattern = this->distributeArguments(vec);
+        std::cout << "size: " << variablePointers.size() << "\n";
+        for (const auto& vec : Range(0,static_cast<VarIntVal>(variablePointers.size())-1,k)) {
+            std::vector<const llvm::Value *> args(vec.size());
+            for (size_t i = 0; i < args.size(); ++i) {
+                args[i] = variablePointers[vec[i].get_ui()];
+            }
+            auto pattern = this->distributeArguments(args);
 
             if (pattern->matches(variableValues, heaps)) {
                 matchingPatterns.push_back(pattern);
