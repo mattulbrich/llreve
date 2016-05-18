@@ -119,11 +119,24 @@ template <typename T> struct UnaryHeapPattern : public HeapPattern<T> {
     UnaryBooleanOp op;
     std::shared_ptr<HeapPattern<T>> arg;
     size_t arguments() const override { return arg->arguments(); }
+    std::shared_ptr<HeapPattern<const llvm::Value *>> distributeArguments(
+        std::vector<const llvm::Value *> variables) const override {
+        return std::make_shared<UnaryHeapPattern<const llvm::Value *>>(
+            op, arg->distributeArguments(variables));
+    }
     std::ostream &dump(std::ostream &os) const override {
         os << "(~";
         arg->dump(os);
         os << ")";
         return os;
+    }
+    bool matches(const VarMap<const llvm::Value *> &variables,
+                 const MonoPair<Heap> &heaps) const override {
+        bool argMatches = arg->matches(variables, heaps);
+        switch (op) {
+        case UnaryBooleanOp::Neg:
+            return !argMatches;
+        }
     }
 };
 
@@ -294,6 +307,26 @@ template <typename T> struct UnaryIntExpr : public HeapExpr<T> {
     UnaryIntOp op;
     std::shared_ptr<HeapExpr<T>> arg;
     size_t arguments() const override { return arg->arguments(); }
+    std::ostream &dump(std::ostream &os) const override {
+        os << "(";
+        os << "-";
+        arg->dump(os);
+        os << ")";
+        return os;
+    }
+    VarIntVal eval(const VarMap<const llvm::Value *> &variables,
+                   const MonoPair<Heap> &heaps) const override {
+        VarIntVal argVal = arg->eval(variables, heaps);
+        switch (op) {
+        case UnaryIntOp::Minus:
+            return -argVal;
+        }
+    }
+    std::shared_ptr<HeapExpr<const llvm::Value *>> distributeArguments(
+        std::vector<const llvm::Value *> variables) const override {
+        return std::make_shared<UnaryIntExpr<const llvm::Value>>(
+            op, arg->distributeArguments(variables));
+    }
 };
 
 template <typename T> struct HeapExprEq : public HeapPattern<T> {
