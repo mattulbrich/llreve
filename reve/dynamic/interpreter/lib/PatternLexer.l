@@ -30,4 +30,13 @@ _               { return PLACEHOLDER; }
 \[              { return LBRACK; }
 \]              { return RBRACK; }
 ;               { return SEMICOLON; }
+[\+\-\*]           { if (strcmp(yytext,"+") == 0) {
+                      yylval.intBinop = BinaryIntOp::Add;
+                  } else if (strcmp(yytext,"-") == 0) {
+                      yylval.intBinop = BinaryIntOp::Subtract;
+                  } else if (strcmp(yytext,"*") == 0) {
+                      yylval.intBinop = BinaryIntOp::Mul;
+                  }
+                  return BINARYINTOP;
+                }
 %%

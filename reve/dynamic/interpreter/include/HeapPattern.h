@@ -321,16 +321,21 @@ VarIntVal Variable<const llvm::Value *>::eval(
 template <typename T> struct BinaryIntExpr : public HeapExpr<T> {
     BinaryIntOp op;
     MonoPair<std::shared_ptr<HeapExpr<T>>> args;
+    BinaryIntExpr(BinaryIntOp op, MonoPair<std::shared_ptr<HeapExpr<T>>> args) : op(op), args(args) {}
     size_t arguments() const override {
         return args.first->arguments() + args.second->arguments();
     }
     std::shared_ptr<HeapExpr<const llvm::Value *>> distributeArguments(
         std::vector<const llvm::Value *> variables) const override {
         auto mid = variables.begin() + args.first->arguments();
+        std::vector<const llvm::Value *> firstArgs;
+        firstArgs.insert(firstArgs.begin(), variables.begin(), mid);
+        std::vector<const llvm::Value *> secondArgs;
+        secondArgs.insert(secondArgs.begin(), mid, variables.end());
         return std::make_shared<BinaryIntExpr<const llvm::Value *>>(
             op, makeMonoPair(
-                    args.first->distributeArguments(variables.begin(), mid),
-                    args.second->distributeArguments(mid, variables.end())));
+                    args.first->distributeArguments(firstArgs),
+                    args.second->distributeArguments(secondArgs)));
     }
     VarIntVal eval(const VarMap<const llvm::Value *> &variables,
                    const MonoPair<Heap> &heaps,
@@ -348,7 +353,7 @@ template <typename T> struct BinaryIntExpr : public HeapExpr<T> {
             return vals.first - vals.second;
         }
     }
-    std::ostream &dump(std::ostream &os) {
+    std::ostream &dump(std::ostream &os) const override {
         os << "(";
         args.first->dump(os);
         switch (op) {

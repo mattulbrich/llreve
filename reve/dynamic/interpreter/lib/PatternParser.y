@@ -13,6 +13,7 @@ void yyerror(const char* s) {
   HeapExpr<VariablePlaceholder>* exprPtr;
   BinaryBooleanOp boolBinop;
   BinaryIntProp intBinprop;
+  BinaryIntOp intBinop;
   ProgramIndex progIndex;
 }
 %type <patternPtr> pattern binaryHeapPattern heapExprProp
@@ -21,6 +22,7 @@ void yyerror(const char* s) {
 %token NUMBER
 %token <boolBinop> BINARYBOOLOP
 %token <intBinprop> BINARYINTPROP
+%token <intBinop>   BINARYINTOP
 %token UNARYBOOLOP
 %token PROPOP
 %token SEMICOLON
@@ -54,6 +56,10 @@ expr : PLACEHOLDER { $$ = new Variable<VariablePlaceholder>(VariablePlaceholder(
      | HEAP LBRACK expr RBRACK { $$ = new HeapAccess<VariablePlaceholder>($1,
                                             std::shared_ptr<HeapExpr<VariablePlaceholder>>($3)); }
      | LPAR expr RPAR { $$ = $2; }
+     | LPAR expr BINARYINTOP expr RPAR
+        { $$ = new BinaryIntExpr<VariablePlaceholder>($3,
+                     makeMonoPair(std::shared_ptr<HeapExpr<VariablePlaceholder>>($2),
+                                  std::shared_ptr<HeapExpr<VariablePlaceholder>>($4))); }
 ;
 %%
 

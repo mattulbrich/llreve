@@ -28,7 +28,7 @@ file(GLOB headers include/*.h)
 
 set_source_files_properties(lib/PatternLexer.cpp PROPERTIES COMPILE_FLAGS /W0)
 
-BISON_TARGET(PatternParser lib/PatternParser.y ${CMAKE_CURRENT_BINARY_DIR}/PatternParser.cpp)
+BISON_TARGET(PatternParser lib/PatternParser.y ${CMAKE_CURRENT_BINARY_DIR}/PatternParser.cpp VERBOSE ${CMAKE_CURRENT_BINARY_DIR}/pattern.output)
 FLEX_TARGET(PatternLexer lib/PatternLexer.l  ${CMAKE_CURRENT_BINARY_DIR}/PatternLexer.cpp)
 ADD_FLEX_BISON_DEPENDENCY(PatternLexer PatternParser)
 set_source_files_properties(${BISON_PatternParser_OUTPUTS} PROPERTIES COMPILE_FLAGS "-Wno-everything")
