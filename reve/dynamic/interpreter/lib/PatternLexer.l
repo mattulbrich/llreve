@@ -12,13 +12,12 @@ using namespace std;
 [ \t\n]         ;
 \(              { return LPAR; }
 \)              { return RPAR; }
-[=]             { if (strcmp(yytext,"=") == 0) {
-                      yylval.intBinprop = BinaryIntProp::EQ;
-                  }
-                  return BINARYINTPROP;
-                }
-
-i_[0-9]+        { cout << "Found bound var:" << yytext << endl; }
+\<              { return LE; }
+\<=             { return LT; }
+=               { return EQ; }
+>=              { return GE; }
+>               { return GT; }
+i_[0-9]+        { yylval.boundVarIndex = strtoul(yytext+2, NULL, 10); return BOUNDVAR; }
 heap\$(1|2)     { if (strcmp(yytext, "heap$1") == 0) {
                       yylval.progIndex = ProgramIndex::First;
                   } else {
@@ -30,13 +29,12 @@ _               { return PLACEHOLDER; }
 \[              { return LBRACK; }
 \]              { return RBRACK; }
 ;               { return SEMICOLON; }
-[\+\-\*]           { if (strcmp(yytext,"+") == 0) {
-                      yylval.intBinop = BinaryIntOp::Add;
-                  } else if (strcmp(yytext,"-") == 0) {
-                      yylval.intBinop = BinaryIntOp::Subtract;
-                  } else if (strcmp(yytext,"*") == 0) {
-                      yylval.intBinop = BinaryIntOp::Mul;
-                  }
-                  return BINARYINTOP;
-                }
+\+              { return PLUS; }
+\*              { return STAR; }
+\-              { return MINUS; }
+∀               { return FORALL; }
+∃               { return EXISTS; }
+\.              { return DOT; }
+,               { return COMMA; }
+[0-9]+          { yylval.constantVal = strtoul(yytext, NULL, 10); return NUMBER; }
 %%

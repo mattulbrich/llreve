@@ -243,6 +243,7 @@ template <typename T> struct HeapAccess : public HeapExpr<T> {
 
 template <typename T> struct Constant : public HeapExpr<T> {
     VarIntVal value;
+    Constant(VarIntVal value) : value(value) {}
     size_t arguments() const override { return 0; }
     std::shared_ptr<HeapExpr<const llvm::Value *>> distributeArguments(
         std::vector<const llvm::Value *> arguments) const override {
@@ -290,12 +291,12 @@ template <typename T> struct Hole : public HeapExpr<T> {
     // the corresponding pattern is up to the user
     size_t index;
     size_t arguments() const override { return 0; }
-    Hole() {}
+    Hole(size_t index) : index(index) {}
     std::shared_ptr<HeapExpr<const llvm::Value *>> distributeArguments(
         std::vector<const llvm::Value *> variables) const override {
         assert(variables.empty());
         unused(variables);
-        return std::make_shared<Hole<const llvm::Value *>>();
+        return std::make_shared<Hole<const llvm::Value *>>(index);
     }
     VarIntVal eval(const VarMap<const llvm::Value *> & /* unused */,
                    const MonoPair<Heap> & /* unused */,
@@ -407,10 +408,10 @@ template <typename T> struct RangeProp : public HeapPattern<T> {
     MonoPair<std::shared_ptr<HeapExpr<T>>> bounds;
     size_t index;
     // This pattern needs to have exactly one hole for the variable in the range
-    HeapPattern<T> pat;
+    std::shared_ptr<HeapPattern<T>> pat;
     RangeProp(RangeQuantifier quant,
               MonoPair<std::shared_ptr<HeapExpr<T>>> bounds, size_t index,
-              HeapPattern<T> pat)
+              std::shared_ptr<HeapPattern<T>> pat)
         : quant(quant), bounds(bounds), index(index), pat(pat) {}
     size_t arguments() const override {
         return bounds.first->arguments() + bounds.second->arguments() +
@@ -430,29 +431,27 @@ template <typename T> struct RangeProp : public HeapPattern<T> {
         return std::make_shared<RangeProp<const llvm::Value *>>(
             quant, makeMonoPair(bounds.first->distributeArguments(firstArgs),
                                 bounds.second->distributeArguments(secondArgs)),
-
+            index,
             pat->distributeArguments(thirdArgs));
     }
     bool matches(const VarMap<const llvm::Value *> &variables,
                  const MonoPair<Heap> &heaps,
                  const HoleMap &holes) const override {
         assert(holes.count(index) == 0);
-        MonoPair<VarIntVal> bounds = bounds.map<VarIntVal>(
-            [&variables, &heaps, &holes](std::shared_ptr<HeapExpr<T>> arg) {
-                return arg->eval(variables, heaps, holes);
+        HoleMap newHoles = holes;
+        MonoPair<VarIntVal> boundVals = bounds.template map<VarIntVal>(
+            [&variables, &heaps, &newHoles](std::shared_ptr<HeapExpr<T>> arg) -> VarIntVal {
+                return arg->eval(variables, heaps, newHoles);
             });
-        for (VarIntVal i = bounds.first; i <= bounds.second; ++i) {
-            holes[index] = i;
-            bool result = pat->matches(variables, heaps, holes);
+        for (VarIntVal i = boundVals.first; i <= boundVals.second; ++i) {
+            newHoles[index] = i;
+            bool result = pat->matches(variables, heaps, newHoles);
             if (result && quant == RangeQuantifier::Any) {
-                holes.erase(index);
                 return true;
             } else if (!result && quant == RangeQuantifier::All) {
-                holes.erase(index);
                 return false;
             }
         }
-        holes.erase(index);
         switch (quant) {
         case RangeQuantifier::Any:
             return false;
@@ -473,10 +472,10 @@ template <typename T> struct RangeProp : public HeapPattern<T> {
         std::string indexName = "i_" + std::to_string(index);
         os << indexName;
         os << ".";
-        bounds.first.dump(os);
+        bounds.first->dump(os);
         os << indexName;
-        bounds.second.dump(os);
-        os << ": ";
+        bounds.second->dump(os);
+        os << ", ";
         pat->dump(os);
         os << ")";
     }
