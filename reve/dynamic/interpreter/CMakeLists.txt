@@ -20,11 +20,26 @@ message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 include_directories(include ${CMAKE_CURRENT_SOURCE_DIR}/../..//reve/include ${LLVM_INCLUDE_DIRS} ${GMP_INCLUDE_DIR})
 add_definitions(${LLVM_DEFINITIONS})
 
+find_package(BISON)
+find_package(FLEX)
+
 file(GLOB sources lib/*.cpp)
 file(GLOB headers include/*.h)
 
+set_source_files_properties(lib/PatternLexer.cpp PROPERTIES COMPILE_FLAGS /W0)
+
+BISON_TARGET(PatternParser lib/PatternParser.y ${CMAKE_CURRENT_BINARY_DIR}/PatternParser.cpp)
+FLEX_TARGET(PatternLexer lib/PatternLexer.l  ${CMAKE_CURRENT_BINARY_DIR}/PatternLexer.cpp)
+ADD_FLEX_BISON_DEPENDENCY(PatternLexer PatternParser)
+set_source_files_properties(${BISON_PatternParser_OUTPUTS} PROPERTIES COMPILE_FLAGS "-Wno-everything")
+set_source_files_properties(${FLEX_PatternLexer_OUTPUTS} PROPERTIES COMPILE_FLAGS "-Wno-everything")
+
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../reve ${CMAKE_CURRENT_BINARY_DIR}/reve)
-add_library(libreve-interpreter ${sources} ${headers})
+add_library(libreve-interpreter
+  ${sources}
+  ${headers}
+  ${BISON_PatternParser_OUTPUTS}
+  ${FLEX_PatternLexer_OUTPUTS})
 add_executable(reve-interpreter src/ReveInterpreter.cpp ${headers})
 add_executable(reve-analyzer src/ReveAnalyzer.cpp ${headers})
 
@@ -37,6 +52,7 @@ target_link_libraries(reve-analyzer
   ${GMP_LIBRARIES}
   ${GMPXX_LIBRARIES}
   ${CBOR_LIBRARIES}
+  ${FL_LIBRARY}
   )
 
 target_link_libraries(reve-interpreter

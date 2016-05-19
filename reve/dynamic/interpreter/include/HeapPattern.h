@@ -87,6 +87,9 @@ enum class BinaryIntProp { LT, LE, EQ, GE, GT };
 template <typename T> struct BinaryHeapPattern : public HeapPattern<T> {
     BinaryBooleanOp op;
     MonoPair<std::shared_ptr<HeapPattern<T>>> args;
+    BinaryHeapPattern(BinaryBooleanOp op,
+                      MonoPair<std::shared_ptr<HeapPattern<T>>> args)
+        : op(op), args(args) {}
     size_t arguments() const override {
         return args.first->arguments() + args.second->arguments();
     }
@@ -277,7 +280,7 @@ template <typename T> struct Variable : public HeapExpr<T> {
         return 0;
     }
     std::ostream &dump(std::ostream &os) const override {
-        os << "variable";
+        os << "_";
         return os;
     }
 };
@@ -539,3 +542,5 @@ template <typename T> struct HeapExprProp : public HeapPattern<T> {
         return os;
     }
 };
+
+std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> parsePatterns(FILE* stream);

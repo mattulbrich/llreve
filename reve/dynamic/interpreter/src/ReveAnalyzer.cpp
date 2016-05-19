@@ -31,6 +31,10 @@ static llvm::cl::opt<string> FileName1Flag(llvm::cl::Positional,
 static llvm::cl::opt<string> FileName2Flag(llvm::cl::Positional,
                                            llvm::cl::desc("FILE2"),
                                            llvm::cl::Required);
+static llvm::cl::opt<string>
+    PatternFileFlag("patterns",
+                    llvm::cl::desc("Path to file containing patterns"),
+                    llvm::cl::Required);
 static llvm::cl::opt<string> OutputDirectoryFlag(
     "output",
     llvm::cl::desc("Directory containing the output of the interpreter"));
@@ -66,6 +70,9 @@ int main(int argc, const char **argv) {
         compileToModules(argv[0], inputOpts, acts);
     vector<MonoPair<PreprocessedFunction>> preprocessedFuns =
         preprocessFunctions(modules, preprocessOpts);
+    FILE* patternFile = fopen(PatternFileFlag.c_str(), "r");
+    auto patterns = parsePatterns(patternFile);
+    std::cerr << "Found " << patterns.size() << " patterns\n";
     vector<smt::SharedSMTRef> smtExprs =
         driver(modules, preprocessedFuns, MainFunctionFlag);
     // map<int, smt::SharedSMTRef> invariantDefinitions =

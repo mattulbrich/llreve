@@ -10,6 +10,7 @@
 #include "PathAnalysis.h"
 #include "SerializeTraces.h"
 #include "Unroll.h"
+#include "PatternParser.h"
 
 #include <fstream>
 #include <iostream>
