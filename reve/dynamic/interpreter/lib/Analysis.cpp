@@ -997,21 +997,7 @@ void iterateTracesInRange(
     vector<std::thread> threads(ThreadsFlag);
     std::function<void()> worker = [&q, &varNamesFirst, &varNamesSecond,
                                     &callback, &heap, &funs]() {
-        for (WorkItem item = q.pop(); item.counter >= 0; item = q.pop()) {
-            map<string, std::shared_ptr<VarVal>> map;
-            // TODO this is ugly
-            for (size_t i = 0; i < item.vals.size(); ++i) {
-                map.insert(
-                    {varNamesFirst.at(i), make_shared<VarInt>(item.vals[i])});
-                if (varNamesFirst.at(i) != varNamesSecond.at(i)) {
-                    map.insert({varNamesSecond.at(i),
-                                make_shared<VarInt>(item.vals[i])});
-                }
-            }
-            MonoPair<Call<const llvm::Value *>> calls =
-                interpretFunctionPair(funs, map, heap, 1000);
-            callback(std::move(calls));
-        }
+        workerThread(q, varNamesFirst, varNamesSecond, callback, heap, funs);
     };
     for (size_t i = 0; i < ThreadsFlag; ++i) {
         threads[i] = std::thread(worker);
@@ -1029,5 +1015,27 @@ void iterateTracesInRange(
     }
     for (auto &t : threads) {
         t.join();
+    }
+}
+
+void workerThread(
+    ThreadSafeQueue<WorkItem> &q, vector<string> &varNamesFirst,
+    vector<string> &varNamesSecond,
+    std::function<void(MonoPair<Call<const llvm::Value *>>)> callback,
+    Heap heap, MonoPair<const llvm::Function *> funs) {
+    for (WorkItem item = q.pop(); item.counter >= 0; item = q.pop()) {
+        map<string, std::shared_ptr<VarVal>> map;
+        // TODO this is ugly
+        for (size_t i = 0; i < item.vals.size(); ++i) {
+            map.insert(
+                {varNamesFirst.at(i), make_shared<VarInt>(item.vals[i])});
+            if (varNamesFirst.at(i) != varNamesSecond.at(i)) {
+                map.insert(
+                    {varNamesSecond.at(i), make_shared<VarInt>(item.vals[i])});
+            }
+        }
+        MonoPair<Call<const llvm::Value *>> calls =
+            interpretFunctionPair(funs, map, heap, 1000);
+        callback(std::move(calls));
     }
 }
