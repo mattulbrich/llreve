@@ -2,6 +2,7 @@
 
 #include "Compat.h"
 #include "HeapPattern.h"
+#include "HeapPattern.h"
 #include "Interpreter.h"
 #include "Linear.h"
 #include "MarkAnalysis.h"
@@ -10,7 +11,6 @@
 #include "PathAnalysis.h"
 #include "SerializeTraces.h"
 #include "Unroll.h"
-#include "PatternParser.h"
 
 #include <fstream>
 #include <iostream>
@@ -107,7 +107,8 @@ void iterateDeserialized(
 vector<SharedSMTRef>
 driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
        vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
-       string mainFunctionName) {
+       string mainFunctionName,
+       vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns) {
     auto preprocessedFunctions =
         findFunction(preprocessedFuns, mainFunctionName);
     if (!preprocessedFunctions) {
@@ -157,16 +158,6 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     loopCounts = {};
     PolynomialEquations polynomialEquations;
     HeapPatternCandidatesMap heapPatternCandidates;
-    std::shared_ptr<HeapPattern<VariablePlaceholder>> heapPatternExample =
-        std::make_shared<HeapExprProp<VariablePlaceholder>>(
-            BinaryIntProp::EQ,
-            makeMonoPair<std::shared_ptr<HeapExpr<VariablePlaceholder>>>(
-                std::make_shared<Variable<VariablePlaceholder>>(
-                    VariablePlaceholder()),
-                std::make_shared<HeapAccess<VariablePlaceholder>>(
-                    ProgramIndex::First,
-                    std::make_shared<Variable<VariablePlaceholder>>(
-                        VariablePlaceholder()))));
     const MonoPair<PathMap> pathMaps =
         preprocessedFunctions.getValue().map<PathMap>(
             [](PreprocessedFunction fun) { return fun.results.paths; });
@@ -178,8 +169,8 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     iterateTracesInRange(
         functions, -100, 100,
         [&loopCounts, &nameMap, &polynomialEquations, &freeVarsMap,
-         &heapPatternCandidates, &heapPatternExample, degree, &loopMtx,
-         &polynomMtx, &patternMtx](MonoPair<Call<const llvm::Value *>> calls) {
+         &heapPatternCandidates, &patterns, degree, &loopMtx, &polynomMtx,
+         &patternMtx](MonoPair<Call<const llvm::Value *>> calls) {
             int lastMark = -5; // -5 is unused
             {
                 std::lock_guard<std::mutex> lock(loopMtx);
@@ -202,13 +193,12 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                 });
             analyzeExecution<const llvm::Value *>(
                 calls, nameMap,
-                [&heapPatternCandidates, &heapPatternExample, &freeVarsMap,
+                [&heapPatternCandidates, &patterns, &freeVarsMap,
                  &patternMtx](MatchInfo<const llvm::Value *> match) {
                     {
                         std::lock_guard<std::mutex> lock(patternMtx);
-                        populateHeapPatterns(heapPatternCandidates,
-                                             *heapPatternExample, freeVarsMap,
-                                             match);
+                        populateHeapPatterns(heapPatternCandidates, patterns,
+                                             freeVarsMap, match);
                     }
                 });
         });
@@ -484,10 +474,10 @@ void populateEquationsMap(PolynomialEquations &polynomialEquations,
     }
 }
 
-void populateHeapPatterns(HeapPatternCandidatesMap &heapPatternCandidates,
-                          const HeapPattern<VariablePlaceholder> &pattern,
-                          FreeVarsMap freeVarsMap,
-                          MatchInfo<const llvm::Value *> match) {
+void populateHeapPatterns(
+    HeapPatternCandidatesMap &heapPatternCandidates,
+    vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
+    FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match) {
     VarMap<const llvm::Value *> variables(match.steps.first->state.variables);
     variables.insert(match.steps.second->state.variables.begin(),
                      match.steps.second->state.variables.end());
@@ -505,8 +495,12 @@ void populateHeapPatterns(HeapPatternCandidatesMap &heapPatternCandidates,
         }
     }
     if (heapPatternCandidates[match.mark].count(exitIndex) == 0) {
-        auto candidates =
-            pattern.instantiate(freeVarsMap.at(match.mark), variables, heaps);
+        list<shared_ptr<HeapPattern<const llvm::Value *>>> candidates;
+        for (auto pat : patterns) {
+            auto newCandidates =
+                pat->instantiate(freeVarsMap.at(match.mark), variables, heaps);
+            candidates.splice(candidates.end(), newCandidates);
+        }
         heapPatternCandidates.at(match.mark)
             .insert(make_pair(exitIndex,
                               LoopInfoData<Optional<HeapPatternCandidates>>(

@@ -73,8 +73,13 @@ int main(int argc, const char **argv) {
     FILE* patternFile = fopen(PatternFileFlag.c_str(), "r");
     auto patterns = parsePatterns(patternFile);
     std::cerr << "Found " << patterns.size() << " patterns\n";
+    for (auto pat : patterns) {
+        pat->dump(std::cerr);
+        std::cerr << "\n";
+    }
+    fclose(patternFile);
     vector<smt::SharedSMTRef> smtExprs =
-        driver(modules, preprocessedFuns, MainFunctionFlag);
+        driver(modules, preprocessedFuns, MainFunctionFlag, patterns);
     // map<int, smt::SharedSMTRef> invariantDefinitions =
     //     analyse(OutputDirectoryFlag, preprocessedFuns, MainFunctionFlag);
     // SMTGenerationOpts::initialize(MainFunctionFlag, false, false, false,

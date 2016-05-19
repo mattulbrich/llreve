@@ -45,7 +45,8 @@ using BoundsMap =
 std::vector<smt::SharedSMTRef>
 driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
        std::vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
-       std::string mainFunctionName);
+       std::string mainFunctionName,
+       std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns);
 llvm::Optional<MonoPair<PreprocessedFunction>>
 findFunction(const std::vector<MonoPair<PreprocessedFunction>> functions,
              std::string functionName);
@@ -125,10 +126,10 @@ BoundsMap updateBounds(
 void populateEquationsMap(PolynomialEquations &equationsMap,
                           FreeVarsMap freeVarsMap,
                           MatchInfo<const llvm::Value *> match, size_t degree);
-void populateHeapPatterns(HeapPatternCandidatesMap &heapPatternCandidates,
-                          const HeapPattern<VariablePlaceholder> &pattern,
-                          FreeVarsMap freeVarsMap,
-                          MatchInfo<const llvm::Value *> match);
+void populateHeapPatterns(
+    HeapPatternCandidatesMap &heapPatternCandidates,
+    std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
+    FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match);
 void dumpPolynomials(const PolynomialEquations &equationsMap,
                      const FreeVarsMap &freeVarsmap);
 void dumpHeapPatterns(const HeapPatternCandidatesMap &heapPatternsMap);
