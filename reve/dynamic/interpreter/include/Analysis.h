@@ -277,4 +277,9 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
 void workerThread(
     ThreadSafeQueue<WorkItem> &q,
     std::function<void(MonoPair<Call<const llvm::Value *>>)> callback,
-    Heap heap, MonoPair<const llvm::Function *> funs);
+    MonoPair<const llvm::Function *> funs);
+
+Heap randomHeap(
+    const llvm::Function &fun,
+    std::map<const llvm::Value *, std::shared_ptr<VarVal>> &variableValues,
+    int lengthBound, int valLowerBound, int valUpperBound, unsigned int *seedp);

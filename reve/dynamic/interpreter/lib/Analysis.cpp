@@ -967,21 +967,11 @@ void iterateTracesInRange(
     std::function<void(MonoPair<Call<const llvm::Value *>>)> callback) {
     assert(!(funs.first->isVarArg() || funs.second->isVarArg()));
     vector<VarIntVal> argValues;
-    Heap heap;
-    // Insert two null terminated strings for testing purposes
-    for (VarIntVal i = 0; i < 10; ++i) {
-        VarIntVal j = i + 1;
-        heap.insert(std::make_pair(i, j));
-    }
-    for (VarIntVal i = 11; i < 20; ++i) {
-        VarIntVal j = i + 1;
-        heap.insert(std::make_pair(i, j));
-    }
 
     ThreadSafeQueue<WorkItem> q;
     vector<std::thread> threads(ThreadsFlag);
-    std::function<void()> worker = [&q, &callback, &heap, &funs]() {
-        workerThread(q, callback, heap, funs);
+    std::function<void()> worker = [&q, &callback, &funs]() {
+        workerThread(q, callback, funs);
     };
     for (size_t i = 0; i < ThreadsFlag; ++i) {
         threads[i] = std::thread(worker);
@@ -1007,25 +997,51 @@ void iterateTracesInRange(
 void workerThread(
     ThreadSafeQueue<WorkItem> &q,
     std::function<void(MonoPair<Call<const llvm::Value *>>)> callback,
-    Heap heap, MonoPair<const llvm::Function *> funs) {
+    MonoPair<const llvm::Function *> funs) {
+    // Each thread has it’s own seed
+    unsigned int seedp = static_cast<unsigned int>(time(NULL));
     for (WorkItem item = q.pop(); item.counter >= 0; item = q.pop()) {
-        MonoPair<std::map<const llvm::Value *, std::shared_ptr<VarVal>>> maps =
-            makeMonoPair<
+        MonoPair<std::map<const llvm::Value *, std::shared_ptr<VarVal>>>
+            variableValues = makeMonoPair<
                 std::map<const llvm::Value *, std::shared_ptr<VarVal>>>({}, {});
         auto argIt1 = funs.first->arg_begin();
         auto argIt2 = funs.second->arg_begin();
         for (size_t i = 0; i < item.vals.size(); ++i) {
             const llvm::Value *firstArg = &*argIt1;
             const llvm::Value *secondArg = &*argIt2;
-            maps.first.insert({firstArg, make_shared<VarInt>(item.vals[i])});
-            maps.second.insert({secondArg, make_shared<VarInt>(item.vals[i])});
+            variableValues.first.insert({firstArg, make_shared<VarInt>(item.vals[i])});
+            variableValues.second.insert({secondArg, make_shared<VarInt>(item.vals[i])});
             ++argIt1;
             ++argIt2;
         }
         assert(argIt1 == funs.first->arg_end());
         assert(argIt2 == funs.second->arg_end());
+        Heap heap = randomHeap(*funs.first, variableValues.first, 30, -20, 20, &seedp);
         MonoPair<Call<const llvm::Value *>> calls =
-            interpretFunctionPair(funs, std::move(maps), heap, 1000);
+            interpretFunctionPair(funs, std::move(variableValues), heap, 1000);
         callback(std::move(calls));
     }
+}
+
+Heap randomHeap(
+    const llvm::Function &fun,
+    std::map<const llvm::Value *, std::shared_ptr<VarVal>> &variableValues,
+    int lengthBound, int valLowerBound, int valUpperBound,
+    unsigned int *seedp) {
+    // We place an array with a random length <= lengthBound with random values
+    // >= valLowerBound and <= valUpperBound at each pointer argument
+    Heap heap;
+    for (const auto &arg : fun.args()) {
+        if (arg.getType()->isPointerTy()) {
+            VarIntVal arrayStart = variableValues.at(&arg)->unsafeIntVal();
+            int length = rand_r(seedp) % (lengthBound + 1);
+            for (int i = 0; i <= length; ++i) {
+                int val =
+                    (rand_r(seedp) % (valUpperBound - valLowerBound + 1)) +
+                    valLowerBound;
+                heap.insert({arrayStart + i, val});
+            }
+        }
+    }
+    return heap;
 }
