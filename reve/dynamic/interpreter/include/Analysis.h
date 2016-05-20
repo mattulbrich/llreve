@@ -275,7 +275,6 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
 }
 
 void workerThread(
-    ThreadSafeQueue<WorkItem> &q, std::vector<std::string> &varNamesFirst,
-    std::vector<std::string> &varNamesSecond,
+    ThreadSafeQueue<WorkItem> &q,
     std::function<void(MonoPair<Call<const llvm::Value *>>)> callback,
     Heap heap, MonoPair<const llvm::Function *> funs);

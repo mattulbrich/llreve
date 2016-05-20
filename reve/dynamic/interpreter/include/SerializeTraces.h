@@ -59,5 +59,4 @@ struct WorkItem {
 
 void workerThread(MonoPair<const llvm::Function *> funs,
                   ThreadSafeQueue<WorkItem> &q,
-                  const std::vector<std::string> varNames,
                   std::string outputDirectory);

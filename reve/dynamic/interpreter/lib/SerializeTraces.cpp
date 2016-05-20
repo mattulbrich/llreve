@@ -19,23 +19,17 @@ void serializeValuesInRange(MonoPair<const Function *> funs,
                             string outputDirectory) {
     assert(!(funs.first->isVarArg() || funs.second->isVarArg()));
     vector<VarIntVal> argValues;
-    vector<string> varNames;
-    for (auto &arg : funs.first->args()) {
-        // The variables are already renamed so we need to remove the suffix
-        std::string varName = arg.getName();
-        size_t i = varName.find_first_of('$');
-        varNames.push_back(varName.substr(0, i));
-    }
     ThreadSafeQueue<WorkItem> q;
     unsigned int n = std::thread::hardware_concurrency();
     vector<std::thread> threads(n);
     for (size_t i = 0; i < n; ++i) {
-        threads[i] = std::thread([&q, varNames, funs, outputDirectory]() {
-            workerThread(funs, q, varNames, outputDirectory);
+        threads[i] = std::thread([&q, funs, outputDirectory]() {
+            workerThread(funs, q, outputDirectory);
         });
     }
     int counter = 0;
-    for (const auto &vals : Range(lowerBound, upperBound, varNames.size())) {
+    for (const auto &vals :
+         Range(lowerBound, upperBound, funs.first->getArgumentList().size())) {
         q.push({vals, counter});
         counter++;
     }
@@ -91,18 +85,24 @@ Range::RangeIterator &Range::RangeIterator::operator++() {
 }
 
 void workerThread(MonoPair<const llvm::Function *> funs,
-                  ThreadSafeQueue<WorkItem> &q,
-                  const std::vector<string> varNames,
-                  std::string outputDirectory) {
+                  ThreadSafeQueue<WorkItem> &q, std::string outputDirectory) {
     for (WorkItem item = q.pop(); item.counter >= 0; item = q.pop()) {
-        map<string, std::shared_ptr<VarVal>> map;
-
+        MonoPair<map<const llvm::Value *, std::shared_ptr<VarVal>>> maps =
+            makeMonoPair<map<const llvm::Value *, std::shared_ptr<VarVal>>>({},
+                                                                            {});
+        auto argIt1 = funs.first->arg_begin();
+        auto argIt2 = funs.second->arg_end();
         for (size_t i = 0; i < item.vals.size(); ++i) {
-            map.insert({varNames[i], make_shared<VarInt>(item.vals[i])});
+            const llvm::Value *firstArg = &*argIt1;
+            const llvm::Value *secondArg = &*argIt2;
+            maps.first.insert({firstArg, make_shared<VarInt>(item.vals[i])});
+            maps.second.insert({secondArg, make_shared<VarInt>(item.vals[i])});
+            ++argIt1;
+            ++argIt2;
         }
         Heap heap;
         MonoPair<Call<const llvm::Value *>> calls =
-            interpretFunctionPair(funs, map, heap, 10000);
+            interpretFunctionPair(funs, maps, heap, 10000);
 
         std::string baseName = outputDirectory + "/";
         baseName += funs.first->getName();

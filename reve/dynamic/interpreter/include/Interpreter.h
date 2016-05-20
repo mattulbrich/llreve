@@ -193,7 +193,7 @@ struct TerminatorUpdate {
 /// programs
 MonoPair<FastCall>
 interpretFunctionPair(MonoPair<const llvm::Function *> funs,
-                      std::map<std::string, std::shared_ptr<VarVal>> variables,
+                      MonoPair<std::map<const llvm::Value*, std::shared_ptr<VarVal>>> variables,
                       Heap heap, uint32_t maxSteps);
 auto interpretFunction(const llvm::Function &fun, FastState entry,
                        uint32_t maxSteps) -> FastCall;

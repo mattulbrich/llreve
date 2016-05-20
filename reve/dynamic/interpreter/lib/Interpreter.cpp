@@ -93,29 +93,13 @@ shared_ptr<VarVal> cborToVarVal(const cbor_item_t *item) {
     }
 }
 
-MonoPair<FastCall>
-interpretFunctionPair(MonoPair<const Function *> funs,
-                      map<string, shared_ptr<VarVal>> variables, Heap heap,
-                      uint32_t maxSteps) {
-    VarMap<const llvm::Value *> var1;
-    VarMap<const llvm::Value *> var2;
-    for (auto &arg : funs.first->args()) {
-        std::string varName = arg.getName();
-        size_t i = varName.find_first_of('$');
-        varName = varName.substr(0, i);
-        const llvm::Value *a = &arg;
-        var1.insert(make_pair(a, variables.at(varName)));
-    }
-    for (auto &arg : funs.second->args()) {
-        std::string varName = arg.getName();
-        size_t i = varName.find_first_of('$');
-        varName = varName.substr(0, i);
-        const llvm::Value *a = &arg;
-        var2.insert(make_pair(a, variables.at(varName)));
-    }
+MonoPair<FastCall> interpretFunctionPair(
+    MonoPair<const Function *> funs,
+    MonoPair<map<const llvm::Value *, shared_ptr<VarVal>>> variables, Heap heap,
+    uint32_t maxSteps) {
     return makeMonoPair(
-        interpretFunction(*funs.first, FastState(var1, heap), maxSteps),
-        interpretFunction(*funs.second, FastState(var2, heap), maxSteps));
+        interpretFunction(*funs.first, FastState(variables.first, heap), maxSteps),
+        interpretFunction(*funs.second, FastState(variables.second, heap), maxSteps));
 }
 
 FastCall interpretFunction(const Function &fun, FastState entry,

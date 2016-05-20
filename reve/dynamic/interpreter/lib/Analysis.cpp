@@ -135,8 +135,8 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     LoopCountMap loopCounts;
     std::mutex loopMtx;
     iterateTracesInRange(
-        functions, -100, 100, [&loopCounts, &nameMap, &loopMtx](
-                                  MonoPair<Call<const llvm::Value *>> calls) {
+        functions, -50, 50, [&loopCounts, &nameMap, &loopMtx](
+                                MonoPair<Call<const llvm::Value *>> calls) {
             int lastMark = -5; // -5 is unused
             {
                 std::lock_guard<std::mutex> lock(loopMtx);
@@ -167,7 +167,7 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     std::mutex patternMtx;
     std::mutex polynomMtx;
     iterateTracesInRange(
-        functions, -100, 100,
+        functions, -50, 50,
         [&loopCounts, &nameMap, &polynomialEquations, &freeVarsMap,
          &heapPatternCandidates, &patterns, degree, &loopMtx, &polynomMtx,
          &patternMtx](MonoPair<Call<const llvm::Value *>> calls) {
@@ -967,21 +967,6 @@ void iterateTracesInRange(
     std::function<void(MonoPair<Call<const llvm::Value *>>)> callback) {
     assert(!(funs.first->isVarArg() || funs.second->isVarArg()));
     vector<VarIntVal> argValues;
-    vector<string> varNamesFirst;
-    vector<string> varNamesSecond;
-
-    for (auto &arg : funs.first->args()) {
-        // The variables are already renamed so we need to remove the suffix
-        std::string varName = arg.getName();
-        size_t i = varName.find_first_of('$');
-        varNamesFirst.push_back(varName.substr(0, i));
-    }
-    for (auto &arg : funs.second->args()) {
-        std::string varName = arg.getName();
-        size_t i = varName.find_first_of('$');
-        varNamesSecond.push_back(varName.substr(0, i));
-    }
-    assert(varNamesFirst.size() == varNamesSecond.size());
     Heap heap;
     // Insert two null terminated strings for testing purposes
     for (VarIntVal i = 0; i < 10; ++i) {
@@ -995,17 +980,18 @@ void iterateTracesInRange(
 
     ThreadSafeQueue<WorkItem> q;
     vector<std::thread> threads(ThreadsFlag);
-    std::function<void()> worker = [&q, &varNamesFirst, &varNamesSecond,
-                                    &callback, &heap, &funs]() {
-        workerThread(q, varNamesFirst, varNamesSecond, callback, heap, funs);
+    std::function<void()> worker = [&q, &callback, &heap, &funs]() {
+        workerThread(q, callback, heap, funs);
     };
     for (size_t i = 0; i < ThreadsFlag; ++i) {
         threads[i] = std::thread(worker);
     }
 
     int counter = 0;
+    assert(funs.first->getArgumentList().size() ==
+           funs.second->getArgumentList().size());
     for (const auto &vals :
-         Range(lowerBound, upperBound, varNamesFirst.size())) {
+         Range(lowerBound, upperBound, funs.first->getArgumentList().size())) {
         q.push({vals, counter});
         ++counter;
     }
@@ -1019,23 +1005,27 @@ void iterateTracesInRange(
 }
 
 void workerThread(
-    ThreadSafeQueue<WorkItem> &q, vector<string> &varNamesFirst,
-    vector<string> &varNamesSecond,
+    ThreadSafeQueue<WorkItem> &q,
     std::function<void(MonoPair<Call<const llvm::Value *>>)> callback,
     Heap heap, MonoPair<const llvm::Function *> funs) {
     for (WorkItem item = q.pop(); item.counter >= 0; item = q.pop()) {
-        map<string, std::shared_ptr<VarVal>> map;
-        // TODO this is ugly
+        MonoPair<std::map<const llvm::Value *, std::shared_ptr<VarVal>>> maps =
+            makeMonoPair<
+                std::map<const llvm::Value *, std::shared_ptr<VarVal>>>({}, {});
+        auto argIt1 = funs.first->arg_begin();
+        auto argIt2 = funs.second->arg_begin();
         for (size_t i = 0; i < item.vals.size(); ++i) {
-            map.insert(
-                {varNamesFirst.at(i), make_shared<VarInt>(item.vals[i])});
-            if (varNamesFirst.at(i) != varNamesSecond.at(i)) {
-                map.insert(
-                    {varNamesSecond.at(i), make_shared<VarInt>(item.vals[i])});
-            }
+            const llvm::Value *firstArg = &*argIt1;
+            const llvm::Value *secondArg = &*argIt2;
+            maps.first.insert({firstArg, make_shared<VarInt>(item.vals[i])});
+            maps.second.insert({secondArg, make_shared<VarInt>(item.vals[i])});
+            ++argIt1;
+            ++argIt2;
         }
+        assert(argIt1 == funs.first->arg_end());
+        assert(argIt2 == funs.second->arg_end());
         MonoPair<Call<const llvm::Value *>> calls =
-            interpretFunctionPair(funs, map, heap, 1000);
+            interpretFunctionPair(funs, std::move(maps), heap, 1000);
         callback(std::move(calls));
     }
 }
