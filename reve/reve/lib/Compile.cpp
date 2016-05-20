@@ -90,6 +90,8 @@ std::vector<const char *> initializeArgs(const char *exeName, InputOpts &opts) {
     args.push_back(exeName); // add executable name
     args.push_back("-xc");   // force language to C
     args.push_back("-std=c99");
+	args.push_back("-g"); // enabel debug information
+	    
     if (!opts.Includes.empty()) {
         for (string &value : opts.Includes) {
             args.push_back("-I");
