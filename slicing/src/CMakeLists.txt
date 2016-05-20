@@ -24,7 +24,7 @@ macro (load_llvm)
 	message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 	message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
-	include_directories(${LLVM_INCLUDE_DIRS} include)
+	include_directories(${LLVM_INCLUDE_DIRS})
 	add_definitions(${LLVM_DEFINITIONS})	
 endmacro(load_llvm)
 
@@ -62,6 +62,21 @@ macro (load_libreve)
 		)	
 endmacro(load_libreve)
 
+macro(find_sources)
+	include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+	file(GLOB_RECURSE sources "*.cpp")
+	file(GLOB test_sources "test/*.cpp")
+	file(GLOB exec_sources "*.cpp")
+
+	foreach (tmp_file ${test_sources})
+		list(REMOVE_ITEM sources ${tmp_file})
+	endforeach (tmp_file)
+
+	foreach (tmp_file ${exec_sources})
+		list(REMOVE_ITEM sources ${tmp_file})
+	endforeach (tmp_file)
+endmacro(find_sources)
+
 
 ### =======================================================
 ### ============ Start of doing things ====================
@@ -70,13 +85,15 @@ endmacro(load_libreve)
 set_compiler_settings()
 load_llvm()
 load_libreve()
+find_sources()
 
-
-file(GLOB sources */*.cpp)
 
 add_executable(slicing main.cpp ${sources})
 # Add a dependencie to librevebuild, to ensure it is build befor the main project.
 add_dependencies(slicing librevebuild)
+
+add_executable(testing test.cpp ${sources} ${test_sources})
+add_dependencies(testing librevebuild)
 
 # Find librarys for components
 # To get a list of all aviable components use 'llvm-config --components'
@@ -89,4 +106,8 @@ target_link_libraries(slicing
 		libreve
 	)
 
+target_link_libraries(testing
+		${llvm_libs}
+		libreve
+	)
 
