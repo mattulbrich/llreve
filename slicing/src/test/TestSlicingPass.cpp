@@ -10,6 +10,12 @@
 #include "llvm/Transforms/Scalar.h"
 
 #include "core/SlicingPass.h"
+#include "core/AddVariableNamePass.h"
+
+#include "llvm/IR/Verifier.h"
+#include "llvm/Transforms/IPO.h"
+
+
 
 using std::make_shared;
 using std::cout;
@@ -18,17 +24,6 @@ using std::shared_ptr;
 using std::string;
 using clang::CodeGenAction;
 
-
-void printIR(llvm::Module& module) {
-	//for(llvm::Function& function:module) {
-		//cout << function.getName().str() << endl;
-	//	printIR(function);
-	//}
-
-	llvm::legacy::PassManager PM;
-	PM.add(llvm::createPrintModulePass(llvm::outs()));
-	PM.run(module);
-}
 
 TEST_CASE("Slicing pass does remove a statement", "[SlicingPass]") {
 	string fileName = "../testdata/simplesyntactic.c";
@@ -46,16 +41,20 @@ TEST_CASE("Slicing pass does remove a statement", "[SlicingPass]") {
 	for(llvm::Function& function:*module) {
 		llvm::legacy::FunctionPassManager passManager(function.getParent());
 		passManager.add(llvm::createPromoteMemoryToRegisterPass());		
-	    passManager.add(llvm::createCFGSimplificationPass());
+	    //passManager.add(llvm::createCFGSimplificationPass());
 		passManager.run(function);
 	}
+
+	string ir;
+	llvm::raw_string_ostream stream(ir);
 
 	int i = 0;
 	for(llvm::Function& function: *module) {
 		for(llvm::BasicBlock& block: function) {
 			for(llvm::Instruction& instruction: block) {			
 				i++;
-				if (i == 2) 
+				//stream << i << ": " << instruction << "\n";
+				if (i == 25) 
 				{
 					SlicingPass::toBeSliced(instruction);
 				}
@@ -64,9 +63,20 @@ TEST_CASE("Slicing pass does remove a statement", "[SlicingPass]") {
 	}
 
 	llvm::legacy::PassManager PM;
+	PM.add(new AddVariableNamePass());
+	PM.add(llvm::createStripSymbolsPass(true));	
 	PM.add(new SlicingPass());
+	PM.add(llvm::createPrintModulePass(stream));
+
 	PM.run(*module);
 
-    printIR(*module);
-    REQUIRE( 0 == 0 );
+	INFO( "=== Resulting IR: ===  \n" << stream.str());
+
+	string errors;
+	llvm::raw_string_ostream error_stream(errors);
+	bool hasError = llvm::verifyModule(*module, &error_stream);
+
+	INFO( "=== Following Errors were reported: === \n" << error_stream.str());
+	CHECK_FALSE( hasError );
+	CHECK(false);
 }

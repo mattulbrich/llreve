@@ -87,13 +87,16 @@ load_llvm()
 load_libreve()
 find_sources()
 
+# Pack all non executable sources into library to prevent
+# repeated building of source files. 
+add_library(all_sources ${sources})
 
-add_executable(slicing main.cpp ${sources})
 # Add a dependencie to librevebuild, to ensure it is build befor the main project.
-add_dependencies(slicing librevebuild)
+add_dependencies(all_sources librevebuild)
 
-add_executable(testing test.cpp ${sources} ${test_sources})
-add_dependencies(testing librevebuild)
+add_executable(slicing main.cpp)
+add_executable(testing test.cpp ${test_sources})
+
 
 # Find librarys for components
 # To get a list of all aviable components use 'llvm-config --components'
@@ -104,10 +107,12 @@ llvm_map_components_to_libnames(llvm_libs
 target_link_libraries(slicing
 		${llvm_libs}
 		libreve
+		all_sources
 	)
 
 target_link_libraries(testing
 		${llvm_libs}
 		libreve
+		all_sources
 	)
 

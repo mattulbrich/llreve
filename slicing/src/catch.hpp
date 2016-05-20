@@ -3468,7 +3468,7 @@ namespace Catch {
 #include <ctime>
 
 #ifndef CATCH_CONFIG_CONSOLE_WIDTH
-#define CATCH_CONFIG_CONSOLE_WIDTH 80
+#define CATCH_CONFIG_CONSOLE_WIDTH 100
 #endif
 
 namespace Catch {
