@@ -60,6 +60,65 @@ Instruction* SlicingPass::findPriviousDef(const DIVariable* variable, Instructio
 	return result;
 }
 
+bool SlicingPass::handleTerminatingInstruction(Instruction& instruction){
+	if (isa<llvm::TerminatorInst>(instruction)) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+bool SlicingPass::handleNoUses(llvm::Instruction& instruction){
+	if (!instruction.hasNUsesOrMore(1)) {
+		instruction.eraseFromParent();
+		return true;
+	}
+	return false;
+}
+
+bool SlicingPass::handleHasPriviousDef(llvm::Instruction& instruction, DIVariable* variable) {
+	if (variable){
+		Instruction* priviousDef = this->findPriviousDef(variable,instruction);
+		if (priviousDef) {
+			instruction.replaceAllUsesWith(priviousDef);
+			instruction.eraseFromParent();
+			return true;
+		}
+	}
+	return false;
+}
+
+bool SlicingPass::handleIsArgument(llvm::Instruction& instruction, DIVariable* variable){
+	if (variable){
+		if (DILocalVariable* localVariable = dyn_cast<DILocalVariable>(variable)) {
+			if (localVariable->isParameter()) {
+				Function* function = instruction.getFunction();
+				if (function) {
+					unsigned arg = localVariable->getArg();
+					unsigned i = 1;
+					Argument* searchedArgument = nullptr;
+
+					for (Argument& argument : function->getArgumentList()) {
+						if (arg == i) {
+							searchedArgument = &argument;
+							break;
+						}
+						i++;
+					}
+
+					if (searchedArgument) {
+						instruction.replaceAllUsesWith(searchedArgument);
+						instruction.eraseFromParent();
+						return true;
+					}
+				}
+			}
+		}
+	}
+
+	return false;
+}
+
 bool SlicingPass::runOnFunction(llvm::Function& function){
 	this->domTree = &getAnalysis<llvm::DominatorTreeWrapperPass>().getDomTree();
 	std::set<llvm::Instruction*> instructionsToDelete;
@@ -74,20 +133,13 @@ bool SlicingPass::runOnFunction(llvm::Function& function){
 
 	for(llvm::Instruction* ins: instructionsToDelete) {
 		Instruction& instruction = *ins;
-		llvm::outs() << "Looking for Privious def of: " << instruction << '\n';
+		DIVariable* variable = AddVariableNamePass::getSrcVariable(instruction);
 
-		//if (!instruction.hasNUsesOrMore(1)) {
-		//	instruction.eraseFromParent();
-		//} else 
-		{
-			if (DIVariable* variable = AddVariableNamePass::getSrcVariable(instruction)){
-				Instruction* priviousDef = this->findPriviousDef(variable,instruction);
-				if (priviousDef) {
-					llvm::outs() << "Found: " << *priviousDef << '\n';
-				}
-			}
-		}
-		
+		bool done = 
+			   handleTerminatingInstruction(instruction)
+			|| handleNoUses(instruction)
+			|| handleHasPriviousDef(instruction, variable)
+			|| handleIsArgument(instruction, variable);
 	}
 
 	return true;

@@ -3,34 +3,88 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/DebugInfoMetadata.h"
+#include "llvm/IR/IntrinsicInst.h"
+#include "llvm/Support/raw_ostream.h"
 
 #include <stack>
+#include <set>
 
 using namespace llvm;
 
 char AddVariableNamePass::ID = 0;
+std::string AddVariableNamePass::srcVariableMetadataName = "srcVariable";
+
+
+void AddVariableNamePass::propagateNoVariable(Instruction* instruction){
+	std::stack<Instruction*> visit;
+	visit.push(instruction);
+	while(!visit.empty()) {
+		Instruction* next = visit.top();
+		visit.pop();
+
+		auto insertRes = hasNoName->insert(next);
+		bool didInsert = insertRes.second;
+		if (didInsert) {
+			setSrcVariable(*instruction, nullptr);
+			for (User* user: next->users()) {
+				if (auto phi = dyn_cast<PHINode>(user)) {
+					visit.push(phi);
+				}
+			}
+		}
+	}
+}
+
+void AddVariableNamePass::setAndPropagate(DIVariable* srcVariable, Instruction* instruction){
+	setSrcVariable(*instruction, srcVariable);
+
+	std::stack<Instruction*> visit;
+	visit.push(instruction);
+	while(!visit.empty()) {
+		Instruction* next = visit.top();
+		visit.pop();
+		for (User* user: next->users()) {
+			if (auto phi = dyn_cast<PHINode>(user)) {
+				DIVariable* presentSrcVariable = getSrcVariable(*phi);
+				bool containedInHasNoName = (hasNoName->find(phi) != hasNoName->end());
+				if (!containedInHasNoName) {
+					if (presentSrcVariable == nullptr) {
+						setSrcVariable(*phi, srcVariable);
+						visit.push(phi);
+					} 
+				}
+			}
+		}
+	}
+}
 
 bool AddVariableNamePass::runOnFunction(llvm::Function &function) {
+	std::set<Instruction*> hasNoName;
+	this->hasNoName = &hasNoName;
+
+	//propagate variables
 	for (BasicBlock& block : function) {
 		for (Instruction& instruction : block) {
-			if (DbgValueInst* DbgValue = dyn_cast<DbgValueInst>(&instruction)) {
-				if (Instruction* ssaVar = dyn_cast<Instruction>(DbgValue->getValue())) {
-					DIVariable* srcVariable = DbgValue->getVariable();
-					setSrcVariable(*ssaVar, srcVariable);
+			if (DbgValueInst* dbgValue = dyn_cast<DbgValueInst>(&instruction)) {
+				if (Instruction* ssaVar = dyn_cast<Instruction>(dbgValue->getValue())) {
+					DIVariable* srcVariable = dbgValue->getVariable();
+					setAndPropagate(srcVariable, ssaVar);
+				}
+			}
+		}
+	}
 
-					std::stack<Instruction*> visit;
-					visit.push(ssaVar);
-					while(!visit.empty()) {
-						Instruction* next = visit.top();
-						visit.pop();
-						for (User* user: ssaVar->users()) {
-							if (isa<PHINode>(user)) {
-								if (Instruction* phiVar = dyn_cast<Instruction>(user)) {
-									//if (srcVariable = )
-									setSrcVariable(*phiVar, srcVariable);
-									//TODO: traverse all phi nodes and annotate with variable name
-									//visit.push(phiVar);
-								}
+	//clean up: remove variables if phi uses different src variables
+	for (BasicBlock& block : function) {
+		for (Instruction& instruction : block) {
+			if (auto phi = dyn_cast<PHINode>(&instruction)) {
+				DIVariable* srcVariable = getSrcVariable(*phi);
+				if (srcVariable != nullptr) {
+					for (unsigned int i = 0; i < phi->getNumIncomingValues();i++) {
+						if (Instruction* defInstruction = dyn_cast<Instruction>(phi->getIncomingValue(i))) {
+							if (srcVariable != getSrcVariable(*defInstruction)) {
+								propagateNoVariable(phi);
+								break;
 							}
 						}
 					}
@@ -38,30 +92,23 @@ bool AddVariableNamePass::runOnFunction(llvm::Function &function) {
 			}
 		}
 	}
+
 	return true;
 }
 
-void AddVariableNamePass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
-
-}
-
 DIVariable* AddVariableNamePass::getSrcVariable(llvm::Instruction& instruction) {
-	return nullptr;
-}
-
-
-DIVariable* AddVariableNamePass::findSrcVariable(const llvm::Instruction& instruction){
-	for(const llvm::Instruction& dbgInfo: *instruction.getParent()){
-		if (const DbgValueInst* DbgValue = dyn_cast<DbgValueInst>(&dbgInfo)) {
-			if (DbgValue->getValue() == &instruction) {
-				return DbgValue->getVariable();;
-			}
-		}
+	auto metadata = instruction.getMetadata(srcVariableMetadataName);
+	if (metadata) {
+		if (DIVariable* result = dyn_cast<DIVariable>(metadata)) {
+			return result;
+		} 
 	}
+	
 	return nullptr;
+
 }
+
 
 void AddVariableNamePass::setSrcVariable(Instruction& instruction, DIVariable* variable){
-	LLVMContext& context = instruction.getContext();	
-	instruction.setMetadata("srcVariable", variable);
+	instruction.setMetadata(srcVariableMetadataName, variable);
 }

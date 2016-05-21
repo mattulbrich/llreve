@@ -1,6 +1,7 @@
 int foo(int a) {
 	int i;
-	i = 1;
+	i = 0;
+	i += 1;
 	if (a == 0) {
 		i += 2;
 	} else {
@@ -14,5 +15,5 @@ int foo(int a) {
 		a -= -2;
 	}
 	i += 6;	
-	return a;
+	return a + i;
 }

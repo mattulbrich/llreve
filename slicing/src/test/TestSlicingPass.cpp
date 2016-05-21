@@ -11,6 +11,7 @@
 
 #include "core/SlicingPass.h"
 #include "core/AddVariableNamePass.h"
+#include "util/LambdaFunctionPass.h"
 
 #include "llvm/IR/Verifier.h"
 #include "llvm/Transforms/IPO.h"
@@ -23,6 +24,8 @@ using std::endl;
 using std::shared_ptr;
 using std::string;
 using clang::CodeGenAction;
+
+using namespace llvm;
 
 
 TEST_CASE("Slicing pass does remove a statement", "[SlicingPass]") {
@@ -38,33 +41,27 @@ TEST_CASE("Slicing pass does remove a statement", "[SlicingPass]") {
 
 	shared_ptr<llvm::Module> module = modules.first;
 
-	for(llvm::Function& function:*module) {
-		llvm::legacy::FunctionPassManager passManager(function.getParent());
-		passManager.add(llvm::createPromoteMemoryToRegisterPass());		
-	    //passManager.add(llvm::createCFGSimplificationPass());
-		passManager.run(function);
-	}
-
 	string ir;
 	llvm::raw_string_ostream stream(ir);
 
-	int i = 0;
-	for(llvm::Function& function: *module) {
+	llvm::legacy::PassManager PM;
+	PM.add(llvm::createPromoteMemoryToRegisterPass());		
+	PM.add(new AddVariableNamePass());
+	PM.add(llvm::createStripSymbolsPass(true));
+	PM.add(new LambdaFunctionPass([&](Function& function)->bool{
+		int i = 0;
 		for(llvm::BasicBlock& block: function) {
 			for(llvm::Instruction& instruction: block) {			
-				i++;
-				//stream << i << ": " << instruction << "\n";
-				if (i == 25) 
+				i++;				
+				if (i == 13) 
 				{
 					SlicingPass::toBeSliced(instruction);
 				}
+				stream << i << ": " << instruction << "\n";
 			}			
 		}
-	}
-
-	llvm::legacy::PassManager PM;
-	PM.add(new AddVariableNamePass());
-	PM.add(llvm::createStripSymbolsPass(true));	
+		return true;
+	}));
 	PM.add(new SlicingPass());
 	PM.add(llvm::createPrintModulePass(stream));
 

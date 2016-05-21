@@ -6,6 +6,8 @@
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 
+
+
 class SlicingPass : public llvm::FunctionPass {
 public:
 	static char ID;
@@ -24,6 +26,10 @@ private:
 	bool isPriviousDef(const llvm::DIVariable* variable, llvm::Instruction& instruction);
 	llvm::Instruction* findPriviousDef(const llvm::DIVariable* variable, llvm::Instruction& instruction);
 
-};
+	bool handleTerminatingInstruction(llvm::Instruction& instruction);
+	bool handleNoUses(llvm::Instruction& instruction);
+	bool handleHasPriviousDef(llvm::Instruction& instruction, llvm::DIVariable* variable);
+	bool handleIsArgument(llvm::Instruction& instruction, llvm::DIVariable* variable);
 
+};
 
