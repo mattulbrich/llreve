@@ -11,6 +11,8 @@
 
 #include "llvm/IR/Module.h"
 
+#include <thread>
+
 enum class LoopInfo {
     Left,  // The left call is looping alone
     Right, // The right call is looping alone
@@ -27,6 +29,7 @@ template <typename T> struct LoopInfoData {
     T left;
     T right;
     T none;
+    LoopInfoData() = default;
     LoopInfoData(T left, T right, T none)
         : left(left), right(right), none(none) {}
 };
@@ -50,6 +53,10 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
 llvm::Optional<MonoPair<PreprocessedFunction>>
 findFunction(const std::vector<MonoPair<PreprocessedFunction>> functions,
              std::string functionName);
+Heap randomHeap(
+    const llvm::Function &fun,
+    std::map<const llvm::Value *, std::shared_ptr<VarVal>> &variableValues,
+    int lengthBound, int valLowerBound, int valUpperBound, unsigned int *seedp);
 
 using Equality = MonoPair<std::string>;
 using PolynomialEquations =
@@ -90,31 +97,37 @@ bool normalMarkBlock(const BlockNameMap &map, BlockName &blockName);
 void debugAnalysis(MatchInfo<std::string> match);
 void dumpLoopCounts(const LoopCountMap &loopCounts);
 std::map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map);
+struct LoopCountsAndMark {
+    int mark;
+    LoopCountMap loopCounts;
+};
+
 template <typename T>
-void findLoopCounts(int &lastMark, LoopCountMap &map, MatchInfo<T> match) {
-    if (lastMark == match.mark) {
+void findLoopCounts(LoopCountsAndMark &loopCountsAndMark, MatchInfo<T> match) {
+    if (loopCountsAndMark.mark == match.mark) {
         switch (match.loopInfo) {
         case LoopInfo::Left:
-            map[match.mark].back().first++;
+            loopCountsAndMark.loopCounts[match.mark].back().first++;
             break;
         case LoopInfo::Right:
-            map[match.mark].back().second++;
+            loopCountsAndMark.loopCounts[match.mark].back().second++;
             break;
         case LoopInfo::None:
-            map[match.mark].back().first++;
-            map[match.mark].back().second++;
+            loopCountsAndMark.loopCounts[match.mark].back().first++;
+            loopCountsAndMark.loopCounts[match.mark].back().second++;
             break;
         }
     } else {
         switch (match.loopInfo) {
         case LoopInfo::None:
-            map[match.mark].push_back(makeMonoPair(0, 0));
+            loopCountsAndMark.loopCounts[match.mark].push_back(
+                makeMonoPair(0, 0));
             break;
         default:
             assert(false);
             break;
         }
-        lastMark = match.mark;
+        loopCountsAndMark.mark = match.mark;
     }
 }
 void instantiateBounds(
@@ -155,9 +168,80 @@ extractEqualities(const PolynomialEquations &equations,
 void iterateDeserialized(
     std::string directory,
     std::function<void(MonoPair<Call<std::string>> &)> callback);
+
+template <typename T>
+void workerThread(
+    ThreadSafeQueue<WorkItem> &q, T &state,
+    std::function<void(MonoPair<Call<const llvm::Value *>>, T &)> callback,
+    MonoPair<const llvm::Function *> funs) {
+    // std::cerr << "State adddress: " << &state << "\n";
+    // Each thread has it’s own seed
+    unsigned int seedp = static_cast<unsigned int>(time(NULL));
+    for (WorkItem item = q.pop(); item.counter >= 0; item = q.pop()) {
+        MonoPair<std::map<const llvm::Value *, std::shared_ptr<VarVal>>>
+            variableValues = makeMonoPair<
+                std::map<const llvm::Value *, std::shared_ptr<VarVal>>>({}, {});
+        auto argIt1 = funs.first->arg_begin();
+        auto argIt2 = funs.second->arg_begin();
+        for (size_t i = 0; i < item.vals.size(); ++i) {
+            const llvm::Value *firstArg = &*argIt1;
+            const llvm::Value *secondArg = &*argIt2;
+            variableValues.first.insert(
+                {firstArg, std::make_shared<VarInt>(item.vals[i])});
+            variableValues.second.insert(
+                {secondArg, std::make_shared<VarInt>(item.vals[i])});
+            ++argIt1;
+            ++argIt2;
+        }
+        assert(argIt1 == funs.first->arg_end());
+        assert(argIt2 == funs.second->arg_end());
+        Heap heap =
+            randomHeap(*funs.first, variableValues.first, 5, -20, 20, &seedp);
+        MonoPair<Call<const llvm::Value *>> calls =
+            interpretFunctionPair(funs, std::move(variableValues), heap, 1000);
+        callback(std::move(calls), state);
+    }
+}
+
+// Each thread operates on it’s own copy of the inital value of state, when
+// finished the threads are merged using the supplied merge function which has
+// to be associative and the resulting state is written back to the state ref
+template <typename T>
 void iterateTracesInRange(
     MonoPair<llvm::Function *> funs, VarIntVal lowerBound, VarIntVal upperBound,
-    std::function<void(MonoPair<Call<const llvm::Value *>>)> callback);
+    unsigned threadsNum, T &state, std::function<T(const T &, const T &)> merge,
+    std::function<void(MonoPair<Call<const llvm::Value *>>, T &)> callback) {
+    assert(!(funs.first->isVarArg() || funs.second->isVarArg()));
+    std::vector<VarIntVal> argValues;
+    T initialState = state;
+    ThreadSafeQueue<WorkItem> q;
+    std::vector<std::thread> threads(threadsNum);
+    std::vector<T> threadStates(threadsNum, initialState);
+    for (size_t i = 0; i < threadsNum; ++i) {
+        threads[i] = std::thread([&q, &callback, &funs, &threadStates, i]() {
+            workerThread(q, threadStates[i], callback, funs);
+        });
+    }
+
+    int counter = 0;
+    assert(funs.first->getArgumentList().size() ==
+           funs.second->getArgumentList().size());
+    for (const auto &vals :
+         Range(lowerBound, upperBound, funs.first->getArgumentList().size())) {
+        q.push({vals, counter});
+        ++counter;
+    }
+    for (size_t i = 0; i < threads.size(); ++i) {
+        // Each of these items will terminate exactly one thread
+        q.push({{}, -1});
+    }
+    for (auto &t : threads) {
+        t.join();
+    }
+    for (auto threadState : threadStates) {
+        state = merge(state, threadState);
+    }
+}
 void dumpLoopTransformations(
     std::map<int, LoopTransformation> loopTransformations);
 void applyLoopTransformation(
@@ -274,12 +358,18 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
     }
 }
 
-void workerThread(
-    ThreadSafeQueue<WorkItem> &q,
-    std::function<void(MonoPair<Call<const llvm::Value *>>)> callback,
-    MonoPair<const llvm::Function *> funs);
+LoopCountsAndMark mergeLoopCounts(LoopCountsAndMark counts1,
+                                  LoopCountsAndMark counts2);
+PolynomialEquations mergePolynomialEquations(PolynomialEquations eq1,
+                                             PolynomialEquations eq2);
+struct MergedAnalysisResults {
+    LoopCountsAndMark loopCounts;
+    PolynomialEquations polynomialEquations;
+    HeapPatternCandidatesMap heapPatternCandidates;
+};
 
-Heap randomHeap(
-    const llvm::Function &fun,
-    std::map<const llvm::Value *, std::shared_ptr<VarVal>> &variableValues,
-    int lengthBound, int valLowerBound, int valUpperBound, unsigned int *seedp);
+MergedAnalysisResults mergeAnalysisResults(MergedAnalysisResults res1,
+                                           MergedAnalysisResults res2);
+
+HeapPatternCandidatesMap mergeHeapPatterns(HeapPatternCandidatesMap cand1,
+                                           HeapPatternCandidatesMap cand2);
