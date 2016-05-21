@@ -7,14 +7,23 @@
 
 using HoleMap = std::map<size_t, VarIntVal>;
 
+enum class PatternType { Binary, Unary, HeapEquality, Range, ExprProp };
+
+enum class ExprType { HeapAccess, Constant, Variable, Hole, Binary, Unary };
+
 // Used before a pattern is instantiated
-struct VariablePlaceholder {};
+struct VariablePlaceholder {
+    bool operator==(const VariablePlaceholder & /* unused */) const {
+        return true;
+    }
+};
 
 VarIntVal getHeapVal(HeapAddress addr, Heap heap);
 
 template <typename T> struct HeapPattern {
     virtual size_t arguments() const = 0;
     virtual ~HeapPattern() = default;
+    virtual PatternType getType() const = 0;
     std::list<std::shared_ptr<HeapPattern<const llvm::Value *>>>
     instantiate(std::vector<std::string> variables,
                 const VarMap<const llvm::Value *> &variableValues,
@@ -76,6 +85,7 @@ template <typename T> struct HeapPattern {
         return this->matches(variables, heaps, holes);
     }
     virtual std::ostream &dump(std::ostream &os) const = 0;
+    virtual bool equalTo(const HeapPattern<T> &other) const = 0;
 };
 
 enum class UnaryBooleanOp { Neg };
@@ -90,6 +100,7 @@ template <typename T> struct BinaryHeapPattern : public HeapPattern<T> {
     BinaryHeapPattern(BinaryBooleanOp op,
                       MonoPair<std::shared_ptr<HeapPattern<T>>> args)
         : op(op), args(args) {}
+    PatternType getType() const override { return PatternType::Binary; }
     size_t arguments() const override {
         return args.first->arguments() + args.second->arguments();
     }
@@ -138,11 +149,21 @@ template <typename T> struct BinaryHeapPattern : public HeapPattern<T> {
         os << ")";
         return os;
     }
+    bool equalTo(const HeapPattern<T> &other) const override {
+        if (other.getType() == PatternType::Binary) {
+            auto binOther = static_cast<const BinaryHeapPattern<T> *>(&other);
+            return op == binOther->op &&
+                   args.first->equalTo(*binOther->args.first) &&
+                   args.second->equalTo(*binOther->args.second);
+        }
+        return false;
+    }
 };
 
 template <typename T> struct UnaryHeapPattern : public HeapPattern<T> {
     UnaryBooleanOp op;
     std::shared_ptr<HeapPattern<T>> arg;
+    PatternType getType() const override { return PatternType::Unary; }
     size_t arguments() const override { return arg->arguments(); }
     std::shared_ptr<HeapPattern<const llvm::Value *>> distributeArguments(
         std::vector<const llvm::Value *> variables) const override {
@@ -163,6 +184,13 @@ template <typename T> struct UnaryHeapPattern : public HeapPattern<T> {
         case UnaryBooleanOp::Neg:
             return !argMatches;
         }
+    }
+    bool equalTo(const HeapPattern<T> &other) const override {
+        if (other.getType() == PatternType::Unary) {
+            auto unOther = static_cast<const UnaryHeapPattern<T> *>(&other);
+            return op == unOther.op && arg->equalTo(*unOther->arg);
+        }
+        return false;
     }
 };
 
@@ -197,6 +225,8 @@ template <typename T> struct HeapExpr {
     virtual std::shared_ptr<HeapExpr<const llvm::Value *>>
     distributeArguments(std::vector<const llvm::Value *> variables) const = 0;
     virtual std::ostream &dump(std::ostream &os) const = 0;
+    virtual bool equalTo(const HeapExpr<T> &other) const = 0;
+    virtual ExprType getType() const = 0;
 };
 
 enum class ProgramIndex { First, Second };
@@ -207,6 +237,7 @@ template <typename T> struct HeapAccess : public HeapExpr<T> {
     std::shared_ptr<HeapExpr<T>> atVal;
     HeapAccess(ProgramIndex programIndex, std::shared_ptr<HeapExpr<T>> atVal)
         : programIndex(programIndex), atVal(atVal) {}
+    ExprType getType() const override { return ExprType::HeapAccess; }
     size_t arguments() const override { return atVal->arguments(); }
     std::shared_ptr<HeapExpr<const llvm::Value *>> distributeArguments(
         std::vector<const llvm::Value *> variables) const override {
@@ -239,11 +270,20 @@ template <typename T> struct HeapAccess : public HeapExpr<T> {
         os << "]";
         return os;
     }
+    bool equalTo(const HeapExpr<T> &other) const override {
+        if (other.getType() == ExprType::HeapAccess) {
+            auto accOther = static_cast<const HeapAccess<T> *>(&other);
+            return programIndex == accOther->programIndex &&
+                   atVal->equalTo(*accOther->atVal);
+        }
+        return false;
+    }
 };
 
 template <typename T> struct Constant : public HeapExpr<T> {
     VarIntVal value;
     Constant(VarIntVal value) : value(value) {}
+    ExprType getType() const override { return ExprType::Constant; }
     size_t arguments() const override { return 0; }
     std::shared_ptr<HeapExpr<const llvm::Value *>> distributeArguments(
         std::vector<const llvm::Value *> arguments) const override {
@@ -262,11 +302,19 @@ template <typename T> struct Constant : public HeapExpr<T> {
         os << value.get_str();
         return os;
     }
+    bool equalTo(const HeapExpr<T> &other) const override {
+        if (other.getType() == ExprType::Constant) {
+            auto constOther = static_cast<const Constant<T> *>(&other);
+            return value == constOther->value;
+        }
+        return false;
+    }
 };
 
 template <typename T> struct Variable : public HeapExpr<T> {
     T varName;
     Variable(T varName) : varName(varName) {}
+    ExprType getType() const override { return ExprType::Variable; }
     size_t arguments() const override { return 1; }
     std::shared_ptr<HeapExpr<const llvm::Value *>> distributeArguments(
         std::vector<const llvm::Value *> variables) const override {
@@ -284,12 +332,21 @@ template <typename T> struct Variable : public HeapExpr<T> {
         os << "_";
         return os;
     }
+    bool equalTo(const HeapExpr<T> &other) const override {
+        if (other.getType() == ExprType::Variable) {
+            auto varOther = static_cast<const Variable<T> *>(&other);
+            return varName == varOther->varName;
+        }
+        return false;
+    }
 };
 
 template <typename T> struct Hole : public HeapExpr<T> {
-    // Ensuring that these indices are unique and match between the range and
+    // Ensuring that these indices are unique and match between the range
+    // and
     // the corresponding pattern is up to the user
     size_t index;
+    ExprType getType() const override { return ExprType::Hole; }
     size_t arguments() const override { return 0; }
     Hole(size_t index) : index(index) {}
     std::shared_ptr<HeapExpr<const llvm::Value *>> distributeArguments(
@@ -309,6 +366,13 @@ template <typename T> struct Hole : public HeapExpr<T> {
         os << index;
         return os;
     }
+    bool equalTo(const HeapExpr<T> &other) const override {
+        if (other.getType() == ExprType::Hole) {
+            auto holeOther = static_cast<const Hole<T> *>(&other);
+            return index == holeOther->index;
+        }
+        return false;
+    }
 };
 
 template <>
@@ -322,7 +386,9 @@ VarIntVal Variable<const llvm::Value *>::eval(
 template <typename T> struct BinaryIntExpr : public HeapExpr<T> {
     BinaryIntOp op;
     MonoPair<std::shared_ptr<HeapExpr<T>>> args;
-    BinaryIntExpr(BinaryIntOp op, MonoPair<std::shared_ptr<HeapExpr<T>>> args) : op(op), args(args) {}
+    BinaryIntExpr(BinaryIntOp op, MonoPair<std::shared_ptr<HeapExpr<T>>> args)
+        : op(op), args(args) {}
+    ExprType getType() const override { return ExprType::Binary; }
     size_t arguments() const override {
         return args.first->arguments() + args.second->arguments();
     }
@@ -334,9 +400,8 @@ template <typename T> struct BinaryIntExpr : public HeapExpr<T> {
         std::vector<const llvm::Value *> secondArgs;
         secondArgs.insert(secondArgs.begin(), mid, variables.end());
         return std::make_shared<BinaryIntExpr<const llvm::Value *>>(
-            op, makeMonoPair(
-                    args.first->distributeArguments(firstArgs),
-                    args.second->distributeArguments(secondArgs)));
+            op, makeMonoPair(args.first->distributeArguments(firstArgs),
+                             args.second->distributeArguments(secondArgs)));
     }
     VarIntVal eval(const VarMap<const llvm::Value *> &variables,
                    const MonoPair<Heap> &heaps,
@@ -371,6 +436,15 @@ template <typename T> struct BinaryIntExpr : public HeapExpr<T> {
         args.second->dump(os);
         os << ")";
         return os;
+    }
+    bool equalTo(const HeapExpr<T> &other) const override {
+        if (other.getType() == ExprType::Binary) {
+            auto binExpr = static_cast<const BinaryIntExpr<T> *>(&other);
+            return op == binExpr->op &&
+                   args.first->equalTo(*binExpr->args.first) &&
+                   args.second->equalTo(*binExpr->args.second);
+        }
+        return false;
     }
 };
 
@@ -407,12 +481,14 @@ template <typename T> struct RangeProp : public HeapPattern<T> {
     RangeQuantifier quant;
     MonoPair<std::shared_ptr<HeapExpr<T>>> bounds;
     size_t index;
-    // This pattern needs to have exactly one hole for the variable in the range
+    // This pattern needs to have exactly one hole for the variable in the
+    // range
     std::shared_ptr<HeapPattern<T>> pat;
     RangeProp(RangeQuantifier quant,
               MonoPair<std::shared_ptr<HeapExpr<T>>> bounds, size_t index,
               std::shared_ptr<HeapPattern<T>> pat)
         : quant(quant), bounds(bounds), index(index), pat(pat) {}
+    PatternType getType() const override { return PatternType::Range; }
     size_t arguments() const override {
         return bounds.first->arguments() + bounds.second->arguments() +
                pat->arguments();
@@ -431,8 +507,7 @@ template <typename T> struct RangeProp : public HeapPattern<T> {
         return std::make_shared<RangeProp<const llvm::Value *>>(
             quant, makeMonoPair(bounds.first->distributeArguments(firstArgs),
                                 bounds.second->distributeArguments(secondArgs)),
-            index,
-            pat->distributeArguments(thirdArgs));
+            index, pat->distributeArguments(thirdArgs));
     }
     bool matches(const VarMap<const llvm::Value *> &variables,
                  const MonoPair<Heap> &heaps,
@@ -440,7 +515,8 @@ template <typename T> struct RangeProp : public HeapPattern<T> {
         assert(holes.count(index) == 0);
         HoleMap newHoles = holes;
         MonoPair<VarIntVal> boundVals = bounds.template map<VarIntVal>(
-            [&variables, &heaps, &newHoles](std::shared_ptr<HeapExpr<T>> arg) -> VarIntVal {
+            [&variables, &heaps,
+             &newHoles](std::shared_ptr<HeapExpr<T>> arg) -> VarIntVal {
                 return arg->eval(variables, heaps, newHoles);
             });
         for (VarIntVal i = boundVals.first; i <= boundVals.second; ++i) {
@@ -479,6 +555,16 @@ template <typename T> struct RangeProp : public HeapPattern<T> {
         pat->dump(os);
         os << ")";
     }
+    bool equalTo(const HeapPattern<T> &other) const override {
+        if (other.getType() == PatternType::Range) {
+            auto rangeOther = static_cast<const RangeProp<T> *>(&other);
+            return quant == rangeOther->quant && index == rangeOther->index &&
+                   bounds.first->equalTo(*rangeOther->bounds.first) &&
+                   bounds.second->equalTo(*rangeOther->bounds.second) &&
+                   pat->equalTo(*rangeOther->pat);
+        }
+        return false;
+    }
 };
 
 template <typename T> struct HeapExprProp : public HeapPattern<T> {
@@ -486,6 +572,7 @@ template <typename T> struct HeapExprProp : public HeapPattern<T> {
     MonoPair<std::shared_ptr<HeapExpr<T>>> args;
     HeapExprProp(BinaryIntProp op, MonoPair<std::shared_ptr<HeapExpr<T>>> args)
         : op(op), args(args) {}
+    PatternType getType() const override { return PatternType::ExprProp; }
     size_t arguments() const override {
         return args.first->arguments() + args.second->arguments();
     }
@@ -545,6 +632,16 @@ template <typename T> struct HeapExprProp : public HeapPattern<T> {
         os << ")";
         return os;
     }
+    bool equalTo(const HeapPattern<T> &other) const override {
+        if (other.getType() == PatternType::ExprProp) {
+            auto exprOther = static_cast<const HeapExprProp<T> *>(&other);
+            return op == exprOther->op &&
+                   args.first->equalTo(*exprOther->args.first) &&
+                   args.second->equalTo(*exprOther->args.second);
+        }
+        return false;
+    }
 };
 
-std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> parsePatterns(FILE* stream);
+std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>>
+parsePatterns(FILE *stream);

@@ -132,22 +132,21 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         });
 
     // Collect loop info
-    LoopCountMap loopCounts;
-    std::mutex loopMtx;
-    iterateTracesInRange(
-        functions, -50, 50, [&loopCounts, &nameMap, &loopMtx](
-                                MonoPair<Call<const llvm::Value *>> calls) {
-            int lastMark = -5; // -5 is unused
-            {
-                std::lock_guard<std::mutex> lock(loopMtx);
-                analyzeExecution<const llvm::Value *>(
-                    calls, nameMap,
-                    std::bind(findLoopCounts<const llvm::Value *>,
-                              std::ref(lastMark), std::ref(loopCounts), _1));
-            }
+    LoopCountsAndMark loopCounts;
+    loopCounts.mark = -5;
+    iterateTracesInRange<LoopCountsAndMark>(
+        functions, -50, 50, ThreadsFlag, loopCounts, mergeLoopCounts,
+        [&nameMap](MonoPair<Call<const llvm::Value *>> calls,
+                   LoopCountsAndMark &localLoopCounts) {
+            analyzeExecution<const llvm::Value *>(
+                calls, nameMap,
+                [&localLoopCounts](MatchInfo<const llvm::Value *> matchInfo) {
+                    findLoopCounts<const llvm::Value *>(localLoopCounts,
+                                                        matchInfo);
+                });
         });
     map<int, LoopTransformation> loopTransformations =
-        findLoopTransformations(loopCounts);
+        findLoopTransformations(loopCounts.loopCounts);
     dumpLoopTransformations(loopTransformations);
 
     // Peel and unroll loops
@@ -155,60 +154,49 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                             loopTransformations, markMaps);
 
     // Run the interpreter on the unrolled code
-    loopCounts = {};
-    PolynomialEquations polynomialEquations;
-    HeapPatternCandidatesMap heapPatternCandidates;
+    MergedAnalysisResults analysisResults;
     const MonoPair<PathMap> pathMaps =
         preprocessedFunctions.getValue().map<PathMap>(
             [](PreprocessedFunction fun) { return fun.results.paths; });
     FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
     size_t degree = DegreeFlag;
-    std::mutex patternMtx;
-    std::mutex polynomMtx;
-    iterateTracesInRange(
-        functions, -50, 50,
-        [&loopCounts, &nameMap, &polynomialEquations, &freeVarsMap,
-         &heapPatternCandidates, &patterns, degree, &loopMtx, &polynomMtx,
-         &patternMtx](MonoPair<Call<const llvm::Value *>> calls) {
-            int lastMark = -5; // -5 is unused
-            {
-                std::lock_guard<std::mutex> lock(loopMtx);
-                analyzeExecution<const llvm::Value *>(
-                    calls, nameMap, [&lastMark, &loopCounts](
-                                        MatchInfo<const llvm::Value *> match) {
-                        findLoopCounts<const llvm::Value *>(lastMark,
-                                                            loopCounts, match);
-                    });
-            }
+    iterateTracesInRange<MergedAnalysisResults>(
+        functions, -50, 50, ThreadsFlag, analysisResults, mergeAnalysisResults,
+        [&nameMap, &freeVarsMap, &patterns,
+         degree](MonoPair<Call<const llvm::Value *>> calls,
+                 MergedAnalysisResults &localAnalysisResults) {
             analyzeExecution<const llvm::Value *>(
                 calls, nameMap,
-                [&polynomialEquations, &freeVarsMap, degree,
-                 &polynomMtx](MatchInfo<const llvm::Value *> match) {
-                    {
-                        std::lock_guard<std::mutex> lock(polynomMtx);
-                        populateEquationsMap(polynomialEquations, freeVarsMap,
-                                             match, degree);
-                    }
+                [&localAnalysisResults](MatchInfo<const llvm::Value *> match) {
+                    findLoopCounts<const llvm::Value *>(
+                        localAnalysisResults.loopCounts, match);
+                });
+            analyzeExecution<const llvm::Value *>(
+                calls, nameMap, [&localAnalysisResults, &freeVarsMap,
+                                 degree](MatchInfo<const llvm::Value *> match) {
+                    populateEquationsMap(
+                        localAnalysisResults.polynomialEquations, freeVarsMap,
+                        match, degree);
                 });
             analyzeExecution<const llvm::Value *>(
                 calls, nameMap,
-                [&heapPatternCandidates, &patterns, &freeVarsMap,
-                 &patternMtx](MatchInfo<const llvm::Value *> match) {
-                    {
-                        std::lock_guard<std::mutex> lock(patternMtx);
-                        populateHeapPatterns(heapPatternCandidates, patterns,
-                                             freeVarsMap, match);
-                    }
+                [&localAnalysisResults, &patterns,
+                 &freeVarsMap](MatchInfo<const llvm::Value *> match) {
+                    populateHeapPatterns(
+                        localAnalysisResults.heapPatternCandidates, patterns,
+                        freeVarsMap, match);
                 });
         });
-    loopTransformations = findLoopTransformations(loopCounts);
+    loopTransformations =
+        findLoopTransformations(analysisResults.loopCounts.loopCounts);
     dumpLoopTransformations(loopTransformations);
-    dumpPolynomials(polynomialEquations, freeVarsMap);
-    dumpHeapPatterns(heapPatternCandidates);
+    dumpPolynomials(analysisResults.polynomialEquations, freeVarsMap);
+    dumpHeapPatterns(analysisResults.heapPatternCandidates);
 
     auto invariantCandidates = makeInvariantDefinitions(
-        findSolutions(polynomialEquations), freeVarsMap, DegreeFlag);
+        findSolutions(analysisResults.polynomialEquations), freeVarsMap,
+        DegreeFlag);
     if (ImplicationsFlag) {
         SMTGenerationOpts::initialize(mainFunctionName, false, false, false,
                                       false, false, false, false, false, false,
@@ -315,7 +303,7 @@ void dumpLoopTransformations(map<int, LoopTransformation> loopTransformations) {
 }
 
 map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map) {
-    std::map<int, int64_t> peelCount;
+    std::map<int, int32_t> peelCount;
     std::map<int, float> unrollQuotients;
     for (auto mapIt : map) {
         int mark = mapIt.first;
@@ -540,10 +528,12 @@ void populateHeapPatterns(
                             .none.getValue();
             break;
         }
-        for (auto listIt = patterns->begin(); listIt != patterns->end();
-             ++listIt) {
+        auto listIt = patterns->begin();
+        while (listIt != patterns->end()) {
             if (!(*listIt)->matches(variables, heaps)) {
                 listIt = patterns->erase(listIt);
+            } else {
+                ++listIt;
             }
         }
     }
@@ -674,7 +664,6 @@ void dumpHeapPatterns(const HeapPatternCandidatesMap &heapPatternsMap) {
             }
             if (exitMapIt.second.none.hasValue()) {
                 std::cerr << "synced\n";
-                std::cerr << exitMapIt.second.none.getValue().size() << "\n";
                 for (auto pat : exitMapIt.second.none.getValue()) {
                     pat->dump(std::cerr);
                     std::cerr << "\n";
@@ -962,67 +951,6 @@ void dumpLoopCounts(const LoopCountMap &loopCounts) {
     std::cerr << "----------\n";
 }
 
-void iterateTracesInRange(
-    MonoPair<llvm::Function *> funs, VarIntVal lowerBound, VarIntVal upperBound,
-    std::function<void(MonoPair<Call<const llvm::Value *>>)> callback) {
-    assert(!(funs.first->isVarArg() || funs.second->isVarArg()));
-    vector<VarIntVal> argValues;
-
-    ThreadSafeQueue<WorkItem> q;
-    vector<std::thread> threads(ThreadsFlag);
-    std::function<void()> worker = [&q, &callback, &funs]() {
-        workerThread(q, callback, funs);
-    };
-    for (size_t i = 0; i < ThreadsFlag; ++i) {
-        threads[i] = std::thread(worker);
-    }
-
-    int counter = 0;
-    assert(funs.first->getArgumentList().size() ==
-           funs.second->getArgumentList().size());
-    for (const auto &vals :
-         Range(lowerBound, upperBound, funs.first->getArgumentList().size())) {
-        q.push({vals, counter});
-        ++counter;
-    }
-    for (size_t i = 0; i < ThreadsFlag; ++i) {
-        // Each of these items will terminate exactly one thread
-        q.push({{}, -1});
-    }
-    for (auto &t : threads) {
-        t.join();
-    }
-}
-
-void workerThread(
-    ThreadSafeQueue<WorkItem> &q,
-    std::function<void(MonoPair<Call<const llvm::Value *>>)> callback,
-    MonoPair<const llvm::Function *> funs) {
-    // Each thread has it’s own seed
-    unsigned int seedp = static_cast<unsigned int>(time(NULL));
-    for (WorkItem item = q.pop(); item.counter >= 0; item = q.pop()) {
-        MonoPair<std::map<const llvm::Value *, std::shared_ptr<VarVal>>>
-            variableValues = makeMonoPair<
-                std::map<const llvm::Value *, std::shared_ptr<VarVal>>>({}, {});
-        auto argIt1 = funs.first->arg_begin();
-        auto argIt2 = funs.second->arg_begin();
-        for (size_t i = 0; i < item.vals.size(); ++i) {
-            const llvm::Value *firstArg = &*argIt1;
-            const llvm::Value *secondArg = &*argIt2;
-            variableValues.first.insert({firstArg, make_shared<VarInt>(item.vals[i])});
-            variableValues.second.insert({secondArg, make_shared<VarInt>(item.vals[i])});
-            ++argIt1;
-            ++argIt2;
-        }
-        assert(argIt1 == funs.first->arg_end());
-        assert(argIt2 == funs.second->arg_end());
-        Heap heap = randomHeap(*funs.first, variableValues.first, 30, -20, 20, &seedp);
-        MonoPair<Call<const llvm::Value *>> calls =
-            interpretFunctionPair(funs, std::move(variableValues), heap, 1000);
-        callback(std::move(calls));
-    }
-}
-
 Heap randomHeap(
     const llvm::Function &fun,
     std::map<const llvm::Value *, std::shared_ptr<VarVal>> &variableValues,
@@ -1044,4 +972,154 @@ Heap randomHeap(
         }
     }
     return heap;
+}
+
+LoopCountsAndMark mergeLoopCounts(LoopCountsAndMark counts1,
+                                  LoopCountsAndMark counts2) {
+    LoopCountsAndMark result = counts1;
+    for (auto it : counts2.loopCounts) {
+        result.loopCounts[it.first].insert(result.loopCounts[it.first].end(),
+                                           it.second.begin(), it.second.end());
+    }
+    return result;
+}
+
+MergedAnalysisResults mergeAnalysisResults(MergedAnalysisResults res1,
+                                           MergedAnalysisResults res2) {
+    MergedAnalysisResults result;
+    result.loopCounts = mergeLoopCounts(res1.loopCounts, res2.loopCounts);
+    result.polynomialEquations = mergePolynomialEquations(
+        res1.polynomialEquations, res2.polynomialEquations);
+    result.heapPatternCandidates = mergeHeapPatterns(
+        res1.heapPatternCandidates, res2.heapPatternCandidates);
+    return result;
+}
+
+PolynomialEquations mergePolynomialEquations(PolynomialEquations eq1,
+                                             PolynomialEquations eq2) {
+    PolynomialEquations result = eq1;
+    for (auto it : eq2) {
+        int mark = it.first;
+        for (auto innerIt : it.second) {
+            ExitIndex exit = innerIt.first;
+            for (auto &vec : innerIt.second.left) {
+                std::vector<std::vector<mpq_class>> newVec =
+                    result[mark][exit].left;
+                newVec.push_back(vec);
+                if (linearlyIndependent(newVec)) {
+                    result.at(mark).at(exit).left = newVec;
+                }
+            }
+            for (auto &vec : innerIt.second.right) {
+                std::vector<std::vector<mpq_class>> newVec =
+                    result[mark][exit].right;
+                newVec.push_back(vec);
+                if (linearlyIndependent(newVec)) {
+                    result.at(mark).at(exit).right = newVec;
+                }
+            }
+            for (auto &vec : innerIt.second.none) {
+                std::vector<std::vector<mpq_class>> newVec =
+                    result[mark][exit].none;
+                newVec.push_back(vec);
+                if (linearlyIndependent(newVec)) {
+                    result.at(mark).at(exit).none = newVec;
+                }
+            }
+        }
+    }
+    return result;
+}
+
+HeapPatternCandidatesMap mergeHeapPatterns(HeapPatternCandidatesMap cand1,
+                                           HeapPatternCandidatesMap cand2) {
+    HeapPatternCandidatesMap result = cand1;
+    for (auto it : result) {
+        int mark = it.first;
+        for (auto exitIt : it.second) {
+            ExitIndex exit = exitIt.first;
+            if (exitIt.second.left.hasValue()) {
+                if (cand2[mark][exit].left.hasValue()) {
+                    const auto &leftPats =
+                        cand2.at(mark).at(exit).left.getValue();
+                    auto listIt = exitIt.second.left.getValue().begin();
+                    while (listIt != exitIt.second.left.getValue().end()) {
+                        bool breaked = false;
+                        for (const auto &pat : leftPats) {
+                            if ((*listIt)->equalTo(*pat)) {
+                                breaked = true;
+                                break;
+                            }
+                        }
+                        if (!breaked) {
+                            listIt =
+                                exitIt.second.left.getValue().erase(listIt);
+                        } else {
+                            ++listIt;
+                        }
+                    }
+                }
+            } else {
+                exitIt.second.left = cand2[mark][exit].left;
+            }
+            if (exitIt.second.right.hasValue()) {
+                if (cand2[mark][exit].right.hasValue()) {
+                    const auto &rightPats =
+                        cand2.at(mark).at(exit).right.getValue();
+                    auto listIt = exitIt.second.right.getValue().begin();
+                    while (listIt != exitIt.second.right.getValue().end()) {
+                        bool breaked = false;
+                        for (const auto &pat : rightPats) {
+                            if ((*listIt)->equalTo(*pat)) {
+                                breaked = true;
+                                break;
+                            }
+                        }
+                        if (!breaked) {
+                            listIt =
+                                exitIt.second.right.getValue().erase(listIt);
+                        } else {
+                            ++listIt;
+                        }
+                    }
+                }
+            } else {
+                exitIt.second.right = cand2[mark][exit].right;
+            }
+            if (exitIt.second.none.hasValue()) {
+                if (cand2[mark][exit].none.hasValue()) {
+                    const auto &nonePats =
+                        cand2.at(mark).at(exit).none.getValue();
+                    auto listIt = exitIt.second.none.getValue().begin();
+                    while (listIt != exitIt.second.none.getValue().end()) {
+                        bool breaked = false;
+                        for (const auto &pat : nonePats) {
+                            if ((*listIt)->equalTo(*pat)) {
+                                breaked = true;
+                                break;
+                            }
+                        }
+                        if (!breaked) {
+                            listIt =
+                                exitIt.second.none.getValue().erase(listIt);
+                        } else {
+                            ++listIt;
+                        }
+                    }
+                }
+            } else {
+                exitIt.second.none = cand2[mark][exit].none;
+            }
+        }
+    }
+    for (auto it : cand2) {
+        int mark = it.first;
+        for (auto exitIt : it.second) {
+            ExitIndex exit = exitIt.first;
+            if (result.count(mark) == 0 || result.at(mark).count(exit) == 0) {
+                result[mark][exit] = exitIt.second;
+            }
+        }
+    }
+    return result;
 }
