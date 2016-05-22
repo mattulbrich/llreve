@@ -22,3 +22,7 @@ VarIntVal getHeapVal(HeapAddress addr, Heap heap) {
         return 0;
     }
 }
+
+template <> smt::SMTRef Variable<const llvm::Value *>::toSMT() const {
+    return smt::stringExpr(varName->getName());
+}

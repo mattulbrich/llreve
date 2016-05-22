@@ -5,7 +5,6 @@
 #include "Permutation.h"
 #include "SerializeTraces.h"
 
-
 using HoleMap = std::map<size_t, VarIntVal>;
 
 enum class PatternType { Binary, Unary, HeapEquality, Range, ExprProp };
@@ -105,6 +104,7 @@ template <typename T> struct HeapPattern {
     std::shared_ptr<HeapPattern<T>> negationNormalForm() const {
         return negationNormalForm(false);
     }
+    virtual smt::SMTRef toSMT() const = 0;
 };
 
 enum class UnaryBooleanOp { Neg };
@@ -245,6 +245,21 @@ template <typename T> struct BinaryHeapPattern : public HeapPattern<T> {
             return std::make_shared<BinaryHeapPattern<T>>(op, newArgs);
         }
     }
+    smt::SMTRef toSMT() const override {
+        smt::SMTRef firstArg = args.first->toSMT();
+        smt::SMTRef secondArg = args.second->toSMT();
+        switch (op) {
+        case BinaryBooleanOp::And:
+            return smt::makeBinOp("and", std::move(firstArg),
+                                  std::move(secondArg));
+        case BinaryBooleanOp::Or:
+            return smt::makeBinOp("or", std::move(firstArg),
+                                  std::move(secondArg));
+        case BinaryBooleanOp::Impl:
+            return smt::makeBinOp("=>", std::move(firstArg),
+                                  std::move(secondArg));
+        }
+    }
 };
 
 template <typename T> struct UnaryHeapPattern : public HeapPattern<T> {
@@ -294,13 +309,21 @@ template <typename T> struct UnaryHeapPattern : public HeapPattern<T> {
         }
         return arg->negationNormalForm(true);
     }
+    smt::SMTRef toSMT() const override {
+        smt::SMTRef smtArg = arg->toSMT();
+        switch (op) {
+        case UnaryBooleanOp::Neg:
+            return smt::makeUnaryOp("not", std::move(smtArg));
+        }
+    }
 };
 
 template <typename T> struct HeapEqual : public HeapPattern<T> {
     // All elements of the two heaps are equal
     size_t arguments() const override { return 0; }
     RewrittenPattern<T> rewriteHeap() const override {
-        return RewrittenPattern<T>(std::make_shared<HeapEqual>());
+        logError("Not yet supported\n");
+        exit(1);
     }
     std::shared_ptr<HeapPattern<const llvm::Value *>> distributeArguments(
         std::vector<const llvm::Value *> arguments) const override {
@@ -319,6 +342,13 @@ template <typename T> struct HeapEqual : public HeapPattern<T> {
         os << "(Equal heaps)";
         return os;
     }
+    smt::SMTRef toSMT() const override {
+        std::vector<smt::SortedVar> args = {smt::SortedVar("heapIndex", "Int")};
+        smt::SharedSMTRef expr =
+            makeBinOp("=", smt::makeBinOp("select", "HEAP$1", "heapIndex"),
+                      smt::makeBinOp("select", "HEAP$2", "heapIndex"));
+        return llvm::make_unique<smt::Forall>(args, expr);
+    }
 };
 
 template <typename T> struct RewrittenExpr;
@@ -335,6 +365,7 @@ template <typename T> struct HeapExpr {
     virtual bool equalTo(const HeapExpr<T> &other) const = 0;
     virtual ExprType getType() const = 0;
     virtual RewrittenExpr<T> rewriteHeap() const = 0;
+    virtual smt::SMTRef toSMT() const = 0;
 };
 
 template <typename T> struct RewrittenExpr {
@@ -395,6 +426,14 @@ template <typename T> struct HeapIndex : public HeapExpr<T> {
         logError("Cannot compare heap index\n");
         exit(1);
     }
+    smt::SMTRef toSMT() const override {
+        switch (index) {
+        case ProgramIndex::First:
+            return smt::stringExpr("i1");
+        case ProgramIndex::Second:
+            return smt::stringExpr("i2");
+        }
+    }
 };
 
 template <typename T> struct HeapValue : public HeapExpr<T> {
@@ -430,6 +469,14 @@ template <typename T> struct HeapValue : public HeapExpr<T> {
     bool equalTo(const HeapExpr<T> & /* unused */) const override {
         logError("Cannot compare heap value\n");
         exit(1);
+    }
+    smt::SMTRef toSMT() const override {
+        switch (index) {
+        case ProgramIndex::First:
+            return smt::stringExpr("heap1");
+        case ProgramIndex::Second:
+            return smt::stringExpr("heap2");
+        }
     }
 };
 
@@ -495,6 +542,12 @@ template <typename T> struct HeapAccess : public HeapExpr<T> {
         }
         return false;
     }
+    smt::SMTRef toSMT() const override {
+        smt::SharedSMTRef heapName = smt::stringExpr(
+            programIndex == ProgramIndex::First ? "HEAP$1" : "HEAP$2");
+        smt::SharedSMTRef ref = atVal->toSMT();
+        return makeBinOp("select", heapName, ref);
+    }
 };
 
 template <typename T> struct Constant : public HeapExpr<T> {
@@ -529,6 +582,9 @@ template <typename T> struct Constant : public HeapExpr<T> {
         }
         return false;
     }
+    smt::SMTRef toSMT() const override {
+        return smt::stringExpr(value.get_str());
+    }
 };
 
 template <typename T> struct Variable : public HeapExpr<T> {
@@ -561,6 +617,10 @@ template <typename T> struct Variable : public HeapExpr<T> {
             return varName == varOther->varName;
         }
         return false;
+    }
+    smt::SMTRef toSMT() const override {
+        logError("Can only convert specialized version of variable\n");
+        return smt::stringExpr("ERROR");
     }
 };
 
@@ -599,10 +659,14 @@ template <typename T> struct Hole : public HeapExpr<T> {
         }
         return false;
     }
+    smt::SMTRef toSMT() const override {
+        return smt::stringExpr("boundVar_" + std::to_string(index));
+    }
 };
 
 template <>
 std::ostream &Variable<const llvm::Value *>::dump(std::ostream &os) const;
+template <> smt::SMTRef Variable<const llvm::Value *>::toSMT() const;
 
 template <>
 VarIntVal Variable<const llvm::Value *>::eval(
@@ -683,6 +747,23 @@ template <typename T> struct BinaryIntExpr : public HeapExpr<T> {
                    args.second->equalTo(*binExpr->args.second);
         }
         return false;
+    }
+    smt::SMTRef toSMT() const override {
+        smt::SMTRef firstArg = args.first->toSMT();
+        smt::SMTRef secondArg = args.second->toSMT();
+        std::string opName;
+        switch (op) {
+        case BinaryIntOp::Add:
+            opName = "+";
+            break;
+        case BinaryIntOp::Mul:
+            opName = "*";
+            break;
+        case BinaryIntOp::Subtract:
+            opName = "-";
+            break;
+        }
+        return makeBinOp(opName, std::move(firstArg), std::move(secondArg));
     }
 };
 
@@ -834,6 +915,20 @@ template <typename T> struct RangeProp : public HeapPattern<T> {
             pat->negationNormalForm(negate);
         return std::make_shared<RangeProp<T>>(newQuant, bounds, index, newPat);
     }
+    smt::SMTRef toSMT() const override {
+
+        std::vector<smt::SortedVar> args = {
+            smt::SortedVar("boundVar_" + std::to_string(index), "Int")};
+        smt::SharedSMTRef var =
+            smt::stringExpr("boundVar_" + std::to_string(index));
+        smt::SharedSMTRef arg1 = bounds.first->toSMT();
+        smt::SharedSMTRef arg2 = bounds.second->toSMT();
+        smt::SharedSMTRef rangeConstraint = makeBinOp(
+            "and", makeBinOp("<=", arg1, var), makeBinOp("<=", var, arg2));
+        smt::SharedSMTRef patRef = pat->toSMT();
+        return llvm::make_unique<smt::Forall>(
+            args, makeBinOp("=>", rangeConstraint, patRef));
+    }
 };
 
 template <typename T> struct HeapExprProp : public HeapPattern<T> {
@@ -893,10 +988,10 @@ template <typename T> struct HeapExprProp : public HeapPattern<T> {
         os << "(";
         args.first->dump(os);
         switch (op) {
-        case BinaryIntProp::LE:
+        case BinaryIntProp::LT:
             os << " < ";
             break;
-        case BinaryIntProp::LT:
+        case BinaryIntProp::LE:
             os << " <= ";
             break;
         case BinaryIntProp::EQ:
@@ -931,6 +1026,27 @@ template <typename T> struct HeapExprProp : public HeapPattern<T> {
         } else {
             return std::make_shared<HeapExprProp<T>>(op, args);
         }
+    }
+    smt::SMTRef toSMT() const override {
+        std::string opName;
+        switch (op) {
+        case BinaryIntProp::LT:
+            opName = "<";
+            break;
+        case BinaryIntProp::LE:
+            opName = "<=";
+            break;
+        case BinaryIntProp::EQ:
+            opName = "=";
+            break;
+        case BinaryIntProp::GE:
+            opName = ">=";
+            break;
+        case BinaryIntProp::GT:
+            opName = ">";
+            break;
+        }
+        return makeBinOp(opName, args.first->toSMT(), args.second->toSMT());
     }
 };
 
