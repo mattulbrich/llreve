@@ -22,7 +22,11 @@ void serializeSMT(std::vector<smt::SharedSMTRef> smtExprs, bool muZ,
         if (muZ) {
             outFile << *smt->compressLets()->mergeImplications({})->toSExpr();
         } else {
-            outFile << *smt->compressLets()->instantiateArrays()->toSExpr();
+            if (opts.DontInstantiate) {
+                outFile << *smt->compressLets()->toSExpr();
+            } else {
+                outFile << *smt->compressLets()->instantiateArrays()->toSExpr();
+            }
         }
         outFile << "\n";
     }

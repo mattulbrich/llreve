@@ -73,8 +73,9 @@ class InputOpts {
 class SerializeOpts {
   public:
     std::string OutputFileName;
-    SerializeOpts(std::string outputFileName)
-        : OutputFileName(outputFileName) {}
+    bool DontInstantiate;
+    SerializeOpts(std::string outputFileName, bool DontInstantiate)
+        : OutputFileName(outputFileName), DontInstantiate(DontInstantiate) {}
 };
 
 /// Options that are parsed from special comments inside the programs

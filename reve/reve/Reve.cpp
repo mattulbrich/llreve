@@ -131,7 +131,7 @@ int main(int argc, const char **argv) {
                                   NestFlag, PassInputThroughFlag, {});
     InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,
                         FileName2Flag);
-    SerializeOpts serializeOpts(OutputFileNameFlag);
+    SerializeOpts serializeOpts(OutputFileNameFlag, false);
     FileOptions fileOpts = getFileOptions(inputOpts.FileNames);
 
     MonoPair<shared_ptr<CodeGenAction>> acts =
@@ -141,10 +141,10 @@ int main(int argc, const char **argv) {
         compileToModules(argv[0], inputOpts, acts);
 
 	llvm::legacy::PassManager PM;
-	PM.add(llvm::createStripSymbolsPass(true));	
+	PM.add(llvm::createStripSymbolsPass(true));
 	PM.run(*modules.first);
 	PM.run(*modules.second);
-	
+
     vector<MonoPair<PreprocessedFunction>> preprocessedFuns =
         preprocessFunctions(modules, preprocessOpts);
 

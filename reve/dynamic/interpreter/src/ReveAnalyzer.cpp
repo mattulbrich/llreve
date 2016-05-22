@@ -85,7 +85,8 @@ int main(int argc, const char **argv) {
     fclose(patternFile);
     vector<smt::SharedSMTRef> smtExprs =
         driver(modules, preprocessedFuns, MainFunctionFlag, patterns);
-    serializeSMT(smtExprs, false, SerializeOpts(OutputFileNameFlag));
+
+    serializeSMT(smtExprs, false, SerializeOpts(OutputFileNameFlag, !InstantiateStorage));
 
     llvm::llvm_shutdown();
 }

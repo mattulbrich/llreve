@@ -57,8 +57,10 @@ static llvm::cl::opt<bool> ImplicationsFlag(
 static llvm::cl::opt<unsigned>
     ThreadsFlag("j", llvm::cl::desc("The number of threads to use"),
                 llvm::cl::init(1));
-static llvm::cl::opt<bool>
-    InstantiateFlag("instantiate", llvm::cl::desc("Instantiate arrays"));
+bool InstantiateStorage;
+static llvm::cl::opt<bool, true>
+    InstantiateFlag("instantiate", llvm::cl::desc("Instantiate arrays"),
+                    llvm::cl::location(InstantiateStorage));
 static llvm::cl::opt<bool> HeapFlag("heap", llvm::cl::desc("Activate heap"));
 
 void iterateDeserialized(
@@ -234,7 +236,7 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
             }
             if (HeapFlag) {
                 args.push_back(SortedVar("HEAP$1", "(Array Int Int)"));
-                if (InstantiateFlag) {
+                if (InstantiateStorage) {
                     stringArgs.push_back(smt::stringExpr("i1"));
                     stringArgs.push_back(makeBinOp("select", "HEAP$1", "i1"));
                 } else {
@@ -248,7 +250,7 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
             }
             if (HeapFlag) {
                 args.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
-                if (InstantiateFlag) {
+                if (InstantiateStorage) {
                     stringArgs.push_back(smt::stringExpr("i2"));
                     stringArgs.push_back(makeBinOp("select", "HEAP$2", "i2"));
                 } else {
@@ -261,7 +263,7 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                 make_shared<smt::Op>(candidateName, stringArgs);
             SharedSMTRef invariant =
                 make_shared<smt::Op>(invariantName, stringArgs);
-            if (InstantiateFlag) {
+            if (InstantiateStorage) {
                 vector<SortedVar> indices = {SortedVar("i1", "Int"),
                                              SortedVar("i2", "Int")};
                 candidate = make_shared<smt::Forall>(indices, candidate);
@@ -789,7 +791,7 @@ SharedSMTRef makeInvariantDefinition(const vector<vector<mpz_class>> &solution,
         conjunction.push_back(makeEquation(vec, freeVars, degree));
     }
     for (const auto &candidate : candidates) {
-        if (InstantiateFlag) {
+        if (InstantiateStorage) {
             conjunction.push_back(
                 candidate->negationNormalForm()->instantiate()->toSMT());
         } else {
@@ -832,7 +834,7 @@ makeInvariantDefinitions(const PolynomialSolutions &solutions,
             args.push_back(SortedVar(var, "Int"));
         }
         if (HeapFlag) {
-            if (InstantiateFlag) {
+            if (InstantiateStorage) {
                 args.push_back(SortedVar("i1", "Int"));
                 args.push_back(SortedVar("heap1", "Int"));
             } else {
@@ -844,7 +846,7 @@ makeInvariantDefinitions(const PolynomialSolutions &solutions,
             args.push_back(SortedVar(var, "Int"));
         }
         if (HeapFlag) {
-            if (InstantiateFlag) {
+            if (InstantiateStorage) {
                 args.push_back(SortedVar("i2", "Int"));
                 args.push_back(SortedVar("heap2", "Int"));
             } else {

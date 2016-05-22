@@ -13,6 +13,8 @@
 
 #include <thread>
 
+extern bool InstantiateStorage;
+
 enum class LoopInfo {
     Left,  // The left call is looping alone
     Right, // The right call is looping alone
