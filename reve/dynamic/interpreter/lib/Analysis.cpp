@@ -226,43 +226,47 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                 continue;
             }
             vector<SortedVar> args;
-            vector<string> stringArgs;
+            vector<smt::SharedSMTRef> stringArgs;
 
             for (auto var : filterVars(1, freeVarsMap.at(mark))) {
                 args.push_back(SortedVar(var, "Int"));
-                stringArgs.push_back(var);
+                stringArgs.push_back(smt::stringExpr(var));
             }
             if (HeapFlag) {
+                args.push_back(SortedVar("HEAP$1", "(Array Int Int)"));
                 if (InstantiateFlag) {
-                    args.push_back(SortedVar("i1", "Int"));
-                    args.push_back(SortedVar("heap1", "Int"));
-                    stringArgs.push_back("i1");
-                    stringArgs.push_back("heap1");
+                    stringArgs.push_back(smt::stringExpr("i1"));
+                    stringArgs.push_back(makeBinOp("select", "HEAP$1", "i1"));
                 } else {
-                    args.push_back(SortedVar("HEAP$1", "(Array Int Int)"));
-                    stringArgs.push_back("HEAP$1");
+                    stringArgs.push_back(smt::stringExpr("HEAP$1"));
                 }
             }
 
             for (auto var : filterVars(2, freeVarsMap.at(mark))) {
                 args.push_back(SortedVar(var, "Int"));
-                stringArgs.push_back(var);
+                stringArgs.push_back(smt::stringExpr(var));
             }
             if (HeapFlag) {
+                args.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
                 if (InstantiateFlag) {
-                    args.push_back(SortedVar("i2", "Int"));
-                    args.push_back(SortedVar("heap2", "Int"));
-                    stringArgs.push_back("i2");
-                    stringArgs.push_back("heap2");
+                    stringArgs.push_back(smt::stringExpr("i2"));
+                    stringArgs.push_back(makeBinOp("select", "HEAP$2", "i2"));
                 } else {
-                    args.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
-                    stringArgs.push_back("HEAP$2");
+                    stringArgs.push_back(smt::stringExpr("HEAP$2"));
                 }
             }
             string invariantName = "INV_MAIN_" + std::to_string(mark);
             string candidateName = invariantName + "_INFERRED";
-            SharedSMTRef candidate = smt::makeOp(candidateName, stringArgs);
-            SharedSMTRef invariant = smt::makeOp(invariantName, stringArgs);
+            SharedSMTRef candidate =
+                make_shared<smt::Op>(candidateName, stringArgs);
+            SharedSMTRef invariant =
+                make_shared<smt::Op>(invariantName, stringArgs);
+            if (InstantiateFlag) {
+                vector<SortedVar> indices = {SortedVar("i1", "Int"),
+                                             SortedVar("i2", "Int")};
+                candidate = make_shared<smt::Forall>(indices, candidate);
+                invariant = make_shared<smt::Forall>(indices, invariant);
+            }
             SharedSMTRef impl = makeBinOp("=>", invariant, candidate);
             SharedSMTRef forall = make_shared<smt::Forall>(args, impl);
             clauses.push_back(invariantIt.second);
@@ -882,9 +886,8 @@ makeInvariantDefinitions(const PolynomialSolutions &solutions,
         if (ImplicationsFlag) {
             invariantName += "_INFERRED";
         }
-        definitions[mark] =
-            make_shared<FunDef>(invariantName, args, "Bool",
-                                std::make_shared<Op>("or", exitClauses));
+        definitions[mark] = make_shared<FunDef>(
+            invariantName, args, "Bool", make_shared<Op>("or", exitClauses));
     }
     return definitions;
 }
