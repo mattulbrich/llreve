@@ -16,6 +16,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ManagedStatic.h"
+#include "llvm/Transforms/IPO.h"
 
 using std::string;
 using std::vector;
@@ -68,6 +69,10 @@ int main(int argc, const char **argv) {
                      make_shared<clang::EmitLLVMOnlyAction>());
     MonoPair<shared_ptr<llvm::Module>> modules =
         compileToModules(argv[0], inputOpts, acts);
+	llvm::legacy::PassManager PM;
+	PM.add(llvm::createStripSymbolsPass(true));
+	PM.run(*modules.first);
+	PM.run(*modules.second);
     vector<MonoPair<PreprocessedFunction>> preprocessedFuns =
         preprocessFunctions(modules, preprocessOpts);
     FILE* patternFile = fopen(PatternFileFlag.c_str(), "r");
