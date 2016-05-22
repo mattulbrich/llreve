@@ -85,14 +85,6 @@ int main(int argc, const char **argv) {
     fclose(patternFile);
     vector<smt::SharedSMTRef> smtExprs =
         driver(modules, preprocessedFuns, MainFunctionFlag, patterns);
-    // map<int, smt::SharedSMTRef> invariantDefinitions =
-    //     analyse(OutputDirectoryFlag, preprocessedFuns, MainFunctionFlag);
-    // SMTGenerationOpts::initialize(MainFunctionFlag, false, false, false,
-    // false,
-    //                               false, false, false, false, false, false,
-    //                               false, invariantDefinitions);
-    // vector<smt::SharedSMTRef> smtExprs = generateSMT(
-    //     modules, preprocessedFuns, FileOptions({}, nullptr, nullptr, false));
     serializeSMT(smtExprs, false, SerializeOpts(OutputFileNameFlag));
 
     llvm::llvm_shutdown();

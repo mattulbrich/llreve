@@ -59,6 +59,7 @@ static llvm::cl::opt<unsigned>
                 llvm::cl::init(1));
 static llvm::cl::opt<bool>
     InstantiateFlag("instantiate", llvm::cl::desc("Instantiate arrays"));
+static llvm::cl::opt<bool> HeapFlag("heap", llvm::cl::desc("Activate heap"));
 
 void iterateDeserialized(
     string directory, std::function<void(MonoPair<Call<string>> &)> callback) {
@@ -200,11 +201,11 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         findSolutions(analysisResults.polynomialEquations),
         analysisResults.heapPatternCandidates, freeVarsMap, DegreeFlag);
     if (ImplicationsFlag) {
-        SMTGenerationOpts::initialize(mainFunctionName, false, false, false,
+        SMTGenerationOpts::initialize(mainFunctionName, HeapFlag, false, false,
                                       false, false, false, false, false, false,
                                       false, false, {});
     } else {
-        SMTGenerationOpts::initialize(mainFunctionName, false, false, false,
+        SMTGenerationOpts::initialize(mainFunctionName, HeapFlag, false, false,
                                       false, false, false, false, false, false,
                                       false, false, invariantCandidates);
     }
@@ -214,6 +215,9 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     vector<SharedSMTRef> clauses =
         generateSMT(modules, {preprocessedFunctions.getValue()},
                     FileOptions({}, nullptr, nullptr, false));
+    // Remove check-sat and get-model
+    clauses.pop_back();
+    clauses.pop_back();
     if (ImplicationsFlag) {
         // Add the necessary implications
         for (auto invariantIt : invariantCandidates) {
@@ -222,21 +226,52 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                 continue;
             }
             vector<SortedVar> args;
-            for (auto var : freeVarsMap.at(mark)) {
+            vector<string> stringArgs;
+
+            for (auto var : filterVars(1, freeVarsMap.at(mark))) {
                 args.push_back(SortedVar(var, "Int"));
+                stringArgs.push_back(var);
+            }
+            if (HeapFlag) {
+                if (InstantiateFlag) {
+                    args.push_back(SortedVar("i1", "Int"));
+                    args.push_back(SortedVar("heap1", "Int"));
+                    stringArgs.push_back("i1");
+                    stringArgs.push_back("heap1");
+                } else {
+                    args.push_back(SortedVar("HEAP$1", "(Array Int Int)"));
+                    stringArgs.push_back("HEAP$1");
+                }
+            }
+
+            for (auto var : filterVars(2, freeVarsMap.at(mark))) {
+                args.push_back(SortedVar(var, "Int"));
+                stringArgs.push_back(var);
+            }
+            if (HeapFlag) {
+                if (InstantiateFlag) {
+                    args.push_back(SortedVar("i2", "Int"));
+                    args.push_back(SortedVar("heap2", "Int"));
+                    stringArgs.push_back("i2");
+                    stringArgs.push_back("heap2");
+                } else {
+                    args.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
+                    stringArgs.push_back("HEAP$2");
+                }
             }
             string invariantName = "INV_MAIN_" + std::to_string(mark);
             string candidateName = invariantName + "_INFERRED";
-            SharedSMTRef candidate =
-                smt::makeOp(candidateName, freeVarsMap.at(mark));
-            SharedSMTRef invariant =
-                smt::makeOp(invariantName, freeVarsMap.at(mark));
+            SharedSMTRef candidate = smt::makeOp(candidateName, stringArgs);
+            SharedSMTRef invariant = smt::makeOp(invariantName, stringArgs);
             SharedSMTRef impl = makeBinOp("=>", invariant, candidate);
             SharedSMTRef forall = make_shared<smt::Forall>(args, impl);
             clauses.push_back(invariantIt.second);
             clauses.push_back(make_shared<smt::Assert>(forall));
         }
     }
+    clauses.push_back(make_shared<smt::CheckSat>());
+    clauses.push_back(make_shared<smt::GetModel>());
+
     return clauses;
 }
 
@@ -788,8 +823,29 @@ makeInvariantDefinitions(const PolynomialSolutions &solutions,
     for (auto mapIt : solutions) {
         int mark = mapIt.first;
         vector<SortedVar> args;
-        for (auto &var : freeVarsMap.at(mark)) {
+        vector<string> stringArgs;
+        for (const auto &var : filterVars(1, freeVarsMap.at(mark))) {
             args.push_back(SortedVar(var, "Int"));
+        }
+        if (HeapFlag) {
+            if (InstantiateFlag) {
+                args.push_back(SortedVar("i1", "Int"));
+                args.push_back(SortedVar("heap1", "Int"));
+            } else {
+                args.push_back(SortedVar("HEAP$1", "(Array Int Int)"));
+            }
+        }
+
+        for (auto var : filterVars(2, freeVarsMap.at(mark))) {
+            args.push_back(SortedVar(var, "Int"));
+        }
+        if (HeapFlag) {
+            if (InstantiateFlag) {
+                args.push_back(SortedVar("i2", "Int"));
+                args.push_back(SortedVar("heap2", "Int"));
+            } else {
+                args.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
+            }
         }
         vector<SharedSMTRef> exitClauses;
         for (auto exitIt : mapIt.second) {
