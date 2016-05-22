@@ -148,9 +148,11 @@ void dumpPolynomials(const PolynomialEquations &equationsMap,
 void dumpHeapPatterns(const HeapPatternCandidatesMap &heapPatternsMap);
 std::map<int, smt::SharedSMTRef>
 makeInvariantDefinitions(const PolynomialSolutions &solutions,
+                         const HeapPatternCandidatesMap &patterns,
                          const FreeVarsMap &freeVarsMap, size_t degree);
 smt::SharedSMTRef
 makeInvariantDefinition(const std::vector<std::vector<mpz_class>> &solution,
+                        const HeapPatternCandidates &candidates,
                         const std::vector<std::string> &freeVars,
                         size_t degree);
 smt::SharedSMTRef makeEquation(const std::vector<mpz_class> &eq,

@@ -57,6 +57,8 @@ static llvm::cl::opt<bool> ImplicationsFlag(
 static llvm::cl::opt<unsigned>
     ThreadsFlag("j", llvm::cl::desc("The number of threads to use"),
                 llvm::cl::init(1));
+static llvm::cl::opt<bool>
+    InstantiateFlag("instantiate", llvm::cl::desc("Instantiate arrays"));
 
 void iterateDeserialized(
     string directory, std::function<void(MonoPair<Call<string>> &)> callback) {
@@ -195,8 +197,8 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     dumpHeapPatterns(analysisResults.heapPatternCandidates);
 
     auto invariantCandidates = makeInvariantDefinitions(
-        findSolutions(analysisResults.polynomialEquations), freeVarsMap,
-        DegreeFlag);
+        findSolutions(analysisResults.polynomialEquations),
+        analysisResults.heapPatternCandidates, freeVarsMap, DegreeFlag);
     if (ImplicationsFlag) {
         SMTGenerationOpts::initialize(mainFunctionName, false, false, false,
                                       false, false, false, false, false, false,
@@ -740,11 +742,20 @@ SharedSMTRef makeEquation(const vector<mpz_class> &eq,
 }
 
 SharedSMTRef makeInvariantDefinition(const vector<vector<mpz_class>> &solution,
+                                     const HeapPatternCandidates &candidates,
                                      const vector<string> &freeVars,
                                      size_t degree) {
     vector<SharedSMTRef> conjunction;
     for (const auto &vec : solution) {
         conjunction.push_back(makeEquation(vec, freeVars, degree));
+    }
+    for (const auto &candidate : candidates) {
+        if (InstantiateFlag) {
+            conjunction.push_back(
+                candidate->negationNormalForm()->instantiate()->toSMT());
+        } else {
+            conjunction.push_back(candidate->toSMT());
+        }
     }
     if (conjunction.size() == 0) {
         return smt::stringExpr("false");
@@ -771,6 +782,7 @@ makeBoundsDefinitions(const map<string, Bound<Optional<VarIntVal>>> &bounds) {
 
 map<int, SharedSMTRef>
 makeInvariantDefinitions(const PolynomialSolutions &solutions,
+                         const HeapPatternCandidatesMap &patterns,
                          const FreeVarsMap &freeVarsMap, size_t degree) {
     map<int, SharedSMTRef> definitions;
     for (auto mapIt : solutions) {
@@ -781,12 +793,25 @@ makeInvariantDefinitions(const PolynomialSolutions &solutions,
         }
         vector<SharedSMTRef> exitClauses;
         for (auto exitIt : mapIt.second) {
+            ExitIndex exit = exitIt.first;
             SharedSMTRef left = makeInvariantDefinition(
-                exitIt.second.left, freeVarsMap.at(mark), degree);
+                exitIt.second.left,
+                patterns.at(mark).at(exit).left.hasValue()
+                    ? patterns.at(mark).at(exit).left.getValue()
+                    : HeapPatternCandidates(),
+                freeVarsMap.at(mark), degree);
             SharedSMTRef right = makeInvariantDefinition(
-                exitIt.second.right, freeVarsMap.at(mark), degree);
+                exitIt.second.right,
+                patterns.at(mark).at(exit).right.hasValue()
+                    ? patterns.at(mark).at(exit).right.getValue()
+                    : HeapPatternCandidates(),
+                freeVarsMap.at(mark), degree);
             SharedSMTRef none = makeInvariantDefinition(
-                exitIt.second.none, freeVarsMap.at(mark), degree);
+                exitIt.second.none,
+                patterns.at(mark).at(exit).none.hasValue()
+                    ? patterns.at(mark).at(exit).none.getValue()
+                    : HeapPatternCandidates(),
+                freeVarsMap.at(mark), degree);
             vector<SharedSMTRef> invariantDisjunction = {left, right, none};
             SharedSMTRef invariant =
                 make_shared<Op>("or", invariantDisjunction);

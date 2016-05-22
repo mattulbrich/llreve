@@ -20,6 +20,8 @@ enum class ExprType {
     HeapValue
 };
 
+enum class ProgramIndex { First, Second };
+
 // Used before a pattern is instantiated
 struct VariablePlaceholder {
     bool operator==(const VariablePlaceholder & /* unused */) const {
@@ -71,6 +73,13 @@ template <typename T> struct HeapPattern {
                       << heap.second.val.get_str() << "\n";
         }
         */
+        if (k == 0) {
+            auto pat = this->distributeArguments({});
+            if (pat->matches(variableValues, heaps)) {
+                matchingPatterns.push_back(pat);
+            }
+            return matchingPatterns;
+        }
         for (const auto &vec :
              Range(0, static_cast<VarIntVal>(variablePointers.size()) - 1, k)) {
             std::vector<const llvm::Value *> args(vec.size());
@@ -99,6 +108,7 @@ template <typename T> struct HeapPattern {
     virtual bool equalTo(const HeapPattern<T> &other) const = 0;
     // Rewrite array accesses to conform to Eldarica's format
     virtual RewrittenPattern<T> rewriteHeap() const = 0;
+    std::shared_ptr<HeapPattern<T>> instantiate() const;
     virtual std::shared_ptr<HeapPattern<T>>
     negationNormalForm(bool negate) const = 0;
     std::shared_ptr<HeapPattern<T>> negationNormalForm() const {
@@ -123,6 +133,12 @@ template <typename T> struct RewrittenPattern {
 };
 
 template <typename T>
+std::shared_ptr<HeapPattern<T>> HeapPattern<T>::instantiate() const {
+    RewrittenPattern<T> newPat = rewriteHeap();
+    return rewriteToImplication(newPat);
+}
+
+template <typename T>
 std::shared_ptr<HeapPattern<T>>
 rewriteToImplication(RewrittenPattern<T> rewrittenPattern);
 
@@ -144,12 +160,12 @@ template <typename T> struct BinaryHeapPattern : public HeapPattern<T> {
         MonoPair<RewrittenPattern<T>> rewrittenPats =
             args.template map<RewrittenPattern<T>>(
                 [](std::shared_ptr<HeapPattern<T>> arg) -> RewrittenPattern<T> {
-                    arg->rewriteHeap();
+                    return arg->rewriteHeap();
                 });
         MonoPair<std::shared_ptr<HeapPattern<T>>> newPts =
             args.template map<std::shared_ptr<HeapPattern<T>>>(
                 [](RewrittenPattern<T> pat) -> std::shared_ptr<HeapPattern<T>> {
-                    rewriteToImplication(pat);
+                    return rewriteToImplication(pat);
                 });
         return RewrittenPattern<T>(
             std::make_shared<BinaryHeapPattern<T>>(op, newPts));
@@ -162,7 +178,8 @@ template <typename T> struct BinaryHeapPattern : public HeapPattern<T> {
         std::vector<const llvm::Value *> variables) const override {
         std::vector<const llvm::Value *> argsFirst;
         std::vector<const llvm::Value *> argsSecond;
-        auto mid = variables.begin() + args.first->arguments();
+        auto mid =
+            variables.begin() + static_cast<long>(args.first->arguments());
         argsFirst.insert(argsFirst.begin(), variables.begin(), mid);
         argsSecond.insert(argsSecond.begin(), mid, variables.end());
         return std::make_shared<BinaryHeapPattern<const llvm::Value *>>(
@@ -318,12 +335,30 @@ template <typename T> struct UnaryHeapPattern : public HeapPattern<T> {
     }
 };
 
+template <typename T> struct HeapExprProp;
+template <typename T> struct HeapIndex;
+template <typename T> struct HeapValue;
+
 template <typename T> struct HeapEqual : public HeapPattern<T> {
     // All elements of the two heaps are equal
+    HeapEqual() = default;
     size_t arguments() const override { return 0; }
+    PatternType getType() const override { return PatternType::HeapEquality; }
     RewrittenPattern<T> rewriteHeap() const override {
-        logError("Not yet supported\n");
-        exit(1);
+        std::shared_ptr<HeapPattern<T>> premise =
+            std::make_shared<HeapExprProp<T>>(
+                BinaryIntProp::EQ,
+                makeMonoPair(
+                    std::make_shared<HeapIndex<T>>(ProgramIndex::First),
+                    std::make_shared<HeapIndex<T>>(ProgramIndex::Second)));
+        std::shared_ptr<HeapPattern<T>> conclusion =
+            std::make_shared<HeapExprProp<T>>(
+                BinaryIntProp::EQ,
+                makeMonoPair(
+                    std::make_shared<HeapValue<T>>(ProgramIndex::First),
+                    std::make_shared<HeapValue<T>>(ProgramIndex::Second)));
+        return RewrittenPattern<T>(std::make_shared<BinaryHeapPattern<T>>(
+            BinaryBooleanOp::Impl, makeMonoPair(premise, conclusion)));
     }
     std::shared_ptr<HeapPattern<const llvm::Value *>> distributeArguments(
         std::vector<const llvm::Value *> arguments) const override {
@@ -331,11 +366,9 @@ template <typename T> struct HeapEqual : public HeapPattern<T> {
         unused(arguments);
         return std::make_shared<HeapEqual<const llvm::Value *>>();
     }
-    bool matches(const VarMap<const llvm::Value *> &variables,
+    bool matches(const VarMap<const llvm::Value *> & /* unused */,
                  const MonoPair<Heap> &heaps,
                  const HoleMap & /* unused */) const override {
-        assert(variables.empty());
-        unused(variables);
         return heaps.first == heaps.second;
     }
     std::ostream &dump(std::ostream &os) const override {
@@ -348,6 +381,14 @@ template <typename T> struct HeapEqual : public HeapPattern<T> {
             makeBinOp("=", smt::makeBinOp("select", "HEAP$1", "heapIndex"),
                       smt::makeBinOp("select", "HEAP$2", "heapIndex"));
         return llvm::make_unique<smt::Forall>(args, expr);
+    }
+    bool equalTo(const HeapPattern<T> &other) const override {
+        return other.getType() == PatternType::HeapEquality;
+    }
+    std::shared_ptr<HeapPattern<T>>
+    negationNormalForm(bool negate) const override {
+        assert(!negate);
+        return std::make_shared<HeapEqual<T>>();
     }
 };
 
@@ -389,8 +430,6 @@ MonoPair<Constraints<T>> mergeConstraints(MonoPair<RewrittenExpr<T>> pats) {
                          pats.second.constraints.second.end());
     return result;
 }
-
-enum class ProgramIndex { First, Second };
 
 template <typename T> struct HeapIndex : public HeapExpr<T> {
     ProgramIndex index;
@@ -940,7 +979,7 @@ template <typename T> struct HeapExprProp : public HeapPattern<T> {
         MonoPair<RewrittenExpr<T>> rewrittenArgs =
             args.template map<RewrittenExpr<T>>(
                 [](std::shared_ptr<HeapExpr<T>> arg) -> RewrittenExpr<T> {
-                    arg->rewriteHeap();
+                    return arg->rewriteHeap();
                 });
         auto constrs = mergeConstraints(rewrittenArgs);
         auto newArgs =

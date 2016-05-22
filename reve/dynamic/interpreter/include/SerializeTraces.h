@@ -26,7 +26,6 @@ class Range {
   public:
     Range(VarIntVal lowerBound, VarIntVal upperBound, size_t n)
         : lowerBound(lowerBound), upperBound(upperBound), n(n) {
-        assert(n > 0);
     }
     class RangeIterator
         : std::iterator<std::forward_iterator_tag, std::vector<VarIntVal>> {

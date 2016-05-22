@@ -37,4 +37,5 @@ _               { return PLACEHOLDER; }
 \.              { return DOT; }
 ,               { return COMMA; }
 [0-9]+          { yylval.constantVal = strtoul(yytext, NULL, 10); return NUMBER; }
+equalHeaps      { return EQUALHEAPS; }
 %%

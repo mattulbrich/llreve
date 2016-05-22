@@ -27,6 +27,7 @@ void yyerror(const char* s) {
 %token EXISTS
 %token <progIndex> HEAP
 %token <boundVarIndex> BOUNDVAR
+%token EQUALHEAPS
 %left IMPL
 %left OR
 %left AND
@@ -41,6 +42,7 @@ pattern : binaryHeapPattern { $$ = $1; }
         | heapExprProp      { $$ = $1; }
         | LPAR pattern RPAR { $$ = $2; }
         | range { $$ = $1; }
+        | EQUALHEAPS { $$ = new HeapEqual<VariablePlaceholder>(); }
 ;
 
 range :
