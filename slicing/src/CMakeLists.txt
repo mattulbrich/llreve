@@ -90,6 +90,7 @@ find_sources()
 # Pack all non executable sources into library to prevent
 # repeated building of source files. 
 add_library(all_sources ${sources})
+target_link_libraries(all_sources libreve)
 
 # Add a dependencie to librevebuild, to ensure it is build befor the main project.
 add_dependencies(all_sources librevebuild)
