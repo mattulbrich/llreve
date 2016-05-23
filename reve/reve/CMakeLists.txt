@@ -1,18 +1,28 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.3)
 project(llvm-reve)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_COMPILER "clang++")
 set(CXX_WARNINGS_FLAGS "-Weverything -Wno-c++98-compat -Wno-exit-time-destructors -Wno-global-constructors -Wno-padded -Wno-switch-enum -Wno-shadow")
 set(CXX_OTHER_FLAGS "--system-header-prefix=llvm --system-header-prefix=clang -fno-omit-frame-pointer")
-set(CXX_STANDARD_FLAGS "-std=c++11 -stdlib=libc++ -fno-rtti")
+set(CXX_STANDARD_FLAGS "-std=c++11 -fno-rtti")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CXX_WARNINGS_FLAGS} ${CXX_STANDARD_FLAGS} ${CXX_OTHER_FLAGS}")
 set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
 
 find_package(LLVM 3.8 REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
 
+exec_program(llvm-config ARGS --cxxflags OUTPUT_VARIABLE LLVM_CXXFLAGS)
+separate_arguments(LLVM_CXXFLAGS)
+
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+set(REVE_USE_LIBCXX "NO")
+if ("-stdlib=libc++" IN_LIST LLVM_CXXFLAGS)
+  set(REVE_USE_LIBCXX "YES")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+endif ()
+
+message(STATUS "use libcxx: ${REVE_USE_LIBCXX}")
 
 include_directories(${LLVM_INCLUDE_DIRS} include)
 add_definitions(${LLVM_DEFINITIONS})
@@ -42,9 +52,11 @@ llvm_map_components_to_libnames(llvm_libs
   x86codegen
   )
 
+if (REVE_USE_LIBCXX)
+  target_link_libraries(libreve c++ c++abi)
+endif ()
+
 target_link_libraries(libreve
-  c++
-  c++abi
   clangFrontend
   clangDriver
   clangSerialization
