@@ -7,7 +7,10 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
 
+#include "core/PDGPass.h"
 #include "core/SlicingPass.h"
+#include "core/SyntacticSlicePass.h"
+#include "core/Util.h"
 
 using std::make_shared;
 using std::cout;
@@ -72,7 +75,7 @@ int main(int argc, const char **argv) {
 	    passManager.add(llvm::createCFGSimplificationPass());
 		passManager.run(function);
 	}
-
+	/*
 	int i = 0;
 	for(llvm::Function& function: *module) {
 		for(llvm::BasicBlock& block: function) {
@@ -85,8 +88,19 @@ int main(int argc, const char **argv) {
 			}			
 		}
 	}
-
+	*/
+	for(llvm::Function& i : *module) {
+		cout << "Instructions:" << endl;
+		for(llvm::Instruction& j : Util::getInstructions(i)) {
+			cout << (&j) << endl;
+		}
+	}
+	
 	llvm::legacy::PassManager PM;
+	
+	PM.add(new llvm::PostDominatorTree());
+	PM.add(new PDGPass());
+	PM.add(new SyntacticSlicePass());
 	PM.add(new SlicingPass());
 	PM.run(*module);
 
