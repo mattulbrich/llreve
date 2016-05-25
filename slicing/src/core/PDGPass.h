@@ -9,6 +9,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+// Computes the PDG for a function.
+// To make the pass work correctly, the SimplifyCFG pass must not be run before.
 class PDGPass : public llvm::FunctionPass {
 	
 	public:
@@ -21,17 +23,20 @@ class PDGPass : public llvm::FunctionPass {
 	
 	virtual bool runOnFunction(llvm::Function &func) override;
 	
-	// Returns the entry point if the instruction is the entry point itself
+	// Return: The instruction 'instr' is control dependent on or NULL if such
+	//         an instruction doesn't exist
 	llvm::Instruction* getCtrlDependency(
 		llvm::Instruction const& instr) const;
 	
-	// The set passed as argument will be returned for method chaining
+	// Return: The set passed as 'result'
+	// Note:   The result-set needs to be cleared outside the method
 	std::unordered_set<llvm::Instruction*>& getDataDependencies(
 		llvm::Instruction const&                instr,
 		std::unordered_set<llvm::Instruction*>& result =
 			*new std::unordered_set<llvm::Instruction*>()) const;
 	
-	// The set passed as argument will be returned for method chaining
+	// Return: The set passed as 'result'
+	// Note:   The result-set needs to be cleared outside the method
 	std::unordered_set<llvm::Instruction*>& getDependencies(
 		llvm::Instruction const&                instr,
 		std::unordered_set<llvm::Instruction*>& result =

@@ -71,8 +71,9 @@ int main(int argc, const char **argv) {
 
 	for(llvm::Function& function:*module) {
 		llvm::legacy::FunctionPassManager passManager(function.getParent());
-		passManager.add(llvm::createPromoteMemoryToRegisterPass());		
-	    passManager.add(llvm::createCFGSimplificationPass());
+		passManager.add(llvm::createPromoteMemoryToRegisterPass());
+		// This pass "destroys" the CFG
+	    //passManager.add(llvm::createCFGSimplificationPass());
 		passManager.run(function);
 	}
 	/*
@@ -89,10 +90,11 @@ int main(int argc, const char **argv) {
 		}
 	}
 	*/
+    printIR(*module);
 	for(llvm::Function& i : *module) {
-		cout << "Instructions:" << endl;
+		cout << "Function " << i.getName().str() << ":" << endl;
 		for(llvm::Instruction& j : Util::getInstructions(i)) {
-			cout << (&j) << endl;
+			cout << (&j) << ": " << Util::toString(j) << endl;
 		}
 	}
 	

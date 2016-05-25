@@ -1,5 +1,7 @@
 #include "PDGPass.h"
 
+#include "Util.h" // TODO: Remove
+
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/Use.h"
 #include "llvm/Support/Casting.h"
@@ -111,6 +113,18 @@ bool PDGPass::runOnFunction(
 			_ctrlDependencies.insert({{&i, pDependency->getTerminator()}});
 		}
 	}
-	
+	/*
+	cout << endl;
+	cout << "PDG:" << endl;
+	unordered_set<Instruction*> dependencies;
+	for(Instruction& i : Util::getInstructions(func)) {
+		cout << (&i) << ": [" << getCtrlDependency(i) << "]";
+		dependencies.clear();
+		for(Instruction* j : getDataDependencies(i, dependencies)) {
+			cout << " " << j;
+		}
+		cout << endl;
+	}
+	*/
 	return false;
 }

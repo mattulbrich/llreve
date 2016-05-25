@@ -40,9 +40,11 @@ bool SyntacticSlicePass::runOnFunction(
 		}
 	}
 	
+	// Traverse the PDG to find all necessary statements
 	while(!toCheck.empty()) {
 		
-		// Prepare the basic block's predecessors for dependency checking in future
+		// Prepare the basic block's predecessors for dependency checking in
+		// future
 		for(Instruction const* i :
 			pdg.getDependencies(*toCheck.front(), dependencies)) {
 			
@@ -52,9 +54,18 @@ bool SyntacticSlicePass::runOnFunction(
 			}
 		}
 		
-		toCheck.pop();
+		toCheck     .pop();
+		dependencies.clear();
 	}
 	
+	// Make sure the branch instruction of each basic block is still in the
+	// slice
+	// TODO: needs to be improved
+	for(Instruction const* i : remainInSlice) {
+		remainInSlice.insert(i->getParent()->getTerminator());
+	}
+	
+	// Mark all instructions, that are not in 'remainInSlice'
 	for(Instruction& i : Util::getInstructions(func)) {
 		if(remainInSlice.find(&i) == remainInSlice.end()) {
 			SlicingPass::toBeSliced(i);;

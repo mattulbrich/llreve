@@ -3,6 +3,7 @@
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instruction.h"
+#include "llvm/IR/Value.h"
 
 #include <type_traits>
 #include <iostream>
@@ -144,4 +145,13 @@ namespace Util {
 		return IteratorPair<NestedInputIterator<FunctionType>>(
 			getInstItBegin(func), getInstItEnd<FunctionType>());
 	}
+	
+	std::string& toString(
+		llvm::Value const& value,
+		std::string&       str,
+		bool const         isForDebug = false);
+	
+	std::string toString(
+		llvm::Value const& value,
+		bool const         isForDebug = false);
 }
