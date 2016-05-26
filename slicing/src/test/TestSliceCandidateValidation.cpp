@@ -20,34 +20,19 @@
 
 #include "core/SliceCandidateValidation.h"
 
+#include "util/FileOperations.h"
+
 
 using namespace llvm;
 using namespace std;
 
 using clang::CodeGenAction;
 
-TEST_CASE("It is possible to call Slice candidate validation", "[SliceCandidateValidation]") {
-	string fileName = "../testdata/simple.c";
-	std::vector<std::string> includes;
-	InputOpts inputOpts(includes, "", fileName, fileName);
+void testSingleLineElemination(string fileName, int line, ValidationResult expectedResult);
 
-	MonoPair<shared_ptr<CodeGenAction>> acts =
-	makeMonoPair(make_shared<clang::EmitLLVMOnlyAction>(),
-		make_shared<clang::EmitLLVMOnlyAction>());
-	MonoPair<shared_ptr<llvm::Module>> modules =
-		compileToModules("", inputOpts, acts);
-
-	shared_ptr<llvm::Module> program = modules.first;
-
-	{
-		llvm::legacy::PassManager PM;
-		PM.add(llvm::createPromoteMemoryToRegisterPass());		
-		PM.add(new AddVariableNamePass());
-		PM.add(llvm::createStripSymbolsPass(true));
-		PM.run(*program);
-	}
-
-	auto sliceCandidate = CloneModule(&*program);
+void testSingleLineElemination(string fileName, int line, ValidationResult expectedResult) {
+	shared_ptr<llvm::Module> program = getModuleFromFile(fileName);
+	shared_ptr<llvm::Module> sliceCandidate = CloneModule(&*program);
 
 	{
 		string ir;
@@ -57,25 +42,29 @@ TEST_CASE("It is possible to call Slice candidate validation", "[SliceCandidateV
 		PM.add(new LambdaFunctionPass([&](Function& function)->bool{
 			int i = 0;
 			for(llvm::BasicBlock& block: function) {
-				for(llvm::Instruction& instruction: block) {			
-					i++;				
-					if (i == 1) 
+				for(llvm::Instruction& instruction: block) {
+					i++;
+					if (i == line)
 					{
 						SlicingPass::toBeSliced(instruction);
 					}
 					stream << i << ": " << instruction << "\n";
-				}			
+				}
 			}
 			return true;
 		}));
 		PM.add(new SlicingPass());
 		PM.run(*sliceCandidate);
-
-		WARN(stream.str());
 	}
 
-	SliceCandidateValidation::validate(&*program, &*sliceCandidate);
+	ValidationResult result = SliceCandidateValidation::validate(&*program, &*sliceCandidate);
+	CHECK(result == expectedResult);
+}
 
+TEST_CASE("Validation of valid Slicecandidate", "[SliceCandidateValidation],[basic]") {
+	testSingleLineElemination("../testdata/simple_sliceable.c", 1, ValidationResult::valid);
+}
 
-
+TEST_CASE("Validation of invalid Slicecandidate", "[SliceCandidateValidation],[basic]") {
+	testSingleLineElemination("../testdata/simple_unsliceable.c", 1, ValidationResult::invalid);
 }

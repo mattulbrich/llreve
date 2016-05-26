@@ -1,7 +1,7 @@
 #pragma once
 #include <string>
 
-enum SatResult {sat, unsat, unknown, timeout};
+enum class SatResult {sat, unsat, unknown, timeout};
 
 class SmtSolverOption {
 	SmtSolverOption(std::string eldaricaPath, std::string z3Path):

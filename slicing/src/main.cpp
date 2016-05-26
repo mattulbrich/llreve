@@ -12,31 +12,32 @@
 #include "core/SyntacticSlicePass.h"
 #include "core/Util.h"
 
-using std::make_shared;
-using std::cout;
-using std::endl;
-using std::shared_ptr;
-using std::string;
-using clang::CodeGenAction;
+
+#include "llvm/Transforms/Utils/Cloning.h"
+
+
+#include "util/FileOperations.h"
+
+using namespace std;
 
 static llvm::cl::opt<std::string> FileName(llvm::cl::Positional,
-                                           llvm::cl::desc("<input file>"),
-                                           llvm::cl::Required);
+	llvm::cl::desc("<input file>"),
+	llvm::cl::Required);
 static llvm::cl::list<string> Includes("I", llvm::cl::desc("Include path"),
-                                           llvm::cl::cat(ReveCategory));
+	llvm::cl::cat(ReveCategory));
 static llvm::cl::opt<string> ResourceDir(
-    "resource-dir",
-    llvm::cl::desc("Directory containing the clang resource files, "
-                   "e.g. /usr/local/lib/clang/3.8.0"),
-    llvm::cl::cat(ReveCategory));
+	"resource-dir",
+	llvm::cl::desc("Directory containing the clang resource files, "
+		"e.g. /usr/local/lib/clang/3.8.0"),
+	llvm::cl::cat(ReveCategory));
 
 // Preprocess flags
 static llvm::cl::opt<bool> ShowCFGFlag("show-cfg", llvm::cl::desc("Show cfg"),
-                                       llvm::cl::cat(ReveCategory));
+	llvm::cl::cat(ReveCategory));
 static llvm::cl::opt<bool>
-    ShowMarkedCFGFlag("show-marked-cfg",
-                      llvm::cl::desc("Show cfg before mark removal"),
-                      llvm::cl::cat(ReveCategory));
+ShowMarkedCFGFlag("show-marked-cfg",
+	llvm::cl::desc("Show cfg before mark removal"),
+	llvm::cl::cat(ReveCategory));
 
 
 void printIR(llvm::Function& function) {
@@ -58,54 +59,9 @@ void printIR(llvm::Module& module) {
 
 int main(int argc, const char **argv) {
 	llvm::cl::ParseCommandLineOptions(argc, argv);
-	InputOpts inputOpts(Includes, ResourceDir, FileName,
-		FileName);
 
-	MonoPair<shared_ptr<CodeGenAction>> acts =
-	makeMonoPair(make_shared<clang::EmitLLVMOnlyAction>(),
-		make_shared<clang::EmitLLVMOnlyAction>());
-	MonoPair<shared_ptr<llvm::Module>> modules =
-		compileToModules(argv[0], inputOpts, acts);
+	shared_ptr<llvm::Module> program = getModuleFromFile(FileName, ResourceDir, Includes);
+	shared_ptr<llvm::Module> sliceCandidate = CloneModule(&*program);
 
-	shared_ptr<llvm::Module> module = modules.first;
-
-	for(llvm::Function& function:*module) {
-		llvm::legacy::FunctionPassManager passManager(function.getParent());
-		passManager.add(llvm::createPromoteMemoryToRegisterPass());
-		// This pass "destroys" the CFG
-	    //passManager.add(llvm::createCFGSimplificationPass());
-		passManager.run(function);
-	}
-	/*
-	int i = 0;
-	for(llvm::Function& function: *module) {
-		for(llvm::BasicBlock& block: function) {
-			for(llvm::Instruction& instruction: block) {			
-				i++;
-				if (i == 2) 
-				{
-					SlicingPass::toBeSliced(instruction);
-				}
-			}			
-		}
-	}
-	*/
-    printIR(*module);
-	for(llvm::Function& i : *module) {
-		cout << "Function " << i.getName().str() << ":" << endl;
-		for(llvm::Instruction& j : Util::getInstructions(i)) {
-			cout << (&j) << ": " << Util::toString(j) << endl;
-		}
-	}
-	
-	llvm::legacy::PassManager PM;
-	
-	PM.add(new llvm::PostDominatorTree());
-	PM.add(new PDGPass());
-	PM.add(new SyntacticSlicePass());
-	PM.add(new SlicingPass());
-	PM.run(*module);
-
-    printIR(*module);
-    return 0;
+	return 0;
 }

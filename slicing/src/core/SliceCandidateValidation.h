@@ -1,6 +1,6 @@
 #include "llvm/IR/Module.h"
 
-enum ValidationResult {valide, invalide, unknown};
+enum class ValidationResult {valid, invalid, unknown};
 
 class CounterExample;
 

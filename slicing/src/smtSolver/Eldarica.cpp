@@ -17,16 +17,16 @@ std::string EldaricaCommand::getCommandStr(std::string smtFilePath, std::string 
 SatResult Eldarica::parseResult(std::string resultFile) {
 	std::ifstream input(resultFile);
 	std::string line;
-	SatResult result = unknown;
+	SatResult result = SatResult::unknown;
 	bool foundResult = false;
 	while (getline(input, line)) {
 		if (line == "sat") {
-			result = sat;
+			result = SatResult::sat;
 			foundResult = true;
 			break;
 		}
 		if (line == "unsat") {
-			result = unsat;
+			result = SatResult::unsat;
 			foundResult = true;
 			break;
 		}
