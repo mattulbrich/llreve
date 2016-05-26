@@ -380,7 +380,7 @@ template <typename T> struct HeapEqual : public HeapPattern<T> {
         smt::SharedSMTRef expr =
             makeBinOp("=", smt::makeBinOp("select", "HEAP$1", "heapIndex"),
                       smt::makeBinOp("select", "HEAP$2", "heapIndex"));
-        return llvm::make_unique<smt::Forall>(args, expr);
+        return std::make_unique<smt::Forall>(args, expr);
     }
     bool equalTo(const HeapPattern<T> &other) const override {
         return other.getType() == PatternType::HeapEquality;
@@ -965,7 +965,7 @@ template <typename T> struct RangeProp : public HeapPattern<T> {
         smt::SharedSMTRef rangeConstraint = makeBinOp(
             "and", makeBinOp("<=", arg1, var), makeBinOp("<=", var, arg2));
         smt::SharedSMTRef patRef = pat->toSMT();
-        return llvm::make_unique<smt::Forall>(
+        return std::make_unique<smt::Forall>(
             args, makeBinOp("=>", rangeConstraint, patRef));
     }
 };

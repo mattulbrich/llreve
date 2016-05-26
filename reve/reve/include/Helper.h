@@ -21,9 +21,9 @@
 template <typename Str>
 auto logError_(Str message, const char *file, int line) -> void {
     bool colors = false;
-    #ifndef _WIN32
+#ifndef _WIN32
     colors = isatty(fileno(stderr));
-    #endif
+#endif
     if (colors) {
         llvm::errs() << "\x1b[31;1mERROR\x1b[0m\x1b[1m (" << file << ":" << line
                      << "): " << message << "\x1b[0m";
@@ -35,9 +35,9 @@ auto logError_(Str message, const char *file, int line) -> void {
 template <typename Str>
 auto logWarning_(Str message, const char *file, int line) -> void {
     bool colors = false;
-    #ifndef _WIN32
+#ifndef _WIN32
     colors = isatty(fileno(stderr));
-    #endif
+#endif
     if (colors) {
         llvm::errs() << "\x1b[33;1mWARNING\x1b[0m\x1b[1m (" << file << ":"
                      << line << "): " << message << "\x1b[0m";
@@ -91,10 +91,10 @@ template <typename T> std::unique_ptr<const smt::SMTExpr> resolveGEP(T &gep) {
         } else {
             args.push_back(
                 smt::makeBinOp("*", smt::stringExpr(std::to_string(size)),
-                                     instrNameOrVal(*ix, (*ix)->getType())));
+                               instrNameOrVal(*ix, (*ix)->getType())));
         }
     }
-    return llvm::make_unique<smt::Op>("+", args);
+    return std::make_unique<smt::Op>("+", args);
 }
 
 template <typename Key, typename Val>

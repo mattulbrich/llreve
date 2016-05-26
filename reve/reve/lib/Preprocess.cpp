@@ -82,7 +82,7 @@ zipFunctions(llvm::Module &mod1, llvm::Module &mod2) {
 AnalysisResults preprocessFunction(llvm::Function &fun, string prefix,
                                    PreprocessOpts opts) {
     auto fpm =
-        llvm::make_unique<llvm::legacy::FunctionPassManager>(fun.getParent());
+        std::make_unique<llvm::legacy::FunctionPassManager>(fun.getParent());
     fpm->add(llvm::createUnifyFunctionExitNodesPass());
 
     fpm->add(new InlinePass());
