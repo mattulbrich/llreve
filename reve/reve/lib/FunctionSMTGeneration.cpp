@@ -683,7 +683,7 @@ SMTRef mutualRecursiveForall(SharedSMTRef clause, MonoPair<CallInfo> callPair,
         implArgs.push_back(stringExpr("HEAP$1_res"));
         implArgs.push_back(stringExpr("HEAP$2_res"));
     }
-    SMTRef postInvariant = llvm::make_unique<Op>(
+    SMTRef postInvariant = std::make_unique<Op>(
         invariantName(ENTRY_MARK, ProgramSelection::Both,
                       callPair.first.callName, InvariantAttr::NONE, varArgs),
         implArgs, !callPair.first.externFun);
@@ -691,11 +691,11 @@ SMTRef mutualRecursiveForall(SharedSMTRef clause, MonoPair<CallInfo> callPair,
         // TODO we need to add the stack somewhere here
     }
     SMTRef result = makeBinOp("=>", std::move(postInvariant), clause);
-    result = llvm::make_unique<Forall>(args, std::move(result));
+    result = std::make_unique<Forall>(args, std::move(result));
     if (callPair.first.externFun) {
         return result;
     }
-    SMTRef preInv = llvm::make_unique<Op>(
+    SMTRef preInv = std::make_unique<Op>(
         invariantName(ENTRY_MARK, ProgramSelection::Both,
                       callPair.first.callName, InvariantAttr::PRE),
         preArgs);
@@ -733,7 +733,7 @@ SMTRef nonmutualRecursiveForall(SharedSMTRef clause, CallInfo call,
         // TODO We need to add the stack somewhere here
     }
     SMTRef result = makeBinOp("=>", endInvariant, clause);
-    result = llvm::make_unique<Forall>(forallArgs, std::move(result));
+    result = std::make_unique<Forall>(forallArgs, std::move(result));
     if (call.externFun) {
         return result;
     }
@@ -788,7 +788,7 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<string> freeVars,
         // μZ rules are implicitly universally quantified
         return clause;
     }
-    return llvm::make_unique<Forall>(vars, clause);
+    return std::make_unique<Forall>(vars, clause);
 }
 
 /* -------------------------------------------------------------------------- */

@@ -76,19 +76,6 @@ cmake ..
 make
 ```
 
-## Build using shake
-
-Generic build where I actually know what’s going on but it requires
-Haskell. If you are not familiar with the Haskell build tooling
-landscape, I recommend using [stack](http://haskellstack.org/).
-
-```
-cd shake
-stack build
-stack exec shake-reve -- -C .
-```
-
-
 ## Usage
 
 Run using

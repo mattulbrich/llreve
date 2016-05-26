@@ -198,7 +198,7 @@ SMTRef SwitchDefault::toSmt() const {
         StringVals.push_back(stringExpr(std::to_string(Val)));
     }
     StringVals.push_back(instrNameOrVal(Cond, Cond->getType()));
-    return llvm::make_unique<Op>("distinct", StringVals);
+    return std::make_unique<Op>("distinct", StringVals);
 }
 
 static llvm::RegisterPass<PathAnalysis>

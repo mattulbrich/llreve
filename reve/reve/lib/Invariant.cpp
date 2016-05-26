@@ -106,7 +106,7 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
                 Clause = makeBinOp("and", std::move(PreInv), std::move(Clause));
             }
         }
-        Clause = llvm::make_unique<Forall>(ForallArgs, std::move(Clause));
+        Clause = std::make_unique<Forall>(ForallArgs, std::move(Clause));
     }
     return Clause;
 }
@@ -114,9 +114,9 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<string> InputArgs,
 SMTRef mainInvariant(int EndIndex, vector<string> FreeVars, string FunName) {
     if (EndIndex == EXIT_MARK) {
         vector<string> Args = {"result$1", "result$2"};
-        for (string& arg : FreeVars) {
+        for (string &arg : FreeVars) {
             // No stack in output
-            if (arg.compare(0,5,"STACK")) {
+            if (arg.compare(0, 5, "STACK")) {
                 Args.push_back(arg);
             }
         }
@@ -156,9 +156,9 @@ MonoPair<SMTRef> invariantDeclaration(int BlockIndex, vector<string> FreeVars,
     }
 
     return makeMonoPair<SMTRef>(
-        llvm::make_unique<FunDecl>(invariantName(BlockIndex, For, FunName),
-                                   args, "Bool"),
-        llvm::make_unique<FunDecl>(
+        std::make_unique<FunDecl>(invariantName(BlockIndex, For, FunName), args,
+                                  "Bool"),
+        std::make_unique<FunDecl>(
             invariantName(BlockIndex, For, FunName, InvariantAttr::PRE),
             preArgs, "Bool"));
 }
@@ -180,8 +180,8 @@ singleInvariantDeclaration(map<int, vector<string>> freeVarsMap, Memory memory,
     const string preName = name + "_PRE";
 
     return makeMonoPair<SMTRef>(
-        llvm::make_unique<class FunDecl>(name, args, "Bool"),
-        llvm::make_unique<class FunDecl>(preName, preArgs, "Bool"));
+        std::make_unique<class FunDecl>(name, args, "Bool"),
+        std::make_unique<class FunDecl>(preName, preArgs, "Bool"));
 }
 
 size_t invariantArgs(vector<string> freeVars, Memory memory,

@@ -3,6 +3,7 @@
 #include <iostream>
 #include <list>
 #include <vector>
+#include <algorithm>
 
 template <typename T>
 std::list<std::vector<T>> kSubset(std::vector<T> input, size_t k) {

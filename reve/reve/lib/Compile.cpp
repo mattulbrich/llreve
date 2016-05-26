@@ -67,7 +67,7 @@ void executeCodeGenActions(const char *exeName, InputOpts &opts,
 void executeCodeGenAction(const ArgStringList &ccArgs,
                           clang::DiagnosticsEngine &diags,
                           shared_ptr<CodeGenAction> act) {
-    auto ci = llvm::make_unique<CompilerInvocation>();
+    auto ci = std::make_unique<CompilerInvocation>();
     CompilerInvocation::CreateFromArgs(*ci, (ccArgs.data()),
                                        (ccArgs.data()) + ccArgs.size(), diags);
     CompilerInstance clang;
@@ -90,8 +90,8 @@ std::vector<const char *> initializeArgs(const char *exeName, InputOpts &opts) {
     args.push_back(exeName); // add executable name
     args.push_back("-xc");   // force language to C
     args.push_back("-std=c99");
-	args.push_back("-g"); // enabel debug information
-	    
+    args.push_back("-g"); // enabel debug information
+
     if (!opts.Includes.empty()) {
         for (string &value : opts.Includes) {
             args.push_back("-I");
@@ -116,7 +116,7 @@ unique_ptr<DiagnosticsEngine> initializeDiagnostics() {
         new clang::TextDiagnosticPrinter(llvm::errs(), &*diagOpts);
     const IntrusiveRefCntPtr<clang::DiagnosticIDs> diagId(
         new clang::DiagnosticIDs());
-    return llvm::make_unique<DiagnosticsEngine>(diagId, &*diagOpts, diagClient);
+    return std::make_unique<DiagnosticsEngine>(diagId, &*diagOpts, diagClient);
 }
 
 /// Initialize the driver
@@ -124,7 +124,7 @@ unique_ptr<Driver> initializeDriver(DiagnosticsEngine &diags) {
     string tripleStr = llvm::sys::getProcessTriple();
     llvm::Triple triple(tripleStr);
     auto driver =
-        llvm::make_unique<clang::driver::Driver>("clang", triple.str(), diags);
+        std::make_unique<clang::driver::Driver>("clang", triple.str(), diags);
     driver->setTitle("reve");
     driver->setCheckInputsExist(false);
     // Builtin includes may not be found, a possible but bad solution would be
