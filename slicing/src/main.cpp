@@ -11,6 +11,7 @@
 #include "core/SlicingPass.h"
 #include "core/SyntacticSlicePass.h"
 #include "core/Util.h"
+#include "core/SliceCandidateValidation.h"
 
 
 #include "llvm/Transforms/Utils/Cloning.h"
@@ -19,6 +20,7 @@
 #include "util/FileOperations.h"
 
 using namespace std;
+using namespace llvm;
 
 static llvm::cl::opt<std::string> FileName(llvm::cl::Positional,
 	llvm::cl::desc("<input file>"),
@@ -62,6 +64,39 @@ int main(int argc, const char **argv) {
 
 	shared_ptr<llvm::Module> program = getModuleFromFile(FileName, ResourceDir, Includes);
 	shared_ptr<llvm::Module> sliceCandidate = CloneModule(&*program);
+
+	std::error_code EC;
+	raw_fd_ostream programOut(StringRef("program.llvm"), EC, llvm::sys::fs::OpenFlags::F_None);
+	raw_fd_ostream sliceOut(StringRef("slice.llvm"), EC, llvm::sys::fs::OpenFlags::F_None);
+
+	{
+		llvm::legacy::PassManager PM;
+		PM.add(new llvm::PostDominatorTree());
+		PM.add(new PDGPass());
+		PM.add(new SyntacticSlicePass());
+		PM.add(new SlicingPass());
+		PM.add(llvm::createPrintModulePass(sliceOut));
+		PM.run(*sliceCandidate);
+	}
+
+	{
+		llvm::legacy::PassManager PM;
+		PM.add(llvm::createPrintModulePass(programOut));
+		PM.run(*program);
+	}
+
+	ValidationResult result = SliceCandidateValidation::validate(&*program, &*sliceCandidate);
+	if (result == ValidationResult::valid) {
+		outs() << "The produced syntactic slice was verified by reve. :) \n";
+
+	} else if (result == ValidationResult::valid){
+		outs() << "Ups! The produced syntactic slice is not valid! :/ \n";
+	} else {
+		outs() << "Could not verify the vlidity! :( \n";
+	}
+
+	outs() << "See program.llvm and slice.llvm for the resulting LLVMIRs \n";
+
 
 	return 0;
 }
