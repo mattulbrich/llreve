@@ -9,7 +9,7 @@ macro(set_compiler_settings)
 	set(CMAKE_CXX_COMPILER "clang++")
 	set(CXX_WARNINGS_FLAGS "-Weverything -Wno-c++98-compat -Wno-exit-time-destructors -Wno-global-constructors -Wno-padded -Wno-switch-enum -Wno-shadow")
 	set(CXX_OTHER_FLAGS "--system-header-prefix=llvm --system-header-prefix=clang")
-	set(CXX_STANDARD_FLAGS "-std=c++11 -stdlib=libc++ -fno-rtti")
+	set(CXX_STANDARD_FLAGS "-std=c++14 -stdlib=libc++ -fno-rtti")
 	#Use cmake -D CLANG_FLAGS=yourFlags to add custom flags
 	set(USER_FLAGS "${CLANG_FLAGS}")
 	set(CMAKE_CXX_FLAGS "${CXX_WARNINGS_FLAGS} ${CXX_STANDARD_FLAGS} ${CXX_OTHER_FLAGS} ${USER_FLAGS}")
@@ -30,6 +30,8 @@ endmacro(load_llvm)
 
 #Compile libreve, make it aviable, make sure it is recompiled on change
 macro (load_libreve)
+	set(REVE_USE_LIBCXX "YES")
+
 	set(reve_build_dir ${CMAKE_BINARY_DIR}/reve)
 	set(reve_dir ${CMAKE_CURRENT_SOURCE_DIR}/../../reve/reve)
 	
