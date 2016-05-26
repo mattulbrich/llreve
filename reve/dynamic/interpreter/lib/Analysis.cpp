@@ -173,21 +173,13 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                  MergedAnalysisResults &localAnalysisResults) {
             analyzeExecution<const llvm::Value *>(
                 calls, nameMap,
-                [&localAnalysisResults](MatchInfo<const llvm::Value *> match) {
+                [&localAnalysisResults, &freeVarsMap, degree,
+                 &patterns](MatchInfo<const llvm::Value *> match) {
                     findLoopCounts<const llvm::Value *>(
                         localAnalysisResults.loopCounts, match);
-                });
-            analyzeExecution<const llvm::Value *>(
-                calls, nameMap, [&localAnalysisResults, &freeVarsMap,
-                                 degree](MatchInfo<const llvm::Value *> match) {
                     populateEquationsMap(
                         localAnalysisResults.polynomialEquations, freeVarsMap,
                         match, degree);
-                });
-            analyzeExecution<const llvm::Value *>(
-                calls, nameMap,
-                [&localAnalysisResults, &patterns,
-                 &freeVarsMap](MatchInfo<const llvm::Value *> match) {
                     populateHeapPatterns(
                         localAnalysisResults.heapPatternCandidates, patterns,
                         freeVarsMap, match);
