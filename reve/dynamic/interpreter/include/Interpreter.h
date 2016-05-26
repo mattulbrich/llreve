@@ -15,9 +15,11 @@
 #include "cbor.h"
 #include "json.hpp"
 
+#include "Integer.h"
+
 using BlockName = std::string;
 using VarName = const llvm::Value *;
-using VarIntVal = mpz_class;
+using VarIntVal = Integer;
 using HeapAddress = mpz_class;
 enum class VarType { Int, Bool };
 const VarName ReturnName = nullptr;
@@ -191,10 +193,10 @@ struct TerminatorUpdate {
 
 /// The variables in the entry state will be renamed appropriately for both
 /// programs
-MonoPair<FastCall>
-interpretFunctionPair(MonoPair<const llvm::Function *> funs,
-                      MonoPair<std::map<const llvm::Value*, std::shared_ptr<VarVal>>> variables,
-                      Heap heap, uint32_t maxSteps);
+MonoPair<FastCall> interpretFunctionPair(
+    MonoPair<const llvm::Function *> funs,
+    MonoPair<std::map<const llvm::Value *, std::shared_ptr<VarVal>>> variables,
+    Heap heap, uint32_t maxSteps);
 auto interpretFunction(const llvm::Function &fun, FastState entry,
                        uint32_t maxSteps) -> FastCall;
 auto interpretBlock(const llvm::BasicBlock &block,
@@ -249,7 +251,8 @@ template <typename A, typename T> VarInt resolveGEP(T &gep, State<A> state) {
         const auto size = typeSize(indexedType, mod->getDataLayout());
         std::shared_ptr<VarVal> val = resolveValue(*ix, state);
         assert(val->getType() == VarType::Int);
-        offset += size * std::static_pointer_cast<VarInt>(val)->val;
+        offset += Integer(mpz_class(size)) *
+                  std::static_pointer_cast<VarInt>(val)->val;
     }
     return VarInt(offset);
 }
@@ -264,3 +267,5 @@ std::map<std::string, const cbor_item_t *>
 cborToKeyMap(const cbor_item_t *item);
 
 std::string valueName(const llvm::Value *val);
+
+extern bool BoundedFlag;

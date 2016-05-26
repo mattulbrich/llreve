@@ -74,5 +74,5 @@ int main(int argc, const char **argv) {
     serializeValuesInRange(
         makeMonoPair(modules.first->getFunction(MainFunctionFlag),
                      modules.second->getFunction(MainFunctionFlag)),
-        -20, 20, OutputDirectoryFlag);
+        Integer(mpz_class(-20)), Integer(mpz_class(20)), OutputDirectoryFlag);
 }

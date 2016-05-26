@@ -39,6 +39,11 @@ using nlohmann::json;
 
 VarVal::~VarVal() = default;
 
+bool BoundedFlag;
+static llvm::cl::opt<bool, true> // The parser
+    Debug("bounded", llvm::cl::desc("Use bounded integers"),
+          llvm::cl::location(BoundedFlag));
+
 template <typename Key, typename Val>
 std::map<Key, Val> cborToMap(const cbor_item_t *item,
                              std::function<Key(const cbor_item_t *)> keyFun,
@@ -71,7 +76,7 @@ VarIntVal VarInt::unsafeIntVal() const { return val; }
 VarType VarBool::getType() const { return VarType::Bool; }
 VarIntVal VarBool::unsafeIntVal() const {
     logError("Called unsafeIntVal on a VarBool\n");
-    return 0;
+    exit(1);
 }
 
 json VarInt::toJSON() const { return val.get_str(); }
@@ -85,8 +90,7 @@ shared_ptr<VarVal> cborToVarVal(const cbor_item_t *item) {
     if (cbor_is_bool(item)) {
         return make_shared<VarBool>(cbor_ctrl_is_bool(item));
     } else if (cbor_isa_string(item) && cbor_string_is_definite(item)) {
-        VarIntVal i;
-        i.set_str(cborToString(item), 10);
+        VarIntVal i(mpz_class(cborToString(item), 10));
         return make_shared<VarInt>(i);
     } else {
         return nullptr;
@@ -98,8 +102,10 @@ MonoPair<FastCall> interpretFunctionPair(
     MonoPair<map<const llvm::Value *, shared_ptr<VarVal>>> variables, Heap heap,
     uint32_t maxSteps) {
     return makeMonoPair(
-        interpretFunction(*funs.first, FastState(variables.first, heap), maxSteps),
-        interpretFunction(*funs.second, FastState(variables.second, heap), maxSteps));
+        interpretFunction(*funs.first, FastState(variables.first, heap),
+                          maxSteps),
+        interpretFunction(*funs.second, FastState(variables.second, heap),
+                          maxSteps));
 }
 
 FastCall interpretFunction(const Function &fun, FastState entry,
@@ -194,8 +200,8 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
             shared_ptr<VarVal> operand =
                 state.variables.at(cast->getOperand(0));
             assert(operand->getType() == VarType::Bool);
-            state.variables[cast] = make_shared<VarInt>(
-                static_pointer_cast<VarBool>(operand)->val ? 1 : 0);
+            state.variables[cast] = make_shared<VarInt>(Integer(
+                mpz_class(static_pointer_cast<VarBool>(operand)->val ? 1 : 0)));
         } else {
             state.variables[cast] = resolveValue(cast->getOperand(0), state);
         }
@@ -206,7 +212,8 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
         assert(ptr->getType() == VarType::Int);
         // This will only insert 0 if there is not already a different element
         auto heapIt = state.heap.insert(
-            std::make_pair(static_pointer_cast<VarInt>(ptr)->val, 0));
+            std::make_pair(static_pointer_cast<VarInt>(ptr)->val.asUnbounded(),
+                           Integer(mpz_class(0))));
         state.variables[load] = make_shared<VarInt>(heapIt.first->second);
     } else if (const auto store = dyn_cast<StoreInst>(instr)) {
         shared_ptr<VarVal> ptr =
@@ -214,7 +221,7 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
         assert(ptr->getType() == VarType::Int);
         shared_ptr<VarVal> val = resolveValue(store->getValueOperand(), state);
         assert(val->getType() == VarType::Int);
-        HeapAddress addr = static_pointer_cast<VarInt>(ptr)->val;
+        HeapAddress addr = static_pointer_cast<VarInt>(ptr)->val.asUnbounded();
         state.heap[addr] = static_pointer_cast<VarInt>(val)->val;
     } else if (const auto select = dyn_cast<SelectInst>(instr)) {
         shared_ptr<VarVal> cond = resolveValue(select->getCondition(), state);
@@ -267,7 +274,8 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
         assert(cond->getType() == VarType::Int);
         const VarIntVal &condVal = static_pointer_cast<VarInt>(cond)->val;
         for (auto c : switchInst->cases()) {
-            VarIntVal caseVal = c.getCaseValue()->getSExtValue();
+            VarIntVal caseVal =
+                Integer(mpz_class(c.getCaseValue()->getSExtValue()));
             if (caseVal == condVal) {
                 return TerminatorUpdate(c.getCaseSuccessor());
             }
@@ -286,14 +294,19 @@ shared_ptr<VarVal> resolveValue(const Value *val, const FastState &state) {
     } else if (const auto constInt = dyn_cast<ConstantInt>(val)) {
         if (constInt->getBitWidth() == 1) {
             return make_shared<VarBool>(constInt->isOne());
-        } else {
-            return make_shared<VarInt>(constInt->getSExtValue());
+        } else if (!BoundedFlag) {
+            return make_shared<VarInt>(
+                Integer(mpz_class(constInt->getSExtValue())));
+        } else if (constInt->getBitWidth() == 8) {
+            return make_shared<VarInt>(
+                Integer(static_cast<int8_t>(constInt->getSExtValue())));
+        } else if (constInt->getBitWidth() == 16) {
         }
     } else if (llvm::isa<llvm::ConstantPointerNull>(val)) {
-        return make_shared<VarInt>(0);
+        return make_shared<VarInt>(Integer(mpz_class(0)));
     }
     logErrorData("Operators are not yet handled\n", *val);
-    return make_shared<VarInt>(42);
+    exit(1);
 }
 
 void interpretICmpInst(const ICmpInst *instr, FastState &state) {
@@ -379,7 +392,7 @@ void interpretBoolBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
 void interpretIntBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
                        const VarIntVal &i0, const VarIntVal &i1,
                        FastState &state) {
-    VarIntVal result = 0;
+    VarIntVal result = Integer(mpz_class(0));
     switch (op) {
     case Instruction::Add:
         result = i0 + i1;
@@ -564,7 +577,7 @@ cbor_item_t *stateToCBOR(FastState state) {
 }
 
 VarIntVal cborToVarIntVal(const cbor_item_t *item) {
-    VarIntVal i(cborToString(item), 10);
+    VarIntVal i(mpz_class(cborToString(item), 10));
     return i;
 }
 
@@ -587,10 +600,12 @@ State<string> cborToState(const cbor_item_t *item) {
     // heap
     cbor_item_t *cborHeap = map[1].value;
     assert(cbor_isa_map(cborHeap));
-    Heap heap = cborToMap<VarIntVal, VarIntVal>(
-        cborHeap, cborToVarIntVal, [](const cbor_item_t *item) -> VarIntVal {
-            return cborToVarIntVal(item);
-        });
+    Heap heap = cborToMap<HeapAddress, VarIntVal>(
+        cborHeap,
+        [](const cbor_item_t *item) {
+            return mpz_class(cborToString(item), 10);
+        },
+        cborToVarIntVal);
     return State<string>(variables, heap);
 }
 

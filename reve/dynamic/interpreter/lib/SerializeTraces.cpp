@@ -64,7 +64,7 @@ Range::RangeIterator Range::end() {
     if (n == 0) {
         return RangeIterator(lowerBound, upperBound, vals);
     }
-    vals[0] = upperBound + 1;
+    vals[0] = upperBound + Integer(mpz_class(1));
     for (size_t i = 1; i < vals.size(); ++i) {
         vals[i] = lowerBound;
     }
@@ -72,11 +72,11 @@ Range::RangeIterator Range::end() {
 }
 
 Range::RangeIterator &Range::RangeIterator::operator++() {
-    VarIntVal carry = 1;
+    mpz_class carry = 1;
     size_t index = 0;
     while (carry == 1 && index < vals.size()) {
         vals[index]++;
-        if (vals[index] == upperBound + 1) {
+        if (vals[index] == upperBound + Integer(mpz_class(1))) {
             carry = 1;
             vals[index] = lowerBound;
         } else {
@@ -85,7 +85,7 @@ Range::RangeIterator &Range::RangeIterator::operator++() {
         ++index;
     }
     if (carry == 1) {
-        vals[0] = upperBound + 1;
+        vals[0] = upperBound + Integer(mpz_class(1));
     }
     return *this;
 }

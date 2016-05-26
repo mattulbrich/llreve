@@ -19,7 +19,7 @@ VarIntVal getHeapVal(HeapAddress addr, Heap heap) {
     if (it != heap.end()) {
         return it->second;
     } else {
-        return 0;
+        return Integer(mpz_class(0));
     }
 }
 

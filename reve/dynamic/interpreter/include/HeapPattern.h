@@ -81,10 +81,13 @@ template <typename T> struct HeapPattern {
             return matchingPatterns;
         }
         for (const auto &vec :
-             Range(0, static_cast<VarIntVal>(variablePointers.size()) - 1, k)) {
+             Range(Integer(mpz_class(0)),
+                   Integer(mpz_class(variablePointers.size())) -
+                       Integer(mpz_class(1)),
+                   k)) {
             std::vector<const llvm::Value *> args(vec.size());
             for (size_t i = 0; i < args.size(); ++i) {
-                args[i] = variablePointers[vec[i].get_ui()];
+                args[i] = variablePointers[vec[i].asUnbounded().get_ui()];
             }
             auto pattern = this->distributeArguments(args);
 
@@ -545,9 +548,9 @@ template <typename T> struct HeapAccess : public HeapExpr<T> {
         VarIntVal atEval = atVal->eval(variables, heaps, holes);
         switch (programIndex) {
         case ProgramIndex::First:
-            return getHeapVal(atEval, heaps.first);
+            return getHeapVal(atEval.asUnbounded(), heaps.first);
         case ProgramIndex::Second:
-            return getHeapVal(atEval, heaps.second);
+            return getHeapVal(atEval.asUnbounded(), heaps.second);
         }
     }
     std::ostream &dump(std::ostream &os) const override {
@@ -636,7 +639,7 @@ template <typename T> struct Variable : public HeapExpr<T> {
                    const MonoPair<Heap> & /* unused */,
                    const HoleMap & /* unused */) const override {
         logError("Can only evaluate specialized version of variable\n");
-        return 0;
+        return Integer(mpz_class(0));
     }
     std::ostream &dump(std::ostream &os) const override {
         os << "_";

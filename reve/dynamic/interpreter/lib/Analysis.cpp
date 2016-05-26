@@ -140,7 +140,8 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     LoopCountsAndMark loopCounts;
     loopCounts.mark = -5;
     iterateTracesInRange<LoopCountsAndMark>(
-        functions, -50, 50, ThreadsFlag, loopCounts, mergeLoopCounts,
+        functions, Integer(mpz_class(-50)), Integer(mpz_class(50)), ThreadsFlag,
+        loopCounts, mergeLoopCounts,
         [&nameMap](MonoPair<Call<const llvm::Value *>> calls,
                    LoopCountsAndMark &localLoopCounts) {
             analyzeExecution<const llvm::Value *>(
@@ -167,7 +168,8 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
     size_t degree = DegreeFlag;
     iterateTracesInRange<MergedAnalysisResults>(
-        functions, -50, 50, ThreadsFlag, analysisResults, mergeAnalysisResults,
+        functions, Integer(mpz_class(-50)), Integer(mpz_class(50)), ThreadsFlag,
+        analysisResults, mergeAnalysisResults,
         [&nameMap, &freeVarsMap, &patterns,
          degree](MonoPair<Call<const llvm::Value *>> calls,
                  MergedAnalysisResults &localAnalysisResults) {
@@ -426,9 +428,9 @@ void populateEquationsMap(PolynomialEquations &polynomialEquations,
         auto polynomialTerms =
             polynomialTermsOfDegree(freeVarsMap.at(match.mark), i);
         for (auto term : polynomialTerms) {
-            VarIntVal termVal = 1;
+            mpz_class termVal = 1;
             for (auto var : term) {
-                termVal *= variables.at(var)->unsafeIntVal();
+                termVal *= variables.at(var)->unsafeIntVal().asUnbounded();
             }
             equation.push_back(termVal);
         }
@@ -438,11 +440,13 @@ void populateEquationsMap(PolynomialEquations &polynomialEquations,
     ExitIndex exitIndex = 0;
     if (variables.count("exitIndex$1_" + std::to_string(match.mark)) == 1) {
         exitIndex = variables.at("exitIndex$1_" + std::to_string(match.mark))
-                        ->unsafeIntVal();
+                        ->unsafeIntVal()
+                        .asUnbounded();
     } else if (variables.count("exitIndex$2_" + std::to_string(match.mark)) ==
                1) {
         exitIndex = variables.at("exitIndex$2_" + std::to_string(match.mark))
-                        ->unsafeIntVal();
+                        ->unsafeIntVal()
+                        .asUnbounded();
     }
     if (polynomialEquations[match.mark].count(exitIndex) == 0) {
         polynomialEquations.at(match.mark)
@@ -511,10 +515,10 @@ void populateHeapPatterns(
     for (auto var : variables) {
         if (var.first->getName() ==
             "exitIndex$1" + std::to_string(match.mark)) {
-            exitIndex = var.second->unsafeIntVal();
+            exitIndex = var.second->unsafeIntVal().asUnbounded();
         } else if (var.first->getName() ==
                    "exitIndex$2" + std::to_string(match.mark)) {
-            exitIndex = var.second->unsafeIntVal();
+            exitIndex = var.second->unsafeIntVal().asUnbounded();
         }
     }
     if (heapPatternCandidates[match.mark].count(exitIndex) == 0) {
@@ -1045,7 +1049,8 @@ Heap randomHeap(
                 int val =
                     (rand_r(seedp) % (valUpperBound - valLowerBound + 1)) +
                     valLowerBound;
-                heap.insert({arrayStart + i, val});
+                heap.insert(
+                    {arrayStart.asUnbounded() + i, Integer(mpz_class(val))});
             }
         }
     }
