@@ -1049,8 +1049,15 @@ Heap randomHeap(
                 int val =
                     (rand_r(seedp) % (valUpperBound - valLowerBound + 1)) +
                     valLowerBound;
-                heap.insert(
-                    {arrayStart.asUnbounded() + i, Integer(mpz_class(val))});
+                if (BoundedFlag) {
+                    heap.insert(
+                        {arrayStart.asUnbounded() + i,
+                         Integer(llvm::APInt(HeapElemSizeFlag,
+                                             static_cast<uint64_t>(val)))});
+                } else {
+                    heap.insert({arrayStart.asUnbounded() + i,
+                                 Integer(mpz_class(val))});
+                }
             }
         }
     }

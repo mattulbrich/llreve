@@ -1,10 +1,10 @@
 #include "HeapPattern.h"
 
 template <>
-VarIntVal Variable<const llvm::Value *>::eval(
+mpz_class Variable<const llvm::Value *>::eval(
     const VarMap<const llvm::Value *> &variables,
     const MonoPair<Heap> & /* unused */, const HoleMap & /* unused */) const {
-    return variables.at(varName)->unsafeIntVal();
+    return variables.at(varName)->unsafeIntVal().asUnbounded();
 }
 
 template <>
@@ -14,12 +14,12 @@ std::ostream &Variable<const llvm::Value *>::dump(std::ostream &os) const {
     return os;
 }
 
-VarIntVal getHeapVal(HeapAddress addr, Heap heap) {
+mpz_class getHeapVal(HeapAddress addr, Heap heap) {
     auto it = heap.find(addr);
     if (it != heap.end()) {
-        return it->second;
+        return it->second.asUnbounded();
     } else {
-        return Integer(mpz_class(0));
+        return 0;
     }
 }
 

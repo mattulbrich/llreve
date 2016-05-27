@@ -40,9 +40,14 @@ using nlohmann::json;
 VarVal::~VarVal() = default;
 
 bool BoundedFlag;
+unsigned HeapElemSizeFlag;
 static llvm::cl::opt<bool, true> // The parser
-    Debug("bounded", llvm::cl::desc("Use bounded integers"),
-          llvm::cl::location(BoundedFlag));
+    Bounded("bounded", llvm::cl::desc("Use bounded integers"),
+            llvm::cl::location(BoundedFlag));
+static llvm::cl::opt<unsigned, true> // The parser
+    HeapElemSize("heap-elem-size",
+                 llvm::cl::desc("Size for a random heap element"),
+                 llvm::cl::location(HeapElemSizeFlag), llvm::cl::init(8));
 
 template <typename Key, typename Val>
 std::map<Key, Val> cborToMap(const cbor_item_t *item,
@@ -160,7 +165,8 @@ BlockUpdate<const llvm::Value *> interpretBlock(const BasicBlock &block,
             FastVarMap args;
             auto argIt = fun->getArgumentList().begin();
             for (const auto &arg : call->arg_operands()) {
-                args.insert(std::make_pair(&*argIt, resolveValue(arg, state)));
+                args.insert(std::make_pair(
+                    &*argIt, resolveValue(arg, state, arg->getType())));
                 ++argIt;
             }
             FastCall c = interpretFunction(*fun, FastState(args, state.heap),
@@ -200,38 +206,76 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
             shared_ptr<VarVal> operand =
                 state.variables.at(cast->getOperand(0));
             assert(operand->getType() == VarType::Bool);
-            state.variables[cast] = make_shared<VarInt>(Integer(
-                mpz_class(static_pointer_cast<VarBool>(operand)->val ? 1 : 0)));
+            if (BoundedFlag) {
+                state.variables[cast] = make_shared<VarInt>(Integer(llvm::APInt(
+                    cast->getType()->getIntegerBitWidth(),
+                    static_pointer_cast<VarBool>(operand)->val ? 1 : 0)));
+            } else {
+                state.variables[cast] = make_shared<VarInt>(Integer(mpz_class(
+                    static_pointer_cast<VarBool>(operand)->val ? 1 : 0)));
+            }
         } else {
-            state.variables[cast] = resolveValue(cast->getOperand(0), state);
+            if (BoundedFlag) {
+                if (const auto zext = dyn_cast<llvm::ZExtInst>(instr)) {
+                    state.variables[zext] = std::make_shared<VarInt>(
+                        resolveValue(zext->getOperand(0), state,
+                                     zext->getType())
+                            ->unsafeIntVal()
+                            .zext(zext->getType()->getIntegerBitWidth()));
+                } else if (const auto sext = dyn_cast<llvm::SExtInst>(instr)) {
+                    state.variables[sext] = std::make_shared<VarInt>(
+                        resolveValue(sext->getOperand(0), state,
+                                     sext->getType())
+                            ->unsafeIntVal()
+                            .sext(sext->getType()->getIntegerBitWidth()));
+                }
+            } else {
+                state.variables[cast] =
+                    resolveValue(cast->getOperand(0), state, cast->getType());
+            }
         }
     } else if (const auto gep = dyn_cast<GetElementPtrInst>(instr)) {
         state.variables[gep] = make_shared<VarInt>(resolveGEP(*gep, state));
     } else if (const auto load = dyn_cast<LoadInst>(instr)) {
-        shared_ptr<VarVal> ptr = resolveValue(load->getPointerOperand(), state);
+        shared_ptr<VarVal> ptr =
+            resolveValue(load->getPointerOperand(), state, load->getType());
         assert(ptr->getType() == VarType::Int);
         // This will only insert 0 if there is not already a different element
-        auto heapIt = state.heap.insert(
-            std::make_pair(static_pointer_cast<VarInt>(ptr)->val.asUnbounded(),
-                           Integer(mpz_class(0))));
-        state.variables[load] = make_shared<VarInt>(heapIt.first->second);
+        if (BoundedFlag) {
+            auto heapIt = state.heap.insert(std::make_pair(
+                static_pointer_cast<VarInt>(ptr)->val.asUnbounded(),
+                Integer(
+                    llvm::APInt(load->getType()->getIntegerBitWidth(), 0))));
+            state.variables[load] = make_shared<VarInt>(heapIt.first->second);
+        } else {
+            auto heapIt = state.heap.insert(std::make_pair(
+                static_pointer_cast<VarInt>(ptr)->val.asUnbounded(),
+                Integer(mpz_class(0))));
+            state.variables[load] = make_shared<VarInt>(heapIt.first->second);
+        }
     } else if (const auto store = dyn_cast<StoreInst>(instr)) {
         shared_ptr<VarVal> ptr =
-            resolveValue(store->getPointerOperand(), state);
+            resolveValue(store->getPointerOperand(), state,
+                         store->getPointerOperand()->getType());
         assert(ptr->getType() == VarType::Int);
-        shared_ptr<VarVal> val = resolveValue(store->getValueOperand(), state);
+        shared_ptr<VarVal> val =
+            resolveValue(store->getValueOperand(), state,
+                         store->getValueOperand()->getType());
         assert(val->getType() == VarType::Int);
         HeapAddress addr = static_pointer_cast<VarInt>(ptr)->val.asUnbounded();
         state.heap[addr] = static_pointer_cast<VarInt>(val)->val;
     } else if (const auto select = dyn_cast<SelectInst>(instr)) {
-        shared_ptr<VarVal> cond = resolveValue(select->getCondition(), state);
+        shared_ptr<VarVal> cond = resolveValue(
+            select->getCondition(), state, select->getCondition()->getType());
         assert(cond->getType() == VarType::Bool);
         bool condVal = static_pointer_cast<VarBool>(cond)->val;
         shared_ptr<VarVal> var;
         if (condVal) {
-            var = resolveValue(select->getTrueValue(), state);
+            var =
+                resolveValue(select->getTrueValue(), state, select->getType());
         } else {
-            var = resolveValue(select->getFalseValue(), state);
+            var =
+                resolveValue(select->getFalseValue(), state, select->getType());
         }
         state.variables[select] = var;
     } else {
@@ -242,7 +286,7 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
 void interpretPHI(const PHINode &instr, FastState &state,
                   const BasicBlock *prevBlock) {
     const Value *val = instr.getIncomingValueForBlock(prevBlock);
-    shared_ptr<VarVal> var = resolveValue(val, state);
+    shared_ptr<VarVal> var = resolveValue(val, state, val->getType());
     state.variables[&instr] = var;
 }
 
@@ -250,7 +294,8 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
                                      FastState &state) {
     if (const auto retInst = dyn_cast<ReturnInst>(instr)) {
         state.variables[ReturnName] =
-            resolveValue(retInst->getReturnValue(), state);
+            resolveValue(retInst->getReturnValue(), state,
+                         retInst->getReturnValue()->getType());
         return TerminatorUpdate(nullptr);
     } else if (const auto branchInst = dyn_cast<BranchInst>(instr)) {
         if (branchInst->isUnconditional()) {
@@ -258,7 +303,8 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
             return TerminatorUpdate(branchInst->getSuccessor(0));
         } else {
             shared_ptr<VarVal> cond =
-                resolveValue(branchInst->getCondition(), state);
+                resolveValue(branchInst->getCondition(), state,
+                             branchInst->getCondition()->getType());
             assert(cond->getType() == VarType::Bool);
             bool condVal = static_pointer_cast<VarBool>(cond)->val;
             assert(branchInst->getNumSuccessors() == 2);
@@ -270,7 +316,8 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
         }
     } else if (const auto switchInst = dyn_cast<SwitchInst>(instr)) {
         shared_ptr<VarVal> cond =
-            resolveValue(switchInst->getCondition(), state);
+            resolveValue(switchInst->getCondition(), state,
+                         switchInst->getCondition()->getType());
         assert(cond->getType() == VarType::Int);
         const VarIntVal &condVal = static_pointer_cast<VarInt>(cond)->val;
         for (auto c : switchInst->cases()) {
@@ -288,7 +335,8 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
     }
 }
 
-shared_ptr<VarVal> resolveValue(const Value *val, const FastState &state) {
+shared_ptr<VarVal> resolveValue(const Value *val, const FastState &state,
+                                const llvm::Type *type) {
     if (isa<Instruction>(val) || isa<Argument>(val)) {
         return state.variables.at(val);
     } else if (const auto constInt = dyn_cast<ConstantInt>(val)) {
@@ -297,10 +345,8 @@ shared_ptr<VarVal> resolveValue(const Value *val, const FastState &state) {
         } else if (!BoundedFlag) {
             return make_shared<VarInt>(
                 Integer(mpz_class(constInt->getSExtValue())));
-        } else if (constInt->getBitWidth() == 8) {
-            return make_shared<VarInt>(
-                Integer(static_cast<int8_t>(constInt->getSExtValue())));
-        } else if (constInt->getBitWidth() == 16) {
+        } else {
+            return make_shared<VarInt>(Integer(constInt->getValue()));
         }
     } else if (llvm::isa<llvm::ConstantPointerNull>(val)) {
         return make_shared<VarInt>(Integer(mpz_class(0)));
@@ -311,8 +357,10 @@ shared_ptr<VarVal> resolveValue(const Value *val, const FastState &state) {
 
 void interpretICmpInst(const ICmpInst *instr, FastState &state) {
     assert(instr->getNumOperands() == 2);
-    const auto op0 = resolveValue(instr->getOperand(0), state);
-    const auto op1 = resolveValue(instr->getOperand(1), state);
+    const auto op0 = resolveValue(instr->getOperand(0), state,
+                                  instr->getOperand(0)->getType());
+    const auto op1 = resolveValue(instr->getOperand(1), state,
+                                  instr->getOperand(0)->getType());
     switch (instr->getPredicate()) {
     default:
         assert(op0->getType() == VarType::Int);
@@ -353,8 +401,10 @@ void interpretIntPredicate(const ICmpInst *instr, CmpInst::Predicate pred,
 }
 
 void interpretBinOp(const BinaryOperator *instr, FastState &state) {
-    const auto op0 = resolveValue(instr->getOperand(0), state);
-    const auto op1 = resolveValue(instr->getOperand(1), state);
+    const auto op0 = resolveValue(instr->getOperand(0), state,
+                                  instr->getOperand(0)->getType());
+    const auto op1 = resolveValue(instr->getOperand(1), state,
+                                  instr->getOperand(1)->getType());
     switch (instr->getOpcode()) {
     case Instruction::Or: {
         assert(op0->getType() == VarType::Bool);

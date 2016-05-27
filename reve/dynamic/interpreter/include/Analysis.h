@@ -190,10 +190,26 @@ void workerThread(
         for (size_t i = 0; i < item.vals.size(); ++i) {
             const llvm::Value *firstArg = &*argIt1;
             const llvm::Value *secondArg = &*argIt2;
-            variableValues.first.insert(
-                {firstArg, std::make_shared<VarInt>(item.vals[i])});
-            variableValues.second.insert(
-                {secondArg, std::make_shared<VarInt>(item.vals[i])});
+            // Pointers are always unbounded
+            if (BoundedFlag && firstArg->getType()->isIntegerTy()) {
+                variableValues.first.insert(
+                    {firstArg,
+                     std::make_shared<VarInt>(Integer(llvm::APInt(
+                         firstArg->getType()->getIntegerBitWidth(),
+                         static_cast<uint64_t>(
+                             item.vals[i].asUnbounded().get_si()))))});
+                variableValues.second.insert(
+                    {secondArg,
+                     std::make_shared<VarInt>(Integer(llvm::APInt(
+                         firstArg->getType()->getIntegerBitWidth(),
+                         static_cast<uint64_t>(
+                             item.vals[i].asUnbounded().get_si()))))});
+            } else {
+                variableValues.first.insert(
+                    {firstArg, std::make_shared<VarInt>(item.vals[i])});
+                variableValues.second.insert(
+                    {secondArg, std::make_shared<VarInt>(item.vals[i])});
+            }
             ++argIt1;
             ++argIt2;
         }

@@ -39,3 +39,27 @@ std::ostream &operator<<(std::ostream &os, const Integer &obj) {
     os << prefix << obj.get_str();
     return os;
 }
+
+Integer Integer::zext(unsigned width) {
+    Integer res(*this);
+    switch (res.type) {
+    case IntType::Unbounded:
+        break;
+    case IntType::Bounded:
+        res.bounded = res.bounded.zext(width);
+        break;
+    }
+    return res;
+}
+
+Integer Integer::sext(unsigned width) {
+    Integer res(*this);
+    switch (res.type) {
+    case IntType::Unbounded:
+        break;
+    case IntType::Bounded:
+        res.bounded = res.bounded.sext(width);
+        break;
+    }
+    return res;
+}

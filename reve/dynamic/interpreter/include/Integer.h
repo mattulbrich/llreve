@@ -14,9 +14,15 @@ struct Integer {
         llvm::APInt bounded;
     };
     IntType type;
-    Integer() : unbounded(mpz_class(0)), type(IntType::Unbounded) {}
-    explicit Integer(mpz_class i) : unbounded(i), type(IntType::Unbounded) {}
-    explicit Integer(llvm::APInt i) : bounded(i), type(IntType::Bounded) {}
+    Integer() : unbounded(mpz_class(0)), type(IntType::Unbounded) {
+
+    }
+    explicit Integer(mpz_class i) : unbounded(i), type(IntType::Unbounded) {
+
+    }
+    explicit Integer(llvm::APInt i) : bounded(i), type(IntType::Bounded) {
+
+    }
 
     friend std::ostream &operator<<(std::ostream &os, const Integer &obj);
     Integer(const Integer &other) : type(other.type) {
@@ -145,6 +151,8 @@ struct Integer {
             return bounded.getSExtValue();
         }
     }
+    Integer zext(unsigned width);
+    Integer sext(unsigned width);
 };
 
 inline bool operator<(const Integer &lhs, const Integer &rhs) {

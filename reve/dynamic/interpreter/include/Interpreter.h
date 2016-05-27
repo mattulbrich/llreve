@@ -208,8 +208,8 @@ auto interpretInstruction(const llvm::Instruction *instr, FastState &state)
     -> void;
 auto interpretTerminator(const llvm::TerminatorInst *instr, FastState &state)
     -> TerminatorUpdate;
-auto resolveValue(const llvm::Value *val, const FastState &state)
-    -> std::shared_ptr<VarVal>;
+auto resolveValue(const llvm::Value *val, const FastState &state,
+                  const llvm::Type *type) -> std::shared_ptr<VarVal>;
 auto interpretICmpInst(const llvm::ICmpInst *instr, FastState &state) -> void;
 auto interpretIntPredicate(const llvm::ICmpInst *instr,
                            llvm::CmpInst::Predicate pred, const VarIntVal &i0,
@@ -227,7 +227,8 @@ cbor_item_t *stateToCBOR(FastState state);
 State<std::string> cborToState(const cbor_item_t *item);
 
 template <typename A, typename T> VarInt resolveGEP(T &gep, State<A> state) {
-    std::shared_ptr<VarVal> val = resolveValue(gep.getPointerOperand(), state);
+    std::shared_ptr<VarVal> val = resolveValue(
+        gep.getPointerOperand(), state, gep.getPointerOperand()->getType());
     assert(val->getType() == VarType::Int);
     VarIntVal offset = std::static_pointer_cast<VarInt>(val)->val;
     const auto type = gep.getSourceElementType();
@@ -249,10 +250,12 @@ template <typename A, typename T> VarInt resolveGEP(T &gep, State<A> state) {
         const auto indexedType = llvm::GetElementPtrInst::getIndexedType(
             type, llvm::ArrayRef<llvm::Value *>(indices));
         const auto size = typeSize(indexedType, mod->getDataLayout());
-        std::shared_ptr<VarVal> val = resolveValue(*ix, state);
+        std::shared_ptr<VarVal> val =
+            resolveValue(*ix, state, (*ix)->getType());
         assert(val->getType() == VarType::Int);
-        offset += Integer(mpz_class(size)) *
-                  std::static_pointer_cast<VarInt>(val)->val;
+        offset +=
+            Integer(mpz_class(size)) *
+            Integer(std::static_pointer_cast<VarInt>(val)->val.asUnbounded());
     }
     return VarInt(offset);
 }
@@ -269,3 +272,4 @@ cborToKeyMap(const cbor_item_t *item);
 std::string valueName(const llvm::Value *val);
 
 extern bool BoundedFlag;
+extern unsigned HeapElemSizeFlag;

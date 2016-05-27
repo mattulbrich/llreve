@@ -102,7 +102,7 @@ expr : PLACEHOLDER { $$ = new Variable<VariablePlaceholder>(VariablePlaceholder(
                                             std::shared_ptr<HeapExpr<VariablePlaceholder>>($3)); }
      | LPAR expr RPAR { $$ = $2; }
      | binaryIntExpr { $$ = $1; }
-     | NUMBER { $$ = new Constant<VariablePlaceholder>(Integer(mpz_class($1))); }
+     | NUMBER { $$ = new Constant<VariablePlaceholder>($1); }
      | BOUNDVAR { $$ = new Hole<VariablePlaceholder>($1); }
 ;
 binaryIntExpr :

@@ -69,13 +69,13 @@ int main(int argc, const char **argv) {
                      make_shared<clang::EmitLLVMOnlyAction>());
     MonoPair<shared_ptr<llvm::Module>> modules =
         compileToModules(argv[0], inputOpts, acts);
-	llvm::legacy::PassManager PM;
-	PM.add(llvm::createStripSymbolsPass(true));
-	PM.run(*modules.first);
-	PM.run(*modules.second);
+    llvm::legacy::PassManager PM;
+    PM.add(llvm::createStripSymbolsPass(true));
+    PM.run(*modules.first);
+    PM.run(*modules.second);
     vector<MonoPair<PreprocessedFunction>> preprocessedFuns =
         preprocessFunctions(modules, preprocessOpts);
-    FILE* patternFile = fopen(PatternFileFlag.c_str(), "r");
+    FILE *patternFile = fopen(PatternFileFlag.c_str(), "r");
     auto patterns = parsePatterns(patternFile);
     std::cerr << "Found " << patterns.size() << " patterns\n";
     for (auto pat : patterns) {
@@ -86,7 +86,8 @@ int main(int argc, const char **argv) {
     vector<smt::SharedSMTRef> smtExprs =
         driver(modules, preprocessedFuns, MainFunctionFlag, patterns);
 
-    serializeSMT(smtExprs, false, SerializeOpts(OutputFileNameFlag, !InstantiateStorage));
+    serializeSMT(smtExprs, false,
+                 SerializeOpts(OutputFileNameFlag, !InstantiateStorage));
 
     llvm::llvm_shutdown();
 }
