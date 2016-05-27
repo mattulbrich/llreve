@@ -43,26 +43,46 @@ bool SyntacticSlicePass::runOnFunction(
 	// Traverse the PDG to find all necessary statements
 	while(!toCheck.empty()) {
 		
+		Instruction const& curInst = *toCheck.front();
+		BasicBlock  const& curBB   = *curInst.getParent();
+		
 		// Prepare the basic block's predecessors for dependency checking in
 		// future
-		for(Instruction const* i :
-			pdg.getDependencies(*toCheck.front(), dependencies)) {
+		for(Instruction const* i : pdg.getDependencies(curInst, dependencies)) {
 			
-			if(remainInSlice.find(i) == remainInSlice.end()) {
-				toCheck      .push(i);
-				remainInSlice.insert(i);
+			BasicBlock     const& depBB    = *i->getParent();
+			TerminatorInst const& termInst = *depBB.getTerminator();
+			
+			// Check whether instruction is already queued
+			if(remainInSlice.find(i) != remainInSlice.end()) {
+				continue;
 			}
+			
+			// Queue the dependency instruction
+			toCheck      .push  (i);
+			remainInSlice.insert(i);
+			
+			// Continue if the current instruction and its dependency are in the
+			// same basic block
+			if(&curBB == &depBB) {
+				continue;
+			}
+			
+			// Check whether the terminator instruction is already queued
+			if(remainInSlice.find(&termInst) != remainInSlice.end()) {
+				continue;
+			}
+			
+			// Also queue the terminator instruction of the dependency
+			// instruction's basic block, as the dependency exists between
+			// different basic blocks and the connection needs to be kept
+			toCheck      .push  (&termInst);
+			remainInSlice.insert(&termInst);
 		}
 		
+		// Unqueue the cuurent instruction and reset its dependencies
 		toCheck     .pop();
 		dependencies.clear();
-	}
-	
-	// Make sure the branch instruction of each basic block is still in the
-	// slice
-	// TODO: needs to be improved
-	for(Instruction const* i : remainInSlice) {
-		remainInSlice.insert(i->getParent()->getTerminator());
 	}
 	
 	// Mark all instructions, that are not in 'remainInSlice'
