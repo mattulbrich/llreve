@@ -57,7 +57,7 @@ shared_ptr<Module> BruteForce::computeSlice(Criterion c) {
 		ModulePtr sliceCandidate = CloneModule(&*program);
 		int sliced = 0;
 
-		for (Function& function: *program) {
+		for (Function& function: *sliceCandidate) {
 			int instructionCounter = 0;
 			for(Instruction& instruction : Util::getInstructions(function)) {
 				if (pattern & (1 << instructionCounter)) {
