@@ -215,23 +215,16 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
                     static_pointer_cast<VarBool>(operand)->val ? 1 : 0)));
             }
         } else {
-            if (BoundedFlag) {
-                if (const auto zext = dyn_cast<llvm::ZExtInst>(instr)) {
-                    state.variables[zext] = std::make_shared<VarInt>(
-                        resolveValue(zext->getOperand(0), state,
-                                     zext->getType())
-                            ->unsafeIntVal()
-                            .zext(zext->getType()->getIntegerBitWidth()));
-                } else if (const auto sext = dyn_cast<llvm::SExtInst>(instr)) {
-                    state.variables[sext] = std::make_shared<VarInt>(
-                        resolveValue(sext->getOperand(0), state,
-                                     sext->getType())
-                            ->unsafeIntVal()
-                            .sext(sext->getType()->getIntegerBitWidth()));
-                }
-            } else {
-                state.variables[cast] =
-                    resolveValue(cast->getOperand(0), state, cast->getType());
+            if (const auto zext = dyn_cast<llvm::ZExtInst>(instr)) {
+                state.variables[zext] = std::make_shared<VarInt>(
+                    resolveValue(zext->getOperand(0), state, zext->getType())
+                        ->unsafeIntVal()
+                        .zext(zext->getType()->getIntegerBitWidth()));
+            } else if (const auto sext = dyn_cast<llvm::SExtInst>(instr)) {
+                state.variables[sext] = std::make_shared<VarInt>(
+                    resolveValue(sext->getOperand(0), state, sext->getType())
+                        ->unsafeIntVal()
+                        .sext(sext->getType()->getIntegerBitWidth()));
             }
         }
     } else if (const auto gep = dyn_cast<GetElementPtrInst>(instr)) {
@@ -376,23 +369,35 @@ void interpretIntPredicate(const ICmpInst *instr, CmpInst::Predicate pred,
                            FastState &state) {
     bool predVal = false;
     switch (pred) {
-    case CmpInst::ICMP_SGE:
-        predVal = i0 >= i1;
-        break;
-    case CmpInst::ICMP_SGT:
-        predVal = i0 > i1;
-        break;
-    case CmpInst::ICMP_SLE:
-        predVal = i0 <= i1;
-        break;
-    case CmpInst::ICMP_SLT:
-        predVal = i0 < i1;
-        break;
     case CmpInst::ICMP_EQ:
-        predVal = i0 == i1;
+        predVal = i0.eq(i1);
         break;
     case CmpInst::ICMP_NE:
-        predVal = i0 != i1;
+        predVal = i0.ne(i1);
+        break;
+    case CmpInst::ICMP_SGE:
+        predVal = i0.sge(i1);
+        break;
+    case CmpInst::ICMP_SGT:
+        predVal = i0.sgt(i1);
+        break;
+    case CmpInst::ICMP_SLE:
+        predVal = i0.sle(i1);
+        break;
+    case CmpInst::ICMP_SLT:
+        predVal = i0.slt(i1);
+        break;
+    case CmpInst::ICMP_UGE:
+        predVal = i0.uge(i1);
+        break;
+    case CmpInst::ICMP_UGT:
+        predVal = i0.ugt(i1);
+        break;
+    case CmpInst::ICMP_ULE:
+        predVal = i0.ule(i1);
+        break;
+    case CmpInst::ICMP_ULT:
+        predVal = i0.ult(i1);
         break;
     default:
         logErrorData("Unsupported predicate:\n", *instr);

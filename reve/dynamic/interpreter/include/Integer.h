@@ -4,6 +4,8 @@
 #include <gmpxx.h>
 #include <iostream>
 
+#include "Helper.h"
+
 #include "llvm/ADT/APInt.h"
 
 enum class IntType { Unbounded, Bounded };
@@ -14,15 +16,9 @@ struct Integer {
         llvm::APInt bounded;
     };
     IntType type;
-    Integer() : unbounded(mpz_class(0)), type(IntType::Unbounded) {
-
-    }
-    explicit Integer(mpz_class i) : unbounded(i), type(IntType::Unbounded) {
-
-    }
-    explicit Integer(llvm::APInt i) : bounded(i), type(IntType::Bounded) {
-
-    }
+    Integer() : unbounded(mpz_class(0)), type(IntType::Unbounded) {}
+    explicit Integer(mpz_class i) : unbounded(i), type(IntType::Unbounded) {}
+    explicit Integer(llvm::APInt i) : bounded(i), type(IntType::Bounded) {}
 
     friend std::ostream &operator<<(std::ostream &os, const Integer &obj);
     Integer(const Integer &other) : type(other.type) {
@@ -77,9 +73,8 @@ struct Integer {
             unbounded /= other.unbounded;
             break;
         case IntType::Bounded:
-            assert(false);
-            // TODO this is signed and unsigned
-            break;
+            logError("Use sdiv and udiv instead\n");
+            exit(1);
         }
         return *this;
     }
@@ -153,6 +148,16 @@ struct Integer {
     }
     Integer zext(unsigned width);
     Integer sext(unsigned width);
+    bool eq(const Integer &rhs) const;
+    bool ne(const Integer &rhs) const;
+    bool ult(const Integer &rhs) const;
+    bool slt(const Integer &rhs) const;
+    bool ule(const Integer &rhs) const;
+    bool sle(const Integer &rhs) const;
+    bool ugt(const Integer &rhs) const;
+    bool sgt(const Integer &rhs) const;
+    bool uge(const Integer &rhs) const;
+    bool sge(const Integer &rhs) const;
 };
 
 inline bool operator<(const Integer &lhs, const Integer &rhs) {
@@ -161,8 +166,7 @@ inline bool operator<(const Integer &lhs, const Integer &rhs) {
     case IntType::Unbounded:
         return lhs.unbounded < rhs.unbounded;
     case IntType::Bounded:
-        assert(false);
-        // TODO this is signed and unsigned
+        logError("Use slt and ult on bounded integers\n");
         exit(1);
     }
 }
