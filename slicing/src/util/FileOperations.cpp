@@ -34,7 +34,7 @@ shared_ptr<llvm::Module> getModuleFromFile(string fileName, string resourceDir, 
 
 	MonoPair<shared_ptr<llvm::Module>> modules =
 	compileToModules("", inputOpts, acts);
-	shared_ptr<llvm::Module> program = llvm::CloneModule(&*(modules.first));
+	shared_ptr<llvm::Module> program = modules.first;
 
 	llvm::legacy::PassManager PM;
 	PM.add(llvm::createPromoteMemoryToRegisterPass());
