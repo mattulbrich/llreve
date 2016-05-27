@@ -8,3 +8,9 @@ bool LambdaFunctionPass::runOnFunction(llvm::Function &function) {
 	}
 	return false;
 }
+
+void LambdaFunctionPass::runOnModule(llvm::Module& module, FunctionPassLambda lambda){
+	llvm::legacy::PassManager PM;
+	PM.add(new LambdaFunctionPass(lambda));
+	PM.run(module);
+}

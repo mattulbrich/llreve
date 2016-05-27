@@ -7,96 +7,89 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
 
-#include "core/PDGPass.h"
-#include "core/SlicingPass.h"
-#include "core/SyntacticSlicePass.h"
-#include "core/Util.h"
-#include "core/SliceCandidateValidation.h"
-
-
-#include "llvm/Transforms/Utils/Cloning.h"
-
 
 #include "util/FileOperations.h"
+#include "slicingMethods/BruteForce.h"
+#include "slicingMethods/SyntacticSlicing.h"
+
 
 using namespace std;
 using namespace llvm;
 
+void store(string fileName, Module& module);
+void parseArgs(int argc, const char **argv);
+
+
+static llvm::cl::OptionCategory ClangCategory("Clang options",
+	"Options for controlling clang.");
+
+static llvm::cl::OptionCategory SlicingCategory("Slicing options",
+	"Options for controlling slicing.");
+
 static llvm::cl::opt<std::string> FileName(llvm::cl::Positional,
 	llvm::cl::desc("<input file>"),
 	llvm::cl::Required);
+
+enum SlicingMethodOptions{syntactic, bruteforce};
+static cl::opt<SlicingMethodOptions> SlicingMethodOption(cl::desc("Choose slicing method:"),
+	cl::values(
+		clEnumVal(syntactic , "Classical syntactic slicing, folowd by verification of the slice."),
+		clEnumVal(bruteforce, "Bruteforce all slicecandidates, returns smalest."),
+		clEnumValEnd),
+	llvm::cl::cat(SlicingCategory),
+	llvm::cl::Required);
+
+
 static llvm::cl::list<string> Includes("I", llvm::cl::desc("Include path"),
-	llvm::cl::cat(ReveCategory));
+	llvm::cl::cat(ClangCategory));
+
 static llvm::cl::opt<string> ResourceDir(
 	"resource-dir",
 	llvm::cl::desc("Directory containing the clang resource files, "
 		"e.g. /usr/local/lib/clang/3.8.0"),
-	llvm::cl::cat(ReveCategory));
-
-// Preprocess flags
-static llvm::cl::opt<bool> ShowCFGFlag("show-cfg", llvm::cl::desc("Show cfg"),
-	llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<bool>
-ShowMarkedCFGFlag("show-marked-cfg",
-	llvm::cl::desc("Show cfg before mark removal"),
-	llvm::cl::cat(ReveCategory));
+	llvm::cl::cat(ClangCategory));
 
 
-void printIR(llvm::Function& function) {
-	llvm::legacy::FunctionPassManager PM(function.getParent());
-	PM.add(llvm::createPrintFunctionPass(llvm::outs()));
-	PM.run(function);
+void parseArgs(int argc, const char **argv) {
+	vector<llvm::cl::OptionCategory*> optionCategorys;
+	optionCategorys.push_back(&ClangCategory);
+	optionCategorys.push_back(&SlicingCategory);
+	llvm::cl::HideUnrelatedOptions(optionCategorys);
+	llvm::cl::ParseCommandLineOptions(argc, argv);
 }
 
-void printIR(llvm::Module& module) {
-	//for(llvm::Function& function:module) {
-		//cout << function.getName().str() << endl;
-	//	printIR(function);
-	//}
+void store(string fileName, Module& module) {
+	std::error_code EC;
+	raw_fd_ostream programOut(StringRef(fileName), EC, llvm::sys::fs::OpenFlags::F_None);
 
 	llvm::legacy::PassManager PM;
-	PM.add(llvm::createPrintModulePass(llvm::outs()));
+	PM.add(llvm::createPrintModulePass(programOut));
 	PM.run(module);
 }
 
 int main(int argc, const char **argv) {
-	llvm::cl::ParseCommandLineOptions(argc, argv);
+	parseArgs(argc, argv);
+	ModulePtr program = getModuleFromFile(FileName, ResourceDir, Includes);
 
-	shared_ptr<llvm::Module> program = getModuleFromFile(FileName, ResourceDir, Includes);
-	shared_ptr<llvm::Module> sliceCandidate = CloneModule(&*program);
-
-	std::error_code EC;
-	raw_fd_ostream programOut(StringRef("program.llvm"), EC, llvm::sys::fs::OpenFlags::F_None);
-	raw_fd_ostream sliceOut(StringRef("slice.llvm"), EC, llvm::sys::fs::OpenFlags::F_None);
-
-	{
-		llvm::legacy::PassManager PM;
-		PM.add(new llvm::PostDominatorTree());
-		PM.add(new PDGPass());
-		PM.add(new SyntacticSlicePass());
-		PM.add(new SlicingPass());
-		PM.add(llvm::createPrintModulePass(sliceOut));
-		PM.run(*sliceCandidate);
+	SlicingMethodPtr method;
+	switch (SlicingMethodOption) {
+		case syntactic:
+		method = shared_ptr<SlicingMethod>(new SyntacticSlicing(program));
+		break;
+		case bruteforce:
+		method = shared_ptr<SlicingMethod>(new BruteForce(program));
+		break;
 	}
 
-	{
-		llvm::legacy::PassManager PM;
-		PM.add(llvm::createPrintModulePass(programOut));
-		PM.run(*program);
-	}
+	ModulePtr slice = method->computeSlice(Criterion());
 
-	ValidationResult result = SliceCandidateValidation::validate(&*program, &*sliceCandidate);
-	if (result == ValidationResult::valid) {
-		outs() << "The produced syntactic slice was verified by reve. :) \n";
-
-	} else if (result == ValidationResult::valid){
-		outs() << "Ups! The produced syntactic slice is not valid! :/ \n";
+	if (!slice){
+		outs() << "An error occured. Could not produce slice. \n";
 	} else {
-		outs() << "Could not verify the vlidity! :( \n";
+		store("program.llvm", *program);
+		store("slice.llvm", *slice);
+		outs() << "See program.llvm and slice.llvm for the resulting LLVMIRs \n";
 	}
-
-	outs() << "See program.llvm and slice.llvm for the resulting LLVMIRs \n";
-
 
 	return 0;
 }
