@@ -154,3 +154,71 @@ bool Integer::sge(const Integer &rhs) const {
         return bounded.sge(rhs.bounded);
     }
 }
+
+Integer Integer::sdiv(const Integer &rhs) const {
+    assert(type == rhs.type);
+    switch (type) {
+    case IntType::Unbounded:
+        return Integer(unbounded / rhs.unbounded);
+    case IntType::Bounded:
+        return Integer(bounded.sdiv(rhs.bounded));
+    }
+}
+Integer Integer::udiv(const Integer &rhs) const {
+    assert(type == rhs.type);
+    switch (type) {
+    case IntType::Unbounded:
+        return Integer(unbounded / rhs.unbounded);
+    case IntType::Bounded:
+        return Integer(bounded.udiv(rhs.bounded));
+    }
+}
+Integer Integer::srem(const Integer &rhs) const {
+    assert(type == rhs.type);
+    switch (type) {
+    case IntType::Unbounded:
+        return Integer(unbounded % rhs.unbounded);
+    case IntType::Bounded:
+        return Integer(bounded.srem(rhs.bounded));
+    }
+}
+Integer Integer::urem(const Integer &rhs) const {
+    assert(type == rhs.type);
+    switch (type) {
+    case IntType::Unbounded:
+        return Integer(unbounded % rhs.unbounded);
+    case IntType::Bounded:
+        return Integer(bounded.urem(rhs.bounded));
+    }
+}
+
+Integer Integer::shl(const Integer &rhs) const {
+    assert(type == IntType::Bounded);
+    assert(type == IntType::Bounded);
+    return Integer(bounded.shl(rhs.bounded));
+}
+Integer Integer::lshr(const Integer &rhs) const {
+    assert(type == IntType::Bounded);
+    assert(type == IntType::Bounded);
+    return Integer(bounded.lshr(rhs.bounded));
+}
+Integer Integer::ashr(const Integer &rhs) const {
+    assert(type == IntType::Bounded);
+    assert(type == IntType::Bounded);
+    return Integer(bounded.ashr(rhs.bounded));
+}
+Integer Integer::and_(const Integer &rhs) const {
+    assert(type == IntType::Bounded);
+    assert(type == IntType::Bounded);
+    return Integer(bounded.And(rhs.bounded));
+}
+Integer Integer::or_(const Integer &rhs) const {
+    assert(type == IntType::Bounded);
+    assert(type == IntType::Bounded);
+    return Integer(bounded.Or(rhs.bounded));
+}
+Integer Integer::xor_(const Integer &rhs) const {
+    assert(type == IntType::Bounded);
+    assert(type == IntType::Bounded);
+    return Integer(bounded.Xor(rhs.bounded));
+}

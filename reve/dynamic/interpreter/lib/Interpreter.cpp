@@ -410,23 +410,18 @@ void interpretBinOp(const BinaryOperator *instr, FastState &state) {
                                   instr->getOperand(0)->getType());
     const auto op1 = resolveValue(instr->getOperand(1), state,
                                   instr->getOperand(1)->getType());
-    switch (instr->getOpcode()) {
-    case Instruction::Or: {
+    if (instr->getType()->getIntegerBitWidth() == 1) {
         assert(op0->getType() == VarType::Bool);
         assert(op1->getType() == VarType::Bool);
         bool b0 = static_pointer_cast<VarBool>(op0)->val;
         bool b1 = static_pointer_cast<VarBool>(op1)->val;
         interpretBoolBinOp(instr, instr->getOpcode(), b0, b1, state);
-        break;
-    }
-    default: {
+    } else {
         assert(op0->getType() == VarType::Int);
         assert(op1->getType() == VarType::Int);
         const VarIntVal &i0 = static_pointer_cast<VarInt>(op0)->val;
         const VarIntVal &i1 = static_pointer_cast<VarInt>(op1)->val;
         interpretIntBinOp(instr, instr->getOpcode(), i0, i1, state);
-        break;
-    }
     }
 }
 
@@ -455,11 +450,38 @@ void interpretIntBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
     case Instruction::Sub:
         result = i0 - i1;
         break;
-    case Instruction::SDiv:
-        result = i0 / i1;
-        break;
     case Instruction::Mul:
         result = i0 * i1;
+        break;
+    case Instruction::SDiv:
+        result = i0.sdiv(i1);
+        break;
+    case Instruction::UDiv:
+        result = i0.udiv(i1);
+        break;
+    case Instruction::SRem:
+        result = i0.srem(i1);
+        break;
+    case Instruction::URem:
+        result = i0.urem(i1);
+        break;
+    case Instruction::Shl:
+        result = i0.shl(i1);
+        break;
+    case Instruction::LShr:
+        result = i0.lshr(i1);
+        break;
+    case Instruction::AShr:
+        result = i0.ashr(i1);
+        break;
+    case Instruction::And:
+        result = i0.and_(i1);
+        break;
+    case Instruction::Or:
+        result = i0.or_(i1);
+        break;
+    case Instruction::Xor:
+        result = i0.xor_(i1);
         break;
     default:
         logErrorData("Unsupported binop:\n", *instr);

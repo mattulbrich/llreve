@@ -158,6 +158,18 @@ struct Integer {
     bool sgt(const Integer &rhs) const;
     bool uge(const Integer &rhs) const;
     bool sge(const Integer &rhs) const;
+
+    Integer sdiv(const Integer &rhs) const;
+    Integer udiv(const Integer &rhs) const;
+    Integer srem(const Integer &rhs) const;
+    Integer urem(const Integer &rhs) const;
+
+    Integer shl(const Integer &rhs) const;
+    Integer lshr(const Integer &rhs) const;
+    Integer ashr(const Integer &rhs) const;
+    Integer and_(const Integer &rhs) const;
+    Integer or_(const Integer &rhs) const;
+    Integer xor_(const Integer &rhs) const;
 };
 
 inline bool operator<(const Integer &lhs, const Integer &rhs) {
