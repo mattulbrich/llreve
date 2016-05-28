@@ -16,7 +16,9 @@ public:
 	LambdaFunctionPass(FunctionPassLambda lambda) : llvm::FunctionPass(ID), lambda(lambda) {}
 
 	virtual bool runOnFunction(llvm::Function &function) override;
-	
+
+	static void runOnModule(llvm::Module& module, FunctionPassLambda lambda);
+
 private:
 	FunctionPassLambda lambda;
 

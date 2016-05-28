@@ -1,13 +1,28 @@
-class Criterion{
-private:
-	int targetInstruction;
+#pragma once
+#include <memory>
+#include "llvm/IR/LegacyPassManager.h"
 
-}
+class SlicingMethod;
+typedef std::shared_ptr<llvm::Module> ModulePtr;
+typedef std::shared_ptr<SlicingMethod> SlicingMethodPtr;
+
+class Criterion{
+public:
+	Criterion();
+	bool isReturnValue();
+
+private:
+	bool isReturnVal;
+};
 
 class SlicingMethod {
 public:
-	SlicingMethod(string fileName);
-	virtual shared_ptr<Module> getSlice(Criterion c);
+	SlicingMethod(ModulePtr program):program(program){}
+	virtual ~SlicingMethod();
+
+	virtual ModulePtr computeSlice(Criterion c) = 0;
+	virtual ModulePtr getProgram();
+
 private:
-	shared_ptr<Module> originalProgram;
-}
+	ModulePtr program;
+};
