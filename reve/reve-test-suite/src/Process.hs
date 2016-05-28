@@ -102,7 +102,7 @@ generateSmt path =
      liftIO $
        createDirectoryIfMissing True
                                 (takeDirectory smtfile)
-     let reveOpts = [file1,file2,"-o",smtfile,"-I","/usr/lib/clang/3.7.1/include"] ++
+     let reveOpts = [file1,file2,"-o",smtfile,"-I","/usr/lib/clang/3.8.0/include"] ++
            optionsFor (conf ^. cnfCustomArgs)
                       smtfile
      $logDebug $ "Running reve: " <> T.pack (show reveOpts)
