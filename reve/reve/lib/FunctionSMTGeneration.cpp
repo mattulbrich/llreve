@@ -677,8 +677,8 @@ SMTRef mutualRecursiveForall(SharedSMTRef clause, MonoPair<CallInfo> callPair,
     args.push_back(SortedVar(callPair.second.assignedTo, "Int"));
     if (memory & HEAP_MASK) {
         // TODO Use an array of bytes
-        args.push_back(SortedVar("HEAP$1_res", "(Array Int Int)"));
-        args.push_back(SortedVar("HEAP$2_res", "(Array Int Int)"));
+        args.push_back(SortedVar("HEAP$1_res", arrayType()));
+        args.push_back(SortedVar("HEAP$2_res", arrayType()));
     }
     vector<SharedSMTRef> implArgs;
 
@@ -724,7 +724,7 @@ SMTRef nonmutualRecursiveForall(SharedSMTRef clause, CallInfo call,
     forallArgs.push_back(SortedVar(call.assignedTo, "Int"));
     if (memory & HEAP_MASK) {
         forallArgs.push_back(
-            SortedVar("HEAP$" + programS + "_res", "(Array Int Int)"));
+            SortedVar("HEAP$" + programS + "_res", arrayType()));
     }
     addMemory(implArgs, memory)(call, progIndex);
     const vector<SharedSMTRef> preArgs = implArgs;
@@ -766,19 +766,8 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
     vector<string> preVars;
     for (const auto &arg : freeVars) {
         std::smatch matchResult;
-        if (std::regex_match(arg.name, matchResult, HEAP_REGEX)) {
-            // TODO Use an array of bytes
-            vars.push_back(SortedVar(arg.name + "_old", "(Array Int Int)"));
-            preVars.push_back(arg.name + "_old");
-        } else {
-            if (SMTGenerationOpts::getInstance().BitVect) {
-                vars.push_back(SortedVar(arg.name + "_old", arg.type));
-                preVars.push_back(arg.name + "_old");
-            } else {
-                vars.push_back(SortedVar(arg.name + "_old", "Int"));
-                preVars.push_back(arg.name + "_old");
-            }
-        }
+        vars.push_back(toSMTSortedVar(SortedVar(arg.name + "_old", arg.type)));
+        preVars.push_back(arg.name + "_old");
     }
 
     if (vars.empty()) {
@@ -852,9 +841,8 @@ SharedSMTRef equalInputsEqualOutputs(vector<smt::SortedVar> funArgs,
     forallArgs.push_back(SortedVar("result$1", "Int"));
     forallArgs.push_back(SortedVar("result$2", "Int"));
     if (memory & HEAP_MASK) {
-        // TODO use an array of bytes
-        forallArgs.push_back(SortedVar("HEAP$1_res", "(Array Int Int)"));
-        forallArgs.push_back(SortedVar("HEAP$2_res", "(Array Int Int)"));
+        forallArgs.push_back(SortedVar("HEAP$1_res", arrayType()));
+        forallArgs.push_back(SortedVar("HEAP$2_res", arrayType()));
         args.push_back("HEAP$1_res");
         args.push_back("HEAP$2_res");
     }
@@ -1069,13 +1057,11 @@ smt::FreeVarsMap freeVars(PathMap map1, PathMap map2,
     const auto addMemoryArrays = [memory](vector<smt::SortedVar> vars,
                                           int index) -> vector<smt::SortedVar> {
         string stringIndex = std::to_string(index);
-        // TODO Use an array of bytes
         if (memory & HEAP_MASK) {
-            vars.push_back(SortedVar("HEAP$" + stringIndex, "(Array Int Int)"));
+            vars.push_back(SortedVar("HEAP$" + stringIndex, arrayType()));
         }
         if (memory & STACK_MASK) {
-            vars.push_back(
-                SortedVar("STACK$" + stringIndex, "(Array Int Int)"));
+            vars.push_back(SortedVar("STACK$" + stringIndex, arrayType()));
         }
         return vars;
     };

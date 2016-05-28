@@ -6,6 +6,10 @@
 
 #include <iostream>
 
+bool isArray(std::string type) {
+    return type.length() >= 6 && type.substr(1, 5) == "Array";
+}
+
 namespace smt {
 using std::make_shared;
 using std::shared_ptr;
@@ -323,9 +327,9 @@ SharedSMTRef FunDef::instantiateArrays() const {
 SharedSMTRef FunDecl::instantiateArrays() const {
     std::vector<string> newInTypes;
     for (const string &type : inTypes) {
-        if (type == "(Array Int Int)") {
+        if (isArray(type)) {
             newInTypes.push_back("Int");
-            newInTypes.push_back("Int");
+            newInTypes.push_back(getSMTType("(_ BitVec 8)"));
         } else {
             newInTypes.push_back(type);
         }
@@ -408,4 +412,16 @@ unique_ptr<const Op> makeOp(std::string opName, std::vector<std::string> args) {
 unique_ptr<const Assignment> makeAssignment(string name, SharedSMTRef val) {
     return std::make_unique<Assignment>(name, val);
 }
+}
+
+std::string getSMTType(std::string arg) {
+    if (SMTGenerationOpts::getInstance().BitVect) {
+        return arg;
+    } else {
+        if (isArray(arg)) {
+            return "(Array Int Int)";
+        } else {
+            return "Int";
+        }
+    }
 }

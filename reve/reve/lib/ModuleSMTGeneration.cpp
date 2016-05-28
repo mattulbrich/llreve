@@ -122,25 +122,24 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                         args.push_back(arg);
                     }
                     if (mem & HEAP_MASK) {
-                        args.push_back(SortedVar("HEAP$1", "(Array Int Int)"));
+                        args.push_back(SortedVar("HEAP$1", arrayType()));
                     }
                     auto funArgs2 = funArgs(fun2, "arg2_", argNum);
                     for (auto arg : funArgs2) {
                         args.push_back(arg);
                     }
                     if (mem) {
-                        args.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
+                        args.push_back(SortedVar("HEAP$2", arrayType()));
                     }
                     std::string funName = invariantName(
                         ENTRY_MARK, ProgramSelection::Both,
                         fun1.getName().str(), InvariantAttr::NONE, argNum);
+                    // TODO Use the correct return types
                     args.push_back(SortedVar("res1", "Int"));
                     args.push_back(SortedVar("res2", "Int"));
                     if (mem & HEAP_MASK) {
-                        args.push_back(
-                            SortedVar("HEAP$1_res", "(Array Int Int)"));
-                        args.push_back(
-                            SortedVar("HEAP$2_res", "(Array Int Int)"));
+                        args.push_back(SortedVar("HEAP$1_res", arrayType()));
+                        args.push_back(SortedVar("HEAP$2_res", arrayType()));
                     }
                     SharedSMTRef body = makeBinOp("=", "res1", "res2");
                     if (mem & HEAP_MASK) {
@@ -383,13 +382,12 @@ SharedSMTRef inInvariant(MonoPair<const llvm::Function *> funs,
                          int index) -> vector<smt::SortedVar> {
                     string indexString = std::to_string(index);
                     if (memory & HEAP_MASK) {
-                        // TODO Use an array of bytes
-                        args.push_back(SortedVar("HEAP$" + indexString,
-                                                 "(Array Int Int)"));
+                        args.push_back(
+                            SortedVar("HEAP$" + indexString, arrayType()));
                     }
                     if (memory & STACK_MASK) {
-                        args.push_back(SortedVar("STACK$" + indexString,
-                                                 "(Array Int Int)"));
+                        args.push_back(
+                            SortedVar("STACK$" + indexString, arrayType()));
                     }
                     return args;
                 });
@@ -451,40 +449,28 @@ SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
                           SharedSMTRef body, Memory memory,
                           const llvm::Type *returnType) {
     // TODO Figure out result type
-    vector<SortedVar> funArgs;
-    if (SMTGenerationOpts::getInstance().BitVect) {
-        funArgs = {SortedVar("result$1", llvmTypeToSMTSort(returnType)),
-                   SortedVar("result$2", llvmTypeToSMTSort(returnType))};
-    } else {
-        funArgs = {SortedVar("result$1", "Int"), SortedVar("result$2", "Int")};
-    }
+    vector<SortedVar> funArgs = {
+        toSMTSortedVar(SortedVar("result$1", llvmTypeToSMTSort(returnType))),
+        toSMTSortedVar(SortedVar("result$2", llvmTypeToSMTSort(returnType)))};
     std::sort(functionArgs.first.begin(), functionArgs.first.end());
     std::sort(functionArgs.second.begin(), functionArgs.second.end());
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
         for (const auto &arg : functionArgs.first) {
-            if (SMTGenerationOpts::getInstance().BitVect) {
-                funArgs.push_back(arg);
-            } else {
-                funArgs.push_back(SortedVar(arg.name, "Int"));
-            }
+            funArgs.push_back(toSMTSortedVar(arg));
         }
     }
     if (memory & HEAP_MASK) {
         // TODO Use an array of bytes
-        funArgs.push_back(SortedVar("HEAP$1", "(Array Int Int)"));
+        funArgs.push_back(SortedVar("HEAP$1", arrayType()));
     }
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
         for (const auto &arg : functionArgs.second) {
-            if (SMTGenerationOpts::getInstance().BitVect) {
-                funArgs.push_back(arg);
-            } else {
-                funArgs.push_back(SortedVar(arg.name, "Int"));
-            }
+            funArgs.push_back(toSMTSortedVar(arg));
         }
     }
     if (memory & HEAP_MASK) {
         // TODO Use an array of bytes
-        funArgs.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
+        funArgs.push_back(SortedVar("HEAP$2", arrayType()));
     }
     if (body == nullptr) {
         body = makeBinOp("=", "result$1", "result$2");

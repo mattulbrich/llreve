@@ -222,6 +222,30 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             args.push_back(stringExpr("0"));
             return makeAssignment(ext->getName(), make_shared<Op>("ite", args));
         } else {
+            if (SMTGenerationOpts::getInstance().BitVect) {
+                if (const auto zext = llvm::dyn_cast<llvm::ZExtInst>(&Instr)) {
+                    val = smt::makeUnaryOp(
+                        "(_ zero_extend " +
+                            std::to_string(
+                                zext->getType()->getIntegerBitWidth() -
+                                zext->getOperand(0)
+                                    ->getType()
+                                    ->getIntegerBitWidth()) +
+                            ")",
+                        val);
+                } else if (const auto sext =
+                               llvm::dyn_cast<llvm::SExtInst>(&Instr)) {
+                    val = smt::makeUnaryOp(
+                        "(_ sign_extend " +
+                            std::to_string(
+                                sext->getType()->getIntegerBitWidth() -
+                                sext->getOperand(0)
+                                    ->getType()
+                                    ->getIntegerBitWidth()) +
+                            ")",
+                        val);
+                }
+            }
             return makeAssignment(ext->getName(), val);
         }
     }

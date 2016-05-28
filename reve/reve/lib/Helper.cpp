@@ -145,3 +145,12 @@ string llvmTypeToSMTSort(const llvm::Type *type) {
 smt::SortedVar llvmValToSortedVar(const llvm::Value *val) {
     return smt::SortedVar(val->getName(), llvmTypeToSMTSort(val->getType()));
 }
+
+std::string arrayType() {
+    return SMTGenerationOpts::getInstance().BitVect ? "(Array Int (_ BitVec 8))"
+                                                    : "(Array Int Int)";
+}
+
+smt::SortedVar toSMTSortedVar(smt::SortedVar var) {
+    return smt::SortedVar(var.name, getSMTType(var.type));
+}

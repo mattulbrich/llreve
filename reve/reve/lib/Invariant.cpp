@@ -142,16 +142,7 @@ MonoPair<SMTRef> invariantDeclaration(int BlockIndex,
                                       Memory Heap) {
     vector<string> args;
     for (const auto &arg : FreeVars) {
-        if (std::regex_match(arg.name, HEAP_REGEX)) {
-            // TODO Use an array of bytes
-            args.push_back("(Array Int Int)");
-        } else {
-            if (SMTGenerationOpts::getInstance().BitVect) {
-                args.push_back(arg.type);
-            } else {
-                args.push_back("Int");
-            }
-        }
+        args.push_back(getSMTType(arg.type));
     }
     const vector<string> preArgs = args;
     // add results
@@ -161,9 +152,9 @@ MonoPair<SMTRef> invariantDeclaration(int BlockIndex,
         args.push_back("Int");
     }
     if (Heap) {
-        args.push_back("(Array Int Int)");
+        args.push_back(arrayType());
         if (For == ProgramSelection::Both) {
-            args.push_back("(Array Int Int)");
+            args.push_back(arrayType());
         }
     }
 
@@ -243,16 +234,7 @@ SharedSMTRef mainInvariantDeclaration(int BlockIndex,
                                       std::string FunName) {
     vector<string> Args;
     for (const auto &arg : FreeVars) {
-        if (std::regex_match(arg.name, HEAP_REGEX)) {
-            // TODO use an array of bytes
-            Args.push_back("(Array Int Int)");
-        } else {
-            if (SMTGenerationOpts::getInstance().BitVect) {
-                Args.push_back(arg.type);
-            } else {
-                Args.push_back("Int");
-            }
-        }
+        Args.push_back(getSMTType(arg.type));
     }
 
     return std::make_shared<class FunDecl>(
