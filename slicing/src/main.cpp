@@ -69,6 +69,9 @@ void store(string fileName, Module& module) {
 
 int main(int argc, const char **argv) {
 	parseArgs(argc, argv);
+	SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
+	smtOpts.PerfectSync = true;
+
 	ModulePtr program = getModuleFromFile(FileName, ResourceDir, Includes);
 
 	SlicingMethodPtr method;
