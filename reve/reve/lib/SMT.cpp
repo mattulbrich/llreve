@@ -322,7 +322,7 @@ SharedSMTRef FunDecl::instantiateArrays() const {
             newInTypes.push_back("Int");
             newInTypes.push_back("Int");
         } else {
-            newInTypes.push_back("Int");
+            newInTypes.push_back(type);
         }
     }
     return make_shared<FunDecl>(funName, newInTypes, outType);

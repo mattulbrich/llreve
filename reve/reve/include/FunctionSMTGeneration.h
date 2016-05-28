@@ -17,7 +17,9 @@
 #include <tuple>
 
 using FAMRef = std::shared_ptr<llvm::FunctionAnalysisManager>;
-using FreeVarsMap = std::map<int, std::vector<std::string>>;
+
+auto dropTypesFreeVars(smt::FreeVarsMap map)
+    -> std::map<int, std::vector<std::string>>;
 
 enum class InterleaveStep { StepBoth, StepFirst, StepSecond };
 
@@ -64,16 +66,16 @@ auto mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
           at the end mark.
  */
 auto getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
-                          FreeVarsMap freeVarsMap, Memory memory)
+                          smt::FreeVarsMap freeVarsMap, Memory memory)
     -> std::map<int, std::map<int, std::vector<std::function<
                                        smt::SharedSMTRef(smt::SharedSMTRef)>>>>;
 /// Declarations for the main function.
 auto mainDeclarations(PathMap pathMap, std::string funName,
-                      FreeVarsMap freeVarsMap)
+                      smt::FreeVarsMap freeVarsMap)
     -> std::vector<smt::SharedSMTRef>;
 /// Declarations for functions that can be called.
 auto recDeclarations(PathMap pathMap, std::string funName,
-                     FreeVarsMap freeVarsMap, Memory memory)
+                     smt::FreeVarsMap freeVarsMap, Memory memory)
     -> std::vector<smt::SharedSMTRef>;
 /// Find all paths with the same start but different end marks
 /**
@@ -84,19 +86,22 @@ other is still allowed to loop at its block.
  */
 auto getForbiddenPaths(MonoPair<PathMap> pathMaps,
                        MonoPair<BidirBlockMarkMap> marked,
-                       FreeVarsMap freeVarsMap, std::string funName, bool main,
-                       Memory memory) -> std::vector<smt::SharedSMTRef>;
+                       smt::FreeVarsMap freeVarsMap, std::string funName,
+                       bool main, Memory memory)
+    -> std::vector<smt::SharedSMTRef>;
 /// Get the assertions for a single program
 auto nonmutualPaths(PathMap pathMap, std::vector<smt::SharedSMTRef> &pathExprs,
-                    FreeVarsMap freeVarsMap, Program prog, std::string funName,
+                    smt::FreeVarsMap freeVarsMap, Program prog,
+                    std::string funName,
                     std::vector<smt::SharedSMTRef> &declarations, Memory memory)
     -> void;
-auto getOffByNPaths(PathMap pathMap1, PathMap pathMap2, FreeVarsMap freeVarsMap,
-                    std::string funName, bool main, Memory memory)
+auto getOffByNPaths(PathMap pathMap1, PathMap pathMap2,
+                    smt::FreeVarsMap freeVarsMap, std::string funName,
+                    bool main, Memory memory)
     -> std::map<int, std::map<int, std::vector<std::function<
                                        smt::SharedSMTRef(smt::SharedSMTRef)>>>>;
 auto offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
-                       FreeVarsMap freeVarsMap, Program prog,
+                       smt::FreeVarsMap freeVarsMap, Program prog,
                        std::string funName, bool main, Memory memory)
     -> std::map<int, std::map<int, std::vector<std::function<
                                        smt::SharedSMTRef(smt::SharedSMTRef)>>>>;
@@ -105,7 +110,7 @@ auto offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
 // Functions for generating SMT for a single/mutual path
 
 auto assignmentsOnPath(Path path, Program prog,
-                       std::vector<std::string> freeVars, bool toEnd,
+                       std::vector<smt::SortedVar> freeVars, bool toEnd,
                        Memory memory) -> std::vector<AssignmentCallBlock>;
 auto interleaveAssignments(
     smt::SharedSMTRef endClause,
@@ -124,36 +129,37 @@ auto mutualRecursiveForall(smt::SharedSMTRef clause,
 auto nonmutualRecursiveForall(smt::SharedSMTRef clause, CallInfo call,
                               Program prog, Memory memory) -> smt::SMTRef;
 auto forallStartingAt(smt::SharedSMTRef clause,
-                      std::vector<std::string> freeVars, int blockIndex,
+                      std::vector<smt::SortedVar> freeVars, int blockIndex,
                       ProgramSelection prog, std::string funName, bool main,
-                      FreeVarsMap freeVarsMap, Memory memory)
+                      smt::FreeVarsMap freeVarsMap, Memory memory)
     -> smt::SharedSMTRef;
 
 /* -------------------------------------------------------------------------- */
 // Functions forcing arguments to be equal
 
 auto makeFunArgsEqual(smt::SharedSMTRef clause, smt::SharedSMTRef preClause,
-                      std::vector<std::string> args1,
-                      std::vector<std::string> args2) -> smt::SharedSMTRef;
-auto equalInputsEqualOutputs(std::vector<std::string> funArgs,
-                             std::vector<std::string> funArgs1,
-                             std::vector<std::string> funArgs2,
-                             std::string funName, FreeVarsMap freeVarsMap,
+                      std::vector<smt::SortedVar> args1,
+                      std::vector<smt::SortedVar> args2) -> smt::SharedSMTRef;
+auto equalInputsEqualOutputs(std::vector<smt::SortedVar> funArgs,
+                             std::vector<smt::SortedVar> funArgs1,
+                             std::vector<smt::SortedVar> funArgs2,
+                             std::string funName, smt::FreeVarsMap freeVarsMap,
                              Memory memory) -> smt::SharedSMTRef;
 
 /* -------------------------------------------------------------------------- */
 // Functions related to the search for free variables
 
 auto freeVarsForBlock(std::map<int, Paths> pathMap)
-    -> std::pair<std::set<std::string>, std::map<int, std::set<std::string>>>;
-auto freeVars(PathMap map1, PathMap map2, std::vector<std::string> funArgs,
-              Memory memory) -> FreeVarsMap;
+    -> std::pair<std::set<smt::SortedVar>,
+                 std::map<int, std::set<smt::SortedVar>>>;
+auto freeVars(PathMap map1, PathMap map2, std::vector<smt::SortedVar> funArgs,
+              Memory memory) -> smt::FreeVarsMap;
 
 /* -------------------------------------------------------------------------- */
 // Miscellanous helper functions that don't really belong anywhere
 
 auto functionArgs(const llvm::Function &fun1, const llvm::Function &fun2)
-    -> MonoPair<std::vector<std::string>>;
+    -> MonoPair<std::vector<smt::SortedVar>>;
 auto swapIndex(int i) -> int;
 
 struct SplitAssignments {
@@ -170,7 +176,7 @@ auto matchFunCalls(std::vector<CallInfo> callInfos1,
 auto checkPathMaps(PathMap map1, PathMap map2) -> void;
 auto mapSubset(PathMap map1, PathMap map2) -> bool;
 auto getDontLoopInvariant(smt::SMTRef endClause, int startIndex,
-                          PathMap pathMap, FreeVarsMap freeVarsMap,
+                          PathMap pathMap, smt::FreeVarsMap freeVarsMap,
                           Program prog, Memory memory) -> smt::SMTRef;
 auto addAssignments(const smt::SharedSMTRef end,
                     std::vector<AssignmentBlock> assignments)
@@ -181,5 +187,5 @@ auto addMemory(std::vector<smt::SharedSMTRef> &implArgs, Memory memory)
 /**
 This is used when MuZFlag is enabled
  */
-auto declareVariables(FreeVarsMap freeVarsMap)
+auto declareVariables(smt::FreeVarsMap freeVarsMap)
     -> std::vector<smt::SharedSMTRef>;

@@ -4,6 +4,7 @@
 
 #include "llvm/ADT/STLExtras.h"
 
+#include <map>
 #include <set>
 #include <sstream>
 #include <string>
@@ -83,6 +84,32 @@ class SortedVar : public SMTExpr {
     }
     SortedVar(const SortedVar &other) : name(other.name), type(other.type) {}
 };
+
+using FreeVarsMap = std::map<int, std::vector<smt::SortedVar>>;
+
+inline bool operator<(const SortedVar &lhs, const SortedVar &rhs) {
+    return lhs.name < rhs.name;
+}
+
+inline bool operator>(const SortedVar &lhs, const SortedVar &rhs) {
+    return rhs < lhs;
+}
+
+inline bool operator<=(const SortedVar &lhs, const SortedVar &rhs) {
+    return !(lhs > rhs);
+}
+
+inline bool operator>=(const SortedVar &lhs, const SortedVar &rhs) {
+    return !(lhs < rhs);
+}
+
+inline bool operator==(const SortedVar &lhs, const SortedVar &rhs) {
+    return lhs.name == rhs.name;
+}
+
+inline bool operator!=(const SortedVar &lhs, const SortedVar &rhs) {
+    return !(lhs == rhs);
+}
 
 class Forall : public SMTExpr {
   public:

@@ -138,7 +138,9 @@ auto mergePathFuns(std::map<int, std::map<int, std::vector<T>>> a,
     return unionWith<int, std::map<int, std::vector<T>>>(a, b, merge);
 }
 
-auto filterVars(int program, std::vector<std::string> vars)
-    -> std::vector<std::string>;
+auto filterVars(int program, std::vector<smt::SortedVar> vars)
+    -> std::vector<smt::SortedVar>;
 
 auto argSort(std::string arg) -> std::string;
+auto llvmTypeToSMTSort(const llvm::Type *type) -> std::string;
+auto llvmValToSortedVar(const llvm::Value *val) -> smt::SortedVar;

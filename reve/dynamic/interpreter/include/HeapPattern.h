@@ -38,7 +38,7 @@ template <typename T> struct HeapPattern {
     virtual ~HeapPattern() = default;
     virtual PatternType getType() const = 0;
     std::list<std::shared_ptr<HeapPattern<const llvm::Value *>>>
-    instantiate(std::vector<std::string> variables,
+    instantiate(const std::vector<smt::SortedVar> &variables,
                 const VarMap<const llvm::Value *> &variableValues,
                 const MonoPair<Heap> &heaps) const {
         size_t k = this->arguments();
@@ -50,7 +50,7 @@ template <typename T> struct HeapPattern {
         std::vector<const llvm::Value *> variablePointers;
         for (auto var : variables) {
             for (auto val : variableValues) {
-                if (var == val.first->getName()) {
+                if (var.name == val.first->getName()) {
                     variablePointers.push_back(val.first);
                 }
             }

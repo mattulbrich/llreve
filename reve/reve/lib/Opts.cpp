@@ -19,7 +19,7 @@ void SMTGenerationOpts::initialize(std::string mainFunction, bool heap,
                                    bool onlyRecursive, bool noByteHeap,
                                    bool everythingSigned, bool singleInvariant,
                                    bool muZ, bool perfectSync, bool nest,
-                                   bool passInputThrough,
+                                   bool passInputThrough, bool bitVect,
                                    map<int, SharedSMTRef> invariants) {
     SMTGenerationOpts &i = getInstance();
     i.MainFunction = mainFunction;
@@ -34,6 +34,7 @@ void SMTGenerationOpts::initialize(std::string mainFunction, bool heap,
     i.PerfectSync = perfectSync;
     i.Nest = nest;
     i.PassInputThrough = passInputThrough;
+    i.BitVect = bitVect;
     i.Invariants = invariants;
 }
 

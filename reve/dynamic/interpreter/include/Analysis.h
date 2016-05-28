@@ -134,31 +134,31 @@ void findLoopCounts(LoopCountsAndMark &loopCountsAndMark, MatchInfo<T> match) {
 }
 void instantiateBounds(
     std::map<int, std::map<std::string, Bound<VarIntVal>>> &boundsMap,
-    const FreeVarsMap &freeVars, MatchInfo<std::string> match);
+    const smt::FreeVarsMap &freeVars, MatchInfo<std::string> match);
 BoundsMap updateBounds(
     BoundsMap accumulator,
     const std::map<int, std::map<std::string, Bound<VarIntVal>>> &update);
 void populateEquationsMap(PolynomialEquations &equationsMap,
-                          FreeVarsMap freeVarsMap,
+                          smt::FreeVarsMap freeVarsMap,
                           MatchInfo<const llvm::Value *> match, size_t degree);
 void populateHeapPatterns(
     HeapPatternCandidatesMap &heapPatternCandidates,
     std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
-    FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match);
+    smt::FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match);
 void dumpPolynomials(const PolynomialEquations &equationsMap,
-                     const FreeVarsMap &freeVarsmap);
+                     const smt::FreeVarsMap &freeVarsmap);
 void dumpHeapPatterns(const HeapPatternCandidatesMap &heapPatternsMap);
 std::map<int, smt::SharedSMTRef>
 makeInvariantDefinitions(const PolynomialSolutions &solutions,
                          const HeapPatternCandidatesMap &patterns,
-                         const FreeVarsMap &freeVarsMap, size_t degree);
+                         const smt::FreeVarsMap &freeVarsMap, size_t degree);
 smt::SharedSMTRef
 makeInvariantDefinition(const std::vector<std::vector<mpz_class>> &solution,
                         const HeapPatternCandidates &candidates,
-                        const std::vector<std::string> &freeVars,
+                        const std::vector<smt::SortedVar> &freeVars,
                         size_t degree);
 smt::SharedSMTRef makeEquation(const std::vector<mpz_class> &eq,
-                               const std::vector<std::string> &freeVars,
+                               const std::vector<smt::SortedVar> &freeVars,
                                size_t degree);
 smt::SharedSMTRef makeBoundsDefinitions(
     const std::map<std::string, Bound<llvm::Optional<VarIntVal>>> &bounds);
@@ -269,7 +269,7 @@ void applyLoopTransformation(
     const std::map<int, LoopTransformation> &loopTransformations,
     const MonoPair<BidirBlockMarkMap> &mark);
 std::vector<std::vector<std::string>>
-polynomialTermsOfDegree(std::vector<std::string> variables, size_t degree);
+polynomialTermsOfDegree(std::vector<smt::SortedVar> variables, size_t degree);
 
 template <typename T>
 void analyzeExecution(const MonoPair<Call<T>> &calls,

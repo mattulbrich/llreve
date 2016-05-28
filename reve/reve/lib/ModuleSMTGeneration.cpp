@@ -73,7 +73,7 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
                 smtOpts.GlobalConstants, fileOpts.AdditionalInRelation));
             smtExprs.push_back(outInvariant(
                 functionArgs(*funPair.first.fun, *funPair.second.fun),
-                fileOpts.OutRelation, mem));
+                fileOpts.OutRelation, mem, funPair.first.fun->getReturnType()));
             auto newSmtExprs = mainAssertion(funPair, declarations,
                                              smtOpts.OnlyRecursive, mem);
             assertions.insert(assertions.end(), newSmtExprs.begin(),
@@ -378,32 +378,47 @@ SharedSMTRef inInvariant(MonoPair<const llvm::Function *> funs,
     vector<SharedSMTRef> args;
     const auto funArgsPair =
         functionArgs(*funs.first, *funs.second)
-            .indexedMap<vector<string>>(
-                [memory](vector<string> args, int index) -> vector<string> {
+            .indexedMap<vector<smt::SortedVar>>(
+                [memory](vector<smt::SortedVar> args,
+                         int index) -> vector<smt::SortedVar> {
                     string indexString = std::to_string(index);
                     if (memory & HEAP_MASK) {
-                        args.push_back("HEAP$" + indexString);
+                        // TODO Use an array of bytes
+                        args.push_back(SortedVar("HEAP$" + indexString,
+                                                 "(Array Int Int)"));
                     }
                     if (memory & STACK_MASK) {
-                        args.push_back("STACK$" + indexString);
+                        args.push_back(SortedVar("STACK$" + indexString,
+                                                 "(Array Int Int)"));
                     }
                     return args;
                 });
-    vector<string> Args1 = funArgsPair.first;
-    vector<string> Args2 = funArgsPair.second;
+    vector<string> Args1;
+    for (const auto &arg : funArgsPair.first) {
+        Args1.push_back(arg.name);
+    }
+    vector<string> Args2;
+    for (const auto &arg : funArgsPair.second) {
+        Args2.push_back(arg.name);
+    }
 
     assert(Args1.size() == Args2.size());
 
-    vector<SortedVar> funArgs =
-        concat(std::move(funArgsPair)
-                   .map<vector<SortedVar>>(
-                       [](vector<string> args) -> vector<SortedVar> {
-                           vector<SortedVar> varArgs;
-                           for (auto arg : args) {
-                               varArgs.push_back(SortedVar(arg, argSort(arg)));
-                           }
-                           return varArgs;
-                       }));
+    vector<SortedVar> funArgs;
+    if (SMTGenerationOpts::getInstance().BitVect) {
+        funArgs = concat(std::move(funArgsPair));
+    } else {
+        funArgsPair.forEach([&funArgs](const auto &args) {
+            for (const auto &var : args) {
+                if (var.type != "(Array Int Int)") {
+                    funArgs.push_back(SortedVar(var.name, "Int"));
+                } else {
+                    funArgs.push_back(var);
+                }
+            }
+        });
+    }
+
     for (auto argPair : makeZip(Args1, Args2)) {
         args.push_back(makeBinOp("=", argPair.first, argPair.second));
     }
@@ -432,26 +447,43 @@ SharedSMTRef inInvariant(MonoPair<const llvm::Function *> funs,
     return make_shared<FunDef>("IN_INV", funArgs, "Bool", body);
 }
 
-SharedSMTRef outInvariant(MonoPair<vector<string>> functionArgs,
-                          SharedSMTRef body, Memory memory) {
-    vector<SortedVar> funArgs = {SortedVar("result$1", "Int"),
-                                 SortedVar("result$2", "Int")};
+SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
+                          SharedSMTRef body, Memory memory,
+                          const llvm::Type *returnType) {
+    // TODO Figure out result type
+    vector<SortedVar> funArgs;
+    if (SMTGenerationOpts::getInstance().BitVect) {
+        funArgs = {SortedVar("result$1", llvmTypeToSMTSort(returnType)),
+                   SortedVar("result$2", llvmTypeToSMTSort(returnType))};
+    } else {
+        funArgs = {SortedVar("result$1", "Int"), SortedVar("result$2", "Int")};
+    }
     std::sort(functionArgs.first.begin(), functionArgs.first.end());
     std::sort(functionArgs.second.begin(), functionArgs.second.end());
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
-        for (const string &arg : functionArgs.first) {
-            funArgs.push_back(SortedVar(arg, "Int"));
+        for (const auto &arg : functionArgs.first) {
+            if (SMTGenerationOpts::getInstance().BitVect) {
+                funArgs.push_back(arg);
+            } else {
+                funArgs.push_back(SortedVar(arg.name, "Int"));
+            }
         }
     }
     if (memory & HEAP_MASK) {
+        // TODO Use an array of bytes
         funArgs.push_back(SortedVar("HEAP$1", "(Array Int Int)"));
     }
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
-        for (const string &arg : functionArgs.second) {
-            funArgs.push_back(SortedVar(arg, "Int"));
+        for (const auto &arg : functionArgs.second) {
+            if (SMTGenerationOpts::getInstance().BitVect) {
+                funArgs.push_back(arg);
+            } else {
+                funArgs.push_back(SortedVar(arg.name, "Int"));
+            }
         }
     }
     if (memory & HEAP_MASK) {
+        // TODO Use an array of bytes
         funArgs.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
     }
     if (body == nullptr) {

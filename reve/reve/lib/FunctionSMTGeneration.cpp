@@ -45,16 +45,17 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
         preprocessedFuns.map<BidirBlockMarkMap>(
             [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
     const string funName = preprocessedFuns.first.fun->getName();
-    const MonoPair<vector<string>> funArgsPair =
+    const MonoPair<vector<smt::SortedVar>> funArgsPair =
         functionArgs(*preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
     // TODO this should use concat
-    const vector<string> funArgs = funArgsPair.foldl<vector<string>>(
-        {},
-        [](vector<string> acc, vector<string> args) -> vector<string> {
-            acc.insert(acc.end(), args.begin(), args.end());
-            return acc;
-        });
-    const FreeVarsMap freeVarsMap =
+    const vector<smt::SortedVar> funArgs =
+        funArgsPair.foldl<vector<smt::SortedVar>>(
+            {},
+            [](auto acc, auto args) {
+                acc.insert(acc.end(), args.begin(), args.end());
+                return acc;
+            });
+    const smt::FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, memory);
     vector<SharedSMTRef> smtExprs;
     vector<SharedSMTRef> pathExprs;
@@ -157,17 +158,18 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
         preprocessedFuns.map<BidirBlockMarkMap>(
             [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
     const string funName = preprocessedFuns.first.fun->getName();
-    const MonoPair<vector<string>> funArgsPair =
+    const MonoPair<vector<smt::SortedVar>> funArgsPair =
         functionArgs(*preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
     // TODO this should use concat
-    const vector<string> funArgs = funArgsPair.foldl<vector<string>>(
-        {},
-        [](vector<string> acc, vector<string> args) {
-            acc.insert(acc.end(), args.begin(), args.end());
-            return acc;
-        });
+    const vector<smt::SortedVar> funArgs =
+        funArgsPair.foldl<vector<smt::SortedVar>>(
+            {},
+            [](vector<smt::SortedVar> acc, vector<smt::SortedVar> args) {
+                acc.insert(acc.end(), args.begin(), args.end());
+                return acc;
+            });
 
-    const FreeVarsMap freeVarsMap =
+    const smt::FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, memory);
     if (SMTGenerationOpts::getInstance().MuZ) {
         const vector<SharedSMTRef> variables = declareVariables(freeVarsMap);
@@ -264,7 +266,7 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
 
 map<int, map<int, vector<function<SharedSMTRef(SharedSMTRef)>>>>
 getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
-                     FreeVarsMap freeVarsMap, Memory memory) {
+                     smt::FreeVarsMap freeVarsMap, Memory memory) {
     map<int, map<int, vector<function<SharedSMTRef(SharedSMTRef)>>>> pathFuns;
     for (const auto &pathMapIt : pathMap1) {
         const int startIndex = pathMapIt.first;
@@ -299,7 +301,7 @@ getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
 }
 
 vector<SharedSMTRef> mainDeclarations(PathMap pathMap, string funName,
-                                      FreeVarsMap freeVarsMap) {
+                                      smt::FreeVarsMap freeVarsMap) {
     vector<SharedSMTRef> declarations;
     for (const auto &pathMapIt : pathMap) {
         const int startIndex = pathMapIt.first;
@@ -322,7 +324,8 @@ vector<SharedSMTRef> mainDeclarations(PathMap pathMap, string funName,
 }
 
 vector<SharedSMTRef> recDeclarations(PathMap pathMap, string funName,
-                                     FreeVarsMap freeVarsMap, Memory memory) {
+                                     smt::FreeVarsMap freeVarsMap,
+                                     Memory memory) {
     vector<SharedSMTRef> declarations;
     for (const auto &pathMapIt : pathMap) {
         const int startIndex = pathMapIt.first;
@@ -341,8 +344,9 @@ vector<SharedSMTRef> recDeclarations(PathMap pathMap, string funName,
 
 vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
                                        MonoPair<BidirBlockMarkMap> marked,
-                                       FreeVarsMap freeVarsMap, string funName,
-                                       bool main, Memory memory) {
+                                       smt::FreeVarsMap freeVarsMap,
+                                       string funName, bool main,
+                                       Memory memory) {
     vector<SharedSMTRef> pathExprs;
     for (const auto &pathMapIt : pathMaps.first) {
         const int startIndex = pathMapIt.first;
@@ -399,7 +403,7 @@ vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
 }
 
 void nonmutualPaths(PathMap pathMap, vector<SharedSMTRef> &pathExprs,
-                    FreeVarsMap freeVarsMap, Program prog, string funName,
+                    smt::FreeVarsMap freeVarsMap, Program prog, string funName,
                     vector<SharedSMTRef> &declarations, Memory memory) {
     const int progIndex = programIndex(prog);
     for (const auto &pathMapIt : pathMap) {
@@ -434,7 +438,7 @@ void nonmutualPaths(PathMap pathMap, vector<SharedSMTRef> &pathExprs,
 }
 
 map<int, map<int, vector<function<SharedSMTRef(SharedSMTRef)>>>>
-getOffByNPaths(PathMap pathMap1, PathMap pathMap2, FreeVarsMap freeVarsMap,
+getOffByNPaths(PathMap pathMap1, PathMap pathMap2, smt::FreeVarsMap freeVarsMap,
                string funName, bool main, Memory memory) {
     map<int, map<int, vector<function<SharedSMTRef(SharedSMTRef)>>>> pathFuns;
     vector<SharedSMTRef> paths;
@@ -448,7 +452,7 @@ getOffByNPaths(PathMap pathMap1, PathMap pathMap2, FreeVarsMap freeVarsMap,
 
 map<int, map<int, vector<function<SharedSMTRef(SharedSMTRef)>>>>
 offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
-                  FreeVarsMap freeVarsMap, Program prog, string funName,
+                  smt::FreeVarsMap freeVarsMap, Program prog, string funName,
                   bool main, Memory memory) {
     const int progIndex = programIndex(prog);
     map<int, map<int, vector<function<SharedSMTRef(SharedSMTRef)>>>> pathFuns;
@@ -463,18 +467,20 @@ offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
                         swapIndex(progIndex), freeVarsMap.at(startIndex));
                     const auto endArgs =
                         filterVars(progIndex, freeVarsMap.at(startIndex));
-                    vector<string> args;
+                    vector<smt::SortedVar> args;
                     if (prog == Program::First) {
                         for (auto arg : endArgs) {
                             args.push_back(arg);
                         }
                         for (auto arg : endArgs2) {
-                            args.push_back(arg + "_old");
+                            args.push_back(
+                                SortedVar(arg.name + "_old", arg.type));
                         }
 
                     } else {
                         for (auto arg : endArgs2) {
-                            args.push_back(arg + "_old");
+                            args.push_back(
+                                SortedVar(arg.name + "_old", arg.type));
                         }
                         for (auto arg : endArgs) {
                             args.push_back(arg);
@@ -511,7 +517,7 @@ offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
 // Functions for generating SMT for a single/mutual path
 
 vector<AssignmentCallBlock> assignmentsOnPath(Path path, Program prog,
-                                              vector<string> freeVars,
+                                              vector<smt::SortedVar> freeVars,
                                               bool toEnd, Memory memory) {
     const int progIndex = programIndex(prog);
     const auto filteredFreeVars = filterVars(progIndex, freeVars);
@@ -524,7 +530,7 @@ vector<AssignmentCallBlock> assignmentsOnPath(Path path, Program prog,
     vector<DefOrCallInfo> oldDefs;
     for (auto var : filteredFreeVars) {
         oldDefs.push_back(DefOrCallInfo(
-            make_shared<Assignment>(var, stringExpr(var + "_old"))));
+            make_shared<Assignment>(var.name, stringExpr(var.name + "_old"))));
     }
     allDefs.push_back(AssignmentCallBlock(oldDefs, nullptr));
 
@@ -666,9 +672,11 @@ SMTRef mutualRecursiveForall(SharedSMTRef clause, MonoPair<CallInfo> callPair,
         static_cast<uint32_t>(callPair.first.args.size()) -
         callPair.first.fun.getFunctionType()->getNumParams();
     vector<SortedVar> args;
+    // TODO Figure out the correct result type
     args.push_back(SortedVar(callPair.first.assignedTo, "Int"));
     args.push_back(SortedVar(callPair.second.assignedTo, "Int"));
     if (memory & HEAP_MASK) {
+        // TODO Use an array of bytes
         args.push_back(SortedVar("HEAP$1_res", "(Array Int Int)"));
         args.push_back(SortedVar("HEAP$2_res", "(Array Int Int)"));
     }
@@ -680,6 +688,7 @@ SMTRef mutualRecursiveForall(SharedSMTRef clause, MonoPair<CallInfo> callPair,
     implArgs.push_back(stringExpr(callPair.first.assignedTo));
     implArgs.push_back(stringExpr(callPair.second.assignedTo));
     if (memory & HEAP_MASK) {
+        // TODO Use an array of bytes
         implArgs.push_back(stringExpr("HEAP$1_res"));
         implArgs.push_back(stringExpr("HEAP$2_res"));
     }
@@ -749,20 +758,26 @@ SMTRef nonmutualRecursiveForall(SharedSMTRef clause, CallInfo call,
 }
 
 /// Wrap the clause in a forall
-SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<string> freeVars,
+SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
                               int blockIndex, ProgramSelection prog,
                               string funName, bool main,
-                              FreeVarsMap freeVarsMap, Memory memory) {
+                              smt::FreeVarsMap freeVarsMap, Memory memory) {
     vector<SortedVar> vars;
     vector<string> preVars;
     for (const auto &arg : freeVars) {
         std::smatch matchResult;
-        if (std::regex_match(arg, matchResult, HEAP_REGEX)) {
-            vars.push_back(SortedVar(arg + "_old", "(Array Int Int)"));
-            preVars.push_back(arg + "_old");
+        if (std::regex_match(arg.name, matchResult, HEAP_REGEX)) {
+            // TODO Use an array of bytes
+            vars.push_back(SortedVar(arg.name + "_old", "(Array Int Int)"));
+            preVars.push_back(arg.name + "_old");
         } else {
-            vars.push_back(SortedVar(arg + "_old", "Int"));
-            preVars.push_back(arg + "_old");
+            if (SMTGenerationOpts::getInstance().BitVect) {
+                vars.push_back(SortedVar(arg.name + "_old", arg.type));
+                preVars.push_back(arg.name + "_old");
+            } else {
+                vars.push_back(SortedVar(arg.name + "_old", "Int"));
+                preVars.push_back(arg.name + "_old");
+            }
         }
     }
 
@@ -772,8 +787,8 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<string> freeVars,
 
     if (main && blockIndex == ENTRY_MARK) {
         vector<string> args;
-        for (auto arg : freeVars) {
-            args.push_back(arg + "_old");
+        for (const auto &arg : freeVars) {
+            args.push_back(arg.name + "_old");
         }
         clause = makeBinOp("=>", makeOp("IN_INV", args), clause);
     } else {
@@ -795,11 +810,17 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<string> freeVars,
 // Functions forcing arguments to be equal
 
 SharedSMTRef makeFunArgsEqual(SharedSMTRef clause, SharedSMTRef preClause,
-                              vector<string> Args1, vector<string> Args2) {
-    vector<string> args;
-    args.insert(args.end(), Args1.begin(), Args1.end());
-    args.insert(args.end(), Args2.begin(), Args2.end());
+                              vector<smt::SortedVar> Args1,
+                              vector<smt::SortedVar> Args2) {
     assert(Args1.size() == Args2.size());
+
+    vector<string> args;
+    for (const auto &arg : Args1) {
+        args.push_back(arg.name);
+    }
+    for (const auto &arg : Args2) {
+        args.push_back(arg.name);
+    }
 
     auto inInv = makeOp("IN_INV", args);
 
@@ -809,42 +830,51 @@ SharedSMTRef makeFunArgsEqual(SharedSMTRef clause, SharedSMTRef preClause,
 
 /// Create an assertion to require that if the recursive invariant holds and the
 /// arguments are equal the outputs are equal
-SharedSMTRef equalInputsEqualOutputs(vector<string> funArgs,
-                                     vector<string> funArgs1,
-                                     vector<string> funArgs2, string funName,
-                                     FreeVarsMap freeVarsMap, Memory memory) {
+SharedSMTRef equalInputsEqualOutputs(vector<smt::SortedVar> funArgs,
+                                     vector<smt::SortedVar> funArgs1,
+                                     vector<smt::SortedVar> funArgs2,
+                                     string funName,
+                                     smt::FreeVarsMap freeVarsMap,
+                                     Memory memory) {
     vector<SortedVar> forallArgs;
     vector<string> args;
     vector<string> preInvArgs;
-    args.insert(args.end(), funArgs.begin(), funArgs.end());
+    for (const auto &arg : funArgs) {
+        args.push_back(arg.name);
+    }
     preInvArgs = args;
 
-    for (auto arg : funArgs) {
-        forallArgs.push_back(SortedVar(arg, argSort(arg)));
-    }
+    forallArgs.insert(forallArgs.end(), funArgs.begin(), funArgs.end());
+
+    // TODO Figure out result type in bounded mode
+    args.push_back("result$1");
+    args.push_back("result$2");
     forallArgs.push_back(SortedVar("result$1", "Int"));
     forallArgs.push_back(SortedVar("result$2", "Int"));
     if (memory & HEAP_MASK) {
+        // TODO use an array of bytes
         forallArgs.push_back(SortedVar("HEAP$1_res", "(Array Int Int)"));
         forallArgs.push_back(SortedVar("HEAP$2_res", "(Array Int Int)"));
-    }
-    args.push_back("result$1");
-    args.push_back("result$2");
-    if (memory & HEAP_MASK) {
         args.push_back("HEAP$1_res");
         args.push_back("HEAP$2_res");
     }
     args = fillUpArgs(args, freeVarsMap, memory, ProgramSelection::Both,
                       InvariantAttr::NONE);
     vector<string> outArgs = {"result$1", "result$2"};
-    vector<string> sortedFunArgs1 = funArgs1;
-    vector<string> sortedFunArgs2 = funArgs2;
+    vector<string> sortedFunArgs1;
+    vector<string> sortedFunArgs2;
+    for (const auto &arg : funArgs1) {
+        sortedFunArgs1.push_back(arg.name);
+    }
+    for (const auto &arg : funArgs2) {
+        sortedFunArgs2.push_back(arg.name);
+    }
     std::sort(sortedFunArgs1.begin(), sortedFunArgs1.end());
     std::sort(sortedFunArgs2.begin(), sortedFunArgs2.end());
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
-        for (const string &arg : funArgs1) {
-            if (!std::regex_match(arg, HEAP_REGEX)) {
-                outArgs.push_back(arg);
+        for (const auto &arg : funArgs1) {
+            if (!std::regex_match(arg.name, HEAP_REGEX)) {
+                outArgs.push_back(arg.name);
             }
         }
     }
@@ -852,9 +882,9 @@ SharedSMTRef equalInputsEqualOutputs(vector<string> funArgs,
         outArgs.push_back("HEAP$1_res");
     }
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
-        for (const string &arg : funArgs2) {
-            if (!std::regex_match(arg, HEAP_REGEX)) {
-                outArgs.push_back(arg);
+        for (const auto &arg : funArgs2) {
+            if (!std::regex_match(arg.name, HEAP_REGEX)) {
+                outArgs.push_back(arg.name);
             }
         }
     }
@@ -882,21 +912,21 @@ SharedSMTRef equalInputsEqualOutputs(vector<string> funArgs,
 
 /// Collect the free variables for the entry block of the PathMap
 /// A variable is free if we use it but didn't create it
-std::pair<set<string>, map<int, set<string>>>
+std::pair<set<smt::SortedVar>, map<int, set<smt::SortedVar>>>
 freeVarsForBlock(map<int, Paths> pathMap) {
-    set<string> freeVars;
-    map<int, set<string>> constructedIntersection;
+    set<smt::SortedVar> freeVars;
+    map<int, set<smt::SortedVar>> constructedIntersection;
     for (const auto &paths : pathMap) {
         for (const auto &path : paths.second) {
             const llvm::BasicBlock *prev = path.Start;
-            set<string> constructed;
+            set<smt::SortedVar> constructed;
 
             // the first block is special since we can't resolve phi
             // nodes here
             for (auto &instr : *path.Start) {
-                constructed.insert(instr.getName());
+                constructed.insert(llvmValToSortedVar(&instr));
                 if (llvm::isa<llvm::PHINode>(instr)) {
-                    freeVars.insert(instr.getName());
+                    freeVars.insert(llvmValToSortedVar(&instr));
                     continue;
                 }
                 if (const auto callInst =
@@ -905,18 +935,19 @@ freeVarsForBlock(map<int, Paths> pathMap) {
                          i++) {
                         const auto arg = callInst->getArgOperand(i);
                         if (!arg->getName().empty() &&
-                            constructed.find(arg->getName()) ==
+                            constructed.find(llvmValToSortedVar(arg)) ==
                                 constructed.end()) {
-                            freeVars.insert(arg->getName());
+                            freeVars.insert(llvmValToSortedVar(arg));
                         }
                     }
                     continue;
                 }
                 for (const auto op : instr.operand_values()) {
-                    if (constructed.find(op->getName()) == constructed.end() &&
+                    if (constructed.find(llvmValToSortedVar(op)) ==
+                            constructed.end() &&
                         !op->getName().empty() &&
                         !llvm::isa<llvm::BasicBlock>(op)) {
-                        freeVars.insert(op->getName());
+                        freeVars.insert(llvmValToSortedVar(op));
                     }
                 }
             }
@@ -924,16 +955,16 @@ freeVarsForBlock(map<int, Paths> pathMap) {
             // now deal with the rest
             for (const auto &edge : path.Edges) {
                 for (auto &instr : *edge.Block) {
-                    constructed.insert(instr.getName());
+                    constructed.insert(llvmValToSortedVar(&instr));
                     if (const auto phiInst =
                             llvm::dyn_cast<llvm::PHINode>(&instr)) {
                         const auto incoming =
                             phiInst->getIncomingValueForBlock(prev);
-                        if (constructed.find(incoming->getName()) ==
+                        if (constructed.find(llvmValToSortedVar(incoming)) ==
                                 constructed.end() &&
                             !incoming->getName().empty() &&
                             !llvm::isa<llvm::BasicBlock>(incoming)) {
-                            freeVars.insert(incoming->getName());
+                            freeVars.insert(llvmValToSortedVar(incoming));
                         }
                         continue;
                     }
@@ -943,26 +974,26 @@ freeVarsForBlock(map<int, Paths> pathMap) {
                              i < callInst->getNumArgOperands(); i++) {
                             const auto arg = callInst->getArgOperand(i);
                             if (!arg->getName().empty() &&
-                                constructed.find(arg->getName()) ==
+                                constructed.find(llvmValToSortedVar(arg)) ==
                                     constructed.end()) {
-                                freeVars.insert(arg->getName());
+                                freeVars.insert(llvmValToSortedVar(arg));
                             }
                         }
                         continue;
                     }
                     for (const auto op : instr.operand_values()) {
-                        if (constructed.find(op->getName()) ==
+                        if (constructed.find(llvmValToSortedVar(op)) ==
                                 constructed.end() &&
                             !op->getName().empty() &&
                             !llvm::isa<llvm::BasicBlock>(op)) {
-                            freeVars.insert(op->getName());
+                            freeVars.insert(llvmValToSortedVar(op));
                         }
                     }
                 }
                 prev = edge.Block;
             }
 
-            set<string> newConstructedIntersection;
+            set<SortedVar> newConstructedIntersection;
             if (constructedIntersection.find(paths.first) ==
                 constructedIntersection.end()) {
                 constructedIntersection.insert(
@@ -983,11 +1014,11 @@ freeVarsForBlock(map<int, Paths> pathMap) {
     return make_pair(freeVars, constructedIntersection);
 }
 
-FreeVarsMap freeVars(PathMap map1, PathMap map2, vector<string> funArgs,
-                     Memory memory) {
-    map<int, set<string>> freeVarsMap;
-    FreeVarsMap freeVarsMapVect;
-    map<int, map<int, set<string>>> constructed;
+smt::FreeVarsMap freeVars(PathMap map1, PathMap map2,
+                          vector<smt::SortedVar> funArgs, Memory memory) {
+    map<int, set<SortedVar>> freeVarsMap;
+    smt::FreeVarsMap freeVarsMapVect;
+    map<int, map<int, set<SortedVar>>> constructed;
     for (const auto &it : map1) {
         const int index = it.first;
         auto freeVars1 = freeVarsForBlock(map1.at(index));
@@ -1007,13 +1038,13 @@ FreeVarsMap freeVars(PathMap map1, PathMap map2, vector<string> funArgs,
         constructed.insert(make_pair(index, freeVars1.second));
     }
 
-    freeVarsMap[EXIT_MARK] = set<string>();
+    freeVarsMap[EXIT_MARK] = set<smt::SortedVar>();
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
-        for (const string &arg : funArgs) {
+        for (const auto &arg : funArgs) {
             freeVarsMap[EXIT_MARK].insert(arg);
         }
     }
-    freeVarsMap[UNREACHABLE_MARK] = set<string>();
+    freeVarsMap[UNREACHABLE_MARK] = set<smt::SortedVar>();
 
     // search for a least fixpoint
     bool changed = true;
@@ -1035,33 +1066,35 @@ FreeVarsMap freeVars(PathMap map1, PathMap map2, vector<string> funArgs,
         }
     }
 
-    const auto addMemoryArrays = [memory](vector<string> vars,
-                                          int index) -> vector<string> {
+    const auto addMemoryArrays = [memory](vector<smt::SortedVar> vars,
+                                          int index) -> vector<smt::SortedVar> {
         string stringIndex = std::to_string(index);
+        // TODO Use an array of bytes
         if (memory & HEAP_MASK) {
-            vars.push_back("HEAP$" + stringIndex);
+            vars.push_back(SortedVar("HEAP$" + stringIndex, "(Array Int Int)"));
         }
         if (memory & STACK_MASK) {
-            vars.push_back("STACK$" + stringIndex);
+            vars.push_back(
+                SortedVar("STACK$" + stringIndex, "(Array Int Int)"));
         }
         return vars;
     };
 
     for (auto it : freeVarsMap) {
         const int index = it.first;
-        vector<string> varsVect;
-        for (auto var : it.second) {
+        vector<smt::SortedVar> varsVect;
+        for (const auto &var : it.second) {
             varsVect.push_back(var);
         }
         const auto argPair =
             makeMonoPair(filterVars(1, varsVect), filterVars(2, varsVect))
-                .indexedMap<vector<string>>(addMemoryArrays);
+                .indexedMap<vector<smt::SortedVar>>(addMemoryArrays);
         freeVarsMapVect[index] = concat(argPair);
     }
 
     const auto argPair =
         makeMonoPair(filterVars(1, funArgs), filterVars(2, funArgs))
-            .indexedMap<vector<string>>(addMemoryArrays);
+            .indexedMap<vector<smt::SortedVar>>(addMemoryArrays);
     // The input arguments should be in the function call order so we can’t add
     // them before
     freeVarsMapVect[ENTRY_MARK] = concat(argPair);
@@ -1072,15 +1105,15 @@ FreeVarsMap freeVars(PathMap map1, PathMap map2, vector<string> funArgs,
 /* -------------------------------------------------------------------------- */
 // Miscellanous helper functions that don't really belong anywhere
 
-MonoPair<vector<string>> functionArgs(const llvm::Function &fun1,
-                                      const llvm::Function &fun2) {
-    vector<string> args1;
+MonoPair<vector<smt::SortedVar>> functionArgs(const llvm::Function &fun1,
+                                              const llvm::Function &fun2) {
+    vector<smt::SortedVar> args1;
     for (auto &arg : fun1.args()) {
-        args1.push_back(arg.getName());
+        args1.push_back(llvmValToSortedVar(&arg));
     }
-    vector<string> args2;
+    vector<smt::SortedVar> args2;
     for (auto &arg : fun2.args()) {
-        args2.push_back(arg.getName());
+        args2.push_back(llvmValToSortedVar(&arg));
     }
     return makeMonoPair(args1, args2);
 }
@@ -1188,7 +1221,8 @@ bool mapSubset(PathMap map1, PathMap map2) {
 }
 
 SMTRef getDontLoopInvariant(SMTRef endClause, int startIndex, PathMap pathMap,
-                            FreeVarsMap freeVars, Program prog, Memory memory) {
+                            smt::FreeVarsMap freeVars, Program prog,
+                            Memory memory) {
     SMTRef clause = std::move(endClause);
     vector<Path> dontLoopPaths;
     for (auto pathMapIt : pathMap.at(startIndex)) {
@@ -1228,20 +1262,29 @@ auto addMemory(vector<SharedSMTRef> &implArgs, Memory memory)
     };
 }
 
-vector<SharedSMTRef> declareVariables(FreeVarsMap freeVarsMap) {
-    set<string> uniqueVars;
+vector<SharedSMTRef> declareVariables(smt::FreeVarsMap freeVarsMap) {
+    set<SortedVar> uniqueVars;
     for (auto it : freeVarsMap) {
-        for (const string &var : it.second) {
+        for (const auto &var : it.second) {
             uniqueVars.insert(var);
         }
     }
     vector<SharedSMTRef> variables;
-    for (string var : uniqueVars) {
-        string type = "Int";
-        if (std::regex_match(var, HEAP_REGEX)) {
-            type = "(Array Int Int)";
-        }
-        variables.push_back(make_shared<VarDecl>(var + "_old", type));
+    for (const auto &var : uniqueVars) {
+        variables.push_back(make_shared<VarDecl>(var.name + "_old", var.type));
     }
     return variables;
+}
+
+auto dropTypesFreeVars(smt::FreeVarsMap map)
+    -> std::map<int, std::vector<std::string>> {
+    std::map<int, vector<string>> result;
+    for (auto it : map) {
+        vector<string> vars;
+        for (auto &sortedVar : it.second) {
+            vars.push_back(sortedVar.name);
+        }
+        result.insert(std::make_pair(it.first, vars));
+    }
+    return result;
 }

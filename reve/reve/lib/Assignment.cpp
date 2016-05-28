@@ -244,25 +244,53 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
 
 /// Convert an LLVM predicate to an SMT predicate
 string predicateName(llvm::CmpInst::Predicate pred) {
-    switch (pred) {
-    case CmpInst::ICMP_SLT:
-    case CmpInst::ICMP_ULT:
-        return "<";
-    case CmpInst::ICMP_SLE:
-    case CmpInst::ICMP_ULE:
-        return "<=";
-    case CmpInst::ICMP_EQ:
-        return "=";
-    case CmpInst::ICMP_SGE:
-    case CmpInst::ICMP_UGE:
-        return ">=";
-    case CmpInst::ICMP_SGT:
-    case CmpInst::ICMP_UGT:
-        return ">";
-    case CmpInst::ICMP_NE:
-        return "distinct";
-    default:
-        return "unsupported predicate";
+    if (SMTGenerationOpts::getInstance().BitVect) {
+        switch (pred) {
+        case CmpInst::ICMP_SLT:
+            return "bvslt";
+        case CmpInst::ICMP_ULT:
+            return "bvult";
+        case CmpInst::ICMP_SLE:
+            return "bvsle";
+        case CmpInst::ICMP_ULE:
+            return "bvule";
+        case CmpInst::ICMP_EQ:
+            return "=";
+        case CmpInst::ICMP_SGE:
+            return "bvsge";
+        case CmpInst::ICMP_UGE:
+            return "bvuge";
+        case CmpInst::ICMP_SGT:
+            return "bvsgt";
+        case CmpInst::ICMP_UGT:
+            return "bvugt";
+        case CmpInst::ICMP_NE:
+            return "distinct";
+        default:
+            return "unsupported predicate";
+        }
+
+    } else {
+        switch (pred) {
+        case CmpInst::ICMP_SLT:
+        case CmpInst::ICMP_ULT:
+            return "<";
+        case CmpInst::ICMP_SLE:
+        case CmpInst::ICMP_ULE:
+            return "<=";
+        case CmpInst::ICMP_EQ:
+            return "=";
+        case CmpInst::ICMP_SGE:
+        case CmpInst::ICMP_UGE:
+            return ">=";
+        case CmpInst::ICMP_SGT:
+        case CmpInst::ICMP_UGT:
+            return ">";
+        case CmpInst::ICMP_NE:
+            return "distinct";
+        default:
+            return "unsupported predicate";
+        }
     }
 }
 
@@ -279,43 +307,80 @@ std::function<SMTRef(SMTRef)> predicateFun(const llvm::CmpInst::CmpInst &cmp) {
 
 /// Convert an LLVM op to an SMT op
 string opName(const llvm::BinaryOperator &Op) {
-    switch (Op.getOpcode()) {
-    case Instruction::Add:
-        return "+";
-    case Instruction::Sub:
-        return "-";
-    case Instruction::Mul:
-        return "*";
-    case Instruction::SDiv:
-        return "div";
-    case Instruction::UDiv:
-        return "div";
-    case Instruction::SRem:
-        return "mod";
-    case Instruction::URem:
-        return "mod";
-    case Instruction::Or:
-        return "or";
-    case Instruction::And:
-        return "and";
-    case Instruction::Xor:
-        return "xor";
-    case Instruction::AShr:
-    case Instruction::LShr:
-        return "div";
-    case Instruction::Shl:
-        return "*";
-    default:
-        logError("Unknown opcode: " + std::string(Op.getOpcodeName()) + "\n");
-        return Op.getOpcodeName();
+    if (SMTGenerationOpts::getInstance().BitVect) {
+        switch (Op.getOpcode()) {
+        case Instruction::Add:
+            return "bvadd";
+        case Instruction::Sub:
+            return "bvsub";
+        case Instruction::Mul:
+            return "bvmul";
+        case Instruction::SDiv:
+            return "bvsdiv";
+        case Instruction::UDiv:
+            return "bvudiv";
+        case Instruction::SRem:
+            return "bvsrem";
+        case Instruction::URem:
+            return "bvurem";
+        case Instruction::Or:
+            return "bvor";
+        case Instruction::And:
+            return "bvand";
+        case Instruction::Xor:
+            return "bvxor";
+        case Instruction::AShr:
+            return "bvashr";
+        case Instruction::LShr:
+            return "bvlshr";
+        case Instruction::Shl:
+            return "blshl";
+        default:
+            logError("Unknown opcode: " + std::string(Op.getOpcodeName()) +
+                     "\n");
+            return Op.getOpcodeName();
+        }
+    } else {
+        switch (Op.getOpcode()) {
+        case Instruction::Add:
+            return "+";
+        case Instruction::Sub:
+            return "-";
+        case Instruction::Mul:
+            return "*";
+        case Instruction::SDiv:
+            return "div";
+        case Instruction::UDiv:
+            return "div";
+        case Instruction::SRem:
+            return "mod";
+        case Instruction::URem:
+            return "mod";
+        case Instruction::Or:
+            return "or";
+        case Instruction::And:
+            return "and";
+        case Instruction::Xor:
+            return "xor";
+        case Instruction::AShr:
+        case Instruction::LShr:
+            return "div";
+        case Instruction::Shl:
+            return "*";
+        default:
+            logError("Unknown opcode: " + std::string(Op.getOpcodeName()) +
+                     "\n");
+            return Op.getOpcodeName();
+        }
     }
 }
 
 std::function<SMTRef(string, SMTRef, SMTRef)>
 combineOp(const llvm::BinaryOperator &Op) {
-    if (Op.getOpcode() == Instruction::AShr ||
-        Op.getOpcode() == Instruction::LShr ||
-        Op.getOpcode() == Instruction::Shl) {
+    if (SMTGenerationOpts::getInstance().BitVect &&
+        (Op.getOpcode() == Instruction::AShr ||
+         Op.getOpcode() == Instruction::LShr ||
+         Op.getOpcode() == Instruction::Shl)) {
         // We can only do that if there is a constant on the right side
         if (const auto constInt =
                 llvm::dyn_cast<llvm::ConstantInt>(Op.getOperand(1))) {

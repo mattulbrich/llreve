@@ -58,9 +58,9 @@ std::vector<std::vector<T>> kCombinationsWithRepetitions(std::vector<T> input,
     auto ints = kCombinationsWithRepetitionsInt(input.size(), k);
     std::vector<std::vector<T>> result;
     for (auto vec : ints) {
-        std::vector<T> vecT(k);
+        std::vector<T> vecT;
         for (size_t i = 0; i < k; ++i) {
-            vecT.at(i) = input.at(vec[i]);
+            vecT.push_back(input.at(vec[i]));
         }
         result.push_back(vecT);
     }

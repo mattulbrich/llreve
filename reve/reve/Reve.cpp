@@ -10,7 +10,6 @@
 
 #include "llvm/Transforms/IPO.h"
 
-
 using clang::CodeGenAction;
 
 using clang::driver::ArgStringList;
@@ -118,17 +117,21 @@ static llvm::cl::opt<bool> PassInputThroughFlag(
                    "complete program. This makes it possible "
                    "to use them in custom postconditions"),
     llvm::cl::cat(ReveCategory));
+static llvm::cl::opt<bool>
+    BitVectFlag("bitvect",
+                llvm::cl::desc("Use bitvects instead of unbounded ints"),
+                llvm::cl::cat(ReveCategory));
 
 int main(int argc, const char **argv) {
     parseCommandLineArguments(argc, argv);
 
     PreprocessOpts preprocessOpts(ShowCFGFlag, ShowMarkedCFGFlag,
                                   InferMarksFlag);
-    SMTGenerationOpts::initialize(MainFunctionFlag, HeapFlag, StackFlag,
-                                  GlobalConstantsFlag, OnlyRecursiveFlag,
-                                  NoByteHeapFlag, EverythingSignedFlag,
-                                  SingleInvariantFlag, MuZFlag, PerfectSyncFlag,
-                                  NestFlag, PassInputThroughFlag, {});
+    SMTGenerationOpts::initialize(
+        MainFunctionFlag, HeapFlag, StackFlag, GlobalConstantsFlag,
+        OnlyRecursiveFlag, NoByteHeapFlag, EverythingSignedFlag,
+        SingleInvariantFlag, MuZFlag, PerfectSyncFlag, NestFlag,
+        PassInputThroughFlag, BitVectFlag, {});
     InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,
                         FileName2Flag);
     SerializeOpts serializeOpts(OutputFileNameFlag, false);
@@ -140,10 +143,10 @@ int main(int argc, const char **argv) {
     MonoPair<shared_ptr<llvm::Module>> modules =
         compileToModules(argv[0], inputOpts, acts);
 
-	llvm::legacy::PassManager PM;
-	PM.add(llvm::createStripSymbolsPass(true));
-	PM.run(*modules.first);
-	PM.run(*modules.second);
+    llvm::legacy::PassManager PM;
+    PM.add(llvm::createStripSymbolsPass(true));
+    PM.run(*modules.first);
+    PM.run(*modules.second);
 
     vector<MonoPair<PreprocessedFunction>> preprocessedFuns =
         preprocessFunctions(modules, preprocessOpts);

@@ -126,12 +126,12 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         preprocessedFunctions.getValue().map<BidirBlockMarkMap>(
             [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
     MonoPair<BlockNameMap> nameMap = markMaps.map<BlockNameMap>(blockNameMap);
-    const MonoPair<vector<string>> funArgsPair =
+    const auto funArgsPair =
         functionArgs(*preprocessedFunctions.getValue().first.fun,
                      *preprocessedFunctions.getValue().second.fun);
-    const vector<string> funArgs = funArgsPair.foldl<vector<string>>(
+    const auto funArgs = funArgsPair.foldl<vector<smt::SortedVar>>(
         {},
-        [](vector<string> acc, vector<string> args) -> vector<string> {
+        [](auto acc, auto args) {
             acc.insert(acc.end(), args.begin(), args.end());
             return acc;
         });
@@ -164,7 +164,7 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     const MonoPair<PathMap> pathMaps =
         preprocessedFunctions.getValue().map<PathMap>(
             [](PreprocessedFunction fun) { return fun.results.paths; });
-    FreeVarsMap freeVarsMap =
+    smt::FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
     size_t degree = DegreeFlag;
     iterateTracesInRange<MergedAnalysisResults>(
@@ -199,11 +199,12 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     if (ImplicationsFlag) {
         SMTGenerationOpts::initialize(mainFunctionName, HeapFlag, false, false,
                                       false, false, false, false, false, false,
-                                      false, false, {});
+                                      false, false, BoundedFlag, {});
     } else {
         SMTGenerationOpts::initialize(mainFunctionName, HeapFlag, false, false,
                                       false, false, false, false, false, false,
-                                      false, false, invariantCandidates);
+                                      false, false, BoundedFlag,
+                                      invariantCandidates);
     }
     llvm::verifyModule(*modules.first);
     llvm::verifyModule(*modules.second);
@@ -224,9 +225,13 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
             vector<SortedVar> args;
             vector<smt::SharedSMTRef> stringArgs;
 
-            for (auto var : filterVars(1, freeVarsMap.at(mark))) {
-                args.push_back(SortedVar(var, "Int"));
-                stringArgs.push_back(smt::stringExpr(var));
+            for (const auto &var : filterVars(1, freeVarsMap.at(mark))) {
+                if (BoundedFlag) {
+                    args.push_back(var);
+                } else {
+                    args.push_back(SortedVar(var.name, "Int"));
+                }
+                stringArgs.push_back(smt::stringExpr(var.name));
             }
             if (HeapFlag) {
                 args.push_back(SortedVar("HEAP$1", "(Array Int Int)"));
@@ -239,8 +244,12 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
             }
 
             for (auto var : filterVars(2, freeVarsMap.at(mark))) {
-                args.push_back(SortedVar(var, "Int"));
-                stringArgs.push_back(smt::stringExpr(var));
+                if (BoundedFlag) {
+                    args.push_back(var);
+                } else {
+                    args.push_back(SortedVar(var.name, "Int"));
+                }
+                stringArgs.push_back(smt::stringExpr(var.name));
             }
             if (HeapFlag) {
                 args.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
@@ -399,14 +408,24 @@ map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map) {
     return transforms;
 }
 
-vector<vector<string>> polynomialTermsOfDegree(vector<string> variables,
+vector<vector<string>> polynomialTermsOfDegree(vector<smt::SortedVar> variables,
                                                size_t degree) {
     if (MultinomialsFlag) {
-        return kCombinationsWithRepetitions(variables, degree);
+        vector<vector<SortedVar>> res =
+            kCombinationsWithRepetitions(variables, degree);
+        vector<vector<string>> resString;
+        for (const auto &vec : res) {
+            vector<string> innerString;
+            for (const auto &var : vec) {
+                innerString.push_back(var.name);
+            }
+            resString.push_back(std::move(innerString));
+        }
+        return resString;
     } else {
         vector<vector<string>> terms;
         for (auto var : variables) {
-            vector<string> term(degree, var);
+            vector<string> term(degree, var.name);
             terms.push_back(term);
         }
         return terms;
@@ -414,7 +433,7 @@ vector<vector<string>> polynomialTermsOfDegree(vector<string> variables,
 }
 
 void populateEquationsMap(PolynomialEquations &polynomialEquations,
-                          FreeVarsMap freeVarsMap,
+                          smt::FreeVarsMap freeVarsMap,
                           MatchInfo<const llvm::Value *> match, size_t degree) {
     VarMap<string> variables;
     for (auto varIt : match.steps.first->state.variables) {
@@ -504,7 +523,7 @@ void populateEquationsMap(PolynomialEquations &polynomialEquations,
 void populateHeapPatterns(
     HeapPatternCandidatesMap &heapPatternCandidates,
     vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
-    FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match) {
+    smt::FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match) {
     VarMap<const llvm::Value *> variables(match.steps.first->state.variables);
     variables.insert(match.steps.second->state.variables.begin(),
                      match.steps.second->state.variables.end());
@@ -660,13 +679,13 @@ findSolutions(const PolynomialEquations &polynomialEquations) {
 }
 
 void dumpPolynomials(const PolynomialEquations &equationsMap,
-                     const FreeVarsMap &freeVarsMap) {
+                     const smt::FreeVarsMap &freeVarsMap) {
     llvm::errs() << "------------------\n";
     PolynomialSolutions solutions = findSolutions(equationsMap);
     for (auto eqMapIt : solutions) {
         std::cerr << eqMapIt.first << ":\n";
         for (const auto &varName : freeVarsMap.at(eqMapIt.first)) {
-            std::cerr << varName << "\t";
+            std::cerr << varName.name << "\t";
         }
         std::cerr << "constant\n";
         for (auto exitMapIt : eqMapIt.second) {
@@ -713,7 +732,8 @@ void dumpHeapPatterns(const HeapPatternCandidatesMap &heapPatternsMap) {
 }
 
 SharedSMTRef makeEquation(const vector<mpz_class> &eq,
-                          const vector<string> &freeVars, size_t degree) {
+                          const vector<smt::SortedVar> &freeVars,
+                          size_t degree) {
     vector<SharedSMTRef> left;
     vector<SharedSMTRef> right;
     vector<SharedSMTRef> polynomialTerms;
@@ -739,17 +759,30 @@ SharedSMTRef makeEquation(const vector<mpz_class> &eq,
             if (eq.at(i) == 1) {
                 left.push_back(polynomialTerms.at(i));
             } else {
-                left.push_back(makeBinOp("*",
-                                         smt::stringExpr(eq.at(i).get_str()),
-                                         polynomialTerms.at(i)));
+                if (BoundedFlag) {
+                    left.push_back(
+                        makeBinOp("bvmul", smt::stringExpr(eq.at(i).get_str()),
+                                  polynomialTerms.at(i)));
+                } else {
+                    left.push_back(
+                        makeBinOp("*", smt::stringExpr(eq.at(i).get_str()),
+                                  polynomialTerms.at(i)));
+                }
             }
         } else if (eq.at(i) < 0) {
             mpz_class inv = -eq.at(i);
             if (inv == 1) {
                 right.push_back(polynomialTerms.at(i));
             } else {
-                right.push_back(makeBinOp("*", smt::stringExpr(inv.get_str()),
-                                          polynomialTerms.at(i)));
+                if (BoundedFlag) {
+                    right.push_back(makeBinOp("bvmul",
+                                              smt::stringExpr(inv.get_str()),
+                                              polynomialTerms.at(i)));
+                } else {
+                    right.push_back(makeBinOp("*",
+                                              smt::stringExpr(inv.get_str()),
+                                              polynomialTerms.at(i)));
+                }
             }
         }
     }
@@ -765,7 +798,11 @@ SharedSMTRef makeEquation(const vector<mpz_class> &eq,
     } else if (left.size() == 1) {
         leftSide = left.front();
     } else {
-        leftSide = make_shared<Op>("+", left);
+        if (BoundedFlag) {
+            leftSide = make_shared<Op>("bvadd", left);
+        } else {
+            leftSide = make_shared<Op>("+", left);
+        }
     }
     SharedSMTRef rightSide = nullptr;
     if (right.size() == 0) {
@@ -773,14 +810,18 @@ SharedSMTRef makeEquation(const vector<mpz_class> &eq,
     } else if (right.size() == 1) {
         rightSide = right.front();
     } else {
-        rightSide = make_shared<Op>("+", right);
+        if (BoundedFlag) {
+            rightSide = make_shared<Op>("bvadd", right);
+        } else {
+            rightSide = make_shared<Op>("+", right);
+        }
     }
     return makeBinOp("=", leftSide, rightSide);
 }
 
 SharedSMTRef makeInvariantDefinition(const vector<vector<mpz_class>> &solution,
                                      const HeapPatternCandidates &candidates,
-                                     const vector<string> &freeVars,
+                                     const vector<SortedVar> &freeVars,
                                      size_t degree) {
     vector<SharedSMTRef> conjunction;
     for (const auto &vec : solution) {
@@ -820,14 +861,18 @@ makeBoundsDefinitions(const map<string, Bound<Optional<VarIntVal>>> &bounds) {
 map<int, SharedSMTRef>
 makeInvariantDefinitions(const PolynomialSolutions &solutions,
                          const HeapPatternCandidatesMap &patterns,
-                         const FreeVarsMap &freeVarsMap, size_t degree) {
+                         const smt::FreeVarsMap &freeVarsMap, size_t degree) {
     map<int, SharedSMTRef> definitions;
     for (auto mapIt : solutions) {
         int mark = mapIt.first;
         vector<SortedVar> args;
         vector<string> stringArgs;
         for (const auto &var : filterVars(1, freeVarsMap.at(mark))) {
-            args.push_back(SortedVar(var, "Int"));
+            if (BoundedFlag) {
+                args.push_back(SortedVar(var.name, var.type));
+            } else {
+                args.push_back(SortedVar(var.name, "Int"));
+            }
         }
         if (HeapFlag) {
             if (InstantiateStorage) {
@@ -839,7 +884,11 @@ makeInvariantDefinitions(const PolynomialSolutions &solutions,
         }
 
         for (auto var : filterVars(2, freeVarsMap.at(mark))) {
-            args.push_back(SortedVar(var, "Int"));
+            if (BoundedFlag) {
+                args.push_back(SortedVar(var.name, var.type));
+            } else {
+                args.push_back(SortedVar(var.name, "Int"));
+            }
         }
         if (HeapFlag) {
             if (InstantiateStorage) {
@@ -891,23 +940,25 @@ makeInvariantDefinitions(const PolynomialSolutions &solutions,
 }
 
 void instantiateBounds(map<int, map<string, Bound<VarIntVal>>> &boundsMap,
-                       const FreeVarsMap &freeVars, MatchInfo<string> match) {
+                       const smt::FreeVarsMap &freeVars,
+                       MatchInfo<string> match) {
     VarMap<string> variables;
     variables.insert(match.steps.first->state.variables.begin(),
                      match.steps.first->state.variables.end());
     variables.insert(match.steps.second->state.variables.begin(),
                      match.steps.second->state.variables.end());
-    for (auto var : freeVars.at(match.mark)) {
-        VarIntVal val = variables.at(var)->unsafeIntVal();
-        if (boundsMap[match.mark].find(var) == boundsMap[match.mark].end()) {
+    for (const auto &var : freeVars.at(match.mark)) {
+        VarIntVal val = variables.at(var.name)->unsafeIntVal();
+        if (boundsMap[match.mark].find(var.name) ==
+            boundsMap[match.mark].end()) {
             boundsMap.at(match.mark)
-                .insert(make_pair(var, Bound<VarIntVal>(val, val)));
+                .insert(make_pair(var.name, Bound<VarIntVal>(val, val)));
         } else {
             // Update bounds
-            boundsMap.at(match.mark).at(var).lower =
-                std::min(boundsMap.at(match.mark).at(var).lower, val);
-            boundsMap.at(match.mark).at(var).upper =
-                std::max(boundsMap.at(match.mark).at(var).upper, val);
+            boundsMap.at(match.mark).at(var.name).lower =
+                std::min(boundsMap.at(match.mark).at(var.name).lower, val);
+            boundsMap.at(match.mark).at(var.name).upper =
+                std::max(boundsMap.at(match.mark).at(var.name).upper, val);
         }
     }
 }

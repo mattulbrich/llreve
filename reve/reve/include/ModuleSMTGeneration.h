@@ -34,5 +34,6 @@ auto inInvariant(MonoPair<const llvm::Function *> funs, smt::SharedSMTRef body,
                  Memory memory, const llvm::Module &mod1,
                  const llvm::Module &mod2, bool strings, bool inInvariant)
     -> smt::SharedSMTRef;
-auto outInvariant(MonoPair<std::vector<std::string>> funArgs,
-                  smt::SharedSMTRef body, Memory memory) -> smt::SharedSMTRef;
+auto outInvariant(MonoPair<std::vector<smt::SortedVar>> funArgs,
+                  smt::SharedSMTRef body, Memory memory, const llvm::Type *type)
+    -> smt::SharedSMTRef;

@@ -21,10 +21,26 @@ SMTRef instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) {
             return stringExpr(apInt.getBoolValue() ? "true" : "false");
         }
         if (apInt.isNegative()) {
-            return makeUnaryOp("-", stringExpr(apInt.toString(10, true).substr(
-                                        1, string::npos)));
+            if (SMTGenerationOpts::getInstance().BitVect) {
+                return smt::makeUnaryOp(
+                    "bvneg",
+                    smt::makeBinOp(
+                        "_",
+                        "bv" + apInt.toString(10, true).substr(1, string::npos),
+                        std::to_string(ty->getIntegerBitWidth())));
+            } else {
+                return makeUnaryOp(
+                    "-", stringExpr(
+                             apInt.toString(10, true).substr(1, string::npos)));
+            }
+        } else {
+            if (SMTGenerationOpts::getInstance().BitVect) {
+                return smt::makeBinOp("_", "bv" + apInt.toString(10, true),
+                                      std::to_string(ty->getIntegerBitWidth()));
+            } else {
+                return stringExpr(apInt.toString(10, true));
+            }
         }
-        return stringExpr(apInt.toString(10, true));
     }
     if (llvm::isa<llvm::ConstantPointerNull>(val)) {
         return stringExpr("0");
@@ -87,12 +103,13 @@ int typeSize(llvm::Type *Ty, const llvm::DataLayout &layout) {
 }
 
 /// Filter vars to only include the ones from Program
-std::vector<string> filterVars(int program, std::vector<string> vars) {
-    std::vector<string> filteredVars;
+std::vector<smt::SortedVar> filterVars(int program,
+                                       std::vector<smt::SortedVar> vars) {
+    std::vector<smt::SortedVar> filteredVars;
     const string programName = std::to_string(program);
-    for (auto var : vars) {
-        const auto pos = var.rfind("$");
-        if (var.substr(pos + 1, programName.length()) == programName) {
+    for (const auto &var : vars) {
+        const auto pos = var.name.rfind("$");
+        if (var.name.substr(pos + 1, programName.length()) == programName) {
             filteredVars.push_back(var);
         }
     }
@@ -105,4 +122,26 @@ string argSort(string arg) {
         return "(Array Int Int)";
     }
     return "Int";
+}
+
+string llvmTypeToSMTSort(const llvm::Type *type) {
+    if (type->isPointerTy()) {
+        return "Int";
+    } else if (type->isIntegerTy()) {
+        return "(_ BitVec " + std::to_string(type->getIntegerBitWidth()) + ")";
+    } else if (type->isVoidTy()) {
+        // Void is always a constant zero
+        return "Int";
+    } else if (type->isLabelTy()) {
+        // These types will never arise in the generated SMT but giving it a
+        // dummy type avoids a special case when searching for free variables
+        return "LABEL";
+    } else {
+        logErrorData("Unsupported type\n", *type);
+        exit(1);
+    }
+}
+
+smt::SortedVar llvmValToSortedVar(const llvm::Value *val) {
+    return smt::SortedVar(val->getName(), llvmTypeToSMTSort(val->getType()));
 }
