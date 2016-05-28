@@ -134,7 +134,7 @@ int main(int argc, const char **argv) {
         PassInputThroughFlag, BitVectFlag, {});
     InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,
                         FileName2Flag);
-    SerializeOpts serializeOpts(OutputFileNameFlag, false);
+    SerializeOpts serializeOpts(OutputFileNameFlag, false, false);
     FileOptions fileOpts = getFileOptions(inputOpts.FileNames);
 
     MonoPair<shared_ptr<CodeGenAction>> acts =

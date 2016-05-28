@@ -121,6 +121,8 @@ class Forall : public SMTExpr {
     std::set<std::string> uses() const override;
     SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
     SharedSMTRef instantiateArrays() const override;
+    SharedSMTRef
+    mergeImplications(std::vector<SharedSMTRef> conditions) const override;
 };
 
 class CheckSat : public SMTExpr {

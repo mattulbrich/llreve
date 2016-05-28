@@ -57,6 +57,9 @@ static llvm::cl::opt<string> MainFunctionFlag(
 static llvm::cl::opt<string>
     OutputFileNameFlag("o", llvm::cl::desc("SMT output filename"),
                        llvm::cl::value_desc("filename"), llvm::cl::Required);
+static llvm::cl::opt<bool>
+    MergeImplications("merge-implications",
+                      llvm::cl::desc("Merge implications"));
 
 int main(int argc, const char **argv) {
     llvm::cl::ParseCommandLineOptions(argc, argv);
@@ -87,7 +90,8 @@ int main(int argc, const char **argv) {
         driver(modules, preprocessedFuns, MainFunctionFlag, patterns);
 
     serializeSMT(smtExprs, false,
-                 SerializeOpts(OutputFileNameFlag, !InstantiateStorage));
+                 SerializeOpts(OutputFileNameFlag, !InstantiateStorage,
+                               MergeImplications));
 
     llvm::llvm_shutdown();
 }

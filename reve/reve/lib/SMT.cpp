@@ -261,6 +261,11 @@ SharedSMTRef Op::mergeImplications(std::vector<SharedSMTRef> conditions) const {
     }
 }
 
+SharedSMTRef
+Forall::mergeImplications(std::vector<SharedSMTRef> conditions) const {
+    return std::make_shared<Forall>(vars, expr->mergeImplications(conditions));
+}
+
 SharedSMTRef SMTExpr::instantiateArrays() const { return shared_from_this(); }
 
 SharedSMTRef Assert::instantiateArrays() const {
