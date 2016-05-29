@@ -2,8 +2,8 @@
 
 #include "Compat.h"
 #include "Invariant.h"
-#include "Opts.h"
 #include "ModuleSMTGeneration.h"
+#include "Opts.h"
 
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Intrinsics.h"
@@ -147,8 +147,7 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     return smtExprs;
 }
 
-vector<SharedSMTRef>
-slicingAssertion(MonoPair<PreprocessedFunction> funPair){
+vector<SharedSMTRef> slicingAssertion(MonoPair<PreprocessedFunction> funPair) {
     vector<SharedSMTRef> assertions;
 
     string typeBool = "Bool";
@@ -167,11 +166,13 @@ slicingAssertion(MonoPair<PreprocessedFunction> funPair){
     // Note that we assume the number of arguments to be equal (number of
     // variables in the criterion) This is why we can use the same arg names
     SharedSMTRef falsePre = make_shared<smt::Primitive<string>>("false");
-    name = invariantName(ENTRY_MARK,ProgramSelection::First,"__criterion",InvariantAttr::PRE,0);
-    assertions.push_back(SharedSMTRef(new FunDef(name, args, typeBool, falsePre)));
+    name = invariantName(ENTRY_MARK, ProgramSelection::First, "__criterion",
+                         InvariantAttr::PRE, 0);
+    assertions.push_back(make_shared<FunDef>(name, args, typeBool, falsePre));
 
-    name = invariantName(ENTRY_MARK,ProgramSelection::Second,"__criterion",InvariantAttr::PRE,0);
-    assertions.push_back(SharedSMTRef(new FunDef(name, args, typeBool, falsePre)));
+    name = invariantName(ENTRY_MARK, ProgramSelection::Second, "__criterion",
+                         InvariantAttr::PRE, 0);
+    assertions.push_back(make_shared<FunDef>(name, args, typeBool, falsePre));
 
     // Add the same args again for mutual invariants
     auto funArgs2 = funArgs(*(funPair.second.fun), "arg2_", 0);
@@ -199,36 +200,40 @@ slicingAssertion(MonoPair<PreprocessedFunction> funPair){
     }
 
     SharedSMTRef allEqual = make_shared<Op>("and", equalArgs);
-    name = invariantName(ENTRY_MARK,ProgramSelection::Both,"__criterion",InvariantAttr::PRE,0);
-    assertions.push_back(SharedSMTRef(new FunDef(name, args, typeBool, allEqual)));
+    name = invariantName(ENTRY_MARK, ProgramSelection::Both, "__criterion",
+                         InvariantAttr::PRE, 0);
+    assertions.push_back(make_shared<FunDef>(name, args, typeBool, allEqual));
 
     // Finaly we need to set the invariant for the function it self to true.
     // (The __criterion function does nothing, therefore no restrictions arise)
     // This is true for mutual and non mutual calls.
-    args.push_back(SortedVar("ret1",typeInt));
-    args.push_back(SortedVar("ret2",typeInt));
+    args.push_back(SortedVar("ret1", typeInt));
+    args.push_back(SortedVar("ret2", typeInt));
 
     SharedSMTRef invBody = make_shared<smt::Primitive<string>>("true");
-    name = invariantName(ENTRY_MARK,ProgramSelection::Both,"__criterion",InvariantAttr::NONE,0);
-    assertions.push_back(SharedSMTRef(new FunDef(name, args, typeBool, invBody)));
+    name = invariantName(ENTRY_MARK, ProgramSelection::Both, "__criterion",
+                         InvariantAttr::NONE, 0);
+    assertions.push_back(make_shared<FunDef>(name, args, typeBool, invBody));
 
     args.clear();
     for (auto arg : funArgs1) {
         args.push_back(arg);
     }
-    args.push_back(SortedVar("ret1",typeInt));
+    args.push_back(SortedVar("ret1", typeInt));
 
-    name = invariantName(ENTRY_MARK,ProgramSelection::First,"__criterion",InvariantAttr::NONE,0);
-    assertions.push_back(SharedSMTRef(new FunDef(name, args, typeBool, invBody)));
+    name = invariantName(ENTRY_MARK, ProgramSelection::First, "__criterion",
+                         InvariantAttr::NONE, 0);
+    assertions.push_back(make_shared<FunDef>(name, args, typeBool, invBody));
 
     args.clear();
     for (auto arg : funArgs2) {
         args.push_back(arg);
     }
-    args.push_back(SortedVar("ret2",typeInt));
+    args.push_back(SortedVar("ret2", typeInt));
 
-    name = invariantName(ENTRY_MARK,ProgramSelection::Second,"__criterion",InvariantAttr::NONE,0);
-    assertions.push_back(SharedSMTRef(new FunDef(name, args, typeBool, invBody)));
+    name = invariantName(ENTRY_MARK, ProgramSelection::Second, "__criterion",
+                         InvariantAttr::NONE, 0);
+    assertions.push_back(make_shared<FunDef>(name, args, typeBool, invBody));
 
     return assertions;
 }
