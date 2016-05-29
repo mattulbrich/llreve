@@ -486,10 +486,5 @@ SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
         }
     }
 
-    if (SMTGenerationOpts::getInstance().DisableOutInv) {
-        body = make_shared<smt::Primitive<string>>("true");
-    }
-
-
     return make_shared<FunDef>("OUT_INV", funArgs, "Bool", body);
 }

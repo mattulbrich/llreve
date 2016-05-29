@@ -11,6 +11,7 @@
 #include "util/FileOperations.h"
 #include "slicingMethods/BruteForce.h"
 #include "slicingMethods/SyntacticSlicing.h"
+#include "core/SliceCandidateValidation.h"
 
 
 using namespace std;
@@ -39,10 +40,11 @@ static cl::opt<SlicingMethodOptions> SlicingMethodOption(cl::desc("Choose slicin
 	llvm::cl::cat(SlicingCategory),
 	llvm::cl::Required);
 
-static llvm::cl::opt<bool> CriterionPresent("criterion-present", llvm::cl::desc("Use if the code contains a __criterion function to mark the criterion."),
+bool CriterionPresent;
+static llvm::cl::opt<bool, true> CriterionPresentFlag("criterion-present", llvm::cl::desc("Use if the code contains a __criterion function to mark the criterion."), cl::location(CriterionPresent),
 	llvm::cl::cat(SlicingCategory));
 static llvm::cl::alias     CriterionPresentShort("p", cl::desc("Alias for -criterion-present"),
-	cl::aliasopt(CriterionPresent), llvm::cl::cat(SlicingCategory));
+    cl::aliasopt(CriterionPresentFlag), llvm::cl::cat(SlicingCategory));
 
 static llvm::cl::list<string> Includes("I", llvm::cl::desc("Include path"),
 	llvm::cl::cat(ClangCategory));
@@ -77,10 +79,6 @@ int main(int argc, const char **argv) {
 
 	SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
 	smtOpts.PerfectSync = true;
-
-	if (CriterionPresent) {
-		smtOpts.DisableOutInv = true;
-	}
 
 	for (Function& function:*program) {
 		if (function.getName() != "__criterion"

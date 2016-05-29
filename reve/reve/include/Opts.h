@@ -48,7 +48,6 @@ class SMTGenerationOpts {
     bool Nest;
     bool PassInputThrough;
     bool BitVect;
-    bool DisableOutInv;
     // If an invariant is not in the map a declaration is added and it’s up to
     // the SMT solver to find it
     std::map<int, smt::SharedSMTRef> Invariants;

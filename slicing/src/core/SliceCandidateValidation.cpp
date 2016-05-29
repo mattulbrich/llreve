@@ -20,7 +20,10 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 
 	PreprocessOpts preprocessOpts(false, false, true);
 	MonoPair<string> fileNames("","");
-	FileOptions fileOpts = getFileOptions(fileNames);
+    FileOptions fileOpts = getFileOptions(fileNames);
+    if (CriterionPresent) {
+        fileOpts.OutRelation = make_shared<smt::Primitive<string>>("true");
+    }
 	SerializeOpts serializeOpts(outputFileName, false, false);
 
 	shared_ptr<Module> programCopy(CloneModule(program));
