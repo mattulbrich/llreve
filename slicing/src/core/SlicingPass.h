@@ -27,6 +27,7 @@ private:
 	llvm::Instruction* findPriviousDef(const llvm::DIVariable* variable, llvm::Instruction& instruction);
 
 	bool handleTerminatingInstruction(llvm::Instruction& instruction);
+	bool handleCriterion(llvm::Instruction& instruction);
 	bool handleNoUses(llvm::Instruction& instruction);
 	bool handleHasPriviousDef(llvm::Instruction& instruction, llvm::DIVariable* variable);
 	bool handleIsArgument(llvm::Instruction& instruction, llvm::DIVariable* variable);

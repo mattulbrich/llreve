@@ -36,6 +36,7 @@ void SMTGenerationOpts::initialize(std::string mainFunction, bool heap,
     i.PassInputThrough = passInputThrough;
     i.BitVect = bitVect;
     i.Invariants = invariants;
+    i.DisableOutInv = false;
 }
 
 void parseCommandLineArguments(int argc, const char **argv) {

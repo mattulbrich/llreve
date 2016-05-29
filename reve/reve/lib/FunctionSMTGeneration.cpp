@@ -3,6 +3,7 @@
 #include "Compat.h"
 #include "Invariant.h"
 #include "Opts.h"
+#include "ModuleSMTGeneration.h"
 
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Intrinsics.h"
@@ -144,6 +145,92 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     smtExprs.insert(smtExprs.end(), pathExprs.begin(), pathExprs.end());
 
     return smtExprs;
+}
+
+vector<SharedSMTRef>
+slicingAssertion(MonoPair<PreprocessedFunction> funPair){
+    vector<SharedSMTRef> assertions;
+
+    string typeBool = "Bool";
+    string typeInt = "Int";
+    std::string name;
+
+    // Collect arguments for call
+    std::vector<SortedVar> args;
+    auto funArgs1 = funArgs(*(funPair.first.fun), "arg1_", 0);
+    for (auto arg : funArgs1) {
+        args.push_back(arg);
+    }
+
+    // add preconditition for nonmutual executen to false this ensures
+    // that the call will be always for both programs
+    // Note that we assume the number of arguments to be equal (number of
+    // variables in the criterion) This is why we can use the same arg names
+    SharedSMTRef falsePre = make_shared<smt::Primitive<string>>("false");
+    name = invariantName(ENTRY_MARK,ProgramSelection::First,"__criterion",InvariantAttr::PRE,0);
+    assertions.push_back(SharedSMTRef(new FunDef(name, args, typeBool, falsePre)));
+
+    name = invariantName(ENTRY_MARK,ProgramSelection::Second,"__criterion",InvariantAttr::PRE,0);
+    assertions.push_back(SharedSMTRef(new FunDef(name, args, typeBool, falsePre)));
+
+    // Add the same args again for mutual invariants
+    auto funArgs2 = funArgs(*(funPair.second.fun), "arg2_", 0);
+    for (auto arg : funArgs2) {
+        args.push_back(arg);
+    }
+
+    // preparation for zip
+    vector<string> Args1;
+    for (const auto &arg : funArgs1) {
+        Args1.push_back(arg.name);
+    }
+    vector<string> Args2;
+    for (const auto &arg : funArgs2) {
+        Args2.push_back(arg.name);
+    }
+
+    assert(Args1.size() == Args2.size());
+
+    // Ensure all variables in the criterion are equal in both versions
+    // of the program using the mutual precondition
+    vector<SharedSMTRef> equalArgs;
+    for (auto argPair : makeZip(Args1, Args2)) {
+        equalArgs.push_back(makeBinOp("=", argPair.first, argPair.second));
+    }
+
+    SharedSMTRef allEqual = make_shared<Op>("and", equalArgs);
+    name = invariantName(ENTRY_MARK,ProgramSelection::Both,"__criterion",InvariantAttr::PRE,0);
+    assertions.push_back(SharedSMTRef(new FunDef(name, args, typeBool, allEqual)));
+
+    // Finaly we need to set the invariant for the function it self to true.
+    // (The __criterion function does nothing, therefore no restrictions arise)
+    // This is true for mutual and non mutual calls.
+    args.push_back(SortedVar("ret1",typeInt));
+    args.push_back(SortedVar("ret2",typeInt));
+
+    SharedSMTRef invBody = make_shared<smt::Primitive<string>>("true");
+    name = invariantName(ENTRY_MARK,ProgramSelection::Both,"__criterion",InvariantAttr::NONE,0);
+    assertions.push_back(SharedSMTRef(new FunDef(name, args, typeBool, invBody)));
+
+    args.clear();
+    for (auto arg : funArgs1) {
+        args.push_back(arg);
+    }
+    args.push_back(SortedVar("ret1",typeInt));
+
+    name = invariantName(ENTRY_MARK,ProgramSelection::First,"__criterion",InvariantAttr::NONE,0);
+    assertions.push_back(SharedSMTRef(new FunDef(name, args, typeBool, invBody)));
+
+    args.clear();
+    for (auto arg : funArgs2) {
+        args.push_back(arg);
+    }
+    args.push_back(SortedVar("ret2",typeInt));
+
+    name = invariantName(ENTRY_MARK,ProgramSelection::Second,"__criterion",InvariantAttr::NONE,0);
+    assertions.push_back(SharedSMTRef(new FunDef(name, args, typeBool, invBody)));
+
+    return assertions;
 }
 
 // the main function that we want to check doesn’t need the output parameters in

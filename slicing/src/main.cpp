@@ -39,6 +39,10 @@ static cl::opt<SlicingMethodOptions> SlicingMethodOption(cl::desc("Choose slicin
 	llvm::cl::cat(SlicingCategory),
 	llvm::cl::Required);
 
+static llvm::cl::opt<bool> CriterionPresent("criterion-present", llvm::cl::desc("Use if the code contains a __criterion function to mark the criterion."),
+	llvm::cl::cat(SlicingCategory));
+static llvm::cl::alias     CriterionPresentShort("p", cl::desc("Alias for -criterion-present"),
+	cl::aliasopt(CriterionPresent), llvm::cl::cat(SlicingCategory));
 
 static llvm::cl::list<string> Includes("I", llvm::cl::desc("Include path"),
 	llvm::cl::cat(ClangCategory));
@@ -69,10 +73,23 @@ void store(string fileName, Module& module) {
 
 int main(int argc, const char **argv) {
 	parseArgs(argc, argv);
+	ModulePtr program = getModuleFromFile(FileName, ResourceDir, Includes);
+
 	SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
 	smtOpts.PerfectSync = true;
 
-	ModulePtr program = getModuleFromFile(FileName, ResourceDir, Includes);
+	if (CriterionPresent) {
+		smtOpts.DisableOutInv = true;
+	}
+
+	for (Function& function:*program) {
+		if (function.getName() != "__criterion"
+			&& function.getName() != "__mark") {
+			smtOpts.MainFunction = function.getName().str();
+			break;
+		}
+	}
+
 
 	SlicingMethodPtr method;
 	switch (SlicingMethodOption) {

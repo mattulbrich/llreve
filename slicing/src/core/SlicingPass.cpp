@@ -35,12 +35,12 @@ bool SlicingPass::isPriviousDef(const DIVariable* variable, Instruction& instruc
 	return variable == AddVariableNamePass::getSrcVariable(instruction);
 }
 
-Instruction* SlicingPass::findPriviousDef(const DIVariable* variable, Instruction& instruction) {	
+Instruction* SlicingPass::findPriviousDef(const DIVariable* variable, Instruction& instruction) {
 	BasicBlock* parent = instruction.getParent();
 	if (!parent) {
 		return nullptr;
 	}
-	
+
 	auto treeNode = this->domTree->getNode(parent);
 
 	Instruction* result = nullptr;
@@ -66,6 +66,16 @@ bool SlicingPass::handleTerminatingInstruction(Instruction& instruction){
 	} else {
 		return false;
 	}
+}
+
+bool SlicingPass::handleCriterion(Instruction& instruction){
+	if (CallInst* call = dyn_cast<CallInst>(&instruction)) {
+		if (call->getCalledFunction()
+			&& call->getCalledFunction()->getName() == "__criterion") {
+		return true;
+	}}
+
+	return false;
 }
 
 bool SlicingPass::handleNoUses(llvm::Instruction& instruction){
@@ -135,8 +145,9 @@ bool SlicingPass::runOnFunction(llvm::Function& function){
 		Instruction& instruction = *ins;
 		DIVariable* variable = AddVariableNamePass::getSrcVariable(instruction);
 
-		bool done = 
+		bool done =
 			   handleTerminatingInstruction(instruction)
+			|| handleCriterion(instruction)
 			|| handleNoUses(instruction)
 			|| handleHasPriviousDef(instruction, variable)
 			|| handleIsArgument(instruction, variable);

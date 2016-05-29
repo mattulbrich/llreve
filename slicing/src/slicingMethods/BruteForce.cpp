@@ -27,10 +27,10 @@ shared_ptr<Module> BruteForce::computeSlice(Criterion c) {
 	//We will not be able to slice the return instruction:
 	numInstructions--;
 
-	if (numFunctions != 1) {
-		outs() << "Unsupported number of functions! Only exactly one function supported. \n";
-		exit(1);
-	}
+	// if (numFunctions != 1) {
+	// 	outs() << "Unsupported number of functions! Only exactly one function supported. \n";
+	// 	exit(1);
+	// }
 
 	if (!c.isReturnValue()) {
 		outs() << "Unsupported criterion, can only slice after return value. \n";

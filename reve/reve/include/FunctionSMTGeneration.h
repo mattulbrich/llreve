@@ -48,6 +48,13 @@ auto functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
                        std::vector<smt::SharedSMTRef> &declarations,
                        Memory memory) -> std::vector<smt::SharedSMTRef>;
 
+/// Create the mutual assertions for slicing.
+/**
+This creates complete assertions for slicing.
+ */
+auto slicingAssertion(MonoPair<PreprocessedFunction> preprocessedFuns)
+                       -> std::vector<smt::SharedSMTRef>;
+
 /// Create the assertion for the passed main function.
 /**
 The main function is special because it is never called so the predicates don’t

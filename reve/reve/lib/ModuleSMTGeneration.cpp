@@ -85,9 +85,16 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
             (!(doesNotRecurse(*funPair.first.fun) &&
                doesNotRecurse(*funPair.second.fun)) ||
              smtOpts.OnlyRecursive)) {
-            auto newSmtExprs = functionAssertion(funPair, declarations, mem);
-            assertions.insert(assertions.end(), newSmtExprs.begin(),
+            if (funPair.first.fun->getName() == "__criterion") {
+                auto newSmtExprs = slicingAssertion(funPair);
+                assertions.insert(assertions.end(), newSmtExprs.begin(),
                               newSmtExprs.end());
+            } else {
+                auto newSmtExprs = functionAssertion(funPair, declarations, mem);
+                assertions.insert(assertions.end(), newSmtExprs.begin(),
+                              newSmtExprs.end());
+            }
+
         }
     }
     smtExprs.insert(smtExprs.end(), declarations.begin(), declarations.end());
@@ -478,6 +485,11 @@ SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
             body = makeBinOp("and", body, makeBinOp("=", "HEAP$1", "HEAP$2"));
         }
     }
+
+    if (SMTGenerationOpts::getInstance().DisableOutInv) {
+        body = make_shared<smt::Primitive<string>>("true");
+    }
+
 
     return make_shared<FunDef>("OUT_INV", funArgs, "Bool", body);
 }
