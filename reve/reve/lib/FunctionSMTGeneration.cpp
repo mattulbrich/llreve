@@ -156,47 +156,34 @@ vector<SharedSMTRef> slicingAssertion(MonoPair<PreprocessedFunction> funPair) {
 
     // Collect arguments for call
     std::vector<SortedVar> args;
+
     auto funArgs1 = funArgs(*(funPair.first.fun), "arg1_", 0);
-    for (auto arg : funArgs1) {
-        args.push_back(arg);
-    }
-
-    // add preconditition for nonmutual executen to false this ensures
-    // that the call will be always for both programs
-    // Note that we assume the number of arguments to be equal (number of
-    // variables in the criterion) This is why we can use the same arg names
-    SharedSMTRef falsePre = make_shared<smt::Primitive<string>>("false");
-    name = invariantName(ENTRY_MARK, ProgramSelection::First, "__criterion",
-                         InvariantAttr::PRE, 0);
-    assertions.push_back(make_shared<FunDef>(name, args, typeBool, falsePre));
-
-    name = invariantName(ENTRY_MARK, ProgramSelection::Second, "__criterion",
-                         InvariantAttr::PRE, 0);
-    assertions.push_back(make_shared<FunDef>(name, args, typeBool, falsePre));
-
-    // Add the same args again for mutual invariants
     auto funArgs2 = funArgs(*(funPair.second.fun), "arg2_", 0);
-    for (auto arg : funArgs2) {
-        args.push_back(arg);
-    }
+    assert(funArgs1.size() == funArgs2.size());
 
-    // preparation for zip
-    vector<string> Args1;
-    for (const auto &arg : funArgs1) {
-        Args1.push_back(arg.name);
-    }
-    vector<string> Args2;
-    for (const auto &arg : funArgs2) {
-        Args2.push_back(arg.name);
-    }
+    args.insert(args.end(), funArgs1.begin(), funArgs1.end());
+    args.insert(args.end(), funArgs2.begin(), funArgs2.end());
 
-    assert(Args1.size() == Args2.size());
+    // Set preconditition for nonmutual calls to false. This ensures
+    // that only mutual calls are allowed.
+    // Note that we assume the number of arguments to be equal (number of
+    // variables in the criterion). This is why we can use the same arg names.
+    makeMonoPair(funArgs1, funArgs2)
+        .indexedForEachProgram([&assertions, typeBool](auto funArgs,
+                                                       auto program) {
+            std::string invName =
+                invariantName(ENTRY_MARK, asSelection(program), "__criterion",
+                              InvariantAttr::PRE, 0);
+            assertions.push_back(make_shared<FunDef>(invName, funArgs, typeBool,
+                                                     stringExpr("false")));
+        });
 
     // Ensure all variables in the criterion are equal in both versions
     // of the program using the mutual precondition
     vector<SharedSMTRef> equalArgs;
-    for (auto argPair : makeZip(Args1, Args2)) {
-        equalArgs.push_back(makeBinOp("=", argPair.first, argPair.second));
+    for (auto argPair : makeZip(funArgs1, funArgs2)) {
+        equalArgs.push_back(
+            makeBinOp("=", argPair.first.name, argPair.second.name));
     }
 
     SharedSMTRef allEqual = make_shared<Op>("and", equalArgs);
@@ -204,36 +191,28 @@ vector<SharedSMTRef> slicingAssertion(MonoPair<PreprocessedFunction> funPair) {
                          InvariantAttr::PRE, 0);
     assertions.push_back(make_shared<FunDef>(name, args, typeBool, allEqual));
 
-    // Finaly we need to set the invariant for the function it self to true.
+    // Finaly we need to set the invariant for the function itself to true.
     // (The __criterion function does nothing, therefore no restrictions arise)
     // This is true for mutual and non mutual calls.
     args.push_back(SortedVar("ret1", typeInt));
     args.push_back(SortedVar("ret2", typeInt));
 
-    SharedSMTRef invBody = make_shared<smt::Primitive<string>>("true");
+    SharedSMTRef invBody = stringExpr("true");
     name = invariantName(ENTRY_MARK, ProgramSelection::Both, "__criterion",
                          InvariantAttr::NONE, 0);
     assertions.push_back(make_shared<FunDef>(name, args, typeBool, invBody));
 
-    args.clear();
-    for (auto arg : funArgs1) {
-        args.push_back(arg);
-    }
-    args.push_back(SortedVar("ret1", typeInt));
-
-    name = invariantName(ENTRY_MARK, ProgramSelection::First, "__criterion",
-                         InvariantAttr::NONE, 0);
-    assertions.push_back(make_shared<FunDef>(name, args, typeBool, invBody));
-
-    args.clear();
-    for (auto arg : funArgs2) {
-        args.push_back(arg);
-    }
-    args.push_back(SortedVar("ret2", typeInt));
-
-    name = invariantName(ENTRY_MARK, ProgramSelection::Second, "__criterion",
-                         InvariantAttr::NONE, 0);
-    assertions.push_back(make_shared<FunDef>(name, args, typeBool, invBody));
+    makeMonoPair(funArgs1, funArgs2)
+        .indexedForEachProgram([&assertions, &invBody, typeInt,
+                                typeBool](auto funArgs, auto program) {
+            funArgs.push_back(SortedVar(
+                "ret" + std::to_string(programIndex(program)), typeInt));
+            std::string invName =
+                invariantName(ENTRY_MARK, asSelection(program), "__criterion",
+                              InvariantAttr::NONE, 0);
+            assertions.push_back(
+                make_shared<FunDef>(invName, funArgs, typeBool, invBody));
+        });
 
     return assertions;
 }

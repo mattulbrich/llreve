@@ -4,6 +4,8 @@
 #include <iostream>
 #include <vector>
 
+#include "Program.h"
+
 // Monomorphic pair
 // Monomorphic refers to the fact that both elements have the same type
 template <typename T> struct MonoPair {
@@ -60,6 +62,11 @@ template <typename T> struct MonoPair {
     void indexedForEach(std::function<void(T, int)> f) const {
         f(first, 1);
         f(second, 2);
+    }
+
+    void indexedForEachProgram(std::function<void(T, Program)> f) const {
+        f(first, Program::First);
+        f(second, Program::Second);
     }
 
     // left fold
