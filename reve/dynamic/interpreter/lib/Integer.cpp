@@ -3,13 +3,21 @@
 #include <cassert>
 
 Integer &Integer::operator=(Integer other) {
+    switch (type) {
+    case IntType::Unbounded:
+        unbounded.~mpz_class();
+        break;
+    case IntType::Bounded:
+        bounded.~APInt();
+        break;
+    }
     type = other.type;
     switch (type) {
     case IntType::Unbounded:
-        swap(unbounded, other.unbounded);
+        new (&unbounded) mpz_class(other.unbounded);
         break;
     case IntType::Bounded:
-        bounded = other.bounded;
+        new (&bounded) llvm::APInt(other.bounded);
         break;
     }
     return *this;
