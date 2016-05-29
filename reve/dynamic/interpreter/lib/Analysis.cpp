@@ -138,7 +138,6 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
 
     // Collect loop info
     LoopCountsAndMark loopCounts;
-    loopCounts.mark = -5;
     iterateTracesInRange<LoopCountsAndMark>(
         functions, Integer(mpz_class(-50)), Integer(mpz_class(50)), ThreadsFlag,
         loopCounts, mergeLoopCounts,

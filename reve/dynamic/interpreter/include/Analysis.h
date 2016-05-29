@@ -102,6 +102,8 @@ std::map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map);
 struct LoopCountsAndMark {
     int mark;
     LoopCountMap loopCounts;
+    // -5 is never used as a mark so its a good default
+    LoopCountsAndMark() : mark(-5) {}
 };
 
 template <typename T>
