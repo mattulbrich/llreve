@@ -48,14 +48,7 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     const string funName = preprocessedFuns.first.fun->getName();
     const MonoPair<vector<smt::SortedVar>> funArgsPair =
         functionArgs(*preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
-    // TODO this should use concat
-    const vector<smt::SortedVar> funArgs =
-        funArgsPair.foldl<vector<smt::SortedVar>>(
-            {},
-            [](auto acc, auto args) {
-                acc.insert(acc.end(), args.begin(), args.end());
-                return acc;
-            });
+    const vector<smt::SortedVar> funArgs = concat(funArgsPair);
     const smt::FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, memory);
     vector<SharedSMTRef> smtExprs;
@@ -231,14 +224,7 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     const string funName = preprocessedFuns.first.fun->getName();
     const MonoPair<vector<smt::SortedVar>> funArgsPair =
         functionArgs(*preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
-    // TODO this should use concat
-    const vector<smt::SortedVar> funArgs =
-        funArgsPair.foldl<vector<smt::SortedVar>>(
-            {},
-            [](vector<smt::SortedVar> acc, vector<smt::SortedVar> args) {
-                acc.insert(acc.end(), args.begin(), args.end());
-                return acc;
-            });
+    const vector<smt::SortedVar> funArgs = concat(funArgsPair);
 
     const smt::FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, memory);
