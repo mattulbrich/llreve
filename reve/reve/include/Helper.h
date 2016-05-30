@@ -86,15 +86,35 @@ template <typename T> std::unique_ptr<const smt::SMTExpr> resolveGEP(T &gep) {
         const auto indexedType = llvm::GetElementPtrInst::getIndexedType(
             type, llvm::ArrayRef<llvm::Value *>(indices));
         const auto size = typeSize(indexedType, mod->getDataLayout());
+        auto smtIx = instrNameOrVal(*ix, (*ix)->getType());
+        if (SMTGenerationOpts::getInstance().BitVect) {
+            smtIx = smt::makeUnaryOp(
+                "(_ sign_extend " +
+                    std::to_string(64 -
+                                   (*ix)->getType()->getIntegerBitWidth()) +
+                    ")",
+                std::move(smtIx));
+        }
         if (size == 1) {
-            args.push_back(instrNameOrVal(*ix, (*ix)->getType()));
+            args.push_back(std::move(smtIx));
         } else {
-            args.push_back(
-                smt::makeBinOp("*", smt::stringExpr(std::to_string(size)),
-                               instrNameOrVal(*ix, (*ix)->getType())));
+            if (SMTGenerationOpts::getInstance().BitVect) {
+                args.push_back(smt::makeBinOp(
+                    "bvmul",
+                    smt::stringExpr("(_ bv" + std::to_string(size) + " 64)"),
+                    std::move(smtIx)));
+            } else {
+                args.push_back(
+                    smt::makeBinOp("*", smt::stringExpr(std::to_string(size)),
+                                   std::move(smtIx)));
+            }
         }
     }
-    return std::make_unique<smt::Op>("+", args);
+    if (SMTGenerationOpts::getInstance().BitVect) {
+        return std::make_unique<smt::Op>("bvadd", args);
+    } else {
+        return std::make_unique<smt::Op>("+", args);
+    }
 }
 
 template <typename Key, typename Val>

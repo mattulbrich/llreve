@@ -43,7 +43,11 @@ SMTRef instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) {
         }
     }
     if (llvm::isa<llvm::ConstantPointerNull>(val)) {
-        return stringExpr("0");
+        if (SMTGenerationOpts::getInstance().BitVect) {
+            return smt::makeBinOp("_", "bv0", "64");
+        } else {
+            return stringExpr("0");
+        }
     }
     if (const auto gep = llvm::dyn_cast<llvm::GEPOperator>(val)) {
         if (!llvm::isa<llvm::Instruction>(val)) {
@@ -147,8 +151,9 @@ smt::SortedVar llvmValToSortedVar(const llvm::Value *val) {
 }
 
 std::string arrayType() {
-    return SMTGenerationOpts::getInstance().BitVect ? "(Array (_ BitVec 64) (_ BitVec 8))"
-                                                    : "(Array Int Int)";
+    return SMTGenerationOpts::getInstance().BitVect
+               ? "(Array (_ BitVec 64) (_ BitVec 8))"
+               : "(Array Int Int)";
 }
 
 smt::SortedVar toSMTSortedVar(smt::SortedVar var) {

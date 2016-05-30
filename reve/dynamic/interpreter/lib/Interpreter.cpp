@@ -442,7 +442,7 @@ void interpretBoolBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
 void interpretIntBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
                        const VarIntVal &i0, const VarIntVal &i1,
                        FastState &state) {
-    VarIntVal result = Integer(mpz_class(0));
+    VarIntVal result;
     switch (op) {
     case Instruction::Add:
         result = i0 + i1;
