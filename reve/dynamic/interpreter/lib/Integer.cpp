@@ -230,3 +230,28 @@ Integer Integer::xor_(const Integer &rhs) const {
     assert(type == IntType::Bounded);
     return Integer(bounded.Xor(rhs.bounded));
 }
+
+Integer Integer::asPointer() const {
+    if (!BoundedFlag) {
+        return Integer(asUnbounded());
+    }
+    switch (type) {
+    case IntType::Bounded:
+        assert(bounded.getBitWidth() <= 64);
+        if (bounded.getBitWidth() == 64) {
+            return *this;
+        }
+        return Integer(bounded.sext(64));
+    case IntType::Unbounded:
+        assert(unbounded.fits_slong_p());
+        return Integer(makeBoundedInt(64, unbounded.get_si()));
+    }
+}
+
+llvm::APInt makeBoundedInt(unsigned numBits, int64_t val) {
+    llvm::APInt ret(numBits, static_cast<uint64_t>(val));
+    if (val < 0) {
+        return -ret;
+    }
+    return ret;
+}

@@ -8,6 +8,8 @@
 
 #include "llvm/ADT/APInt.h"
 
+extern bool BoundedFlag;
+
 enum class IntType { Unbounded, Bounded };
 
 struct Integer {
@@ -33,6 +35,7 @@ struct Integer {
     }
     Integer &operator=(Integer other);
     ~Integer();
+    Integer asPointer() const;
     Integer &operator+=(const Integer &other) {
         assert(type == other.type);
         switch (type) {
@@ -178,8 +181,8 @@ inline bool operator<(const Integer &lhs, const Integer &rhs) {
     case IntType::Unbounded:
         return lhs.unbounded < rhs.unbounded;
     case IntType::Bounded:
-        logError("Use slt and ult on bounded integers\n");
-        exit(1);
+        // Only used for putting it in a map
+        return lhs.bounded.slt(rhs.bounded);
     }
 }
 inline bool operator>(const Integer &lhs, const Integer &rhs) {
@@ -206,3 +209,5 @@ inline bool operator==(const Integer &lhs, const Integer &rhs) {
 inline bool operator!=(const Integer &lhs, const Integer &rhs) {
     return !(lhs == rhs);
 }
+
+llvm::APInt makeBoundedInt(unsigned numBits, int64_t i);

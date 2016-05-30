@@ -195,17 +195,20 @@ void workerThread(
             // Pointers are always unbounded
             if (BoundedFlag && firstArg->getType()->isIntegerTy()) {
                 variableValues.first.insert(
+                    {firstArg, std::make_shared<VarInt>(Integer(makeBoundedInt(
+                                   firstArg->getType()->getIntegerBitWidth(),
+                                   item.vals[i].asUnbounded().get_si())))});
+                variableValues.second.insert(
+                    {secondArg, std::make_shared<VarInt>(Integer(makeBoundedInt(
+                                    firstArg->getType()->getIntegerBitWidth(),
+                                    item.vals[i].asUnbounded().get_si())))});
+            } else if (firstArg->getType()->isPointerTy()) {
+                variableValues.first.insert(
                     {firstArg,
-                     std::make_shared<VarInt>(Integer(llvm::APInt(
-                         firstArg->getType()->getIntegerBitWidth(),
-                         static_cast<uint64_t>(
-                             item.vals[i].asUnbounded().get_si()))))});
+                     std::make_shared<VarInt>(item.vals[i].asPointer())});
                 variableValues.second.insert(
                     {secondArg,
-                     std::make_shared<VarInt>(Integer(llvm::APInt(
-                         firstArg->getType()->getIntegerBitWidth(),
-                         static_cast<uint64_t>(
-                             item.vals[i].asUnbounded().get_si()))))});
+                     std::make_shared<VarInt>(item.vals[i].asPointer())});
             } else {
                 variableValues.first.insert(
                     {firstArg, std::make_shared<VarInt>(item.vals[i])});

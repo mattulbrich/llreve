@@ -20,7 +20,7 @@
 using BlockName = std::string;
 using VarName = const llvm::Value *;
 using VarIntVal = Integer;
-using HeapAddress = mpz_class;
+using HeapAddress = Integer;
 enum class VarType { Int, Bool };
 const VarName ReturnName = nullptr;
 
@@ -254,8 +254,9 @@ template <typename A, typename T> VarInt resolveGEP(T &gep, State<A> state) {
             resolveValue(*ix, state, (*ix)->getType());
         assert(val->getType() == VarType::Int);
         offset +=
-            Integer(mpz_class(size)) *
-            Integer(std::static_pointer_cast<VarInt>(val)->val.asUnbounded());
+            Integer(mpz_class(size)).asPointer() *
+            Integer(std::static_pointer_cast<VarInt>(val)->val.asUnbounded())
+                .asPointer();
     }
     return VarInt(offset);
 }
@@ -271,5 +272,4 @@ cborToKeyMap(const cbor_item_t *item);
 
 std::string valueName(const llvm::Value *val);
 
-extern bool BoundedFlag;
 extern unsigned HeapElemSizeFlag;

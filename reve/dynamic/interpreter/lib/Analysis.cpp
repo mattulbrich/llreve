@@ -1094,18 +1094,20 @@ Heap randomHeap(
     for (const auto &arg : fun.args()) {
         if (arg.getType()->isPointerTy()) {
             VarIntVal arrayStart = variableValues.at(&arg)->unsafeIntVal();
-            int length = rand_r(seedp) % (lengthBound + 1);
-            for (int i = 0; i <= length; ++i) {
+            unsigned int length =
+                static_cast<unsigned int>(rand_r(seedp) % (lengthBound + 1));
+            for (unsigned int i = 0; i <= length; ++i) {
                 int val =
                     (rand_r(seedp) % (valUpperBound - valLowerBound + 1)) +
                     valLowerBound;
                 if (BoundedFlag) {
                     heap.insert(
-                        {arrayStart.asUnbounded() + i,
-                         Integer(llvm::APInt(HeapElemSizeFlag,
-                                             static_cast<uint64_t>(val)))});
+                        {arrayStart.asPointer() +
+                             Integer(mpz_class(i)).asPointer(),
+                         Integer(makeBoundedInt(HeapElemSizeFlag, val))});
                 } else {
-                    heap.insert({arrayStart.asUnbounded() + i,
+                    heap.insert({arrayStart.asPointer() +
+                                     Integer(mpz_class(i)).asPointer(),
                                  Integer(mpz_class(val))});
                 }
             }

@@ -548,9 +548,9 @@ template <typename T> struct HeapAccess : public HeapExpr<T> {
         mpz_class atEval = atVal->eval(variables, heaps, holes);
         switch (programIndex) {
         case ProgramIndex::First:
-            return getHeapVal(atEval, heaps.first);
+            return getHeapVal(Integer(atEval).asPointer(), heaps.first);
         case ProgramIndex::Second:
-            return getHeapVal(atEval, heaps.second);
+            return getHeapVal(Integer(atEval).asPointer(), heaps.second);
         }
     }
     std::ostream &dump(std::ostream &os) const override {

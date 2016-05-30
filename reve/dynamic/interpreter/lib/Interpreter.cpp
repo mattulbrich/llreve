@@ -207,9 +207,10 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
                 state.variables.at(cast->getOperand(0));
             assert(operand->getType() == VarType::Bool);
             if (BoundedFlag) {
-                state.variables[cast] = make_shared<VarInt>(Integer(llvm::APInt(
-                    cast->getType()->getIntegerBitWidth(),
-                    static_pointer_cast<VarBool>(operand)->val ? 1 : 0)));
+                state.variables[cast] =
+                    make_shared<VarInt>(Integer(makeBoundedInt(
+                        cast->getType()->getIntegerBitWidth(),
+                        static_pointer_cast<VarBool>(operand)->val ? 1 : 0)));
             } else {
                 state.variables[cast] = make_shared<VarInt>(Integer(mpz_class(
                     static_pointer_cast<VarBool>(operand)->val ? 1 : 0)));
@@ -236,13 +237,13 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
         // This will only insert 0 if there is not already a different element
         if (BoundedFlag) {
             auto heapIt = state.heap.insert(std::make_pair(
-                static_pointer_cast<VarInt>(ptr)->val.asUnbounded(),
+                static_pointer_cast<VarInt>(ptr)->val.asPointer(),
                 Integer(
-                    llvm::APInt(load->getType()->getIntegerBitWidth(), 0))));
+                    makeBoundedInt(load->getType()->getIntegerBitWidth(), 0))));
             state.variables[load] = make_shared<VarInt>(heapIt.first->second);
         } else {
             auto heapIt = state.heap.insert(std::make_pair(
-                static_pointer_cast<VarInt>(ptr)->val.asUnbounded(),
+                static_pointer_cast<VarInt>(ptr)->val.asPointer(),
                 Integer(mpz_class(0))));
             state.variables[load] = make_shared<VarInt>(heapIt.first->second);
         }
@@ -255,7 +256,7 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
             resolveValue(store->getValueOperand(), state,
                          store->getValueOperand()->getType());
         assert(val->getType() == VarType::Int);
-        HeapAddress addr = static_pointer_cast<VarInt>(ptr)->val.asUnbounded();
+        HeapAddress addr = static_pointer_cast<VarInt>(ptr)->val;
         state.heap[addr] = static_pointer_cast<VarInt>(val)->val;
     } else if (const auto select = dyn_cast<SelectInst>(instr)) {
         shared_ptr<VarVal> cond = resolveValue(
@@ -342,7 +343,7 @@ shared_ptr<VarVal> resolveValue(const Value *val, const FastState &state,
             return make_shared<VarInt>(Integer(constInt->getValue()));
         }
     } else if (llvm::isa<llvm::ConstantPointerNull>(val)) {
-        return make_shared<VarInt>(Integer(mpz_class(0)));
+        return make_shared<VarInt>(Integer(makeBoundedInt(64, 0)));
     }
     logErrorData("Operators are not yet handled\n", *val);
     exit(1);
@@ -680,7 +681,7 @@ State<string> cborToState(const cbor_item_t *item) {
     Heap heap = cborToMap<HeapAddress, VarIntVal>(
         cborHeap,
         [](const cbor_item_t *item) {
-            return mpz_class(cborToString(item), 10);
+            return Integer(mpz_class(cborToString(item), 10));
         },
         cborToVarIntVal);
     return State<string>(variables, heap);
