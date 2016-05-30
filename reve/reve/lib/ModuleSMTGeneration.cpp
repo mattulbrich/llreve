@@ -467,7 +467,6 @@ SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
         }
     }
     if (memory & HEAP_MASK) {
-        // TODO Use an array of bytes
         funArgs.push_back(SortedVar("HEAP$1", arrayType()));
     }
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
@@ -476,7 +475,6 @@ SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
         }
     }
     if (memory & HEAP_MASK) {
-        // TODO Use an array of bytes
         funArgs.push_back(SortedVar("HEAP$2", arrayType()));
     }
     if (body == nullptr) {

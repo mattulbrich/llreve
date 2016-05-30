@@ -733,7 +733,6 @@ SMTRef mutualRecursiveForall(SharedSMTRef clause, MonoPair<CallInfo> callPair,
     args.push_back(SortedVar(callPair.first.assignedTo, "Int"));
     args.push_back(SortedVar(callPair.second.assignedTo, "Int"));
     if (memory & HEAP_MASK) {
-        // TODO Use an array of bytes
         args.push_back(SortedVar("HEAP$1_res", arrayType()));
         args.push_back(SortedVar("HEAP$2_res", arrayType()));
     }
@@ -745,7 +744,6 @@ SMTRef mutualRecursiveForall(SharedSMTRef clause, MonoPair<CallInfo> callPair,
     implArgs.push_back(stringExpr(callPair.first.assignedTo));
     implArgs.push_back(stringExpr(callPair.second.assignedTo));
     if (memory & HEAP_MASK) {
-        // TODO Use an array of bytes
         implArgs.push_back(stringExpr("HEAP$1_res"));
         implArgs.push_back(stringExpr("HEAP$2_res"));
     }
