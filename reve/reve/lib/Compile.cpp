@@ -70,6 +70,7 @@ void executeCodeGenAction(const ArgStringList &ccArgs,
     auto ci = std::make_unique<CompilerInvocation>();
     CompilerInvocation::CreateFromArgs(*ci, (ccArgs.data()),
                                        (ccArgs.data()) + ccArgs.size(), diags);
+    ci->getFrontendOpts().DisableFree = false;
     CompilerInstance clang;
     clang.setInvocation(ci.release());
     clang.createDiagnostics();
