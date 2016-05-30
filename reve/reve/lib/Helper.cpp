@@ -126,7 +126,7 @@ string argSort(string arg) {
 
 string llvmTypeToSMTSort(const llvm::Type *type) {
     if (type->isPointerTy()) {
-        return "Int";
+        return "(_ BitVec 64)";
     } else if (type->isIntegerTy()) {
         return "(_ BitVec " + std::to_string(type->getIntegerBitWidth()) + ")";
     } else if (type->isVoidTy()) {
@@ -147,7 +147,7 @@ smt::SortedVar llvmValToSortedVar(const llvm::Value *val) {
 }
 
 std::string arrayType() {
-    return SMTGenerationOpts::getInstance().BitVect ? "(Array Int (_ BitVec 8))"
+    return SMTGenerationOpts::getInstance().BitVect ? "(Array (_ BitVec 64) (_ BitVec 8))"
                                                     : "(Array Int Int)";
 }
 

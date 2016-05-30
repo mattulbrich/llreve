@@ -295,7 +295,8 @@ SharedSMTRef Op::instantiateArrays() const {
                     newArgs.push_back(stringExpr(index));
                     newArgs.push_back(
                         makeBinOp("select", arg, stringExpr(index)));
-                    indices.push_back(SortedVar(index, "Int"));
+                    indices.push_back(
+                        SortedVar(index, getSMTType("(_ BitVec 64)")));
                 } else {
                     newArgs.push_back(arg);
                 }
@@ -305,7 +306,8 @@ SharedSMTRef Op::instantiateArrays() const {
         }
         return make_shared<Forall>(indices, make_shared<Op>(opName, newArgs));
     } else if (opName == "=" && args.size() == 2 && args.at(0)->heapInfo()) {
-        std::vector<SortedVar> indices = {SortedVar("i", "Int")};
+        std::vector<SortedVar> indices = {
+            SortedVar("i", getSMTType("(_ BitVec 64)"))};
         return make_shared<Forall>(
             indices,
             makeBinOp("=", makeBinOp("select", args.at(0), stringExpr("i")),
@@ -328,7 +330,7 @@ SharedSMTRef FunDecl::instantiateArrays() const {
     std::vector<string> newInTypes;
     for (const string &type : inTypes) {
         if (isArray(type)) {
-            newInTypes.push_back("Int");
+            newInTypes.push_back(getSMTType("(_ BitVec 64)"));
             newInTypes.push_back(getSMTType("(_ BitVec 8)"));
         } else {
             newInTypes.push_back(type);
