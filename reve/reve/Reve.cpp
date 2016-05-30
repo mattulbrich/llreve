@@ -121,6 +121,10 @@ static llvm::cl::opt<bool>
     BitVectFlag("bitvect",
                 llvm::cl::desc("Use bitvects instead of unbounded ints"),
                 llvm::cl::cat(ReveCategory));
+static llvm::cl::opt<bool>
+    DontInstantiate("dont-instantiate",
+                    llvm::cl::desc("Dont instantiate arrays"),
+                    llvm::cl::cat(ReveCategory));
 
 int main(int argc, const char **argv) {
     parseCommandLineArguments(argc, argv);
@@ -134,7 +138,7 @@ int main(int argc, const char **argv) {
         PassInputThroughFlag, BitVectFlag, {});
     InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,
                         FileName2Flag);
-    SerializeOpts serializeOpts(OutputFileNameFlag, false, false);
+    SerializeOpts serializeOpts(OutputFileNameFlag, DontInstantiate, false);
     FileOptions fileOpts = getFileOptions(inputOpts.FileNames);
 
     MonoPair<shared_ptr<CodeGenAction>> acts =
