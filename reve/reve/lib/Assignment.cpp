@@ -180,24 +180,60 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
                               resolveGEP(*getElementPtrInst));
     }
     if (const auto loadInst = llvm::dyn_cast<llvm::LoadInst>(&Instr)) {
-        SMTRef pointer = instrNameOrVal(loadInst->getOperand(0),
-                                        loadInst->getOperand(0)->getType());
-        SMTRef load =
-            makeBinOp("select", stringExpr("HEAP$" + std::to_string(progIndex)),
-                      std::move(pointer));
-        return makeAssignment(loadInst->getName(), std::move(load));
+        SharedSMTRef pointer = instrNameOrVal(
+            loadInst->getOperand(0), loadInst->getOperand(0)->getType());
+        if (SMTGenerationOpts::getInstance().BitVect) {
+            // We load single bytes
+            unsigned bytes = loadInst->getType()->getIntegerBitWidth() / 8;
+            vector<SharedSMTRef> args;
+            for (unsigned i = 0; i < bytes; ++i) {
+                SharedSMTRef load = makeBinOp(
+                    "select", stringExpr("HEAP$" + std::to_string(progIndex)),
+                    makeBinOp(
+                        "bvadd", pointer,
+                        smt::makeBinOp("_", "bv" + std::to_string(i), "64")));
+                args.push_back(load);
+            }
+            return makeAssignment(loadInst->getName(),
+                                  make_shared<Op>("concat", args));
+        } else {
+            SMTRef load = makeBinOp(
+                "select", stringExpr("HEAP$" + std::to_string(progIndex)),
+                pointer);
+            return makeAssignment(loadInst->getName(), std::move(load));
+        }
     }
     if (const auto storeInst = llvm::dyn_cast<llvm::StoreInst>(&Instr)) {
         string heap = "HEAP$" + std::to_string(progIndex);
-        SharedSMTRef val =
-            instrNameOrVal(storeInst->getValueOperand(),
-                           storeInst->getValueOperand()->getType());
         SharedSMTRef pointer =
             instrNameOrVal(storeInst->getPointerOperand(),
                            storeInst->getPointerOperand()->getType());
-        const std::vector<SharedSMTRef> args = {stringExpr(heap), pointer, val};
-        const auto store = make_shared<Op>("store", args);
-        return makeAssignment("HEAP$" + std::to_string(progIndex), store);
+        SharedSMTRef val =
+            instrNameOrVal(storeInst->getValueOperand(),
+                           storeInst->getValueOperand()->getType());
+        if (SMTGenerationOpts::getInstance().BitVect) {
+            int bytes =
+                storeInst->getValueOperand()->getType()->getIntegerBitWidth() /
+                8;
+            SharedSMTRef newHeap = stringExpr(heap);
+            for (int i = 0; i < bytes; ++i) {
+                SharedSMTRef offset = makeBinOp(
+                    "bvadd", pointer,
+                    smt::makeBinOp("_", "bv" + std::to_string(i), "64"));
+                SharedSMTRef elem =
+                    makeUnaryOp("(_ extract " + std::to_string(8 * i + 7) +
+                                    " " + std::to_string(8 * i) + ")",
+                                val);
+                const std::vector<SharedSMTRef> args = {newHeap, offset, elem};
+                newHeap = make_shared<Op>("store", args);
+            }
+            return makeAssignment("HEAP$" + std::to_string(progIndex), newHeap);
+        } else {
+            const std::vector<SharedSMTRef> args = {stringExpr(heap), pointer,
+                                                    val};
+            const auto store = make_shared<Op>("store", args);
+            return makeAssignment("HEAP$" + std::to_string(progIndex), store);
+        }
     }
     if (const auto truncInst = llvm::dyn_cast<llvm::TruncInst>(&Instr)) {
         SharedSMTRef val = instrNameOrVal(truncInst->getOperand(0),

@@ -35,6 +35,10 @@ SMTRef instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) {
             }
         } else {
             if (SMTGenerationOpts::getInstance().BitVect) {
+                if (ty->isVoidTy()) {
+                    return smt::makeBinOp("_", "bv" + apInt.toString(10, true),
+                                          std::to_string(apInt.getBitWidth()));
+                }
                 return smt::makeBinOp("_", "bv" + apInt.toString(10, true),
                                       std::to_string(ty->getIntegerBitWidth()));
             } else {

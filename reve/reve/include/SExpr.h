@@ -31,9 +31,9 @@ template <typename T> class Apply : public SExpr<T> {
     void serialize(std::ostream &os, size_t indent) const override {
         os << "(" << fun;
         std::vector<std::string> atomicOps = {
-            "+",   "-",   "*",   "<=",       "<",      ">",
-            ">=",  "=",   "not", "distinct", "select", "store",
-            "ite", "div", "_",   "bvadd",    "bvsub",  "bvmul"};
+            "+",   "-", "*",     "<=",       "<",      ">",
+            ">=",  "=", "not",   "distinct", "select", "ite",
+            "div", "_", "bvadd", "bvsub",    "bvmul"};
         std::vector<std::string> forceIndentOps = {"assert", "and", "rule"};
         bool atomicOp = std::find(atomicOps.begin(), atomicOps.end(), fun) !=
                         atomicOps.end();
@@ -45,7 +45,7 @@ template <typename T> class Apply : public SExpr<T> {
         if (atomicOp || simpleOp || inv) {
             for (auto &arg : args) {
                 os << " ";
-                arg->serialize(os, indent+fun.size()+3);
+                arg->serialize(os, indent + fun.size() + 3);
             }
         } else {
             for (auto &arg : args) {
