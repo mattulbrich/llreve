@@ -139,17 +139,17 @@ SMTRef mainInvariant(int EndIndex, vector<SortedVar> FreeVars, string FunName) {
 MonoPair<SMTRef> invariantDeclaration(int BlockIndex,
                                       vector<smt::SortedVar> FreeVars,
                                       ProgramSelection For, std::string FunName,
-                                      Memory Heap) {
+                                      Memory Heap,
+                                      const llvm::Type *resultType) {
     vector<string> args;
     for (const auto &arg : FreeVars) {
         args.push_back(getSMTType(arg.type));
     }
     const vector<string> preArgs = args;
     // add results
-    // TODO Figure out the correct type for results
-    args.push_back("Int");
+    args.push_back(llvmTypeToSMTSort(resultType));
     if (For == ProgramSelection::Both) {
-        args.push_back("Int");
+        args.push_back(llvmTypeToSMTSort(resultType));
     }
     if (Heap) {
         args.push_back(arrayType());

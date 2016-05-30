@@ -18,7 +18,8 @@ auto mainInvariant(int EndIndex, std::vector<smt::SortedVar> FreeVars,
                    std::string FunName) -> smt::SMTRef;
 auto invariantDeclaration(int BlockIndex, std::vector<smt::SortedVar> FreeVars,
                           ProgramSelection For, std::string FunName,
-                          Memory heap) -> MonoPair<smt::SMTRef>;
+                          Memory heap, const llvm::Type *resultType)
+    -> MonoPair<smt::SMTRef>;
 auto singleInvariantDeclaration(smt::FreeVarsMap freeVarsMap, Memory memory,
                                 ProgramSelection prog, std::string funName)
     -> MonoPair<smt::SMTRef>;

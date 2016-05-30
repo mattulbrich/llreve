@@ -88,13 +88,13 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
             if (funPair.first.fun->getName() == "__criterion") {
                 auto newSmtExprs = slicingAssertion(funPair);
                 assertions.insert(assertions.end(), newSmtExprs.begin(),
-                              newSmtExprs.end());
+                                  newSmtExprs.end());
             } else {
-                auto newSmtExprs = functionAssertion(funPair, declarations, mem);
+                auto newSmtExprs =
+                    functionAssertion(funPair, declarations, mem);
                 assertions.insert(assertions.end(), newSmtExprs.begin(),
-                              newSmtExprs.end());
+                                  newSmtExprs.end());
             }
-
         }
     }
     smtExprs.insert(smtExprs.end(), declarations.begin(), declarations.end());
@@ -455,7 +455,6 @@ SharedSMTRef inInvariant(MonoPair<const llvm::Function *> funs,
 SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
                           SharedSMTRef body, Memory memory,
                           const llvm::Type *returnType) {
-    // TODO Figure out result type
     vector<SortedVar> funArgs = {
         toSMTSortedVar(SortedVar("result$1", llvmTypeToSMTSort(returnType))),
         toSMTSortedVar(SortedVar("result$2", llvmTypeToSMTSort(returnType)))};

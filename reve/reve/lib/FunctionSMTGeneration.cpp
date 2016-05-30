@@ -58,16 +58,17 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
         declarations.push_back(std::move(invariant));
 
     };
+    const llvm::Type *returnType = preprocessedFuns.first.fun->getReturnType();
     if (!SMTGenerationOpts::getInstance().SingleInvariant) {
-        MonoPair<SMTRef> invariants =
-            invariantDeclaration(ENTRY_MARK, freeVarsMap.at(ENTRY_MARK),
-                                 ProgramSelection::Both, funName, memory);
+        MonoPair<SMTRef> invariants = invariantDeclaration(
+            ENTRY_MARK, freeVarsMap.at(ENTRY_MARK), ProgramSelection::Both,
+            funName, memory, returnType);
         MonoPair<SMTRef> invariants1 = invariantDeclaration(
             ENTRY_MARK, filterVars(1, freeVarsMap.at(ENTRY_MARK)),
-            ProgramSelection::First, funName, memory);
+            ProgramSelection::First, funName, memory, returnType);
         MonoPair<SMTRef> invariants2 = invariantDeclaration(
             ENTRY_MARK, filterVars(2, freeVarsMap.at(ENTRY_MARK)),
-            ProgramSelection::Second, funName, memory);
+            ProgramSelection::Second, funName, memory, returnType);
         std::move(invariants).forEach(addInvariant);
         std::move(invariants1).forEach(addInvariant);
         std::move(invariants2).forEach(addInvariant);
@@ -86,8 +87,8 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     const map<int, map<int, vector<std::function<SharedSMTRef(SharedSMTRef)>>>>
         synchronizedPaths = getSynchronizedPaths(
             pathMaps.first, pathMaps.second, freeVarsMap, memory);
-    const vector<SharedSMTRef> recDecls =
-        recDeclarations(pathMaps.first, funName, freeVarsMap, memory);
+    const vector<SharedSMTRef> recDecls = recDeclarations(
+        pathMaps.first, funName, freeVarsMap, memory, returnType);
     declarations.insert(declarations.end(), recDecls.begin(), recDecls.end());
     for (const auto &it : synchronizedPaths) {
         const int startIndex = it.first;
@@ -108,9 +109,9 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     // these are needed for calls that can’t be matched with the same call in
     // the other program
     nonmutualPaths(pathMaps.first, pathExprs, freeVarsMap, Program::First,
-                   funName, declarations, memory);
+                   funName, declarations, memory, returnType);
     nonmutualPaths(pathMaps.second, pathExprs, freeVarsMap, Program::Second,
-                   funName, declarations, memory);
+                   funName, declarations, memory, returnType);
 
     const vector<SharedSMTRef> forbiddenPaths = getForbiddenPaths(
         pathMaps, marked, freeVarsMap, funName, false, memory);
@@ -235,12 +236,13 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     }
     vector<SharedSMTRef> smtExprs;
 
+    const llvm::Type *returnType = preprocessedFuns.first.fun->getReturnType();
     if (onlyRec) {
         smtExprs.push_back(
             equalInputsEqualOutputs(freeVarsMap.at(ENTRY_MARK),
                                     filterVars(1, freeVarsMap.at(ENTRY_MARK)),
                                     filterVars(2, freeVarsMap.at(ENTRY_MARK)),
-                                    funName, freeVarsMap, memory));
+                                    funName, freeVarsMap, memory, returnType));
         return smtExprs;
     }
 
@@ -382,16 +384,17 @@ vector<SharedSMTRef> mainDeclarations(PathMap pathMap, string funName,
 
 vector<SharedSMTRef> recDeclarations(PathMap pathMap, string funName,
                                      smt::FreeVarsMap freeVarsMap,
-                                     Memory memory) {
+                                     Memory memory,
+                                     const llvm::Type *returnType) {
     vector<SharedSMTRef> declarations;
     for (const auto &pathMapIt : pathMap) {
         const int startIndex = pathMapIt.first;
         if (startIndex != ENTRY_MARK &&
             !SMTGenerationOpts::getInstance().SingleInvariant) {
             // ignore entry node
-            MonoPair<SharedSMTRef> invariants =
-                invariantDeclaration(startIndex, freeVarsMap.at(startIndex),
-                                     ProgramSelection::Both, funName, memory);
+            MonoPair<SharedSMTRef> invariants = invariantDeclaration(
+                startIndex, freeVarsMap.at(startIndex), ProgramSelection::Both,
+                funName, memory, returnType);
             declarations.push_back(invariants.first);
             declarations.push_back(invariants.second);
         }
@@ -461,7 +464,8 @@ vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
 
 void nonmutualPaths(PathMap pathMap, vector<SharedSMTRef> &pathExprs,
                     smt::FreeVarsMap freeVarsMap, Program prog, string funName,
-                    vector<SharedSMTRef> &declarations, Memory memory) {
+                    vector<SharedSMTRef> &declarations, Memory memory,
+                    const llvm::Type *returnType) {
     const int progIndex = programIndex(prog);
     for (const auto &pathMapIt : pathMap) {
         const int startIndex = pathMapIt.first;
@@ -469,7 +473,7 @@ void nonmutualPaths(PathMap pathMap, vector<SharedSMTRef> &pathExprs,
             !SMTGenerationOpts::getInstance().SingleInvariant) {
             MonoPair<SMTRef> invariants = invariantDeclaration(
                 startIndex, filterVars(progIndex, freeVarsMap.at(startIndex)),
-                asSelection(prog), funName, memory);
+                asSelection(prog), funName, memory, returnType);
             std::move(invariants).forEach([&declarations](SMTRef inv) {
                 declarations.push_back(std::move(inv));
             });
@@ -729,9 +733,12 @@ SMTRef mutualRecursiveForall(SharedSMTRef clause, MonoPair<CallInfo> callPair,
         static_cast<uint32_t>(callPair.first.args.size()) -
         callPair.first.fun.getFunctionType()->getNumParams();
     vector<SortedVar> args;
-    // TODO Figure out the correct result type
-    args.push_back(SortedVar(callPair.first.assignedTo, "Int"));
-    args.push_back(SortedVar(callPair.second.assignedTo, "Int"));
+    args.push_back(
+        SortedVar(callPair.first.assignedTo,
+                  llvmTypeToSMTSort(callPair.first.fun.getReturnType())));
+    args.push_back(
+        SortedVar(callPair.second.assignedTo,
+                  llvmTypeToSMTSort(callPair.second.fun.getReturnType())));
     if (memory & HEAP_MASK) {
         args.push_back(SortedVar("HEAP$1_res", arrayType()));
         args.push_back(SortedVar("HEAP$2_res", arrayType()));
@@ -874,12 +881,10 @@ SharedSMTRef makeFunArgsEqual(SharedSMTRef clause, SharedSMTRef preClause,
 
 /// Create an assertion to require that if the recursive invariant holds and the
 /// arguments are equal the outputs are equal
-SharedSMTRef equalInputsEqualOutputs(vector<smt::SortedVar> funArgs,
-                                     vector<smt::SortedVar> funArgs1,
-                                     vector<smt::SortedVar> funArgs2,
-                                     string funName,
-                                     smt::FreeVarsMap freeVarsMap,
-                                     Memory memory) {
+SharedSMTRef equalInputsEqualOutputs(
+    vector<smt::SortedVar> funArgs, vector<smt::SortedVar> funArgs1,
+    vector<smt::SortedVar> funArgs2, string funName,
+    smt::FreeVarsMap freeVarsMap, Memory memory, const llvm::Type *returnType) {
     vector<SortedVar> forallArgs;
     vector<string> args;
     vector<string> preInvArgs;
@@ -890,11 +895,10 @@ SharedSMTRef equalInputsEqualOutputs(vector<smt::SortedVar> funArgs,
 
     forallArgs.insert(forallArgs.end(), funArgs.begin(), funArgs.end());
 
-    // TODO Figure out result type in bounded mode
     args.push_back("result$1");
     args.push_back("result$2");
-    forallArgs.push_back(SortedVar("result$1", "Int"));
-    forallArgs.push_back(SortedVar("result$2", "Int"));
+    forallArgs.push_back(SortedVar("result$1", llvmTypeToSMTSort(returnType)));
+    forallArgs.push_back(SortedVar("result$2", llvmTypeToSMTSort(returnType)));
     if (memory & HEAP_MASK) {
         forallArgs.push_back(SortedVar("HEAP$1_res", arrayType()));
         forallArgs.push_back(SortedVar("HEAP$2_res", arrayType()));

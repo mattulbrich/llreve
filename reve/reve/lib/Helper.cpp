@@ -129,6 +129,9 @@ string argSort(string arg) {
 }
 
 string llvmTypeToSMTSort(const llvm::Type *type) {
+    if (!SMTGenerationOpts::getInstance().BitVect) {
+        return "Int";
+    }
     if (type->isPointerTy()) {
         return "(_ BitVec 64)";
     } else if (type->isIntegerTy()) {

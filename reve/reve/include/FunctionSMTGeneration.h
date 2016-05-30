@@ -53,7 +53,7 @@ auto functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
 This creates complete assertions for slicing.
  */
 auto slicingAssertion(MonoPair<PreprocessedFunction> preprocessedFuns)
-                       -> std::vector<smt::SharedSMTRef>;
+    -> std::vector<smt::SharedSMTRef>;
 
 /// Create the assertion for the passed main function.
 /**
@@ -82,7 +82,8 @@ auto mainDeclarations(PathMap pathMap, std::string funName,
     -> std::vector<smt::SharedSMTRef>;
 /// Declarations for functions that can be called.
 auto recDeclarations(PathMap pathMap, std::string funName,
-                     smt::FreeVarsMap freeVarsMap, Memory memory)
+                     smt::FreeVarsMap freeVarsMap, Memory memory,
+                     const llvm::Type *returnType)
     -> std::vector<smt::SharedSMTRef>;
 /// Find all paths with the same start but different end marks
 /**
@@ -100,8 +101,8 @@ auto getForbiddenPaths(MonoPair<PathMap> pathMaps,
 auto nonmutualPaths(PathMap pathMap, std::vector<smt::SharedSMTRef> &pathExprs,
                     smt::FreeVarsMap freeVarsMap, Program prog,
                     std::string funName,
-                    std::vector<smt::SharedSMTRef> &declarations, Memory memory)
-    -> void;
+                    std::vector<smt::SharedSMTRef> &declarations, Memory memory,
+                    const llvm::Type *type) -> void;
 auto getOffByNPaths(PathMap pathMap1, PathMap pathMap2,
                     smt::FreeVarsMap freeVarsMap, std::string funName,
                     bool main, Memory memory)
@@ -151,7 +152,8 @@ auto equalInputsEqualOutputs(std::vector<smt::SortedVar> funArgs,
                              std::vector<smt::SortedVar> funArgs1,
                              std::vector<smt::SortedVar> funArgs2,
                              std::string funName, smt::FreeVarsMap freeVarsMap,
-                             Memory memory) -> smt::SharedSMTRef;
+                             Memory memory, const llvm::Type *returnType)
+    -> smt::SharedSMTRef;
 
 /* -------------------------------------------------------------------------- */
 // Functions related to the search for free variables
