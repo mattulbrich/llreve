@@ -60,6 +60,18 @@ Integer Integer::zext(unsigned width) {
     return res;
 }
 
+Integer Integer::zextOrTrunc(unsigned width) {
+    Integer res(*this);
+    switch (res.type) {
+    case IntType::Unbounded:
+        break;
+    case IntType::Bounded:
+        res.bounded = res.bounded.zextOrTrunc(width);
+        break;
+    }
+    return res;
+}
+
 Integer Integer::sext(unsigned width) {
     Integer res(*this);
     switch (res.type) {

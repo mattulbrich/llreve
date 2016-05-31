@@ -173,6 +173,8 @@ struct Integer {
     Integer and_(const Integer &rhs) const;
     Integer or_(const Integer &rhs) const;
     Integer xor_(const Integer &rhs) const;
+
+    Integer zextOrTrunc(unsigned width);
 };
 
 inline bool operator<(const Integer &lhs, const Integer &rhs) {

@@ -226,6 +226,21 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
                     resolveValue(sext->getOperand(0), state, sext->getType())
                         ->unsafeIntVal()
                         .sext(sext->getType()->getIntegerBitWidth()));
+            } else if (const auto ptrToInt =
+                           dyn_cast<llvm::PtrToIntInst>(instr)) {
+                state.variables[ptrToInt] = std::make_shared<VarInt>(
+                    resolveValue(ptrToInt->getPointerOperand(), state,
+                                 ptrToInt->getPointerOperand()->getType())
+                        ->unsafeIntVal()
+                        .zextOrTrunc(
+                            ptrToInt->getType()->getIntegerBitWidth()));
+            } else if (const auto intToPtr =
+                           dyn_cast<llvm::IntToPtrInst>(instr)) {
+                state.variables[ptrToInt] = std::make_shared<VarInt>(
+                    resolveValue(intToPtr->getOperand(0), state,
+                                 intToPtr->getOperand(0)->getType())
+                        ->unsafeIntVal()
+                        .zextOrTrunc(64));
             }
         }
     } else if (const auto gep = dyn_cast<GetElementPtrInst>(instr)) {
@@ -245,6 +260,8 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
             auto heapIt = state.heap.insert(std::make_pair(
                 static_pointer_cast<VarInt>(ptr)->val.asPointer(),
                 Integer(mpz_class(0))));
+            assert(heapIt.first->second.type == IntType::Bounded);
+            assert(heapIt.first->second.bounded.getBitWidth() == 8);
             state.variables[load] = make_shared<VarInt>(heapIt.first->second);
         }
     } else if (const auto store = dyn_cast<StoreInst>(instr)) {
