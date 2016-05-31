@@ -251,17 +251,24 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
         assert(ptr->getType() == VarType::Int);
         // This will only insert 0 if there is not already a different element
         if (BoundedFlag) {
-            auto heapIt = state.heap.insert(std::make_pair(
-                static_pointer_cast<VarInt>(ptr)->val.asPointer(),
-                Integer(
-                    makeBoundedInt(load->getType()->getIntegerBitWidth(), 0))));
-            state.variables[load] = make_shared<VarInt>(heapIt.first->second);
+            unsigned bytes = load->getType()->getIntegerBitWidth() / 8;
+            llvm::APInt val =
+                makeBoundedInt(load->getType()->getIntegerBitWidth(), 0);
+            for (unsigned i = 0; i < bytes; ++i) {
+                auto heapIt = state.heap.insert(std::make_pair(
+                    static_pointer_cast<VarInt>(ptr)->val.asPointer() +
+                        Integer(mpz_class(i)).asPointer(),
+                    Integer(makeBoundedInt(8, 0))));
+                assert(heapIt.first->second.type == IntType::Bounded);
+                assert(heapIt.first->second.bounded.getBitWidth() == 8);
+                val = (val << 8) |
+                      (heapIt.first->second.bounded).sextOrSelf(bytes * 8);
+            }
+            state.variables[load] = make_shared<VarInt>(Integer(val));
         } else {
             auto heapIt = state.heap.insert(std::make_pair(
                 static_pointer_cast<VarInt>(ptr)->val.asPointer(),
                 Integer(mpz_class(0))));
-            assert(heapIt.first->second.type == IntType::Bounded);
-            assert(heapIt.first->second.bounded.getBitWidth() == 8);
             state.variables[load] = make_shared<VarInt>(heapIt.first->second);
         }
     } else if (const auto store = dyn_cast<StoreInst>(instr)) {
@@ -269,12 +276,31 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
             resolveValue(store->getPointerOperand(), state,
                          store->getPointerOperand()->getType());
         assert(ptr->getType() == VarType::Int);
-        shared_ptr<VarVal> val =
-            resolveValue(store->getValueOperand(), state,
-                         store->getValueOperand()->getType());
-        assert(val->getType() == VarType::Int);
         HeapAddress addr = static_pointer_cast<VarInt>(ptr)->val;
-        state.heap[addr] = static_pointer_cast<VarInt>(val)->val;
+        VarIntVal val = resolveValue(store->getValueOperand(), state,
+                                     store->getValueOperand()->getType())
+                            ->unsafeIntVal();
+        if (BoundedFlag) {
+            int bytes =
+                store->getValueOperand()->getType()->getIntegerBitWidth() / 8;
+            assert(val.type == IntType::Bounded);
+            llvm::APInt bval = val.bounded;
+            if (bytes == 1) {
+                state.heap[addr] = val;
+            } else {
+                uint64_t i = 0;
+                for (; bytes >= 0; --bytes) {
+                    llvm::APInt el = bval.trunc(8);
+                    bval = bval.ashr(8);
+                    state.heap[addr + Integer(llvm::APInt(
+                                          64, static_cast<uint64_t>(bytes)))] =
+                        Integer(el);
+                    ++i;
+                }
+            }
+        } else {
+            state.heap[addr] = val;
+        }
     } else if (const auto select = dyn_cast<SelectInst>(instr)) {
         shared_ptr<VarVal> cond = resolveValue(
             select->getCondition(), state, select->getCondition()->getType());
