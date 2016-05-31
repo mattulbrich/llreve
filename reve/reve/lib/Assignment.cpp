@@ -185,17 +185,20 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
         if (SMTGenerationOpts::getInstance().BitVect) {
             // We load single bytes
             unsigned bytes = loadInst->getType()->getIntegerBitWidth() / 8;
-            vector<SharedSMTRef> args;
-            for (unsigned i = 0; i < bytes; ++i) {
-                SharedSMTRef load = makeBinOp(
-                    "select", stringExpr("HEAP$" + std::to_string(progIndex)),
+            SharedSMTRef load = makeBinOp(
+                "select", stringExpr("HEAP$" + std::to_string(progIndex)),
+                pointer);
+            for (unsigned i = 1; i < bytes; ++i) {
+                load = makeBinOp(
+                    "concat", load,
                     makeBinOp(
-                        "bvadd", pointer,
-                        smt::makeBinOp("_", "bv" + std::to_string(i), "64")));
-                args.push_back(load);
+                        "select",
+                        stringExpr("HEAP$" + std::to_string(progIndex)),
+                        makeBinOp("bvadd", pointer,
+                                  smt::makeBinOp("_", "bv" + std::to_string(i),
+                                                 "64"))));
             }
-            return makeAssignment(loadInst->getName(),
-                                  make_shared<Op>("concat", args));
+            return makeAssignment(loadInst->getName(), load);
         } else {
             SMTRef load = makeBinOp(
                 "select", stringExpr("HEAP$" + std::to_string(progIndex)),
