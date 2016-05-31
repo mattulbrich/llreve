@@ -220,10 +220,10 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
                 SharedSMTRef offset = makeBinOp(
                     "bvadd", pointer,
                     smt::makeBinOp("_", "bv" + std::to_string(i), "64"));
-                SharedSMTRef elem =
-                    makeUnaryOp("(_ extract " + std::to_string(8 * i + 7) +
-                                    " " + std::to_string(8 * i) + ")",
-                                val);
+                SharedSMTRef elem = makeUnaryOp(
+                    "(_ extract " + std::to_string(8 * (bytes - i - 1) + 7) +
+                        " " + std::to_string(8 * (bytes - i - 1)) + ")",
+                    val);
                 const std::vector<SharedSMTRef> args = {newHeap, offset, elem};
                 newHeap = make_shared<Op>("store", args);
             }
