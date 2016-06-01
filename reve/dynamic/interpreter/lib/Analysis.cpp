@@ -114,6 +114,7 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
        vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
        string mainFunctionName,
        vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns) {
+    SMTGenerationOpts::getInstance().BitVect = BoundedFlag;
     auto preprocessedFunctions =
         findFunction(preprocessedFuns, mainFunctionName);
     if (!preprocessedFunctions) {
