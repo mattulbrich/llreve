@@ -124,9 +124,10 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
                 }
             }
         }
-        if (BinOp->getOpcode() == Instruction::Or ||
-            BinOp->getOpcode() == Instruction::And ||
-            BinOp->getOpcode() == Instruction::Xor) {
+        if (!SMTGenerationOpts::getInstance().BitVect &&
+            (BinOp->getOpcode() == Instruction::Or ||
+             BinOp->getOpcode() == Instruction::And ||
+             BinOp->getOpcode() == Instruction::Xor)) {
             if (!(BinOp->getOperand(0)->getType()->isIntegerTy(1) &&
                   BinOp->getOperand(1)->getType()->isIntegerTy(1))) {
                 logWarningData(
