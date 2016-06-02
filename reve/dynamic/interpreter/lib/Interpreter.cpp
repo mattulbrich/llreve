@@ -358,8 +358,12 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
         assert(cond->getType() == VarType::Int);
         const VarIntVal &condVal = static_pointer_cast<VarInt>(cond)->val;
         for (auto c : switchInst->cases()) {
-            VarIntVal caseVal =
-                Integer(mpz_class(c.getCaseValue()->getSExtValue()));
+            VarIntVal caseVal;
+            if (BoundedFlag) {
+                caseVal = Integer(c.getCaseValue()->getValue());
+            } else {
+                caseVal = Integer(mpz_class(c.getCaseValue()->getSExtValue()));
+            }
             if (caseVal == condVal) {
                 return TerminatorUpdate(c.getCaseSuccessor());
             }
