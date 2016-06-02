@@ -138,8 +138,9 @@ int main(int argc, const char **argv) {
         PassInputThroughFlag, BitVectFlag, {});
     InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,
                         FileName2Flag);
-    SerializeOpts serializeOpts(OutputFileNameFlag, DontInstantiate, false);
     FileOptions fileOpts = getFileOptions(inputOpts.FileNames);
+    SerializeOpts serializeOpts(OutputFileNameFlag, DontInstantiate, false,
+                                BitVectFlag);
 
     MonoPair<shared_ptr<CodeGenAction>> acts =
         makeMonoPair(make_shared<clang::EmitLLVMOnlyAction>(),

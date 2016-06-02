@@ -18,31 +18,25 @@ void serializeSMT(std::vector<smt::SharedSMTRef> smtExprs, bool muZ,
 
     std::ostream outFile(buf);
 
-    for (auto &smt : smtExprs) {
+    int i = 0;
+    for (const auto &smt : smtExprs) {
         if (muZ) {
             outFile << *smt->compressLets()->mergeImplications({})->toSExpr();
         } else {
-            if (opts.DontInstantiate) {
-                if (opts.MergeImplications) {
-                    outFile << *smt->compressLets()
-                                    ->mergeImplications({})
-                                    ->toSExpr();
-                } else {
-                    outFile << *smt->compressLets()->toSExpr();
-                }
-            } else {
-                if (opts.MergeImplications) {
-                    outFile << *smt->compressLets()
-                                    ->instantiateArrays()
-                                    ->mergeImplications({})
-                                    ->toSExpr();
-                } else {
-                    outFile
-                        << *smt->compressLets()->instantiateArrays()->toSExpr();
-                }
+            smt::SharedSMTRef out = smt->compressLets();
+            if (opts.MergeImplications) {
+                out = out->mergeImplications({});
             }
+            if (!opts.DontInstantiate) {
+                out = out->instantiateArrays();
+            }
+            if (opts.RenameDefineFuns) {
+                out = out->renameDefineFuns("__" + std::to_string(i));
+            }
+            outFile << *out->toSExpr();
         }
         outFile << "\n";
+        ++i;
     }
 
     if (!opts.OutputFileName.empty()) {

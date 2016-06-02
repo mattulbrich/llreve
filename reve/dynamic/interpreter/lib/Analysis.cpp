@@ -113,7 +113,8 @@ vector<SharedSMTRef>
 driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
        vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
        string mainFunctionName,
-       vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns) {
+       vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
+       FileOptions fileOpts) {
     SMTGenerationOpts::getInstance().BitVect = BoundedFlag;
     auto preprocessedFunctions =
         findFunction(preprocessedFuns, mainFunctionName);
@@ -210,8 +211,7 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     llvm::verifyModule(*modules.second);
     // TODO pass all functions
     vector<SharedSMTRef> clauses =
-        generateSMT(modules, {preprocessedFunctions.getValue()},
-                    FileOptions({}, nullptr, nullptr, false));
+        generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
     // Remove check-sat and get-model
     clauses.pop_back();
     clauses.pop_back();

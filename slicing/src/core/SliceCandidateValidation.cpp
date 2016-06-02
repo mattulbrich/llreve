@@ -24,7 +24,7 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
     if (CriterionPresent) {
         fileOpts.OutRelation = make_shared<smt::Primitive<string>>("true");
     }
-	SerializeOpts serializeOpts(outputFileName, false, false);
+    SerializeOpts serializeOpts(outputFileName, false, false, false);
 
 	shared_ptr<Module> programCopy(CloneModule(program));
 	shared_ptr<Module> candiateCopy(CloneModule(candidate));

@@ -6,6 +6,7 @@
 #include "Interpreter.h"
 #include "MarkAnalysis.h"
 #include "MonoPair.h"
+#include "Opts.h"
 #include "Permutation.h"
 #include "Preprocess.h"
 
@@ -51,7 +52,8 @@ std::vector<smt::SharedSMTRef>
 driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
        std::vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
        std::string mainFunctionName,
-       std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns);
+       std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
+       FileOptions fileopts);
 llvm::Optional<MonoPair<PreprocessedFunction>>
 findFunction(const std::vector<MonoPair<PreprocessedFunction>> functions,
              std::string functionName);

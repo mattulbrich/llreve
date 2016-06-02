@@ -35,12 +35,13 @@ class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
         std::vector<std::shared_ptr<const SMTExpr>> conditions) const;
     virtual std::shared_ptr<const SMTExpr> instantiateArrays() const;
     virtual std::unique_ptr<const HeapInfo> heapInfo() const;
-    /// This is for the case when we are in the negative position of an
-    /// implication
     virtual ~SMTExpr() = default;
     SMTExpr(const SMTExpr & /*unused*/) = default;
     SMTExpr &operator=(SMTExpr &) = delete;
     SMTExpr() = default;
+    // Necessary to prevent horn2vmt from fucking up
+    virtual std::shared_ptr<const SMTExpr>
+    renameDefineFuns(std::string suffix) const;
 };
 
 using SharedSMTRef = std::shared_ptr<const SMTExpr>;
@@ -168,7 +169,11 @@ template <typename T> class Primitive : public SMTExpr {
     std::unique_ptr<const HeapInfo> heapInfo() const override {
         return nullptr;
     }
+    SharedSMTRef renameDefineFuns(std::string suffix) const override;
 };
+
+template <>
+SharedSMTRef Primitive<std::string>::renameDefineFuns(std::string suffix) const;
 
 class Op : public SMTExpr {
   public:
@@ -186,6 +191,7 @@ class Op : public SMTExpr {
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) const override;
     SharedSMTRef instantiateArrays() const override;
+    SharedSMTRef renameDefineFuns(std::string suffix) const override;
 };
 
 class Query : public SMTExpr {
@@ -231,6 +237,7 @@ class FunDef : public SMTExpr {
     SharedSMTRef body;
     SExprRef toSExpr() const override;
     SharedSMTRef instantiateArrays() const override;
+    SharedSMTRef renameDefineFuns(std::string suffix) const override;
 };
 
 class Comment : public SMTExpr {

@@ -86,12 +86,14 @@ int main(int argc, const char **argv) {
         std::cerr << "\n";
     }
     fclose(patternFile);
+
+    FileOptions fileOpts = getFileOptions(inputOpts.FileNames);
     vector<smt::SharedSMTRef> smtExprs =
-        driver(modules, preprocessedFuns, MainFunctionFlag, patterns);
+        driver(modules, preprocessedFuns, MainFunctionFlag, patterns, fileOpts);
 
     serializeSMT(smtExprs, false,
                  SerializeOpts(OutputFileNameFlag, !InstantiateStorage,
-                               MergeImplications));
+                               MergeImplications, BoundedFlag));
 
     llvm::llvm_shutdown();
 }

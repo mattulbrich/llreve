@@ -19,6 +19,7 @@ using sexpr::Value;
 using sexpr::List;
 using std::set;
 using std::string;
+using std::vector;
 
 SExprRef SetLogic::toSExpr() const {
     std::vector<SExprRef> args;
@@ -413,6 +414,36 @@ unique_ptr<const Op> makeOp(std::string opName, std::vector<std::string> args) {
 
 unique_ptr<const Assignment> makeAssignment(string name, SharedSMTRef val) {
     return std::make_unique<Assignment>(name, val);
+}
+
+SharedSMTRef SMTExpr::renameDefineFuns(string /* unused */) const {
+    return shared_from_this();
+}
+
+SharedSMTRef FunDef::renameDefineFuns(string suffix) const {
+    vector<SortedVar> newArgs;
+    for (const auto &arg : args) {
+        newArgs.push_back(SortedVar(arg.name + suffix, arg.type));
+    }
+    return make_shared<FunDef>(funName, newArgs, outType,
+                               body->renameDefineFuns(suffix));
+}
+
+SharedSMTRef Op::renameDefineFuns(string suffix) const {
+    std::vector<SharedSMTRef> newArgs;
+    for (const auto &arg : args) {
+        newArgs.push_back(arg->renameDefineFuns(suffix));
+    }
+    return make_shared<Op>(opName, newArgs, instantiate);
+}
+
+template <>
+SharedSMTRef Primitive<string>::renameDefineFuns(string suffix) const {
+    if (val == "false" || val == "true" || val.at(0) == '(') {
+        return shared_from_this();
+    } else {
+        return make_shared<Primitive>(val + suffix);
+    }
 }
 }
 
