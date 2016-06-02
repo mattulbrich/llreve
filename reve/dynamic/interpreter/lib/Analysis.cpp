@@ -755,34 +755,22 @@ SharedSMTRef makeEquation(const vector<mpz_class> &eq,
     }
     assert(polynomialTerms.size() + 1 == eq.size());
     for (size_t i = 0; i < polynomialTerms.size(); ++i) {
+        std::string mulName = BoundedFlag ? "bvmul" : "*";
         if (eq.at(i) > 0) {
             if (eq.at(i) == 1) {
                 left.push_back(polynomialTerms.at(i));
             } else {
-                if (BoundedFlag) {
-                    left.push_back(
-                        makeBinOp("bvmul", smt::stringExpr(eq.at(i).get_str()),
-                                  polynomialTerms.at(i)));
-                } else {
-                    left.push_back(
-                        makeBinOp("*", smt::stringExpr(eq.at(i).get_str()),
-                                  polynomialTerms.at(i)));
-                }
+                left.push_back(makeBinOp(mulName,
+                                         intToSMT(eq.at(i).get_str(), 32),
+                                         polynomialTerms.at(i)));
             }
         } else if (eq.at(i) < 0) {
             mpz_class inv = -eq.at(i);
             if (inv == 1) {
                 right.push_back(polynomialTerms.at(i));
             } else {
-                if (BoundedFlag) {
-                    right.push_back(makeBinOp("bvmul",
-                                              smt::stringExpr(inv.get_str()),
-                                              polynomialTerms.at(i)));
-                } else {
-                    right.push_back(makeBinOp("*",
-                                              smt::stringExpr(inv.get_str()),
-                                              polynomialTerms.at(i)));
-                }
+                right.push_back(makeBinOp(mulName, intToSMT(inv.get_str(), 32),
+                                          polynomialTerms.at(i)));
             }
         }
     }
@@ -794,7 +782,7 @@ SharedSMTRef makeEquation(const vector<mpz_class> &eq,
     }
     SharedSMTRef leftSide = nullptr;
     if (left.size() == 0) {
-        leftSide = smt::stringExpr("0");
+        leftSide = intToSMT("0", 32);
     } else if (left.size() == 1) {
         leftSide = left.front();
     } else {
@@ -806,7 +794,7 @@ SharedSMTRef makeEquation(const vector<mpz_class> &eq,
     }
     SharedSMTRef rightSide = nullptr;
     if (right.size() == 0) {
-        rightSide = smt::stringExpr("0");
+        rightSide = intToSMT("0", 32);
     } else if (right.size() == 1) {
         rightSide = right.front();
     } else {

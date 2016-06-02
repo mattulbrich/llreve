@@ -439,7 +439,8 @@ SharedSMTRef Op::renameDefineFuns(string suffix) const {
 
 template <>
 SharedSMTRef Primitive<string>::renameDefineFuns(string suffix) const {
-    if (val == "false" || val == "true" || val.at(0) == '(' || std::isdigit(val.at(0))) {
+    if (val == "false" || val == "true" || val.at(0) == '(' ||
+        std::isdigit(val.at(0))) {
         return shared_from_this();
     } else {
         return make_shared<Primitive>(val + suffix);
@@ -467,12 +468,15 @@ std::string getSMTType(std::string arg) {
     }
 }
 
-smt::SharedSMTRef apIntToSMT(llvm::APInt i) {
-    std::string val = i.toString(10, true);
+smt::SharedSMTRef intToSMT(std::string val, unsigned bitWidth) {
     if (SMTGenerationOpts::getInstance().BitVect) {
-        return smt::stringExpr("(_ bv" + val + " " +
-                          std::to_string(i.getBitWidth()) + ")");
+        return smt::stringExpr("(_ bv" + val + " " + std::to_string(bitWidth) +
+                               ")");
     } else {
         return smt::stringExpr(val);
     }
+}
+
+smt::SharedSMTRef apIntToSMT(llvm::APInt i) {
+    return intToSMT(i.toString(10, true), i.getBitWidth());
 }
