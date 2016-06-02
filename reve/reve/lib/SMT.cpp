@@ -439,7 +439,7 @@ SharedSMTRef Op::renameDefineFuns(string suffix) const {
 
 template <>
 SharedSMTRef Primitive<string>::renameDefineFuns(string suffix) const {
-    if (val == "false" || val == "true" || val.at(0) == '(') {
+    if (val == "false" || val == "true" || val.at(0) == '(' || std::isdigit(val.at(0))) {
         return shared_from_this();
     } else {
         return make_shared<Primitive>(val + suffix);
