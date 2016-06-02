@@ -38,19 +38,19 @@ class BooleanCondition : public Condition {
 
 class SwitchCondition : public Condition {
   public:
-    SwitchCondition(const llvm::Value *Cond, int64_t Val)
+    SwitchCondition(const llvm::Value *Cond, const llvm::APInt Val)
         : Cond(std::move(Cond)), Val(std::move(Val)) {}
     const llvm::Value *const Cond;
-    const int64_t Val;
+    llvm::APInt Val;
     std::unique_ptr<const smt::SMTExpr> toSmt() const override;
 };
 
 class SwitchDefault : public Condition {
   public:
-    SwitchDefault(const llvm::Value *Cond, std::vector<int64_t> Vals)
+    SwitchDefault(const llvm::Value *Cond, std::vector<llvm::APInt> Vals)
         : Cond(std::move(Cond)), Vals(std::move(Vals)) {}
     const llvm::Value *const Cond;
-    const std::vector<int64_t> Vals;
+    const std::vector<llvm::APInt> Vals;
     std::unique_ptr<const smt::SMTExpr> toSmt() const override;
 };
 

@@ -466,3 +466,13 @@ std::string getSMTType(std::string arg) {
         }
     }
 }
+
+smt::SharedSMTRef apIntToSMT(llvm::APInt i) {
+    std::string val = i.toString(10, true);
+    if (SMTGenerationOpts::getInstance().BitVect) {
+        return smt::stringExpr("(_ bv" + val + " " +
+                          std::to_string(i.getBitWidth()) + ")");
+    } else {
+        return smt::stringExpr(val);
+    }
+}

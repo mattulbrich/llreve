@@ -122,15 +122,15 @@ Paths_ traverse(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks,
     }
     if (auto SwitchInst = llvm::dyn_cast<llvm::SwitchInst>(TermInst)) {
         Paths_ TraversedPaths;
-        std::vector<int64_t> Vals;
+        std::vector<llvm::APInt> Vals;
         for (auto Case : SwitchInst->cases()) {
-            int64_t Val = Case.getCaseValue()->getSExtValue();
-            Vals.push_back(Val);
+            Vals.push_back(Case.getCaseValue()->getValue());
             auto TraversedPaths_ =
                 traverse(Case.getCaseSuccessor(), MarkedBlocks, false, Visited);
             for (auto &P : TraversedPaths_) {
                 P.insert(P.begin(), Edge(make_shared<const SwitchCondition>(
-                                             SwitchInst->getCondition(), Val),
+                                             SwitchInst->getCondition(),
+                                             Case.getCaseValue()->getValue()),
                                          Case.getCaseSuccessor()));
             }
             TraversedPaths.insert(TraversedPaths.end(), TraversedPaths_.begin(),
@@ -189,13 +189,13 @@ SMTRef BooleanCondition::toSmt() const {
 
 SMTRef SwitchCondition::toSmt() const {
     return makeBinOp("=", instrNameOrVal(Cond, Cond->getType()),
-                     stringExpr(std::to_string(Val)));
+                     apIntToSMT(Val));
 }
 
 SMTRef SwitchDefault::toSmt() const {
     std::vector<SharedSMTRef> StringVals;
     for (auto Val : Vals) {
-        StringVals.push_back(stringExpr(std::to_string(Val)));
+        StringVals.push_back(apIntToSMT(Val));
     }
     StringVals.push_back(instrNameOrVal(Cond, Cond->getType()));
     return std::make_unique<Op>("distinct", StringVals);
