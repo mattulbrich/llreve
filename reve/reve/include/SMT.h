@@ -124,6 +124,7 @@ class Forall : public SMTExpr {
     SharedSMTRef instantiateArrays() const override;
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) const override;
+    SharedSMTRef renameDefineFuns(std::string suffix) const override;
 };
 
 class CheckSat : public SMTExpr {

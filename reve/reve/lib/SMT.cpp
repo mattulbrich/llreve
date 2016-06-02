@@ -445,6 +445,14 @@ SharedSMTRef Primitive<string>::renameDefineFuns(string suffix) const {
         return make_shared<Primitive>(val + suffix);
     }
 }
+
+SharedSMTRef Forall::renameDefineFuns(std::string suffix) const {
+    vector<SortedVar> newArgs;
+    for (const auto &arg : vars) {
+        newArgs.push_back(SortedVar(arg.name + suffix, arg.type));
+    }
+    return make_shared<Forall>(newArgs, expr->renameDefineFuns(suffix));
+}
 }
 
 std::string getSMTType(std::string arg) {
