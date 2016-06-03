@@ -775,10 +775,10 @@ SharedSMTRef makeEquation(const vector<mpz_class> &eq,
         }
     }
     if (eq.back() > 0) {
-        left.push_back(smt::stringExpr(eq.back().get_str()));
+        left.push_back(intToSMT(eq.back().get_str(), 32));
     } else if (eq.back() < 0) {
         mpz_class inv = -eq.back();
-        right.push_back(smt::stringExpr(inv.get_str()));
+        right.push_back(intToSMT(inv.get_str(), 32));
     }
     SharedSMTRef leftSide = nullptr;
     if (left.size() == 0) {
