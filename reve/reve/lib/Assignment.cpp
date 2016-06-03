@@ -360,7 +360,7 @@ string predicateName(llvm::CmpInst::Predicate pred) {
 
 /// A function that is abblied to the arguments of a predicate
 std::function<SMTRef(SMTRef)> predicateFun(const llvm::CmpInst::CmpInst &cmp) {
-    if (cmp.isUnsigned() &&
+    if (!SMTGenerationOpts::getInstance().BitVect && cmp.isUnsigned() &&
         !SMTGenerationOpts::getInstance().EverythingSigned) {
         return [](SMTRef everythingSigned) {
             return makeUnaryOp("abs", std::move(everythingSigned));
