@@ -240,9 +240,20 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
         }
     }
     if (const auto truncInst = llvm::dyn_cast<llvm::TruncInst>(&Instr)) {
-        SharedSMTRef val = instrNameOrVal(truncInst->getOperand(0),
-                                          truncInst->getOperand(0)->getType());
-        return makeAssignment(truncInst->getName(), val);
+        if (SMTGenerationOpts::getInstance().BitVect) {
+            unsigned bitWidth = truncInst->getType()->getIntegerBitWidth();
+            std::string extract =
+                "(_ extract " + std::to_string(bitWidth - 1) + " 0)";
+            return makeAssignment(
+                truncInst->getName(),
+                makeUnaryOp(extract, instrNameOrVal(
+                                         truncInst->getOperand(0),
+                                         truncInst->getOperand(0)->getType())));
+        } else {
+            SharedSMTRef val = instrNameOrVal(
+                truncInst->getOperand(0), truncInst->getOperand(0)->getType());
+            return makeAssignment(truncInst->getName(), val);
+        }
     }
     const llvm::Instruction *ext = nullptr;
     if ((ext = llvm::dyn_cast<llvm::ZExtInst>(&Instr)) ||
