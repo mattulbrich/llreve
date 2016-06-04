@@ -81,13 +81,10 @@ template <typename T> struct HeapPattern {
             return matchingPatterns;
         }
         for (const auto &vec :
-             Range(Integer(mpz_class(0)),
-                   Integer(mpz_class(variablePointers.size())) -
-                       Integer(mpz_class(1)),
-                   k)) {
+             Range(0, mpz_class(variablePointers.size()) - 1, k)) {
             std::vector<const llvm::Value *> args(vec.size());
             for (size_t i = 0; i < args.size(); ++i) {
-                args[i] = variablePointers[vec[i].asUnbounded().get_ui()];
+                args[i] = variablePointers[vec[i].get_ui()];
             }
             auto pattern = this->distributeArguments(args);
 

@@ -48,6 +48,11 @@ using namespace std::placeholders;
 
 static llvm::cl::opt<bool>
     MultinomialsFlag("multinomials", llvm::cl::desc("Use true multinomials"));
+std::string InputFileFlag;
+static llvm::cl::opt<std::string, true>
+    InputFileFlagStorage("input",
+                         llvm::cl::desc("Use the inputs in the passed file"),
+                         llvm::cl::location(InputFileFlag));
 static llvm::cl::opt<unsigned>
     DegreeFlag("degree", llvm::cl::desc("Degree of the polynomial invariants"),
                llvm::cl::init(1));
@@ -141,8 +146,7 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     // Collect loop info
     LoopCountsAndMark loopCounts;
     iterateTracesInRange<LoopCountsAndMark>(
-        functions, Integer(mpz_class(-50)), Integer(mpz_class(50)), ThreadsFlag,
-        loopCounts, mergeLoopCounts,
+        functions, -50, 50, ThreadsFlag, loopCounts, mergeLoopCounts,
         [&nameMap](MonoPair<Call<const llvm::Value *>> calls,
                    LoopCountsAndMark &localLoopCounts) {
             analyzeExecution<const llvm::Value *>(
@@ -169,8 +173,7 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
     size_t degree = DegreeFlag;
     iterateTracesInRange<MergedAnalysisResults>(
-        functions, Integer(mpz_class(-50)), Integer(mpz_class(50)), ThreadsFlag,
-        analysisResults, mergeAnalysisResults,
+        functions, -50, 50, ThreadsFlag, analysisResults, mergeAnalysisResults,
         [&nameMap, &freeVarsMap, &patterns,
          degree](MonoPair<Call<const llvm::Value *>> calls,
                  MergedAnalysisResults &localAnalysisResults) {
@@ -1070,6 +1073,31 @@ void dumpLoopCounts(const LoopCountMap &loopCounts) {
         }
     }
     std::cerr << "----------\n";
+}
+
+std::map<const llvm::Value *, std::shared_ptr<VarVal>>
+getVarMap(const llvm::Function *fun, std::vector<mpz_class> vals) {
+    std::map<const llvm::Value *, std::shared_ptr<VarVal>> variableValues;
+    auto argIt = fun->arg_begin();
+    for (size_t i = 0; i < vals.size(); ++i) {
+        const llvm::Value *arg = &*argIt;
+        // Pointers are always unbounded
+        if (BoundedFlag && arg->getType()->isIntegerTy()) {
+            variableValues.insert(
+                {arg, std::make_shared<VarInt>(Integer(
+                          makeBoundedInt(arg->getType()->getIntegerBitWidth(),
+                                         vals[i].get_si())))});
+        } else if (arg->getType()->isPointerTy()) {
+            variableValues.insert(
+                {arg, std::make_shared<VarInt>(Integer(vals[i]).asPointer())});
+        } else {
+            variableValues.insert(
+                {arg, std::make_shared<VarInt>(Integer(vals[i]))});
+        }
+        ++argIt;
+    }
+    assert(argIt == fun->arg_end());
+    return variableValues;
 }
 
 Heap randomHeap(

@@ -7,12 +7,15 @@
 #include "MarkAnalysis.h"
 #include "MonoPair.h"
 #include "Opts.h"
+#include "ParseInput.h"
 #include "Permutation.h"
 #include "Preprocess.h"
 
 #include "llvm/IR/Module.h"
 
 #include <thread>
+
+extern std::string InputFileFlag;
 
 extern bool InstantiateStorage;
 
@@ -177,6 +180,9 @@ void iterateDeserialized(
     std::string directory,
     std::function<void(MonoPair<Call<std::string>> &)> callback);
 
+std::map<const llvm::Value *, std::shared_ptr<VarVal>>
+getVarMap(const llvm::Function *fun, std::vector<mpz_class> vals);
+
 template <typename T>
 void workerThread(
     ThreadSafeQueue<WorkItem> &q, T &state,
@@ -189,52 +195,16 @@ void workerThread(
         MonoPair<std::map<const llvm::Value *, std::shared_ptr<VarVal>>>
             variableValues = makeMonoPair<
                 std::map<const llvm::Value *, std::shared_ptr<VarVal>>>({}, {});
-        auto argIt1 = funs.first->arg_begin();
-        for (size_t i = 0; i < item.vals.first.size(); ++i) {
-            const llvm::Value *firstArg = &*argIt1;
-            // Pointers are always unbounded
-            if (BoundedFlag && firstArg->getType()->isIntegerTy()) {
-                variableValues.first.insert(
-                    {firstArg,
-                     std::make_shared<VarInt>(Integer(makeBoundedInt(
-                         firstArg->getType()->getIntegerBitWidth(),
-                         item.vals.first[i].asUnbounded().get_si())))});
-            } else if (firstArg->getType()->isPointerTy()) {
-                variableValues.first.insert(
-                    {firstArg,
-                     std::make_shared<VarInt>(item.vals.first[i].asPointer())});
-            } else {
-                variableValues.first.insert(
-                    {firstArg, std::make_shared<VarInt>(item.vals.first[i])});
-            }
-            ++argIt1;
+        variableValues.first = getVarMap(funs.first, item.vals.first);
+        variableValues.second = getVarMap(funs.second, item.vals.second);
+        if (!item.heapSet) {
+            Heap heap = randomHeap(*funs.first, variableValues.first, 5, -20,
+                                   20, &seedp);
+            item.heaps.first = heap;
+            item.heaps.second = heap;
         }
-        auto argIt2 = funs.second->arg_begin();
-        for (size_t i = 0; i < item.vals.second.size(); ++i) {
-            const llvm::Value *secondArg = &*argIt2;
-            // Pointers are always unbounded
-            if (BoundedFlag && secondArg->getType()->isIntegerTy()) {
-                variableValues.second.insert(
-                    {secondArg,
-                     std::make_shared<VarInt>(Integer(makeBoundedInt(
-                         secondArg->getType()->getIntegerBitWidth(),
-                         item.vals.second[i].asUnbounded().get_si())))});
-            } else if (secondArg->getType()->isPointerTy()) {
-                variableValues.second.insert(
-                    {secondArg, std::make_shared<VarInt>(
-                                    item.vals.second[i].asPointer())});
-            } else {
-                variableValues.second.insert(
-                    {secondArg, std::make_shared<VarInt>(item.vals.second[i])});
-            }
-            ++argIt2;
-        }
-        assert(argIt1 == funs.first->arg_end());
-        assert(argIt2 == funs.second->arg_end());
-        Heap heap =
-            randomHeap(*funs.first, variableValues.first, 5, -20, 20, &seedp);
         MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
-            funs, std::move(variableValues), {heap, heap}, 1000);
+            funs, std::move(variableValues), item.heaps, 1000);
         callback(std::move(calls), state);
     }
 }
@@ -244,7 +214,7 @@ void workerThread(
 // to be associative and the resulting state is written back to the state ref
 template <typename T>
 void iterateTracesInRange(
-    MonoPair<llvm::Function *> funs, VarIntVal lowerBound, VarIntVal upperBound,
+    MonoPair<llvm::Function *> funs, mpz_class lowerBound, mpz_class upperBound,
     unsigned threadsNum, T &state, std::function<T(const T &, const T &)> merge,
     std::function<void(MonoPair<Call<const llvm::Value *>>, T &)> callback) {
     assert(!(funs.first->isVarArg() || funs.second->isVarArg()));
@@ -262,10 +232,17 @@ void iterateTracesInRange(
     int counter = 0;
     assert(funs.first->getArgumentList().size() ==
            funs.second->getArgumentList().size());
-    for (const auto &vals :
-         Range(lowerBound, upperBound, funs.first->getArgumentList().size())) {
-        q.push({{vals, vals}, {{}, {}}, false, counter});
-        ++counter;
+    if (!InputFileFlag.empty()) {
+        std::vector<WorkItem> items = parseInput(InputFileFlag);
+        for (const auto& item : items) {
+            q.push(item);
+        }
+    } else {
+        for (const auto &vals : Range(lowerBound, upperBound,
+                                      funs.first->getArgumentList().size())) {
+            q.push({{vals, vals}, {{}, {}}, false, counter});
+            ++counter;
+        }
     }
     for (size_t i = 0; i < threads.size(); ++i) {
         // Each of these items will terminate exactly one thread

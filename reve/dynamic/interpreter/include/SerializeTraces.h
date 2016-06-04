@@ -10,22 +10,22 @@
 
 // All combinations of values inside the bounds, upperbound included
 class Range {
-    VarIntVal lowerBound;
-    VarIntVal upperBound;
+    mpz_class lowerBound;
+    mpz_class upperBound;
     size_t n;
 
   public:
-    Range(VarIntVal lowerBound, VarIntVal upperBound, size_t n)
+    Range(mpz_class lowerBound, mpz_class upperBound, size_t n)
         : lowerBound(lowerBound), upperBound(upperBound), n(n) {}
     class RangeIterator
-        : std::iterator<std::forward_iterator_tag, std::vector<VarIntVal>> {
-        VarIntVal lowerBound;
-        VarIntVal upperBound;
-        std::vector<VarIntVal> vals;
+        : std::iterator<std::forward_iterator_tag, std::vector<mpz_class>> {
+        mpz_class lowerBound;
+        mpz_class upperBound;
+        std::vector<mpz_class> vals;
 
       public:
-        RangeIterator(VarIntVal lowerBound, VarIntVal upperBound,
-                      std::vector<VarIntVal> vals)
+        RangeIterator(mpz_class lowerBound, mpz_class upperBound,
+                      std::vector<mpz_class> vals)
             : lowerBound(lowerBound), upperBound(upperBound), vals(vals) {}
         RangeIterator &operator++();
         bool operator==(const RangeIterator &other) {
@@ -34,14 +34,14 @@ class Range {
         bool operator!=(const RangeIterator &other) {
             return vals != other.vals;
         }
-        std::vector<VarIntVal> &operator*() { return vals; }
+        std::vector<mpz_class> &operator*() { return vals; }
     };
     RangeIterator begin();
     RangeIterator end();
 };
 
 struct WorkItem {
-    MonoPair<std::vector<VarIntVal>> vals;
+    MonoPair<std::vector<mpz_class>> vals;
     MonoPair<Heap> heaps;
     bool heapSet;
     int counter;

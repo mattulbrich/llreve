@@ -15,7 +15,7 @@ using std::map;
 using llvm::Function;
 
 Range::RangeIterator Range::begin() {
-    vector<VarIntVal> vals(n);
+    vector<mpz_class> vals(n);
     if (n == 0) {
         return RangeIterator(lowerBound, upperBound, vals);
     }
@@ -29,11 +29,11 @@ Range::RangeIterator Range::begin() {
 }
 
 Range::RangeIterator Range::end() {
-    vector<VarIntVal> vals(n);
+    vector<mpz_class> vals(n);
     if (n == 0) {
         return RangeIterator(lowerBound, upperBound, vals);
     }
-    vals[0] = upperBound + Integer(mpz_class(1));
+    vals[0] = upperBound + 1;
     for (size_t i = 1; i < vals.size(); ++i) {
         vals[i] = lowerBound;
     }
@@ -45,7 +45,7 @@ Range::RangeIterator &Range::RangeIterator::operator++() {
     size_t index = 0;
     while (carry == 1 && index < vals.size()) {
         vals[index]++;
-        if (vals[index] == upperBound + Integer(mpz_class(1))) {
+        if (vals[index] == upperBound + 1) {
             carry = 1;
             vals[index] = lowerBound;
         } else {
@@ -54,7 +54,7 @@ Range::RangeIterator &Range::RangeIterator::operator++() {
         ++index;
     }
     if (carry == 1) {
-        vals[0] = upperBound + Integer(mpz_class(1));
+        vals[0] = upperBound + 1;
     }
     return *this;
 }
