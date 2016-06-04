@@ -104,13 +104,13 @@ shared_ptr<VarVal> cborToVarVal(const cbor_item_t *item) {
 
 MonoPair<FastCall> interpretFunctionPair(
     MonoPair<const Function *> funs,
-    MonoPair<map<const llvm::Value *, shared_ptr<VarVal>>> variables, Heap heap,
-    uint32_t maxSteps) {
+    MonoPair<map<const llvm::Value *, shared_ptr<VarVal>>> variables,
+    MonoPair<Heap> heaps, uint32_t maxSteps) {
     return makeMonoPair(
-        interpretFunction(*funs.first, FastState(variables.first, heap),
+        interpretFunction(*funs.first, FastState(variables.first, heaps.first),
                           maxSteps),
-        interpretFunction(*funs.second, FastState(variables.second, heap),
-                          maxSteps));
+        interpretFunction(*funs.second,
+                          FastState(variables.second, heaps.second), maxSteps));
 }
 
 FastCall interpretFunction(const Function &fun, FastState entry,

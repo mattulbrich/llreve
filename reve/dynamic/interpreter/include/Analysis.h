@@ -190,42 +190,51 @@ void workerThread(
             variableValues = makeMonoPair<
                 std::map<const llvm::Value *, std::shared_ptr<VarVal>>>({}, {});
         auto argIt1 = funs.first->arg_begin();
-        auto argIt2 = funs.second->arg_begin();
-        for (size_t i = 0; i < item.vals.size(); ++i) {
+        for (size_t i = 0; i < item.vals.first.size(); ++i) {
             const llvm::Value *firstArg = &*argIt1;
-            const llvm::Value *secondArg = &*argIt2;
             // Pointers are always unbounded
             if (BoundedFlag && firstArg->getType()->isIntegerTy()) {
                 variableValues.first.insert(
-                    {firstArg, std::make_shared<VarInt>(Integer(makeBoundedInt(
-                                   firstArg->getType()->getIntegerBitWidth(),
-                                   item.vals[i].asUnbounded().get_si())))});
-                variableValues.second.insert(
-                    {secondArg, std::make_shared<VarInt>(Integer(makeBoundedInt(
-                                    firstArg->getType()->getIntegerBitWidth(),
-                                    item.vals[i].asUnbounded().get_si())))});
+                    {firstArg,
+                     std::make_shared<VarInt>(Integer(makeBoundedInt(
+                         firstArg->getType()->getIntegerBitWidth(),
+                         item.vals.first[i].asUnbounded().get_si())))});
             } else if (firstArg->getType()->isPointerTy()) {
                 variableValues.first.insert(
                     {firstArg,
-                     std::make_shared<VarInt>(item.vals[i].asPointer())});
-                variableValues.second.insert(
-                    {secondArg,
-                     std::make_shared<VarInt>(item.vals[i].asPointer())});
+                     std::make_shared<VarInt>(item.vals.first[i].asPointer())});
             } else {
                 variableValues.first.insert(
-                    {firstArg, std::make_shared<VarInt>(item.vals[i])});
-                variableValues.second.insert(
-                    {secondArg, std::make_shared<VarInt>(item.vals[i])});
+                    {firstArg, std::make_shared<VarInt>(item.vals.first[i])});
             }
             ++argIt1;
+        }
+        auto argIt2 = funs.second->arg_begin();
+        for (size_t i = 0; i < item.vals.second.size(); ++i) {
+            const llvm::Value *secondArg = &*argIt2;
+            // Pointers are always unbounded
+            if (BoundedFlag && secondArg->getType()->isIntegerTy()) {
+                variableValues.second.insert(
+                    {secondArg,
+                     std::make_shared<VarInt>(Integer(makeBoundedInt(
+                         secondArg->getType()->getIntegerBitWidth(),
+                         item.vals.second[i].asUnbounded().get_si())))});
+            } else if (secondArg->getType()->isPointerTy()) {
+                variableValues.second.insert(
+                    {secondArg, std::make_shared<VarInt>(
+                                    item.vals.second[i].asPointer())});
+            } else {
+                variableValues.second.insert(
+                    {secondArg, std::make_shared<VarInt>(item.vals.second[i])});
+            }
             ++argIt2;
         }
         assert(argIt1 == funs.first->arg_end());
         assert(argIt2 == funs.second->arg_end());
         Heap heap =
             randomHeap(*funs.first, variableValues.first, 5, -20, 20, &seedp);
-        MonoPair<Call<const llvm::Value *>> calls =
-            interpretFunctionPair(funs, std::move(variableValues), heap, 1000);
+        MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
+            funs, std::move(variableValues), {heap, heap}, 1000);
         callback(std::move(calls), state);
     }
 }
@@ -255,12 +264,12 @@ void iterateTracesInRange(
            funs.second->getArgumentList().size());
     for (const auto &vals :
          Range(lowerBound, upperBound, funs.first->getArgumentList().size())) {
-        q.push({vals, {}, false, counter});
+        q.push({{vals, vals}, {{}, {}}, false, counter});
         ++counter;
     }
     for (size_t i = 0; i < threads.size(); ++i) {
         // Each of these items will terminate exactly one thread
-        q.push({{}, {}, false, -1});
+        q.push({{{}, {}}, {{}, {}}, false, -1});
     }
     for (auto &t : threads) {
         t.join();

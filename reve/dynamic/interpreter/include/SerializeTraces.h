@@ -16,8 +16,7 @@ class Range {
 
   public:
     Range(VarIntVal lowerBound, VarIntVal upperBound, size_t n)
-        : lowerBound(lowerBound), upperBound(upperBound), n(n) {
-    }
+        : lowerBound(lowerBound), upperBound(upperBound), n(n) {}
     class RangeIterator
         : std::iterator<std::forward_iterator_tag, std::vector<VarIntVal>> {
         VarIntVal lowerBound;
@@ -27,8 +26,7 @@ class Range {
       public:
         RangeIterator(VarIntVal lowerBound, VarIntVal upperBound,
                       std::vector<VarIntVal> vals)
-            : lowerBound(lowerBound), upperBound(upperBound), vals(vals)
-              {}
+            : lowerBound(lowerBound), upperBound(upperBound), vals(vals) {}
         RangeIterator &operator++();
         bool operator==(const RangeIterator &other) {
             return vals == other.vals;
@@ -43,8 +41,8 @@ class Range {
 };
 
 struct WorkItem {
-    std::vector<VarIntVal> vals;
-    Heap heap;
+    MonoPair<std::vector<VarIntVal>> vals;
+    MonoPair<Heap> heaps;
     bool heapSet;
     int counter;
 };
