@@ -114,7 +114,7 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
     for (auto &fun1 : mod1) {
         if (fun1.isDeclaration() && !fun1.isIntrinsic()) {
             auto fun2P = mod2.getFunction(fun1.getName());
-            if (fun2P && fun1.getName() != "__mark") {
+            if (fun2P && fun1.getName() != "__mark" && fun1.getName() != "__splitmark") {
                 llvm::Function &fun2 = *fun2P;
                 // Calculate the number of varargs used in function calls
                 set<uint32_t> varArgs = getVarArgs(fun1);
@@ -187,14 +187,14 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
     }
     for (auto &fun1 : mod1) {
         if (fun1.isDeclaration() && !fun1.isIntrinsic() &&
-            fun1.getName() != "__mark") {
+            fun1.getName() != "__mark" && fun1.getName() != "__splitmark") {
             auto decls = externFunDecl(fun1, 1, mem);
             declarations.insert(declarations.end(), decls.begin(), decls.end());
         }
     }
     for (auto &fun2 : mod2) {
         if (fun2.isDeclaration() && !fun2.isIntrinsic() &&
-            fun2.getName() != "__mark") {
+            fun2.getName() != "__mark" && fun2.getName() != "__splitmark") {
             auto decls = externFunDecl(fun2, 2, mem);
             declarations.insert(declarations.end(), decls.begin(), decls.end());
         }

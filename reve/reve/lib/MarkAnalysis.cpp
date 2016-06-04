@@ -2,10 +2,10 @@
 
 #include <iostream>
 
+#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
-#include "llvm/Analysis/LoopInfo.h"
 
 using std::make_pair;
 using std::set;
@@ -25,7 +25,9 @@ bool MarkAnalysis::runOnFunction(llvm::Function &Fun) {
         for (auto &Inst : BB) {
             if (const auto CallInst = llvm::dyn_cast<llvm::CallInst>(&Inst)) {
                 if ((CallInst->getCalledFunction() != nullptr) &&
-                    CallInst->getCalledFunction()->getName() == "__mark") {
+                    (CallInst->getCalledFunction()->getName() == "__mark" ||
+                     CallInst->getCalledFunction()->getName() ==
+                         "__splitmark")) {
                     const llvm::Value *IDVal = CallInst->getArgOperand(0);
                     int ID = 0;
                     if (const auto ConstInt =
@@ -43,10 +45,11 @@ bool MarkAnalysis::runOnFunction(llvm::Function &Fun) {
             BlockedMarks[&BB].insert(UNREACHABLE_MARK);
         }
     }
-    // loop rotation duplicates marks, so we need to remove the marks that are outside the loop
-    llvm::LoopInfo& LI = getAnalysis<llvm::LoopInfoWrapperPass>().getLoopInfo();
+    // loop rotation duplicates marks, so we need to remove the marks that are
+    // outside the loop
+    llvm::LoopInfo &LI = getAnalysis<llvm::LoopInfoWrapperPass>().getLoopInfo();
     for (auto it : MarkedBlocks) {
-        set<llvm::BasicBlock*> newMarkedBlocks;
+        set<llvm::BasicBlock *> newMarkedBlocks;
         if (it.second.size() > 1) {
             for (auto block : it.second) {
                 if (LI.getLoopFor(block)) {

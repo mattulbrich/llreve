@@ -16,8 +16,10 @@ bool RemoveMarkPass::runOnFunction(llvm::Function & /*unused */) {
                 for (auto &Inst : *BB) {
                     if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(&Inst)) {
                         if ((CallInst->getCalledFunction() != nullptr) &&
-                            CallInst->getCalledFunction()->getName() ==
-                                "__mark") {
+                            (CallInst->getCalledFunction()->getName() ==
+                                 "__mark" ||
+                             CallInst->getCalledFunction()->getName() ==
+                                 "__splitmark")) {
                             ToDelete.insert(CallInst);
                         }
                     }

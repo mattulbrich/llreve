@@ -89,7 +89,8 @@ AnalysisResults preprocessFunction(llvm::Function &fun, string prefix,
     fpm->add(llvm::createPromoteMemoryToRegisterPass()); // mem2reg
     fpm->add(llvm::createLoopSimplifyPass());
     fpm->add(llvm::createCFGSimplificationPass());
-    fpm->add(new SplitEntryBlockPass());
+    fpm->add(new SplitBlockPass());
+
     MarkAnalysis *markAnalysis = new MarkAnalysis();
     InferMarksAnalysis *inferMarkAnalysis = new InferMarksAnalysis();
     fpm->add(inferMarkAnalysis);
