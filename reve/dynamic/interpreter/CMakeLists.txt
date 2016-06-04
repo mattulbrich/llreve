@@ -40,7 +40,6 @@ add_library(libreve-interpreter
   ${headers}
   ${BISON_PatternParser_OUTPUTS}
   ${FLEX_PatternLexer_OUTPUTS})
-add_executable(reve-interpreter src/ReveInterpreter.cpp ${headers})
 add_executable(reve-analyzer src/ReveAnalyzer.cpp ${headers})
 
 target_link_libraries(libreve-interpreter
@@ -53,12 +52,4 @@ target_link_libraries(reve-analyzer
   ${GMPXX_LIBRARIES}
   ${CBOR_LIBRARIES}
   ${FL_LIBRARY}
-  )
-
-target_link_libraries(reve-interpreter
-  libreve
-  libreve-interpreter
-  ${GMP_LIBRARIES}
-  ${GMPXX_LIBRARIES}
-  ${CBOR_LIBRARIES}
   )

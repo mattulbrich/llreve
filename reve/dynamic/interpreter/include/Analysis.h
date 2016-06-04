@@ -255,12 +255,12 @@ void iterateTracesInRange(
            funs.second->getArgumentList().size());
     for (const auto &vals :
          Range(lowerBound, upperBound, funs.first->getArgumentList().size())) {
-        q.push({vals, counter});
+        q.push({vals, {}, false, counter});
         ++counter;
     }
     for (size_t i = 0; i < threads.size(); ++i) {
         // Each of these items will terminate exactly one thread
-        q.push({{}, -1});
+        q.push({{}, {}, false, -1});
     }
     for (auto &t : threads) {
         t.join();

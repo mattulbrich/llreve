@@ -8,15 +8,6 @@
 
 #include "llvm/IR/Function.h"
 
-/// Interprets the provided functions for all combinations of inputs
-/// within the provided bounds. The output is written to the output
-/// directory to files named ${functionName}_(1|2)_${counter}.cbor
-/// where counter just ensures that the names are unique. The actual
-/// function arguments can be found in the entry state.
-auto serializeValuesInRange(MonoPair<const llvm::Function *> funs,
-                            VarIntVal lowerBound, VarIntVal upperBound,
-                            std::string outputDirectory) -> void;
-
 // All combinations of values inside the bounds, upperbound included
 class Range {
     VarIntVal lowerBound;
@@ -53,9 +44,7 @@ class Range {
 
 struct WorkItem {
     std::vector<VarIntVal> vals;
+    Heap heap;
+    bool heapSet;
     int counter;
 };
-
-void workerThread(MonoPair<const llvm::Function *> funs,
-                  ThreadSafeQueue<WorkItem> &q,
-                  std::string outputDirectory);
