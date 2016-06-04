@@ -409,7 +409,7 @@ string opName(const llvm::BinaryOperator &Op) {
         case Instruction::LShr:
             return "bvlshr";
         case Instruction::Shl:
-            return "blshl";
+            return "bvshl";
         default:
             logError("Unknown opcode: " + std::string(Op.getOpcodeName()) +
                      "\n");
