@@ -456,7 +456,7 @@ combineOp(const llvm::BinaryOperator &Op) {
                     return makeBinOp(opName, std::move(firstArg),
                                      stringExpr(std::to_string(divisor)));
                 };
-        } else {
+        } else if (!SMTGenerationOpts::getInstance().BitVect) {
             logErrorData("Only shifts by a constant are supported\n", Op);
         }
     }
