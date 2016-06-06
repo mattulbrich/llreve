@@ -14,7 +14,7 @@ using namespace std;
 using namespace llvm;
 
 
-shared_ptr<Module> BruteForce::computeSlice(Criterion c) {
+shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 	ModulePtr program = getProgram();
 	int numFunctions = 0;
 	int numInstructions = 0;
@@ -26,16 +26,6 @@ shared_ptr<Module> BruteForce::computeSlice(Criterion c) {
 	}
 	//We will not be able to slice the return instruction:
 	numInstructions--;
-
-	// if (numFunctions != 1) {
-	// 	outs() << "Unsupported number of functions! Only exactly one function supported. \n";
-	// 	exit(1);
-	// }
-
-	if (!c.isReturnValue()) {
-		outs() << "Unsupported criterion, can only slice after return value. \n";
-		exit(1);
-	}
 
 	ModulePtr bestCandidate = shared_ptr<Module>(nullptr);
 	int maxSliced = 0;
@@ -73,7 +63,7 @@ shared_ptr<Module> BruteForce::computeSlice(Criterion c) {
 		PM.run(*sliceCandidate);
 
 		if (sliced > maxSliced) {
-			ValidationResult isValid = SliceCandidateValidation::validate(&*program, &*sliceCandidate);
+			ValidationResult isValid = SliceCandidateValidation::validate(&*program, &*sliceCandidate, c);
 			if (isValid == ValidationResult::valid) {
 				maxSliced = sliced;
 				bestCandidate = sliceCandidate;

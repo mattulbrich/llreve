@@ -40,8 +40,8 @@ static cl::opt<SlicingMethodOptions> SlicingMethodOption(cl::desc("Choose slicin
 	llvm::cl::cat(SlicingCategory),
 	llvm::cl::Required);
 
-bool CriterionPresent;
-static llvm::cl::opt<bool, true> CriterionPresentFlag("criterion-present", llvm::cl::desc("Use if the code contains a __criterion function to mark the criterion."), cl::location(CriterionPresent),
+bool criterionPresent = false;
+static llvm::cl::opt<bool,true> CriterionPresentFlag("criterion-present", llvm::cl::desc("Use if the code contains a __criterion function to mark the criterion."), cl::location(criterionPresent),
 	llvm::cl::cat(SlicingCategory));
 static llvm::cl::alias     CriterionPresentShort("p", cl::desc("Alias for -criterion-present"),
     cl::aliasopt(CriterionPresentFlag), llvm::cl::cat(SlicingCategory));
@@ -77,15 +77,11 @@ int main(int argc, const char **argv) {
 	parseArgs(argc, argv);
 	ModulePtr program = getModuleFromFile(FileName, ResourceDir, Includes);
 
-	SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
-	smtOpts.PerfectSync = true;
-
-	for (Function& function:*program) {
-		if (function.getName() != "__criterion"
-			&& function.getName() != "__mark") {
-			smtOpts.MainFunction = function.getName().str();
-			break;
-		}
+	CriterionPtr criterion;
+	if (CriterionPresentFlag) {
+		criterion = shared_ptr<Criterion>(new PresentCriterion());
+	} else {
+		criterion = shared_ptr<Criterion>(new ReturnValueCriterion());
 	}
 
 
@@ -99,7 +95,7 @@ int main(int argc, const char **argv) {
 		break;
 	}
 
-	ModulePtr slice = method->computeSlice(Criterion());
+	ModulePtr slice = method->computeSlice(criterion);
 
 	if (!slice){
 		outs() << "An error occured. Could not produce slice. \n";

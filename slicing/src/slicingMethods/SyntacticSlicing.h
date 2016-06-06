@@ -5,6 +5,6 @@
 class SyntacticSlicing: public SlicingMethod {
 public:
 	SyntacticSlicing(ModulePtr program):SlicingMethod(program){}
-	virtual ModulePtr computeSlice(Criterion c) override;
+	virtual ModulePtr computeSlice(CriterionPtr c) override;
 
 };

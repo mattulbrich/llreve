@@ -11,29 +11,28 @@
 using namespace std;
 using namespace llvm;
 
-shared_ptr<Module> SyntacticSlicing::computeSlice(Criterion c) {
+shared_ptr<Module> SyntacticSlicing::computeSlice(CriterionPtr criterion) {
 	ModulePtr result = shared_ptr<Module>(nullptr);
-	if (c.isReturnValue()) {
-		ModulePtr program = getProgram();
-		ModulePtr sliceCandidate = CloneModule(&*program);
 
-		llvm::legacy::PassManager PM;
-		PM.add(new llvm::PostDominatorTree());
-		PM.add(new PDGPass());
-		PM.add(new SyntacticSlicePass());
-		PM.add(new SlicingPass());
-		PM.run(*sliceCandidate);
+	ModulePtr program = getProgram();
+	ModulePtr sliceCandidate = CloneModule(&*program);
 
-		ValidationResult valid = SliceCandidateValidation::validate(&*program, &*sliceCandidate);
-		if (valid == ValidationResult::valid) {
-			result = sliceCandidate;
-			outs() << "The produced syntactic slice was verified by reve. :) \n";
+	llvm::legacy::PassManager PM;
+	PM.add(new llvm::PostDominatorTree());
+	PM.add(new PDGPass());
+	PM.add(new SyntacticSlicePass(criterion));
+	PM.add(new SlicingPass());
+	PM.run(*sliceCandidate);
 
-		} else if (valid == ValidationResult::valid){
-			outs() << "Ups! The produced syntactic slice is not valid! :/ \n";
-		} else {
-			outs() << "Could not verify the vlidity! :( \n";
-		}
+	ValidationResult valid = SliceCandidateValidation::validate(&*program, &*sliceCandidate, criterion);
+	if (valid == ValidationResult::valid) {
+		result = sliceCandidate;
+		outs() << "The produced syntactic slice was verified by reve. :) \n";
+
+	} else if (valid == ValidationResult::valid){
+		outs() << "Ups! The produced syntactic slice is not valid! :/ \n";
+	} else {
+		outs() << "Could not verify the vlidity! :( \n";
 	}
 
 	return result;
