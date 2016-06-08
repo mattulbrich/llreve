@@ -27,7 +27,6 @@ const VarName ReturnName = nullptr;
 struct VarVal {
     virtual VarType getType() const = 0;
     virtual nlohmann::json toJSON() const = 0;
-    virtual cbor_item_t *toCBOR() const = 0;
     virtual ~VarVal();
     VarVal(const VarVal &other) = default;
     VarVal() = default;
@@ -37,13 +36,10 @@ struct VarVal {
 
 bool varValEq(const VarVal &lhs, const VarVal &rhs);
 
-std::shared_ptr<VarVal> cborToVarVal(const cbor_item_t *item);
-
 struct VarInt : VarVal {
     VarIntVal val;
     VarType getType() const override;
     nlohmann::json toJSON() const override;
-    cbor_item_t *toCBOR() const override;
     VarInt(VarIntVal val) : val(val) {}
     VarInt() : val(0) {}
     VarIntVal unsafeIntVal() const override;
@@ -53,7 +49,6 @@ struct VarBool : VarVal {
     bool val;
     VarType getType() const override;
     nlohmann::json toJSON() const override;
-    cbor_item_t *toCBOR() const override;
     VarBool(bool val) : val(val) {}
     VarIntVal unsafeIntVal() const override;
 };
@@ -67,7 +62,9 @@ template <typename T> struct State {
     // If an address is not in the map, it’s value is zero
     // Note that the values in the map can also be zero
     Heap heap;
-    State(VarMap<T> variables, Heap heap) : variables(variables), heap(heap) {}
+    Integer heapBackground;
+    State(VarMap<T> variables, Heap heap, Integer heapBackground)
+        : variables(variables), heap(heap), heapBackground(heapBackground) {}
     State() = default;
 };
 
@@ -84,10 +81,7 @@ template <typename T> struct Step {
     Step &operator=(const Step &other) = default;
     virtual nlohmann::json
     toJSON(std::function<std::string(T)> varName) const = 0;
-    virtual cbor_item_t *toCBOR() const = 0;
 };
-
-std::shared_ptr<Step<std::string>> cborToStep(const cbor_item_t *item);
 
 template <typename T> struct BlockStep;
 
@@ -121,16 +115,9 @@ template <typename T> struct Call : Step<T> {
         j["blocks_visited"] = blocksVisited;
         return j;
     }
-    cbor_item_t *toCBOR() const override {
-        logError("Only specialized version cab be serialized to cbor\n");
-        return nullptr;
-    }
 };
 
 using FastCall = Call<const llvm::Value *>;
-template <> cbor_item_t *FastCall::toCBOR() const;
-
-Call<std::string> cborToCall(const cbor_item_t *item);
 
 template <typename T> struct BlockStep : Step<T> {
     BlockName blockName;
@@ -152,16 +139,7 @@ template <typename T> struct BlockStep : Step<T> {
         j["calls"] = jsonCalls;
         return j;
     }
-    cbor_item_t *toCBOR() const override {
-        logError("Only specialized version can be serialized to cbor\n");
-        return nullptr;
-    }
 };
-
-template <> cbor_item_t *BlockStep<const llvm::Value *>::toCBOR() const;
-
-std::shared_ptr<BlockStep<std::string>>
-cborToBlockStep(const cbor_item_t *item);
 
 template <typename T> struct BlockUpdate {
     // State after phi nodes
@@ -196,7 +174,7 @@ struct TerminatorUpdate {
 MonoPair<FastCall> interpretFunctionPair(
     MonoPair<const llvm::Function *> funs,
     MonoPair<std::map<const llvm::Value *, std::shared_ptr<VarVal>>> variables,
-    MonoPair<Heap> heaps, uint32_t maxSteps);
+    MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds, uint32_t maxSteps);
 auto interpretFunction(const llvm::Function &fun, FastState entry,
                        uint32_t maxSteps) -> FastCall;
 auto interpretBlock(const llvm::BasicBlock &block,
@@ -222,9 +200,6 @@ auto interpretIntBinOp(const llvm::BinaryOperator *instr,
 auto interpretBoolBinOp(const llvm::BinaryOperator *instr,
                         llvm::Instruction::BinaryOps op, bool b0, bool b1,
                         FastState &state) -> void;
-
-cbor_item_t *stateToCBOR(FastState state);
-State<std::string> cborToState(const cbor_item_t *item);
 
 template <typename A, typename T> VarInt resolveGEP(T &gep, State<A> state) {
     std::shared_ptr<VarVal> val = resolveValue(
@@ -260,15 +235,6 @@ template <typename A, typename T> VarInt resolveGEP(T &gep, State<A> state) {
     }
     return VarInt(offset);
 }
-
-std::string cborToString(const cbor_item_t *item);
-VarIntVal cborToVarIntVal(const cbor_item_t *item);
-
-template <typename T>
-std::vector<T> cborToVector(const cbor_item_t *item,
-                            std::function<T(const cbor_item_t *)> fun);
-std::map<std::string, const cbor_item_t *>
-cborToKeyMap(const cbor_item_t *item);
 
 std::string valueName(const llvm::Value *val);
 

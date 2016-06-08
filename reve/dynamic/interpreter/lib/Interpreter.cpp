@@ -49,33 +49,6 @@ static llvm::cl::opt<unsigned, true> // The parser
                  llvm::cl::desc("Size for a random heap element"),
                  llvm::cl::location(HeapElemSizeFlag), llvm::cl::init(8));
 
-template <typename Key, typename Val>
-std::map<Key, Val> cborToMap(const cbor_item_t *item,
-                             std::function<Key(const cbor_item_t *)> keyFun,
-                             std::function<Val(const cbor_item_t *)> valFun) {
-    assert(cbor_isa_map(item));
-    std::map<Key, Val> map;
-    struct cbor_pair *handle = cbor_map_handle(item);
-    for (size_t i = 0; i < cbor_map_size(item); ++i) {
-        map.insert(
-            std::make_pair(keyFun(handle[i].key), valFun(handle[i].value)));
-    }
-    return map;
-}
-
-template <typename T>
-std::map<std::string, T>
-cborToStringMap(const cbor_item_t *item,
-                std::function<T(const cbor_item_t *)> fun) {
-    return cborToMap<std::string, T>(item, cborToString, fun);
-}
-
-std::map<std::string, const cbor_item_t *>
-cborToKeyMap(const cbor_item_t *item) {
-    return cborToMap<std::string, const cbor_item_t *>(
-        item, cborToString, [](const cbor_item_t *x) { return x; });
-}
-
 VarType VarInt::getType() const { return VarType::Int; }
 VarIntVal VarInt::unsafeIntVal() const { return val; }
 VarType VarBool::getType() const { return VarType::Bool; }
@@ -85,32 +58,21 @@ VarIntVal VarBool::unsafeIntVal() const {
 }
 
 json VarInt::toJSON() const { return val.get_str(); }
-cbor_item_t *VarInt::toCBOR() const {
-    return cbor_build_string(val.get_str().c_str());
-}
 json VarBool::toJSON() const { return json(val); }
-cbor_item_t *VarBool::toCBOR() const { return cbor_build_bool(val); }
-
-shared_ptr<VarVal> cborToVarVal(const cbor_item_t *item) {
-    if (cbor_is_bool(item)) {
-        return make_shared<VarBool>(cbor_ctrl_is_bool(item));
-    } else if (cbor_isa_string(item) && cbor_string_is_definite(item)) {
-        VarIntVal i(mpz_class(cborToString(item), 10));
-        return make_shared<VarInt>(i);
-    } else {
-        return nullptr;
-    }
-}
 
 MonoPair<FastCall> interpretFunctionPair(
     MonoPair<const Function *> funs,
     MonoPair<map<const llvm::Value *, shared_ptr<VarVal>>> variables,
-    MonoPair<Heap> heaps, uint32_t maxSteps) {
+    MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds,
+    uint32_t maxSteps) {
     return makeMonoPair(
-        interpretFunction(*funs.first, FastState(variables.first, heaps.first),
+        interpretFunction(*funs.first, FastState(variables.first, heaps.first,
+                                                 heapBackgrounds.first),
                           maxSteps),
-        interpretFunction(*funs.second,
-                          FastState(variables.second, heaps.second), maxSteps));
+        interpretFunction(
+            *funs.second,
+            FastState(variables.second, heaps.second, heapBackgrounds.second),
+            maxSteps));
 }
 
 FastCall interpretFunction(const Function &fun, FastState entry,
@@ -169,8 +131,9 @@ BlockUpdate<const llvm::Value *> interpretBlock(const BasicBlock &block,
                     &*argIt, resolveValue(arg, state, arg->getType())));
                 ++argIt;
             }
-            FastCall c = interpretFunction(*fun, FastState(args, state.heap),
-                                           maxSteps - blocksVisited);
+            FastCall c = interpretFunction(
+                *fun, FastState(args, state.heap, state.heapBackground),
+                maxSteps - blocksVisited);
             blocksVisited += c.blocksVisited;
             if (blocksVisited > maxSteps || c.earlyExit) {
                 return BlockUpdate<const llvm::Value *>(
@@ -258,7 +221,8 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
                 auto heapIt = state.heap.insert(std::make_pair(
                     static_pointer_cast<VarInt>(ptr)->val.asPointer() +
                         Integer(mpz_class(i)).asPointer(),
-                    Integer(makeBoundedInt(8, 0))));
+                    Integer(makeBoundedInt(
+                        8, state.heapBackground.asUnbounded().get_si()))));
                 assert(heapIt.first->second.type == IntType::Bounded);
                 assert(heapIt.first->second.bounded.getBitWidth() == 8);
                 val = (val << 8) |
@@ -268,7 +232,7 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
         } else {
             auto heapIt = state.heap.insert(std::make_pair(
                 static_pointer_cast<VarInt>(ptr)->val.asPointer(),
-                Integer(mpz_class(0))));
+                state.heapBackground));
             state.variables[load] = make_shared<VarInt>(heapIt.first->second);
         }
     } else if (const auto store = dyn_cast<StoreInst>(instr)) {
@@ -538,85 +502,6 @@ void interpretIntBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
     state.variables[instr] = make_shared<VarInt>(result);
 }
 
-shared_ptr<Step<string>> cborToStep(const cbor_item_t *item) {
-    assert(cbor_isa_map(item));
-    if (cbor_map_size(item) == 6) {
-        return shared_ptr<Step<string>>(new Call<string>(cborToCall(item)));
-    } else if (cbor_map_size(item) == 3) {
-        return cborToBlockStep(item);
-    } else {
-        return nullptr;
-    }
-}
-
-Call<string> cborToCall(const cbor_item_t *item) {
-    assert(cbor_isa_map(item));
-    assert(cbor_map_size(item) == 6);
-    map<std::string, const cbor_item_t *> vals = cborToKeyMap(item);
-    string functionName = cborToString(vals.at("function_name"));
-    State<string> entry = cborToState(vals.at("entry_state"));
-    State<string> ret = cborToState(vals.at("return_state"));
-    vector<shared_ptr<BlockStep<string>>> steps =
-        cborToVector<shared_ptr<BlockStep<string>>>(vals.at("steps"),
-                                                    cborToBlockStep);
-    bool earlyExit = cbor_ctrl_is_bool(vals.at("early_exit"));
-    uint32_t blocksVisited = cbor_get_uint32(vals.at("blocks_visited"));
-    return Call<string>(functionName, entry, ret, steps, earlyExit,
-                        blocksVisited);
-}
-
-template <> cbor_item_t *FastCall::toCBOR() const {
-    bool ret;
-    cbor_item_t *map = cbor_new_definite_map(6);
-    ret = cbor_map_add(
-        map, (struct cbor_pair){
-                 .key = cbor_move(cbor_build_string("function_name")),
-                 .value = cbor_move(cbor_build_string(functionName.c_str()))});
-    assert(ret);
-    ret = cbor_map_add(
-        map,
-        (struct cbor_pair){.key = cbor_move(cbor_build_string("entry_state")),
-                           .value = cbor_move(stateToCBOR(entryState))});
-    assert(ret);
-    ret = cbor_map_add(
-        map,
-        (struct cbor_pair){.key = cbor_move(cbor_build_string("return_state")),
-                           .value = cbor_move(stateToCBOR(returnState))});
-    assert(ret);
-    cbor_item_t *cborSteps = cbor_new_definite_array(steps.size());
-
-    for (const auto &step : steps) {
-        ret = cbor_array_push(cborSteps, cbor_move(step->toCBOR()));
-        assert(ret);
-    }
-    ret = cbor_map_add(
-        map, (struct cbor_pair){.key = cbor_move(cbor_build_string("steps")),
-                                .value = cbor_move(cborSteps)});
-    assert(ret);
-    ret = cbor_map_add(
-        map,
-        (struct cbor_pair){.key = cbor_move(cbor_build_string("early_exit")),
-                           .value = cbor_move(cbor_build_bool(earlyExit))});
-    assert(ret);
-    ret = cbor_map_add(
-        map, (struct cbor_pair){
-                 .key = cbor_move(cbor_build_string("blocks_visited")),
-                 .value = cbor_move(cbor_build_uint32(blocksVisited))});
-    assert(ret);
-    return map;
-}
-
-shared_ptr<BlockStep<string>> cborToBlockStep(const cbor_item_t *item) {
-    assert(cbor_isa_map(item));
-    assert(cbor_map_size(item) == 3);
-    map<std::string, const cbor_item_t *> vals = cborToKeyMap(item);
-    string blockName = cborToString(vals.at("block_name"));
-    State<string> state = cborToState(vals.at("state"));
-    vector<Call<string>> calls =
-        cborToVector<Call<string>>(vals.at("calls"), cborToCall);
-    return make_shared<BlockStep<string>>(blockName, state, calls);
-}
-
 bool varValEq(const VarVal &lhs, const VarVal &rhs) {
     if (lhs.getType() != rhs.getType()) {
         return false;
@@ -629,29 +514,6 @@ bool varValEq(const VarVal &lhs, const VarVal &rhs) {
         const VarInt &rhsI = static_cast<const VarInt &>(rhs);
         return lhsI.val == rhsI.val;
     }
-}
-
-template <> cbor_item_t *BlockStep<const llvm::Value *>::toCBOR() const {
-    cbor_item_t *map = cbor_new_definite_map(3);
-    bool ret;
-    ret = cbor_map_add(
-        map, (struct cbor_pair){
-                 .key = cbor_move(cbor_build_string("block_name")),
-                 .value = cbor_move(cbor_build_string(blockName.c_str()))});
-    assert(ret);
-    ret = cbor_map_add(
-        map, (struct cbor_pair){.key = cbor_move(cbor_build_string("state")),
-                                .value = cbor_move(stateToCBOR(state))});
-    assert(ret);
-    cbor_item_t *cborCalls = cbor_new_definite_array(calls.size());
-    for (const auto &call : calls) {
-        ret = cbor_array_push(cborCalls, cbor_move(call.toCBOR()));
-        assert(ret);
-    }
-    cbor_map_add(
-        map, (struct cbor_pair){.key = cbor_move(cbor_build_string("calls")),
-                                .value = cbor_move(cborCalls)});
-    return map;
 }
 
 string valueName(const llvm::Value *val) {
@@ -672,77 +534,4 @@ json stateToJSON(State<T> state, function<string(T)> getName) {
     j["variables"] = jsonVariables;
     j["heap"] = jsonHeap;
     return j;
-}
-
-cbor_item_t *stateToCBOR(FastState state) {
-    cbor_item_t *cborVariables = cbor_new_definite_map(state.variables.size());
-    cbor_item_t *cborHeap = cbor_new_definite_map(state.heap.size());
-    for (const auto &var : state.variables) {
-        string varName = var.first == nullptr ? "return" : var.first->getName();
-        cbor_map_add(cborVariables,
-                     (struct cbor_pair){
-                         .key = cbor_move(cbor_build_string(varName.c_str())),
-                         .value = cbor_move(var.second->toCBOR())});
-    }
-    for (const auto &index : state.heap) {
-        cbor_map_add(cborHeap,
-                     (struct cbor_pair){.key = cbor_move(cbor_build_string(
-                                            index.first.get_str().c_str())),
-                                        .value = cbor_move(cbor_build_string(
-                                            index.second.get_str().c_str()))});
-    }
-    cbor_item_t *map = cbor_new_definite_map(2);
-    cbor_map_add(map, (struct cbor_pair){
-                          .key = cbor_move(cbor_build_string("variables")),
-                          .value = cbor_move(cborVariables)});
-    cbor_map_add(map,
-                 (struct cbor_pair){.key = cbor_move(cbor_build_string("heap")),
-                                    .value = cbor_move(cborHeap)});
-    return map;
-}
-
-VarIntVal cborToVarIntVal(const cbor_item_t *item) {
-    VarIntVal i(mpz_class(cborToString(item), 10));
-    return i;
-}
-
-string cborToString(const cbor_item_t *item) {
-    assert(cbor_isa_string(item) && cbor_string_is_definite(item));
-    const char *data = reinterpret_cast<const char *>(cbor_string_handle(item));
-    string buf(data, cbor_string_length(item));
-    return buf;
-}
-
-State<string> cborToState(const cbor_item_t *item) {
-    assert(cbor_map_size(item) == 2);
-    struct cbor_pair *map = cbor_map_handle(item);
-    // TODO better validation
-    // variables
-    cbor_item_t *cborVariables = map[0].value;
-    assert(cbor_isa_map(cborVariables));
-    VarMap<string> variables =
-        cborToStringMap<shared_ptr<VarVal>>(cborVariables, cborToVarVal);
-    // heap
-    cbor_item_t *cborHeap = map[1].value;
-    assert(cbor_isa_map(cborHeap));
-    Heap heap = cborToMap<HeapAddress, VarIntVal>(
-        cborHeap,
-        [](const cbor_item_t *item) {
-            return Integer(mpz_class(cborToString(item), 10));
-        },
-        cborToVarIntVal);
-    return State<string>(variables, heap);
-}
-
-template <typename T>
-vector<T> cborToVector(const cbor_item_t *item,
-                       std::function<T(const cbor_item_t *)> fun) {
-    assert(cbor_isa_array(item));
-    size_t size = cbor_array_size(item);
-    vector<T> vec;
-    vec.reserve(size);
-    for (size_t i = 0; i < size; ++i) {
-        vec.push_back(fun(cbor_move(cbor_array_get(item, i))));
-    }
-    return vec;
 }

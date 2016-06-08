@@ -67,52 +67,9 @@ static llvm::cl::opt<bool, true>
     InstantiateFlag("instantiate", llvm::cl::desc("Instantiate arrays"),
                     llvm::cl::location(InstantiateStorage));
 static llvm::cl::opt<bool> HeapFlag("heap", llvm::cl::desc("Activate heap"));
-
-void iterateDeserialized(
-    string directory, std::function<void(MonoPair<Call<string>> &)> callback) {
-    DIR *dir = opendir(directory.c_str());
-    if (dir == nullptr) {
-        logError("Couldn't open directory: " + directory + "\n");
-    }
-    struct dirent *dirEntry;
-    std::regex firstFileRegex("^(.*_)1(_\\d+.cbor)$", std::regex::ECMAScript);
-    while ((dirEntry = readdir(dir))) {
-        string fileName1 = directory + "/" + dirEntry->d_name;
-        std::smatch sm;
-        if (!std::regex_match(fileName1, sm, firstFileRegex)) {
-            continue;
-        }
-        std::string fileName2 = sm[1].str() + "2" + sm[2].str();
-        ifstream file1(fileName1, ios::binary | ios::ate);
-        ifstream file2(fileName2, ios::binary | ios::ate);
-        std::streamsize size1 = file1.tellg();
-        std::streamsize size2 = file2.tellg();
-        file1.seekg(0, ios::beg);
-        file2.seekg(0, ios::beg);
-
-        std::vector<char> buffer1(static_cast<size_t>(size1));
-        std::vector<char> buffer2(static_cast<size_t>(size2));
-        if (!file1.read(buffer1.data(), size1) ||
-            !file2.read(buffer2.data(), size2)) {
-            logError("Couldn't read one of the files: " + fileName1 + "\n");
-        }
-
-        // deserialize
-        struct cbor_load_result res;
-        cbor_item_t *root =
-            cbor_load(reinterpret_cast<unsigned char *>(buffer1.data()),
-                      static_cast<size_t>(size1), &res);
-        Call<std::string> c1 = cborToCall(root);
-        cbor_decref(&root);
-        root = cbor_load(reinterpret_cast<unsigned char *>(buffer2.data()),
-                         static_cast<size_t>(size2), &res);
-        Call<std::string> c2 = cborToCall(root);
-        cbor_decref(&root);
-        MonoPair<Call<string>> calls = makeMonoPair(c1, c2);
-        callback(calls);
-    }
-    closedir(dir);
-}
+static llvm::cl::opt<bool>
+    InvertFlag("invert",
+               llvm::cl::desc("Check for satisfiability of negation"));
 
 vector<SharedSMTRef>
 driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
@@ -201,13 +158,13 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         findSolutions(analysisResults.polynomialEquations),
         analysisResults.heapPatternCandidates, freeVarsMap, DegreeFlag);
     if (ImplicationsFlag) {
-        SMTGenerationOpts::initialize(mainFunctionName, HeapFlag, false, false,
-                                      false, false, false, false, false, false,
-                                      false, false, BoundedFlag, {});
+        SMTGenerationOpts::initialize(
+            mainFunctionName, HeapFlag, false, false, false, false, false,
+            false, false, false, false, false, BoundedFlag, InvertFlag, {});
     } else {
         SMTGenerationOpts::initialize(mainFunctionName, HeapFlag, false, false,
                                       false, false, false, false, false, false,
-                                      false, false, BoundedFlag,
+                                      false, false, BoundedFlag, InvertFlag,
                                       invariantCandidates);
     }
     llvm::verifyModule(*modules.first);

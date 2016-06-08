@@ -17,8 +17,6 @@
 
 extern std::string InputFileFlag;
 
-extern bool InstantiateStorage;
-
 enum class LoopInfo {
     Left,  // The left call is looping alone
     Right, // The right call is looping alone
@@ -176,9 +174,6 @@ std::map<int,
          std::map<ExitIndex, LoopInfoData<std::set<MonoPair<std::string>>>>>
 extractEqualities(const PolynomialEquations &equations,
                   const std::vector<std::string> &freeVars);
-void iterateDeserialized(
-    std::string directory,
-    std::function<void(MonoPair<Call<std::string>> &)> callback);
 
 std::map<const llvm::Value *, std::shared_ptr<VarVal>>
 getVarMap(const llvm::Function *fun, std::vector<mpz_class> vals);
@@ -203,8 +198,10 @@ void workerThread(
             item.heaps.first = heap;
             item.heaps.second = heap;
         }
+        MonoPair<Integer> heapBackgrounds = item.heapBackgrounds.map<Integer>(
+            [](auto b) { return Integer(b); });
         MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
-            funs, std::move(variableValues), item.heaps, 1000);
+            funs, std::move(variableValues), item.heaps, heapBackgrounds, 1000);
         callback(std::move(calls), state);
     }
 }
@@ -234,19 +231,19 @@ void iterateTracesInRange(
            funs.second->getArgumentList().size());
     if (!InputFileFlag.empty()) {
         std::vector<WorkItem> items = parseInput(InputFileFlag);
-        for (const auto& item : items) {
+        for (const auto &item : items) {
             q.push(item);
         }
     } else {
         for (const auto &vals : Range(lowerBound, upperBound,
                                       funs.first->getArgumentList().size())) {
-            q.push({{vals, vals}, {{}, {}}, false, counter});
+            q.push({{vals, vals}, {0, 0}, {{}, {}}, false, counter});
             ++counter;
         }
     }
     for (size_t i = 0; i < threads.size(); ++i) {
         // Each of these items will terminate exactly one thread
-        q.push({{{}, {}}, {{}, {}}, false, -1});
+        q.push({{{}, {}}, {0, 0}, {{}, {}}, false, -1});
     }
     for (auto &t : threads) {
         t.join();

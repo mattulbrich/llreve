@@ -12,7 +12,6 @@ set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
 
 find_package(LLVM 3.8 REQUIRED CONFIG)
 find_package(GMP)
-find_package(CBOR)
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
@@ -50,6 +49,5 @@ target_link_libraries(reve-analyzer
   libreve-interpreter
   ${GMP_LIBRARIES}
   ${GMPXX_LIBRARIES}
-  ${CBOR_LIBRARIES}
   ${FL_LIBRARY}
   )

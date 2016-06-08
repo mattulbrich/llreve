@@ -42,6 +42,7 @@ class Range {
 
 struct WorkItem {
     MonoPair<std::vector<mpz_class>> vals;
+    MonoPair<mpz_class> heapBackgrounds;
     MonoPair<Heap> heaps;
     bool heapSet;
     int counter;
