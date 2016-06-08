@@ -1,13 +1,9 @@
 #include "CDGPass.h"
 
-#include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/IR/CFG.h"
-#include "llvm/IR/Use.h"
-#include "llvm/Support/Casting.h"
 
 #include <iostream>
 #include <queue>
-#include <stdexcept>
 #include <unordered_set>
 
 using namespace std;
@@ -16,6 +12,11 @@ using namespace llvm;
 static RegisterPass<CDGPass> tmp("cdg-creation", "CDG Creation", true, true);
 
 char CDGPass::ID = 0;
+
+CDGPass::~CDGPass() {
+	
+	clearNodes();
+}
 
 CDGPass::Iterator CDGPass::begin() {
 	
@@ -26,10 +27,20 @@ CDGPass::Iterator CDGPass::begin() {
 //	
 //}
 
-CDGPass::NodeType* CDGPass::computeCtrlDependency(
+void CDGPass::clearNodes(void) {
+	
+	for(auto const& i : _nodes) {
+		delete i.second;
+	}
+	
+	_nodes.clear();
+} 
+
+void CDGPass::computeDependency(
 		BasicBlock&              bb,
 		PostDominatorTree const& pdt) {
 	
+	NodeType*                  pDependency = &getRoot();
 	queue<BasicBlock*>         toCheck;
 	unordered_set<BasicBlock*> markedToCheck;
 	
@@ -43,7 +54,8 @@ CDGPass::NodeType* CDGPass::computeCtrlDependency(
 		
 		// Check whether 'curBB' is the control dependency we're looking for
 		if(!pdt.dominates(&bb, &curBB)) {
-			return &(*this)[*curBB.getTerminator()];
+			pDependency = &(*this)[*curBB.getTerminator()];
+			break;
 		}
 		
 		// Prepare the basic block's predecessors for dependency checking in future
@@ -55,9 +67,10 @@ CDGPass::NodeType* CDGPass::computeCtrlDependency(
 		}
 	}
 	
-	// Instructions that aren't dependent on any other instruction depend on the
-	// root node
-	return _nodes[nullptr];
+	// All instructions in a basic block share the same control dependency
+	for(Instruction& i : bb) {
+		(*this)[i].predecessors.insert(pDependency);
+	}
 }
 
 CDGPass::Iterator CDGPass::end() {
@@ -97,13 +110,9 @@ bool CDGPass::runOnFunction(
 		Function& func) {
 	
 	PostDominatorTree const& pdt = getAnalysis<PostDominatorTree>();
-	NodeType*                pDependency;
 	
 	// Make sure, the previous state gets forgotten
-	for(auto const& i : _nodes) {
-		delete i.second;
-	}
-	_nodes.clear();
+	clearNodes();
 	
 	// Create a generic node for each instruction and store the mapping
 	for(Instruction& i : Util::getInstructions(func)) {
@@ -113,16 +122,10 @@ bool CDGPass::runOnFunction(
 	
 	// Find the control dependency for each basic block 'i'
 	for(BasicBlock& i : func) {
-		
-		if(!(pDependency = computeCtrlDependency(i, pdt))) {
-			continue;
-		}
-		
-		for(Instruction& j : i) {
-			(*this)[j].predecessors.insert(pDependency);
-		}
+		computeDependency(i, pdt);
 	}
 	
+	// Complete the graph
 	Util::addSuccessors(*this);
 	
 	return false;

@@ -25,6 +25,7 @@ class CDGPass : public llvm::FunctionPass {
 	static char ID;
 	
 	CDGPass() : llvm::FunctionPass(ID) {}
+	~CDGPass();
 	
 	virtual void getAnalysisUsage(llvm::AnalysisUsage &au) const override;
 	
@@ -37,17 +38,16 @@ class CDGPass : public llvm::FunctionPass {
 	
 	NodeType& getRoot(void) const;
 	
-	NodeType& operator[](
-		llvm::Instruction& inst) const;
-	
-	NodeTypeConst& operator[](
-		llvm::Instruction const& inst) const;
+	NodeType&      operator[](llvm::Instruction&       inst) const;
+	NodeTypeConst& operator[](llvm::Instruction const& inst) const;
 	
 	private:
 	
 	MapType _nodes;
 	
-	NodeType* computeCtrlDependency(
+	void clearNodes(void);
+	
+	void computeDependency(
 		llvm::BasicBlock&              bb,
 		llvm::PostDominatorTree const& pdt);
 };
