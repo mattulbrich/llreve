@@ -7,6 +7,8 @@
 
 using HoleMap = std::map<size_t, mpz_class>;
 
+extern bool InstantiateStorage;
+
 enum class PatternType { Binary, Unary, HeapEquality, Range, ExprProp };
 
 enum class ExprType {
@@ -368,11 +370,17 @@ template <typename T> struct HeapEqual : public HeapPattern<T> {
         return os;
     }
     smt::SMTRef toSMT() const override {
-        std::vector<smt::SortedVar> args = {smt::SortedVar("heapIndex", "Int")};
-        smt::SharedSMTRef expr =
-            makeBinOp("=", smt::makeBinOp("select", "HEAP$1", "heapIndex"),
-                      smt::makeBinOp("select", "HEAP$2", "heapIndex"));
-        return std::make_unique<smt::Forall>(args, expr);
+        if (InstantiateStorage) {
+            std::vector<smt::SortedVar> args = {
+                smt::SortedVar("heapIndex", "Int")};
+            smt::SharedSMTRef expr =
+                makeBinOp("=", smt::makeBinOp("select", "HEAP$1", "heapIndex"),
+                          smt::makeBinOp("select", "HEAP$2", "heapIndex"));
+
+            return std::make_unique<smt::Forall>(args, expr);
+        } else {
+            return smt::makeBinOp("=", "HEAP$1", "HEAP$2");
+        }
     }
     bool equalTo(const HeapPattern<T> &other) const override {
         return other.getType() == PatternType::HeapEquality;

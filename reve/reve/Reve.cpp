@@ -125,6 +125,9 @@ static llvm::cl::opt<bool>
     DontInstantiate("dont-instantiate",
                     llvm::cl::desc("Dont instantiate arrays"),
                     llvm::cl::cat(ReveCategory));
+static llvm::cl::opt<bool>
+    InvertFlag("invert", llvm::cl::desc("Check for satisfiabilty of negation"),
+               llvm::cl::cat(ReveCategory));
 
 int main(int argc, const char **argv) {
     parseCommandLineArguments(argc, argv);
@@ -135,7 +138,7 @@ int main(int argc, const char **argv) {
         MainFunctionFlag, HeapFlag, StackFlag, GlobalConstantsFlag,
         OnlyRecursiveFlag, NoByteHeapFlag, EverythingSignedFlag,
         SingleInvariantFlag, MuZFlag, PerfectSyncFlag, NestFlag,
-        PassInputThroughFlag, BitVectFlag, {});
+        PassInputThroughFlag, BitVectFlag, InvertFlag, {});
     InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,
                         FileName2Flag);
     FileOptions fileOpts = getFileOptions(inputOpts.FileNames);

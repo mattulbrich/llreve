@@ -19,7 +19,7 @@ void SMTGenerationOpts::initialize(std::string mainFunction, bool heap,
                                    bool onlyRecursive, bool noByteHeap,
                                    bool everythingSigned, bool singleInvariant,
                                    bool muZ, bool perfectSync, bool nest,
-                                   bool passInputThrough, bool bitVect,
+                                   bool passInputThrough, bool bitVect, bool invert,
                                    map<int, SharedSMTRef> invariants) {
     SMTGenerationOpts &i = getInstance();
     i.MainFunction = mainFunction;
@@ -36,6 +36,7 @@ void SMTGenerationOpts::initialize(std::string mainFunction, bool heap,
     i.PassInputThrough = passInputThrough;
     i.BitVect = bitVect;
     i.Invariants = invariants;
+    i.Invert = invert;
 }
 
 void parseCommandLineArguments(int argc, const char **argv) {
