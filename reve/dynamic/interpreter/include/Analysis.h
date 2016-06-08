@@ -38,6 +38,14 @@ template <typename T> struct LoopInfoData {
         : left(left), right(right), none(none) {}
 };
 
+template <typename T1, typename T2>
+void zipWith(LoopInfoData<T1> &loop1, LoopInfoData<T2> &loop2,
+             std::function<void(T1 &, T2 &)> f) {
+    f(loop1.left, loop2.left);
+    f(loop1.right, loop2.right);
+    f(loop1.none, loop2.none);
+}
+
 using ExitIndex = mpz_class;
 
 using BlockNameMap = std::map<std::string, std::set<int>>;
