@@ -1106,7 +1106,7 @@ MergedAnalysisResults mergeAnalysisResults(MergedAnalysisResults res1,
     result.loopCounts = mergeLoopCounts(res1.loopCounts, res2.loopCounts);
     result.polynomialEquations = mergePolynomialEquations(
         res1.polynomialEquations, res2.polynomialEquations);
-    result.heapPatternCandidates = mergeHeapPatterns(
+    result.heapPatternCandidates = mergeHeapPatternMaps(
         res1.heapPatternCandidates, res2.heapPatternCandidates);
     return result;
 }
@@ -1147,84 +1147,61 @@ PolynomialEquations mergePolynomialEquations(PolynomialEquations eq1,
     return result;
 }
 
-HeapPatternCandidatesMap mergeHeapPatterns(HeapPatternCandidatesMap cand1,
-                                           HeapPatternCandidatesMap cand2) {
+HeapPatternCandidatesMap mergeHeapPatternMaps(HeapPatternCandidatesMap cand1,
+                                              HeapPatternCandidatesMap cand2) {
     HeapPatternCandidatesMap result = cand1;
-    for (auto it : result) {
+    for (auto &it : result) {
         int mark = it.first;
-        for (auto exitIt : it.second) {
+        for (auto &exitIt : it.second) {
             ExitIndex exit = exitIt.first;
             if (exitIt.second.left.hasValue()) {
-                if (cand2[mark][exit].left.hasValue()) {
-                    const auto &leftPats =
-                        cand2.at(mark).at(exit).left.getValue();
-                    auto listIt = exitIt.second.left.getValue().begin();
-                    while (listIt != exitIt.second.left.getValue().end()) {
-                        bool breaked = false;
-                        for (const auto &pat : leftPats) {
-                            if ((*listIt)->equalTo(*pat)) {
-                                breaked = true;
-                                break;
-                            }
-                        }
-                        if (!breaked) {
-                            listIt =
-                                exitIt.second.left.getValue().erase(listIt);
-                        } else {
-                            ++listIt;
-                        }
-                    }
+                if (cand2.count(mark) > 0 && cand2.at(mark).count(exit) > 0 &&
+                    cand2.at(mark).at(exit).left.hasValue()) {
+                    result.at(mark).at(exit).left = mergeHeapPatternCandidates(
+                        cand1.at(mark).at(exit).left.getValue(),
+                        cand2.at(mark).at(exit).left.getValue());
+                    assert(result.at(mark).at(exit).left.getValue().size() <=
+                           std::min(
+                               cand1.at(mark).at(exit).left.getValue().size(),
+                               cand2.at(mark).at(exit).left.getValue().size()));
                 }
             } else {
-                exitIt.second.left = cand2[mark][exit].left;
+                if (cand2.count(mark) > 0 && cand2.at(mark).count(exit) > 0) {
+                    exitIt.second.left = cand2.at(mark).at(exit).left;
+                }
             }
             if (exitIt.second.right.hasValue()) {
-                if (cand2[mark][exit].right.hasValue()) {
-                    const auto &rightPats =
-                        cand2.at(mark).at(exit).right.getValue();
-                    auto listIt = exitIt.second.right.getValue().begin();
-                    while (listIt != exitIt.second.right.getValue().end()) {
-                        bool breaked = false;
-                        for (const auto &pat : rightPats) {
-                            if ((*listIt)->equalTo(*pat)) {
-                                breaked = true;
-                                break;
-                            }
-                        }
-                        if (!breaked) {
-                            listIt =
-                                exitIt.second.right.getValue().erase(listIt);
-                        } else {
-                            ++listIt;
-                        }
-                    }
+                if (cand2.count(mark) > 0 && cand2.at(mark).count(exit) > 0 &&
+                    cand2.at(mark).at(exit).right.hasValue()) {
+                    result.at(mark).at(exit).right = mergeHeapPatternCandidates(
+                        cand1.at(mark).at(exit).right.getValue(),
+                        cand2.at(mark).at(exit).right.getValue());
+                    assert(
+                        result.at(mark).at(exit).right.getValue().size() <=
+                        std::min(
+                            cand1.at(mark).at(exit).right.getValue().size(),
+                            cand2.at(mark).at(exit).right.getValue().size()));
                 }
             } else {
-                exitIt.second.right = cand2[mark][exit].right;
+                if (cand2.count(mark) > 0 && cand2.at(mark).count(exit) > 0) {
+                    exitIt.second.right = cand2.at(mark).at(exit).right;
+                }
             }
             if (exitIt.second.none.hasValue()) {
-                if (cand2[mark][exit].none.hasValue()) {
-                    const auto &nonePats =
-                        cand2.at(mark).at(exit).none.getValue();
-                    auto listIt = exitIt.second.none.getValue().begin();
-                    while (listIt != exitIt.second.none.getValue().end()) {
-                        bool breaked = false;
-                        for (const auto &pat : nonePats) {
-                            if ((*listIt)->equalTo(*pat)) {
-                                breaked = true;
-                                break;
-                            }
-                        }
-                        if (!breaked) {
-                            listIt =
-                                exitIt.second.none.getValue().erase(listIt);
-                        } else {
-                            ++listIt;
-                        }
-                    }
+                if (cand2.count(mark) > 0 && cand2.at(mark).count(exit) > 0 &&
+                    cand2.at(mark).at(exit).none.hasValue()) {
+                    result.at(mark).at(exit).none = mergeHeapPatternCandidates(
+                        cand1.at(mark).at(exit).none.getValue(),
+                        cand2.at(mark).at(exit).none.getValue());
+                    assert(result.at(mark).at(exit).none.getValue().size() <=
+                           std::min(
+                               cand1.at(mark).at(exit).none.getValue().size(),
+                               cand2.at(mark).at(exit).none.getValue().size()));
                 }
             } else {
-                exitIt.second.none = cand2[mark][exit].none;
+                if (cand2.count(mark) > 0 && cand2.at(mark).count(exit) > 0) {
+                    exitIt.second.none = cand2.at(mark).at(exit).none;
+                }
             }
         }
     }
@@ -1238,4 +1215,25 @@ HeapPatternCandidatesMap mergeHeapPatterns(HeapPatternCandidatesMap cand1,
         }
     }
     return result;
+}
+
+HeapPatternCandidates
+mergeHeapPatternCandidates(HeapPatternCandidates candidates1,
+                           HeapPatternCandidates candidates2) {
+    auto it = candidates1.begin();
+    while (it != candidates1.end()) {
+        bool breaked = false;
+        for (const auto &pat : candidates2) {
+            if ((*it)->equalTo(*pat)) {
+                breaked = true;
+                break;
+            }
+        }
+        if (!breaked) {
+            it = candidates1.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    return candidates1;
 }

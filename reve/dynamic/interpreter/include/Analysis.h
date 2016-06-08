@@ -381,5 +381,8 @@ struct MergedAnalysisResults {
 MergedAnalysisResults mergeAnalysisResults(MergedAnalysisResults res1,
                                            MergedAnalysisResults res2);
 
-HeapPatternCandidatesMap mergeHeapPatterns(HeapPatternCandidatesMap cand1,
-                                           HeapPatternCandidatesMap cand2);
+HeapPatternCandidatesMap mergeHeapPatternMaps(HeapPatternCandidatesMap cand1,
+                                              HeapPatternCandidatesMap cand2);
+HeapPatternCandidates
+mergeHeapPatternCandidates(HeapPatternCandidates candidates1,
+                           HeapPatternCandidates candidates2);
