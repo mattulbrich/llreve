@@ -5,7 +5,7 @@
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/IRPrintingPasses.h"
 
-#include "core/PDGPass.h"
+#include "core/DependencyGraphPasses.h"
 #include "core/SlicingPass.h"
 #include "core/SyntacticSlicePass.h"
 #include "core/SliceCandidateValidation.h"
@@ -23,6 +23,8 @@ void testSyntacticSlicing(string fileName) {
 
 	llvm::legacy::PassManager PM;
 	PM.add(new llvm::PostDominatorTree());
+	PM.add(new CDGPass());
+	PM.add(new DDGPass());
 	PM.add(new PDGPass());
 	PM.add(new SyntacticSlicePass());
 	PM.add(new SlicingPass());

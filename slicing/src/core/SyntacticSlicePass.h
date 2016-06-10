@@ -1,6 +1,6 @@
 #pragma once
 
-#include "PDGPass.h"
+#include "DependencyGraphPasses.h"
 
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instruction.h"

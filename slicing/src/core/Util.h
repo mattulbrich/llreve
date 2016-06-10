@@ -1,5 +1,6 @@
 #pragma once
 
+#include "llvm/ADT/GraphTraits.h"
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Function.h"
@@ -238,6 +239,9 @@ template <class NodeType> class GenericNode {
 	std::unordered_set<GenericNode<NodeType>*> predecessors;
 	std::unordered_set<GenericNode<NodeType>*> successors;
 	
+	// Only available if the InnerType provides a default constructor
+	GenericNode(void) : innerNode() {}
+	
 	GenericNode(
 		NodeType innerNode) : innerNode(innerNode) {}
 	
@@ -270,8 +274,8 @@ template <class InnerType> struct GraphTraitsGenericNodeInverse {
 	typedef GenericNode<InnerType>      NodeType;
 	typedef typename NodeType::Iterator ChildIteratorType;
 
-	static NodeType* getEntryNode(NodeType* pNode) {
-		return pNode;
+	static NodeType* getEntryNode(llvm::Inverse<NodeType*> pNode) {
+		return pNode.Graph;
 	}
 
 	static ChildIteratorType child_begin(NodeType* pNode) {
