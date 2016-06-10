@@ -23,7 +23,7 @@ define-fun      { return DEFINE_FUN; }
 as-array        { return AS_ARRAY; }
 error           { return ERROR; }
 ite             { return ITE; }
-\"[^\"]\"       { smtlval.str = new std::string(yytext,1,yyleng-2); return STRING; }
+\"[^\"]*\"       { smtlval.str = new std::string(yytext,1,yyleng-2); return STRING; }
 _               { return UNDERSCORE; }
 Int             { return INT; }
 Array           { return ARRAY; }

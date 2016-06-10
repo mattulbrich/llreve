@@ -103,3 +103,9 @@ ModelValues parseValues(Model model) {
     }
     return modelValues;
 }
+
+Result::~Result() = default;
+
+bool Unsat::isSat() const { return false; }
+
+bool Sat::isSat() const { return true; }

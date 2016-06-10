@@ -6,9 +6,11 @@
 #include "Interpreter.h"
 #include "Linear.h"
 #include "MarkAnalysis.h"
+#include "Model.h"
 #include "ModuleSMTGeneration.h"
 #include "MonoPair.h"
 #include "PathAnalysis.h"
+#include "Serialize.h"
 #include "SerializeTraces.h"
 #include "Unroll.h"
 
@@ -240,6 +242,105 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     clauses.push_back(make_shared<smt::GetModel>());
 
     return clauses;
+}
+
+void cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
+                 vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
+                 string mainFunctionName,
+                 vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
+                 FileOptions fileOpts) {
+    SMTGenerationOpts::getInstance().BitVect = BoundedFlag;
+    auto preprocessedFunctions =
+        findFunction(preprocessedFuns, mainFunctionName);
+    if (!preprocessedFunctions) {
+        logError("No function with the supplied name\n");
+        return;
+    }
+    auto functions = preprocessedFunctions.getValue().map<llvm::Function *>(
+        [](PreprocessedFunction f) { return f.fun; });
+    const MonoPair<BidirBlockMarkMap> markMaps =
+        preprocessedFunctions.getValue().map<BidirBlockMarkMap>(
+            [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
+    MonoPair<BlockNameMap> nameMap = markMaps.map<BlockNameMap>(blockNameMap);
+    const auto funArgsPair =
+        functionArgs(*preprocessedFunctions.getValue().first.fun,
+                     *preprocessedFunctions.getValue().second.fun);
+    const auto funArgs = funArgsPair.foldl<vector<smt::SortedVar>>(
+        {},
+        [](auto acc, auto args) {
+            acc.insert(acc.end(), args.begin(), args.end());
+            return acc;
+        });
+
+    // Run the interpreter on the unrolled code
+    MergedAnalysisResults analysisResults;
+    const MonoPair<PathMap> pathMaps =
+        preprocessedFunctions.getValue().map<PathMap>(
+            [](PreprocessedFunction fun) { return fun.results.paths; });
+    smt::FreeVarsMap freeVarsMap =
+        freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
+    size_t degree = DegreeFlag;
+    ModelValues vals;
+    for (const auto &arg : functions.first->args()) {
+        vals.values.insert({std::string(arg.getName()) + "_old", 0});
+    }
+    for (const auto &arg : functions.second->args()) {
+        vals.values.insert({std::string(arg.getName()) + "_old", 0});
+    }
+    do {
+        auto variableValues =
+            functions
+                .map<std::map<const llvm::Value *, std::shared_ptr<VarVal>>>(
+                    [&vals](auto fun) {
+                        return getVarMapFromModel(fun, vals.values);
+                    });
+        std::cout << "Found counterexample:\n";
+        for (auto it : variableValues.first) {
+            llvm::errs() << it.first->getName() << " "
+                         << it.second->unsafeIntVal().asUnbounded().get_str()
+                         << "\n";
+        }
+        for (auto it : variableValues.second) {
+            llvm::errs() << it.first->getName() << " "
+                         << it.second->unsafeIntVal().asUnbounded().get_str()
+                         << "\n";
+        }
+        MonoPair<Call<const llvm::Value *>> calls =
+            interpretFunctionPair(functions, std::move(variableValues),
+                                  {{}, {}}, {Integer(0), Integer(0)}, 1000);
+        analyzeExecution<const llvm::Value *>(
+            calls, nameMap, [&analysisResults, &freeVarsMap, degree,
+                             &patterns](MatchInfo<const llvm::Value *> match) {
+                populateEquationsMap(analysisResults.polynomialEquations,
+                                     freeVarsMap, match, degree);
+                populateHeapPatterns(analysisResults.heapPatternCandidates,
+                                     patterns, freeVarsMap, match);
+            });
+
+        auto invariantCandidates = makeInvariantDefinitions(
+            findSolutions(analysisResults.polynomialEquations),
+            analysisResults.heapPatternCandidates, freeVarsMap, DegreeFlag);
+
+        SMTGenerationOpts::initialize(mainFunctionName, HeapFlag, false, false,
+                                      false, false, false, false, false, false,
+                                      false, false, BoundedFlag, InvertFlag,
+                                      invariantCandidates);
+        vector<SharedSMTRef> clauses =
+            generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
+        serializeSMT(clauses, false,
+                     SerializeOpts("/home/moritz/tmp/test.smt2",
+                                   !InstantiateStorage, false, BoundedFlag));
+        system("z3 /home/moritz/tmp/test.smt2 > /home/moritz/tmp/test.output");
+        FILE *z3Output = fopen("/home/moritz/tmp/test.output", "r");
+        auto result = parseResult(z3Output);
+        if (!result->isSat()) {
+            break;
+        }
+        vals = parseValues(std::static_pointer_cast<Sat>(result)->model);
+        fclose(z3Output);
+    } while (1 /* sat */);
+    dumpPolynomials(analysisResults.polynomialEquations, freeVarsMap);
+    dumpHeapPatterns(analysisResults.heapPatternCandidates);
 }
 
 void applyLoopTransformation(
@@ -488,6 +589,17 @@ void populateHeapPatterns(
     // TODO don’t copy heaps
     MonoPair<Heap> heaps = makeMonoPair(match.steps.first->state.heap,
                                         match.steps.second->state.heap);
+    switch (match.loopInfo) {
+    case LoopInfo::Left:
+        std::cout << "left\n";
+        break;
+    case LoopInfo::Right:
+        std::cout << "right\n";
+        break;
+    case LoopInfo::None:
+        std::cout << "synced\n";
+        break;
+    }
     ExitIndex exitIndex = 0;
     for (auto var : variables) {
         if (var.first->getName() ==
@@ -1052,6 +1164,17 @@ getVarMap(const llvm::Function *fun, std::vector<mpz_class> vals) {
         ++argIt;
     }
     assert(argIt == fun->arg_end());
+    return variableValues;
+}
+
+std::map<const llvm::Value *, std::shared_ptr<VarVal>>
+getVarMapFromModel(const llvm::Function *fun,
+                   std::map<std::string, mpz_class> vals) {
+    std::map<const llvm::Value *, std::shared_ptr<VarVal>> variableValues;
+    for (auto &arg : fun->args()) {
+        mpz_class val = vals.at(std::string(arg.getName()) + "_old");
+        variableValues.insert({&arg, std::make_shared<VarInt>(Integer(val))});
+    }
     return variableValues;
 }
 

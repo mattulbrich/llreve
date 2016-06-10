@@ -63,6 +63,12 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
        std::string mainFunctionName,
        std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
        FileOptions fileopts);
+void cegarDriver(
+    MonoPair<std::shared_ptr<llvm::Module>> modules,
+    std::vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
+    std::string mainFunctionName,
+    std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
+    FileOptions fileopts);
 llvm::Optional<MonoPair<PreprocessedFunction>>
 findFunction(const std::vector<MonoPair<PreprocessedFunction>> functions,
              std::string functionName);
@@ -185,6 +191,10 @@ extractEqualities(const PolynomialEquations &equations,
 
 std::map<const llvm::Value *, std::shared_ptr<VarVal>>
 getVarMap(const llvm::Function *fun, std::vector<mpz_class> vals);
+
+std::map<const llvm::Value *, std::shared_ptr<VarVal>>
+getVarMapFromModel(const llvm::Function *fun,
+                   std::map<std::string, mpz_class> vals);
 
 template <typename T>
 void workerThread(

@@ -33,6 +33,7 @@ static llvm::cl::opt<string> FileName1Flag(llvm::cl::Positional,
 static llvm::cl::opt<string> FileName2Flag(llvm::cl::Positional,
                                            llvm::cl::desc("FILE2"),
                                            llvm::cl::Required);
+static llvm::cl::opt<bool> CegarFlag("cegar", llvm::cl::desc("Cegar"));
 static llvm::cl::opt<string>
     PatternFileFlag("patterns",
                     llvm::cl::desc("Path to file containing patterns"),
@@ -103,12 +104,17 @@ int main(int argc, const char **argv) {
     fclose(patternFile);
 
     FileOptions fileOpts = getFileOptions(inputOpts.FileNames);
-    vector<smt::SharedSMTRef> smtExprs =
-        driver(modules, preprocessedFuns, MainFunctionFlag, patterns, fileOpts);
+    if (CegarFlag) {
+        cegarDriver(modules, preprocessedFuns, MainFunctionFlag, patterns,
+                    fileOpts);
+    } else {
+        vector<smt::SharedSMTRef> smtExprs = driver(
+            modules, preprocessedFuns, MainFunctionFlag, patterns, fileOpts);
 
-    serializeSMT(smtExprs, false,
-                 SerializeOpts(OutputFileNameFlag, !InstantiateStorage,
-                               MergeImplications, BoundedFlag));
+        serializeSMT(smtExprs, false,
+                     SerializeOpts(OutputFileNameFlag, !InstantiateStorage,
+                                   MergeImplications, BoundedFlag));
+    }
 
     llvm::llvm_shutdown();
 }

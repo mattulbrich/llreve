@@ -106,15 +106,20 @@ struct Model {
 
 ModelValues parseValues(Model model);
 
-struct Result {};
+struct Result {
+    virtual bool isSat() const = 0;
+    virtual ~Result();
+};
 
 struct Unsat : public Result {
     Unsat() {}
+    bool isSat() const override;
 };
 
 struct Sat : public Result {
     Model model;
     Sat(Model model) : model(model) {}
+    bool isSat() const override;
 };
 
 std::shared_ptr<Result> parseResult(FILE *stream);
