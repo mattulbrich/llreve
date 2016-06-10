@@ -5,6 +5,7 @@
 #include "Analysis.h"
 #include "Compat.h"
 #include "Compile.h"
+#include "Model.h"
 #include "ModuleSMTGeneration.h"
 #include "Opts.h"
 #include "Preprocess.h"
@@ -79,6 +80,20 @@ int main(int argc, const char **argv) {
     vector<MonoPair<PreprocessedFunction>> preprocessedFuns =
         preprocessFunctions(modules, preprocessOpts);
     FILE *patternFile = fopen(PatternFileFlag.c_str(), "r");
+    FILE *mehFile = fopen("/home/moritz/tmp/testoutput", "r");
+    auto crap = parseResult(mehFile);
+    auto crap2 = parseValues(std::static_pointer_cast<Sat>(crap)->model);
+    for (auto ar : crap2.arrays) {
+        std::cout << ar.first << "\n";
+        std::cout << ar.second.background << "\n";
+        for (auto val : ar.second.vals) {
+            std::cout << val.first << ":" << val.second << "\n";
+        }
+    }
+    for (auto arg : crap2.values) {
+        std::cout << arg.first << ":" << arg.second << "\n";
+    }
+
     auto patterns = parsePatterns(patternFile);
     std::cerr << "Found " << patterns.size() << " patterns\n";
     for (auto pat : patterns) {
