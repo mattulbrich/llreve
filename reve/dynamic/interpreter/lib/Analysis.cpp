@@ -167,8 +167,6 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                                       false, false, BoundedFlag, InvertFlag,
                                       invariantCandidates);
     }
-    llvm::verifyModule(*modules.first);
-    llvm::verifyModule(*modules.second);
     // TODO pass all functions
     vector<SharedSMTRef> clauses =
         generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
