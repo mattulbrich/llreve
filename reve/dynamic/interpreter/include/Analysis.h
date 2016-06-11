@@ -10,6 +10,7 @@
 #include "ParseInput.h"
 #include "Permutation.h"
 #include "Preprocess.h"
+#include "Model.h"
 
 #include "llvm/IR/Module.h"
 
@@ -195,6 +196,9 @@ getVarMap(const llvm::Function *fun, std::vector<mpz_class> vals);
 std::map<const llvm::Value *, std::shared_ptr<VarVal>>
 getVarMapFromModel(const llvm::Function *fun,
                    std::map<std::string, mpz_class> vals);
+Heap getHeapFromModel(const ArrayVal &ar);
+MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays);
+MonoPair<Integer> getHeapBackgrounds(std::map<std::string, ArrayVal> arrays);
 
 template <typename T>
 void workerThread(

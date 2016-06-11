@@ -6,7 +6,6 @@
 #include "Interpreter.h"
 #include "Linear.h"
 #include "MarkAnalysis.h"
-#include "Model.h"
 #include "ModuleSMTGeneration.h"
 #include "MonoPair.h"
 #include "PathAnalysis.h"
@@ -280,7 +279,10 @@ void cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     smt::FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
     size_t degree = DegreeFlag;
+    // Set initial values
     ModelValues vals;
+    vals.arrays.insert({"HEAP$1_old", {0, {}}});
+    vals.arrays.insert({"HEAP$2_old", {0, {}}});
     for (const auto &arg : functions.first->args()) {
         vals.values.insert({std::string(arg.getName()) + "_old", 0});
     }
@@ -288,12 +290,15 @@ void cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         vals.values.insert({std::string(arg.getName()) + "_old", 0});
     }
     do {
+        // reconstruct input from counterexample
         auto variableValues =
             functions
                 .map<std::map<const llvm::Value *, std::shared_ptr<VarVal>>>(
                     [&vals](auto fun) {
                         return getVarMapFromModel(fun, vals.values);
                     });
+
+        // dump new example
         std::cout << "---\nFound counterexample:\n";
         for (auto it : variableValues.first) {
             llvm::errs() << it.first->getName() << " "
@@ -305,9 +310,18 @@ void cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                          << it.second->unsafeIntVal().asUnbounded().get_str()
                          << "\n";
         }
+        for (auto ar : vals.arrays) {
+            std::cout << ar.first << "\n";
+            std::cout << "background: " << ar.second.background << "\n";
+            for (auto val : ar.second.vals) {
+                std::cout << val.first << ":" << val.second << "\n";
+            }
+        }
+
         MonoPair<Call<const llvm::Value *>> calls =
             interpretFunctionPair(functions, std::move(variableValues),
-                                  {{}, {}}, {Integer(0), Integer(0)}, 1000);
+                                  getHeapsFromModel(vals.arrays),
+                                  getHeapBackgrounds(vals.arrays), 1000);
         analyzeExecution<const llvm::Value *>(
             calls, nameMap, [&analysisResults, &freeVarsMap, degree,
                              &patterns](MatchInfo<const llvm::Value *> match) {
@@ -635,17 +649,23 @@ void populateHeapPatterns(
                                   Optional<HeapPatternCandidates>())));
         switch (match.loopInfo) {
         case LoopInfo::Left:
-            assert(!heapPatternCandidates.at(match.mark).at(exitIndex).left.hasValue());
+            assert(!heapPatternCandidates.at(match.mark)
+                        .at(exitIndex)
+                        .left.hasValue());
             heapPatternCandidates.at(match.mark).at(exitIndex).left =
                 std::move(candidates);
             break;
         case LoopInfo::Right:
-            assert(!heapPatternCandidates.at(match.mark).at(exitIndex).right.hasValue());
+            assert(!heapPatternCandidates.at(match.mark)
+                        .at(exitIndex)
+                        .right.hasValue());
             heapPatternCandidates.at(match.mark).at(exitIndex).right =
                 std::move(candidates);
             break;
         case LoopInfo::None:
-            assert(!heapPatternCandidates.at(match.mark).at(exitIndex).none.hasValue());
+            assert(!heapPatternCandidates.at(match.mark)
+                        .at(exitIndex)
+                        .none.hasValue());
             heapPatternCandidates.at(match.mark).at(exitIndex).none =
                 std::move(candidates);
             break;
@@ -1189,6 +1209,30 @@ getVarMapFromModel(const llvm::Function *fun,
         variableValues.insert({&arg, std::make_shared<VarInt>(Integer(val))});
     }
     return variableValues;
+}
+
+Heap getHeapFromModel(const ArrayVal &ar) {
+    Heap result;
+    for (auto it : ar.vals) {
+        result.insert({Integer(it.first), Integer(it.second)});
+    }
+    return result;
+}
+
+MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays) {
+    if (!HeapFlag) {
+        return {{}, {}};
+    }
+    return {getHeapFromModel(arrays.at("HEAP$1_old")),
+            getHeapFromModel(arrays.at("HEAP$2_old"))};
+}
+
+MonoPair<Integer> getHeapBackgrounds(std::map<std::string, ArrayVal> arrays) {
+    if (!HeapFlag) {
+        return {Integer(mpz_class(0)), Integer(mpz_class(0))};
+    }
+    return {Integer(arrays.at("HEAP$1_old").background),
+            Integer(arrays.at("HEAP$2_old").background)};
 }
 
 Heap randomHeap(
