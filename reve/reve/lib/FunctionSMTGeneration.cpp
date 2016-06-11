@@ -314,7 +314,10 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
                     path, freeVarsMap.at(startIndex), startIndex,
                     ProgramSelection::Both, funName, true, freeVarsMap, memory);
                 if (SMTGenerationOpts::getInstance().Invert) {
-                    negations.push_back(makeUnaryOp("not", clause));
+                    negations.push_back(makeBinOp(
+                        "and",
+                        makeBinOp("=", "INV_INDEX", std::to_string(startIndex)),
+                        makeUnaryOp("not", clause)));
                 } else {
                     smtExprs.push_back(make_shared<Assert>(clause));
                 }
@@ -1328,6 +1331,9 @@ vector<SharedSMTRef> declareVariables(smt::FreeVarsMap freeVarsMap) {
     vector<SharedSMTRef> variables;
     for (const auto &var : uniqueVars) {
         variables.push_back(make_shared<VarDecl>(var.name + "_old", var.type));
+    }
+    if (SMTGenerationOpts::getInstance().Invert) {
+        variables.push_back(make_shared<VarDecl>("INV_INDEX", "Int"));
     }
     return variables;
 }
