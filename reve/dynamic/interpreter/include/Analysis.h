@@ -114,7 +114,7 @@ template <typename T> struct MatchInfo {
 // Walks through the two calls and calls the function for every pair of matching
 // marks
 bool normalMarkBlock(const BlockNameMap &map, BlockName &blockName);
-void debugAnalysis(MatchInfo<std::string> match);
+void debugAnalysis(MatchInfo<const llvm::Value *> match);
 void dumpLoopCounts(const LoopCountMap &loopCounts);
 std::map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map);
 struct LoopCountsAndMark {
