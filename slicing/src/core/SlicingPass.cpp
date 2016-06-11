@@ -7,9 +7,11 @@
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 
+#include "core/DeleteVisitor.h"
+
 #include "llvm/IR/Dominators.h"
 
-#include <set>
+#include <queue>
 #include <iostream>
 
 using namespace llvm;
@@ -31,126 +33,44 @@ bool SlicingPass::isToBeSliced(llvm::Instruction& instruction){
 	}
 }
 
-bool SlicingPass::isPriviousDef(const DIVariable* variable, Instruction& instruction) {
-	return variable == AddVariableNamePass::getSrcVariable(instruction);
-}
-
-Instruction* SlicingPass::findPriviousDef(const DIVariable* variable, Instruction& instruction) {
-	BasicBlock* parent = instruction.getParent();
-	if (!parent) {
-		return nullptr;
-	}
-
-	auto treeNode = this->domTree->getNode(parent);
-
-	Instruction* result = nullptr;
-	while (!result && treeNode) {
-		BasicBlock* block = treeNode->getBlock();
-		for (Instruction& instructionInBlock: *block) {
-			if (this->isPriviousDef(variable, instructionInBlock)) {
-				// double check, as we might still be in the same block.
-				if (this->domTree->dominates(&instructionInBlock, &instruction)) {
-					result = &instructionInBlock;
-				}
-			}
-		}
-		treeNode = treeNode->getIDom();
-	}
-
-	return result;
-}
-
-bool SlicingPass::handleTerminatingInstruction(Instruction& instruction){
-	if (isa<llvm::TerminatorInst>(instruction)) {
-		return true;
-	} else {
-		return false;
-	}
-}
-
-bool SlicingPass::handleCriterion(Instruction& instruction){
-	if (CallInst* call = dyn_cast<CallInst>(&instruction)) {
-		if (call->getCalledFunction()
-			&& call->getCalledFunction()->getName() == "__criterion") {
-		return true;
-	}}
-
-	return false;
-}
-
-bool SlicingPass::handleNoUses(llvm::Instruction& instruction){
-	if (!instruction.hasNUsesOrMore(1)) {
-		instruction.eraseFromParent();
-		return true;
-	}
-	return false;
-}
-
-bool SlicingPass::handleHasPriviousDef(llvm::Instruction& instruction, DIVariable* variable) {
-	if (variable){
-		Instruction* priviousDef = this->findPriviousDef(variable,instruction);
-		if (priviousDef) {
-			instruction.replaceAllUsesWith(priviousDef);
-			instruction.eraseFromParent();
-			return true;
-		}
-	}
-	return false;
-}
-
-bool SlicingPass::handleIsArgument(llvm::Instruction& instruction, DIVariable* variable){
-	if (variable){
-		if (DILocalVariable* localVariable = dyn_cast<DILocalVariable>(variable)) {
-			if (localVariable->isParameter()) {
-				Function* function = instruction.getFunction();
-				if (function) {
-					unsigned arg = localVariable->getArg();
-					unsigned i = 1;
-					Argument* searchedArgument = nullptr;
-
-					for (Argument& argument : function->getArgumentList()) {
-						if (arg == i) {
-							searchedArgument = &argument;
-							break;
-						}
-						i++;
-					}
-
-					if (searchedArgument) {
-						instruction.replaceAllUsesWith(searchedArgument);
-						instruction.eraseFromParent();
-						return true;
-					}
-				}
-			}
-		}
-	}
-
-	return false;
-}
-
 bool SlicingPass::runOnFunction(llvm::Function& function){
 	this->domTree = &getAnalysis<llvm::DominatorTreeWrapperPass>().getDomTree();
-	std::set<llvm::Instruction*> instructionsToDelete;
+	std::queue<llvm::Instruction*> instructionsToDelete;
 
 	for(llvm::BasicBlock& block: function) {
 		for(llvm::Instruction& instruction: block) {
 			if (SlicingPass::isToBeSliced(instruction)) {
-				instructionsToDelete.insert(&instruction);
+				instructionsToDelete.push(&instruction);
 			}
 		}
 	}
 
-	for(llvm::Instruction* ins: instructionsToDelete) {
-		Instruction& instruction = *ins;
-		DIVariable* variable = AddVariableNamePass::getSrcVariable(instruction);
+	std::queue<llvm::Instruction*> secondTry;
 
-		bool done =
-			   handleTerminatingInstruction(instruction)
-			|| handleCriterion(instruction)
-			|| handleNoUses(instruction)
-			|| handleHasPriviousDef(instruction, variable)
-			|| handleIsArgument(instruction, variable);
+	std::queue<llvm::Instruction*>* activeQueue = &instructionsToDelete;
+	std::queue<llvm::Instruction*>* secondQueue = &secondTry;
+
+	bool changed = true;
+	while(changed) {
+		changed = false;
+
+		while (!instructionsToDelete.empty()) {
+			Instruction& instruction = *activeQueue->front();
+			activeQueue->pop();
+
+			DeleteVisitor visitor(this->domTree);
+			bool deleted = visitor.visit(instruction);
+
+			if (!deleted) {
+				changed = true;
+				secondQueue->push(&instruction);
+			}
+		}
+
+		std::queue<llvm::Instruction*>* temp;
+		temp = activeQueue;
+		activeQueue = secondQueue;
+		secondQueue = temp;
 	}
 
 	return true;

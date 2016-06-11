@@ -8,6 +8,8 @@
 using namespace std;
 using namespace llvm;
 
+const string Criterion::CRITERION_FUNCTION_NAME = "__criterion";
+
 Criterion::Criterion(){}
 
 bool Criterion::isReturnValue() const{

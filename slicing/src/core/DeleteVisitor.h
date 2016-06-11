@@ -1,0 +1,31 @@
+#pragma once
+#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/InstVisitor.h"
+#include "llvm/IR/Dominators.h"
+
+/**
+ * Removes the visited operation and manipulates the IR accordingly
+ * to produce a prooper slice.
+ *
+ * The retun type of the visit methods states if the instruction
+ * could be removed.
+ */
+class DeleteVisitor: public llvm::InstVisitor<DeleteVisitor, bool> {
+public:
+	DeleteVisitor(llvm::DominatorTree* domTree){domTree_ = domTree;}
+	bool visitInstruction(llvm::Instruction &I);
+	bool visitTerminatorInst(llvm::TerminatorInst &I);
+	bool visitCallInst(llvm::CallInst &I);
+
+private:
+	llvm::DominatorTree* domTree_;
+
+	bool isPriviousDef(const llvm::DIVariable* variable, llvm::Instruction& instruction);
+	llvm::Instruction* findPriviousDef(const llvm::DIVariable* variable, llvm::Instruction& instruction);
+
+	bool handleNoUses(llvm::Instruction& instruction);
+	bool handleHasPriviousDef(llvm::Instruction& instruction, llvm::DIVariable* variable);
+	bool handleIsArgument(llvm::Instruction& instruction, llvm::DIVariable* variable);
+};
