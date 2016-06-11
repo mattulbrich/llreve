@@ -606,7 +606,6 @@ template <typename T> struct Constant : public HeapExpr<T> {
     mpz_class eval(const VarMap<const llvm::Value *> &variables,
                    const MonoPair<Heap> & /* unused */,
                    const HoleMap & /* unused */) const override {
-        assert(variables.empty());
         unused(variables);
         return value;
     }

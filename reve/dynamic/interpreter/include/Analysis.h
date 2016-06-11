@@ -5,12 +5,12 @@
 #include "HeapPattern.h"
 #include "Interpreter.h"
 #include "MarkAnalysis.h"
+#include "Model.h"
 #include "MonoPair.h"
 #include "Opts.h"
 #include "ParseInput.h"
 #include "Permutation.h"
 #include "Preprocess.h"
-#include "Model.h"
 
 #include "llvm/IR/Module.h"
 
@@ -193,9 +193,16 @@ extractEqualities(const PolynomialEquations &equations,
 std::map<const llvm::Value *, std::shared_ptr<VarVal>>
 getVarMap(const llvm::Function *fun, std::vector<mpz_class> vals);
 
-std::map<const llvm::Value *, std::shared_ptr<VarVal>>
-getVarMapFromModel(const llvm::Function *fun,
-                   std::map<std::string, mpz_class> vals);
+std::map<std::string, const llvm::Value *>
+instructionNameMap(const llvm::Function *fun);
+std::map<std::string, const llvm::Value *>
+instructionNameMap(MonoPair<const llvm::Function *> funs);
+
+MonoPair<std::map<const llvm::Value *, std::shared_ptr<VarVal>>>
+getVarMapFromModel(
+    std::map<std::string, const llvm::Value *> instructionNameMap,
+    std::vector<smt::SortedVar> freeVars,
+    std::map<std::string, mpz_class> vals);
 Heap getHeapFromModel(const ArrayVal &ar);
 MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays);
 MonoPair<Integer> getHeapBackgrounds(std::map<std::string, ArrayVal> arrays);

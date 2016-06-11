@@ -289,17 +289,17 @@ void cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     for (const auto &arg : functions.second->args()) {
         vals.values.insert({std::string(arg.getName()) + "_old", 0});
     }
+    vals.values.insert({"INV_INDEX", ENTRY_MARK});
+    auto instrNameMap = instructionNameMap(functions);
     do {
+        int cexMark = static_cast<int>(vals.values.at("INV_INDEX").get_si());
         // reconstruct input from counterexample
-        auto variableValues =
-            functions
-                .map<std::map<const llvm::Value *, std::shared_ptr<VarVal>>>(
-                    [&vals](auto fun) {
-                        return getVarMapFromModel(fun, vals.values);
-                    });
+        auto variableValues = getVarMapFromModel(
+            instrNameMap, freeVarsMap.at(cexMark), vals.values);
 
         // dump new example
         std::cout << "---\nFound counterexample:\n";
+        std::cout << "at invariant: " << cexMark << "\n";
         for (auto it : variableValues.first) {
             llvm::errs() << it.first->getName() << " "
                          << it.second->unsafeIntVal().asUnbounded().get_str()
@@ -318,10 +318,17 @@ void cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
             }
         }
 
-        MonoPair<Call<const llvm::Value *>> calls =
-            interpretFunctionPair(functions, std::move(variableValues),
-                                  getHeapsFromModel(vals.arrays),
-                                  getHeapBackgrounds(vals.arrays), 1000);
+        assert(markMaps.first.MarkToBlocksMap.at(cexMark).size() == 1);
+        assert(markMaps.second.MarkToBlocksMap.at(cexMark).size() == 1);
+        auto firstBlock = *markMaps.first.MarkToBlocksMap.at(cexMark).begin();
+        auto secondBlock = *markMaps.second.MarkToBlocksMap.at(cexMark).begin();
+        std::string tmp;
+        getline(std::cin, tmp);
+
+        MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
+            functions, variableValues, getHeapsFromModel(vals.arrays),
+            getHeapBackgrounds(vals.arrays), {firstBlock, secondBlock}, 1000);
+        analyzeExecution<const llvm::Value *>(calls, nameMap, debugAnalysis);
         analyzeExecution<const llvm::Value *>(
             calls, nameMap, [&analysisResults, &freeVarsMap, degree,
                              &patterns](MatchInfo<const llvm::Value *> match) {
@@ -337,7 +344,7 @@ void cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
 
         SMTGenerationOpts::initialize(mainFunctionName, HeapFlag, false, false,
                                       false, false, false, false, false, false,
-                                      false, false, BoundedFlag, InvertFlag,
+                                      false, false, false, true,
                                       invariantCandidates);
         vector<SharedSMTRef> clauses =
             generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
@@ -1202,13 +1209,50 @@ getVarMap(const llvm::Function *fun, std::vector<mpz_class> vals) {
     return variableValues;
 }
 
-std::map<const llvm::Value *, std::shared_ptr<VarVal>>
-getVarMapFromModel(const llvm::Function *fun,
-                   std::map<std::string, mpz_class> vals) {
-    std::map<const llvm::Value *, std::shared_ptr<VarVal>> variableValues;
-    for (auto &arg : fun->args()) {
-        mpz_class val = vals.at(std::string(arg.getName()) + "_old");
-        variableValues.insert({&arg, std::make_shared<VarInt>(Integer(val))});
+std::map<std::string, const llvm::Value *>
+instructionNameMap(const llvm::Function *fun) {
+    std::map<std::string, const llvm::Value *> nameMap;
+    for (const auto &arg : fun->args()) {
+        nameMap.insert({arg.getName(), &arg});
+    }
+    for (const auto &bb : *fun) {
+        for (const auto &instr : bb) {
+            if (!instr.getName().empty()) {
+                nameMap.insert({instr.getName(), &instr});
+            }
+        }
+    }
+    return nameMap;
+}
+
+std::map<std::string, const llvm::Value *>
+instructionNameMap(MonoPair<const llvm::Function *> funs) {
+    std::map<std::string, const llvm::Value *> nameMap =
+        instructionNameMap(funs.first);
+    std::map<std::string, const llvm::Value *> nameMap2 =
+        instructionNameMap(funs.second);
+    nameMap.insert(nameMap2.begin(), nameMap2.end());
+    return nameMap;
+}
+
+MonoPair<std::map<const llvm::Value *, std::shared_ptr<VarVal>>>
+getVarMapFromModel(
+    std::map<std::string, const llvm::Value *> instructionNameMap,
+    std::vector<smt::SortedVar> freeVars,
+    std::map<std::string, mpz_class> vals) {
+    MonoPair<std::map<const llvm::Value *, std::shared_ptr<VarVal>>>
+        variableValues = makeMonoPair<
+            std::map<const llvm::Value *, std::shared_ptr<VarVal>>>({}, {});
+    for (const auto &var : freeVars) {
+        mpz_class val = vals.at(var.name + "_old");
+        const llvm::Value *instr = instructionNameMap.at(var.name);
+        if (varBelongsTo(var.name, 1)) {
+            variableValues.first.insert(
+                {instr, std::make_shared<VarInt>(Integer(val))});
+        } else {
+            variableValues.second.insert(
+                {instr, std::make_shared<VarInt>(Integer(val))});
+        }
     }
     return variableValues;
 }

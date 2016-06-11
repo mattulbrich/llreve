@@ -27,5 +27,5 @@ ite             { return ITE; }
 _               { return UNDERSCORE; }
 Int             { return INT; }
 Array           { return ARRAY; }
-[a-zA-Z][a-zA-Z0-9$_!\.]*  { smtlval.str = new std::string(yytext); return IDENTIFIER; }
+[a-zA-Z_!\.][a-zA-Z0-9$_!\.]*  { smtlval.str = new std::string(yytext); return IDENTIFIER; }
 %%

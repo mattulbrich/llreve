@@ -175,11 +175,20 @@ MonoPair<FastCall> interpretFunctionPair(
     MonoPair<const llvm::Function *> funs,
     MonoPair<std::map<const llvm::Value *, std::shared_ptr<VarVal>>> variables,
     MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds, uint32_t maxSteps);
+MonoPair<FastCall> interpretFunctionPair(
+    MonoPair<const llvm::Function *> funs,
+    MonoPair<std::map<const llvm::Value *, std::shared_ptr<VarVal>>> variables,
+    MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds,
+    MonoPair<const llvm::BasicBlock *> startBlocks, uint32_t maxSteps);
 auto interpretFunction(const llvm::Function &fun, FastState entry,
                        uint32_t maxSteps) -> FastCall;
+auto interpretFunction(const llvm::Function &fun, FastState entry,
+                       const llvm::BasicBlock *bb, uint32_t maxSteps)
+    -> FastCall;
 auto interpretBlock(const llvm::BasicBlock &block,
                     const llvm::BasicBlock *prevBlock, FastState &state,
-                    uint32_t maxStep) -> BlockUpdate<const llvm::Value *>;
+                    bool skipPhi, uint32_t maxStep)
+    -> BlockUpdate<const llvm::Value *>;
 auto interpretPHI(const llvm::PHINode &instr, FastState &state,
                   const llvm::BasicBlock *prevBlock) -> void;
 auto interpretInstruction(const llvm::Instruction *instr, FastState &state)

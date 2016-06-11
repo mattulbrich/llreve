@@ -75,17 +75,36 @@ MonoPair<FastCall> interpretFunctionPair(
             maxSteps));
 }
 
+MonoPair<FastCall> interpretFunctionPair(
+    MonoPair<const llvm::Function *> funs,
+    MonoPair<std::map<const llvm::Value *, std::shared_ptr<VarVal>>> variables,
+    MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds,
+    MonoPair<const llvm::BasicBlock *> startBlocks, uint32_t maxSteps) {
+    return makeMonoPair(
+        interpretFunction(*funs.first, FastState(variables.first, heaps.first,
+                                                 heapBackgrounds.first),
+                          startBlocks.first, maxSteps),
+        interpretFunction(
+            *funs.second,
+            FastState(variables.second, heaps.second, heapBackgrounds.second),
+            startBlocks.second, maxSteps));
+}
+
 FastCall interpretFunction(const Function &fun, FastState entry,
+                           const llvm::BasicBlock *startBlock,
                            uint32_t maxSteps) {
     const BasicBlock *prevBlock = nullptr;
-    const BasicBlock *currentBlock = &fun.getEntryBlock();
+    const BasicBlock *currentBlock = startBlock;
     vector<shared_ptr<BlockStep<const llvm::Value *>>> steps;
     FastState currentState = entry;
     BlockUpdate<const llvm::Value *> update;
     uint32_t blocksVisited = 0;
+    bool firstBlock = true;
     do {
         update = interpretBlock(*currentBlock, prevBlock, currentState,
+                                firstBlock,
                                 maxSteps - blocksVisited);
+        firstBlock = false;
         blocksVisited += update.blocksVisited;
         steps.push_back(make_shared<BlockStep<const llvm::Value *>>(
             currentBlock->getName(), std::move(update.step),
@@ -102,9 +121,14 @@ FastCall interpretFunction(const Function &fun, FastState entry,
                     std::move(steps), false, blocksVisited);
 }
 
+FastCall interpretFunction(const Function &fun, FastState entry,
+                           uint32_t maxSteps) {
+    return interpretFunction(fun, entry, &fun.getEntryBlock(), maxSteps);
+}
+
 BlockUpdate<const llvm::Value *> interpretBlock(const BasicBlock &block,
                                                 const BasicBlock *prevBlock,
-                                                FastState &state,
+                                                FastState &state, bool skipPhi,
                                                 uint32_t maxSteps) {
     uint32_t blocksVisited = 1;
     const Instruction *firstNonPhi = block.getFirstNonPHI();
@@ -115,7 +139,9 @@ BlockUpdate<const llvm::Value *> interpretBlock(const BasicBlock &block,
          ++instrIterator) {
         const Instruction *inst = &*instrIterator;
         assert(isa<PHINode>(inst));
-        interpretPHI(*dyn_cast<PHINode>(inst), state, prevBlock);
+        if (!skipPhi) {
+            interpretPHI(*dyn_cast<PHINode>(inst), state, prevBlock);
+        }
     }
     FastState step(state);
 
