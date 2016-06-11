@@ -1,0 +1,5 @@
+#!/bin/bash
+
+../scripts/prepare program.llvm
+../scripts/prepare slice.llvm
+meld program.llvm slice.llvm
