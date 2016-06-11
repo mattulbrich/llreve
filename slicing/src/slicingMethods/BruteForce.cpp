@@ -24,11 +24,12 @@ shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 			numInstructions++;
 		}
 	}
-	//We will not be able to slice the return instruction:
-	numInstructions--;
+
+	// We do not want to slice the criterion itself
+	numInstructions -= c->getInstructions(*program).size();
 
 	ModulePtr bestCandidate = shared_ptr<Module>(nullptr);
-	int maxSliced = 0;
+	int maxSliced = -1;
 
 	cout << "|--------------------|" << endl;
 	cout << "|";
@@ -45,24 +46,30 @@ shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 		}
 
 		ModulePtr sliceCandidate = CloneModule(&*program);
+		set<Instruction*> criterionInstructions = c->getInstructions(*sliceCandidate);
 		int sliced = 0;
 
 		for (Function& function: *sliceCandidate) {
 			int instructionCounter = 0;
 			for(Instruction& instruction : Util::getInstructions(function)) {
-				if (pattern & (1 << instructionCounter)) {
-					SlicingPass::toBeSliced(instruction);
-					sliced++;
+				const bool isCriterion = criterionInstructions.find(&instruction) != criterionInstructions.end();
+				if (!isCriterion) {
+					if (pattern & (1 << instructionCounter)) {
+						SlicingPass::toBeSliced(instruction);
+						sliced++;
+					}
+					instructionCounter++;
 				}
-				instructionCounter++;
 			}
 		}
 
+		//Will be deleted from pass manager!
+		SlicingPass* slicingPass = new SlicingPass();
 		llvm::legacy::PassManager PM;
-		PM.add(new SlicingPass());
+		PM.add(slicingPass);
 		PM.run(*sliceCandidate);
 
-		if (sliced > maxSliced) {
+		if (!slicingPass->hasUnSlicedInstructions() && sliced > maxSliced) {
 			ValidationResult isValid = SliceCandidateValidation::validate(&*program, &*sliceCandidate, c);
 			if (isValid == ValidationResult::valid) {
 				maxSliced = sliced;
