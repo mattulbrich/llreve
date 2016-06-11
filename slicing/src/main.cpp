@@ -78,9 +78,17 @@ int main(int argc, const char **argv) {
 	ModulePtr program = getModuleFromFile(FileName, ResourceDir, Includes);
 
 	CriterionPtr criterion;
+	CriterionPtr presentCriterion = shared_ptr<Criterion>(new PresentCriterion());
 	if (CriterionPresentFlag) {
-		criterion = shared_ptr<Criterion>(new PresentCriterion());
+		if (presentCriterion->getInstructions(*program).size() == 0){
+			outs() << "ERROR: Criterion present flag set, but no criterion found! \n";
+			exit(1);
+		}
+		criterion = presentCriterion;
 	} else {
+		if (presentCriterion->getInstructions(*program).size() > 0){
+			outs() << "WARNING: Criterion present flag not set, but criterion found! Slice is for return value!\n";
+		}
 		criterion = shared_ptr<Criterion>(new ReturnValueCriterion());
 	}
 
