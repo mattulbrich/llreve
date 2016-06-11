@@ -599,7 +599,28 @@ void populateHeapPatterns(
             exitIndex = var.second->unsafeIntVal().asUnbounded();
         }
     }
-    if (heapPatternCandidates[match.mark].count(exitIndex) == 0) {
+    bool newCandidates =
+        heapPatternCandidates[match.mark].count(exitIndex) == 0;
+    if (!newCandidates) {
+        switch (match.loopInfo) {
+        case LoopInfo::Left:
+            newCandidates = !heapPatternCandidates.at(match.mark)
+                                 .at(exitIndex)
+                                 .left.hasValue();
+            break;
+        case LoopInfo::Right:
+            newCandidates = !heapPatternCandidates.at(match.mark)
+                                 .at(exitIndex)
+                                 .right.hasValue();
+            break;
+        case LoopInfo::None:
+            newCandidates = !heapPatternCandidates.at(match.mark)
+                                 .at(exitIndex)
+                                 .none.hasValue();
+            break;
+        }
+    }
+    if (newCandidates) {
         list<shared_ptr<HeapPattern<const llvm::Value *>>> candidates;
         for (auto pat : patterns) {
             auto newCandidates =
@@ -614,14 +635,17 @@ void populateHeapPatterns(
                                   Optional<HeapPatternCandidates>())));
         switch (match.loopInfo) {
         case LoopInfo::Left:
+            assert(!heapPatternCandidates.at(match.mark).at(exitIndex).left.hasValue());
             heapPatternCandidates.at(match.mark).at(exitIndex).left =
                 std::move(candidates);
             break;
         case LoopInfo::Right:
+            assert(!heapPatternCandidates.at(match.mark).at(exitIndex).right.hasValue());
             heapPatternCandidates.at(match.mark).at(exitIndex).right =
                 std::move(candidates);
             break;
         case LoopInfo::None:
+            assert(!heapPatternCandidates.at(match.mark).at(exitIndex).none.hasValue());
             heapPatternCandidates.at(match.mark).at(exitIndex).none =
                 std::move(candidates);
             break;
