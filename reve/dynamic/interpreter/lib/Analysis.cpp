@@ -294,7 +294,7 @@ void cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                     [&vals](auto fun) {
                         return getVarMapFromModel(fun, vals.values);
                     });
-        std::cout << "Found counterexample:\n";
+        std::cout << "---\nFound counterexample:\n";
         for (auto it : variableValues.first) {
             llvm::errs() << it.first->getName() << " "
                          << it.second->unsafeIntVal().asUnbounded().get_str()
@@ -589,17 +589,6 @@ void populateHeapPatterns(
     // TODO don’t copy heaps
     MonoPair<Heap> heaps = makeMonoPair(match.steps.first->state.heap,
                                         match.steps.second->state.heap);
-    switch (match.loopInfo) {
-    case LoopInfo::Left:
-        std::cout << "left\n";
-        break;
-    case LoopInfo::Right:
-        std::cout << "right\n";
-        break;
-    case LoopInfo::None:
-        std::cout << "synced\n";
-        break;
-    }
     ExitIndex exitIndex = 0;
     for (auto var : variables) {
         if (var.first->getName() ==
