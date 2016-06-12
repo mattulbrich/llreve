@@ -1,3 +1,4 @@
+//Simelar to examples Listing 1
 int foo ( int x ) {
 	x = x - 50;
 	x = x + 100;
