@@ -7,10 +7,7 @@ int __assert_sliced(int x){
 }
 
 int foo(int x) {
-
-	x += 0;
-	x += 0;
-
+	__assert_sliced(x += 0);
 	__criterion(x);
 	return x;
 }

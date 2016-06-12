@@ -9,9 +9,13 @@
 //#include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
 #include "core/AddVariableNamePass.h"
+#include "core/PromoteAssertSlicedPass.h"
 #include "llvm/Transforms/IPO.h"
 
 #include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/IR/Verifier.h"
+
 
 
 using namespace std;
@@ -40,7 +44,11 @@ shared_ptr<llvm::Module> getModuleFromFile(string fileName, string resourceDir, 
 	PM.add(llvm::createPromoteMemoryToRegisterPass());
 	PM.add(new AddVariableNamePass());
 	PM.add(llvm::createStripSymbolsPass(true));
+	PM.add(new PromoteAssertSlicedPass());
 	PM.run(*program);
+
+    bool hasError = llvm::verifyModule(*program, &errs());
+    assert(!hasError && "Error during initial construction of IT!");
 
 	shared_ptr<llvm::Module> sliceCandidate = CloneModule(&*program);
 	return program;
