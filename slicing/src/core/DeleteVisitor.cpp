@@ -20,7 +20,7 @@ bool DeleteVisitor::visitTerminatorInst(TerminatorInst &instruction){
 
 bool DeleteVisitor::visitCallInst(CallInst &instruction){
 	if (instruction.getCalledFunction()
-			&& instruction.getCalledFunction()->getName() == Criterion::CRITERION_FUNCTION_NAME) {
+			&& instruction.getCalledFunction()->getName() == Criterion::FUNCTION_NAME) {
 		return false;
 	} else {
 		//TODD: avoid removing call instructions, that coudl modify

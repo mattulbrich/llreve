@@ -3,12 +3,13 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Instructions.h"
 
+#include "core/PromoteAssertSlicedPass.h"
 #include "core/Util.h"
 
 using namespace std;
 using namespace llvm;
 
-const string Criterion::CRITERION_FUNCTION_NAME = "__criterion";
+const string Criterion::FUNCTION_NAME = "__criterion";
 
 Criterion::Criterion(){}
 
@@ -32,7 +33,8 @@ std::set<llvm::Instruction*> ReturnValueCriterion::getInstructions(llvm::Module&
 	set<Instruction*> instructions;
 	for (Function& function:module) {
 		if (function.getName() != "__criterion"
-			&& function.getName() != "__mark") {
+			&& function.getName() != "__mark"
+			&& function.getName() != PromoteAssertSlicedPass::FUNCTION_NAME) {
 			assert(!multipleFunctions && "Can't use slicing after return value for programs with more than one function!");
 		multipleFunctions = true;
 
