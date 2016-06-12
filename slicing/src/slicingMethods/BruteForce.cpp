@@ -4,6 +4,7 @@
 #include "core/Util.h"
 #include "core/SlicingPass.h"
 #include <iostream>
+#include <bitset>
 
 #include "core/SliceCandidateValidation.h"
 
@@ -48,9 +49,9 @@ shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 		ModulePtr sliceCandidate = CloneModule(&*program);
 		set<Instruction*> criterionInstructions = c->getInstructions(*sliceCandidate);
 		int sliced = 0;
+		int instructionCounter = 0;
 
 		for (Function& function: *sliceCandidate) {
-			int instructionCounter = 0;
 			for(Instruction& instruction : Util::getInstructions(function)) {
 				const bool isCriterion = criterionInstructions.find(&instruction) != criterionInstructions.end();
 				if (!isCriterion) {
@@ -69,7 +70,7 @@ shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 		PM.add(slicingPass);
 		PM.run(*sliceCandidate);
 
-		if (!slicingPass->hasUnSlicedInstructions() && sliced > maxSliced) {
+		if (!slicingPass->hasUnSlicedInstructions() && sliced >= maxSliced) {
 			ValidationResult isValid = SliceCandidateValidation::validate(&*program, &*sliceCandidate, c);
 			if (isValid == ValidationResult::valid) {
 				maxSliced = sliced;
