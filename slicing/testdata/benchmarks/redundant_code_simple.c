@@ -1,3 +1,5 @@
+#include "slicing_marks.h"
+
 //similar to example listing 5
 int foo ( int x ) {
 	if ( x > 0) {

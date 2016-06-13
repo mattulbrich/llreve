@@ -1,3 +1,6 @@
+// *** ADDED BY HEADER FIXUP ***
+#include <istream>
+// *** END ***
 #include "BruteForce.h"
 
 #include "util/LambdaFunctionPass.h"

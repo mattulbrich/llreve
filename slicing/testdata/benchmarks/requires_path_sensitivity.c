@@ -1,11 +1,14 @@
+#include "slicing_marks.h"
+
 // similar to example listing 11
 // closer to the original example
 int foo(int a, int z) {
-	int x = 0;
-	int y = 5;
+	int x, y, b;
+	x = 0;
+	y = 5;
 
 	if ( a > 0 )
-		int b = x + y;
+		b = x + y;
 
 	if ( a > 42)
 		x = 1;

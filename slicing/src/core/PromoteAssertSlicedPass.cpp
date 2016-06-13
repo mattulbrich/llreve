@@ -1,3 +1,6 @@
+// *** ADDED BY HEADER FIXUP ***
+#include <istream>
+// *** END ***
 #include "PromoteAssertSlicedPass.h"
 
 #include "llvm/IR/IntrinsicInst.h"
@@ -55,12 +58,14 @@ void PromoteAssertSlicedPass::markAssertSliced(llvm::Instruction& instruction) {
 }
 
 bool PromoteAssertSlicedPass::isAssertSliced(llvm::Instruction& instruction) {
-	std::string data = cast<MDString>(instruction.getMetadata(ASSERT_SLICED)->getOperand(0))->getString();
-	if (data == ASSERT_SLICED) {
-		return true;
-	} else {
-		return false;
-	}
+    if (auto metaData = instruction.getMetadata(ASSERT_SLICED)) {
+        std::string data = cast<MDString>(metaData->getOperand(0))->getString();
+        if (data == ASSERT_SLICED) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 

@@ -1,3 +1,8 @@
+// *** ADDED BY HEADER FIXUP ***
+#include <istream>
+#include <iterator>
+#include <utility>
+// *** END ***
 #pragma once
 
 #include "llvm/ADT/GraphTraits.h"

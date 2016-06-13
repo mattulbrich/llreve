@@ -1,3 +1,6 @@
+// *** ADDED BY HEADER FIXUP ***
+#include <istream>
+// *** END ***
 #include "DependencyGraphPasses.h"
 
 #include "llvm/ADT/PostOrderIterator.h"
