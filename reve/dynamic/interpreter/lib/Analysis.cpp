@@ -726,7 +726,7 @@ findFunction(const vector<MonoPair<PreprocessedFunction>> functions,
     return Optional<MonoPair<PreprocessedFunction>>();
 }
 
-bool normalMarkBlock(const BlockNameMap &map, BlockName &blockName) {
+bool normalMarkBlock(const BlockNameMap &map, const BlockName &blockName) {
     auto it = map.find(blockName);
     if (it == map.end()) {
         return false;

@@ -89,12 +89,12 @@ template <typename T> struct Call : Step<T> {
     std::string functionName;
     State<T> entryState;
     State<T> returnState;
-    std::vector<std::shared_ptr<BlockStep<T>>> steps;
+    std::vector<BlockStep<T>> steps;
     // Did we exit because we ran out of steps?
     bool earlyExit;
     uint32_t blocksVisited;
     Call(std::string functionName, State<T> entryState, State<T> returnState,
-         std::vector<std::shared_ptr<BlockStep<T>>> steps, bool earlyExit,
+         std::vector<BlockStep<T>> steps, bool earlyExit,
          uint32_t blocksVisited)
         : functionName(std::move(functionName)),
           entryState(std::move(entryState)),
@@ -108,7 +108,7 @@ template <typename T> struct Call : Step<T> {
         j["return_state"] = stateToJSON<T>(returnState, varName);
         std::vector<nlohmann::json> jsonSteps;
         for (auto step : steps) {
-            jsonSteps.push_back(step->toJSON(varName));
+            jsonSteps.push_back(step.toJSON(varName));
         }
         j["steps"] = jsonSteps;
         j["early_exit"] = earlyExit;

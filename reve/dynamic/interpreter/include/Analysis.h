@@ -113,7 +113,7 @@ template <typename T> struct MatchInfo {
 
 // Walks through the two calls and calls the function for every pair of matching
 // marks
-bool normalMarkBlock(const BlockNameMap &map, BlockName &blockName);
+bool normalMarkBlock(const BlockNameMap &map, const BlockName &blockName);
 void debugAnalysis(MatchInfo<const llvm::Value *> match);
 void dumpLoopCounts(const LoopCountMap &loopCounts);
 std::map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map);
@@ -294,10 +294,8 @@ template <typename T>
 void analyzeExecution(const MonoPair<Call<T>> &calls,
                       MonoPair<BlockNameMap> nameMaps,
                       std::function<void(MatchInfo<T>)> fun) {
-    const std::vector<std::shared_ptr<BlockStep<T>>> &steps1 =
-        calls.first.steps;
-    const std::vector<std::shared_ptr<BlockStep<T>>> &steps2 =
-        calls.second.steps;
+    const std::vector<BlockStep<T>> &steps1 = calls.first.steps;
+    const std::vector<BlockStep<T>> &steps2 = calls.second.steps;
     auto stepsIt1 = steps1.begin();
     auto stepsIt2 = steps2.begin();
     auto prevStepIt1 = *stepsIt1;
@@ -305,30 +303,30 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
     while (stepsIt1 != steps1.end() && stepsIt2 != steps2.end()) {
         // Advance until a mark is reached
         while (stepsIt1 != steps1.end() &&
-               !normalMarkBlock(nameMaps.first, (*stepsIt1)->blockName)) {
+               !normalMarkBlock(nameMaps.first, stepsIt1->blockName)) {
             stepsIt1++;
         }
         while (stepsIt2 != steps2.end() &&
-               !normalMarkBlock(nameMaps.second, (*stepsIt2)->blockName)) {
+               !normalMarkBlock(nameMaps.second, stepsIt2->blockName)) {
             stepsIt2++;
         }
         if (stepsIt1 == steps1.end() && stepsIt2 == steps2.end()) {
             break;
         }
         // Check marks
-        if (!intersection(nameMaps.first.at((*stepsIt1)->blockName),
-                          nameMaps.second.at((*stepsIt2)->blockName))
+        if (!intersection(nameMaps.first.at(stepsIt1->blockName),
+                          nameMaps.second.at(stepsIt2->blockName))
                  .empty()) {
-            assert(intersection(nameMaps.first.at((*stepsIt1)->blockName),
-                                nameMaps.second.at((*stepsIt2)->blockName))
+            assert(intersection(nameMaps.first.at(stepsIt1->blockName),
+                                nameMaps.second.at(stepsIt2->blockName))
                        .size() == 1);
             // We resolve the ambiguity in the marks by hoping that for one
             // program there is only one choice
-            int mark = *intersection(nameMaps.first.at((*stepsIt1)->blockName),
-                                     nameMaps.second.at((*stepsIt2)->blockName))
+            int mark = *intersection(nameMaps.first.at(stepsIt1->blockName),
+                                     nameMaps.second.at(stepsIt2->blockName))
                             .begin();
             // Perfect synchronization
-            fun(MatchInfo<T>(makeMonoPair(&**stepsIt1, &**stepsIt2),
+            fun(MatchInfo<T>(makeMonoPair(&*stepsIt1, &*stepsIt2),
                              LoopInfo::None, mark));
             prevStepIt1 = *stepsIt1;
             prevStepIt2 = *stepsIt2;
@@ -337,8 +335,8 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
         } else {
             // In the first round this is not true, but we should never fall in
             // this case in the first round
-            assert(prevStepIt1 != *stepsIt1);
-            assert(prevStepIt2 != *stepsIt2);
+            assert(&prevStepIt1 != &*stepsIt1);
+            assert(&prevStepIt2 != &*stepsIt2);
 
             // One side has to wait for the other to finish its loop
             LoopInfo loop = LoopInfo::Left;
@@ -348,7 +346,7 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
             auto end = steps1.end();
             auto nameMap = nameMaps.first;
             auto otherNameMap = nameMaps.second;
-            if ((*stepsIt2)->blockName == prevStepIt2->blockName) {
+            if (stepsIt2->blockName == prevStepIt2.blockName) {
                 loop = LoopInfo::Right;
                 stepsIt = stepsIt2;
                 prevStepIt = prevStepIt2;
@@ -359,22 +357,22 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
             }
             // Keep looping one program until it moves on
             do {
-                assert(intersection(nameMap.at(prevStepIt->blockName),
-                                    otherNameMap.at(prevStepItOther->blockName))
+                assert(intersection(nameMap.at(prevStepIt.blockName),
+                                    otherNameMap.at(prevStepItOther.blockName))
                            .size() == 1);
                 int mark =
-                    *intersection(nameMap.at(prevStepIt->blockName),
-                                  otherNameMap.at(prevStepItOther->blockName))
+                    *intersection(nameMap.at(prevStepIt.blockName),
+                                  otherNameMap.at(prevStepItOther.blockName))
                          .begin();
                 // Make sure the first program is always the first argument
                 if (loop == LoopInfo::Left) {
-                    const BlockStep<T> *firstStep = &**stepsIt;
-                    const BlockStep<T> *secondStep = &*prevStepItOther;
+                    const BlockStep<T> *firstStep = &*stepsIt;
+                    const BlockStep<T> *secondStep = &prevStepItOther;
                     fun(MatchInfo<T>(makeMonoPair(firstStep, secondStep), loop,
                                      mark));
                 } else {
-                    const BlockStep<T> *secondStep = &**stepsIt;
-                    const BlockStep<T> *firstStep = &*prevStepItOther;
+                    const BlockStep<T> *secondStep = &*stepsIt;
+                    const BlockStep<T> *firstStep = &prevStepItOther;
                     fun(MatchInfo<T>(makeMonoPair(firstStep, secondStep), loop,
                                      mark));
                 }
@@ -382,10 +380,10 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
                 do {
                     stepsIt++;
                 } while (stepsIt != end &&
-                         !normalMarkBlock(nameMap, (*stepsIt)->blockName));
+                         !normalMarkBlock(nameMap, stepsIt->blockName));
                 // Did we return to the same mark?
             } while (stepsIt != end &&
-                     (*stepsIt)->blockName == prevStepIt->blockName);
+                     stepsIt->blockName == prevStepIt.blockName);
             // Getting a reference to the iterator and modifying that doesn't
             // seem to work so we copy it and set it again
             if (loop == LoopInfo::Left) {

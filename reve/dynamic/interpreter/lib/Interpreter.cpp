@@ -95,18 +95,17 @@ FastCall interpretFunction(const Function &fun, FastState entry,
                            uint32_t maxSteps) {
     const BasicBlock *prevBlock = nullptr;
     const BasicBlock *currentBlock = startBlock;
-    vector<shared_ptr<BlockStep<const llvm::Value *>>> steps;
+    vector<BlockStep<const llvm::Value *>> steps;
     FastState currentState = entry;
     BlockUpdate<const llvm::Value *> update;
     uint32_t blocksVisited = 0;
     bool firstBlock = true;
     do {
         update = interpretBlock(*currentBlock, prevBlock, currentState,
-                                firstBlock,
-                                maxSteps - blocksVisited);
+                                firstBlock, maxSteps - blocksVisited);
         firstBlock = false;
         blocksVisited += update.blocksVisited;
-        steps.push_back(make_shared<BlockStep<const llvm::Value *>>(
+        steps.push_back(BlockStep<const llvm::Value *>(
             currentBlock->getName(), std::move(update.step),
             std::move(update.calls)));
         prevBlock = currentBlock;

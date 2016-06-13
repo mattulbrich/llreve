@@ -1022,13 +1022,13 @@ template <typename T> struct HeapExprProp : public HeapPattern<T> {
             os << " < ";
             break;
         case BinaryIntProp::LE:
-            os << " <= ";
+            os << " ≤ ";
             break;
         case BinaryIntProp::EQ:
             os << " = ";
             break;
         case BinaryIntProp::GE:
-            os << " >= ";
+            os << " ≥ ";
             break;
         case BinaryIntProp::GT:
             os << " > ";
