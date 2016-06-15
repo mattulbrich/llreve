@@ -353,8 +353,6 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         char templateName[] = "tmpsmt_XXXXXX.smt2";
         int tmpSMTFd = mkstemps(templateName, 5);
         string templateFileName(templateName);
-        std::cerr << "tmpfile: " << templateFileName << "\n";
-        std::getline(std::cin, tmp);
         serializeSMT(clauses, false,
                      SerializeOpts(templateFileName, !InstantiateStorage, false,
                                    BoundedFlag));
