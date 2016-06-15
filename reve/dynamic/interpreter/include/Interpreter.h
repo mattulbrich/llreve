@@ -34,6 +34,9 @@ nlohmann::json toJSON(const bool &b);
 VarIntVal unsafeIntVal(const bool &b);
 bool unsafeBool(const bool &b);
 
+// This technique is from the talk “Inheritance is The Base Class of Evil”
+// https://channel9.msdn.com/Events/GoingNative/2013/Inheritance-Is-The-Base-Class-of-Evil
+// It gives us value semantics and polymorphism at the same time
 class VarVal {
   public:
     template <typename T> VarVal(T x) : self_(new model<T>(std::move(x))) {}
