@@ -64,7 +64,7 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
        std::string mainFunctionName,
        std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
        FileOptions fileopts);
-void cegarDriver(
+std::vector<smt::SharedSMTRef> cegarDriver(
     MonoPair<std::shared_ptr<llvm::Module>> modules,
     std::vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
     std::string mainFunctionName,

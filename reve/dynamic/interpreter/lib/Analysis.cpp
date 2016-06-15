@@ -20,6 +20,7 @@
 
 // I don't care about windows
 #include <dirent.h>
+#include <stdio.h>
 #include <sys/stat.h>
 
 #include "llvm/IR/Verifier.h"
@@ -243,17 +244,18 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     return clauses;
 }
 
-void cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
-                 vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
-                 string mainFunctionName,
-                 vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
-                 FileOptions fileOpts) {
+std::vector<smt::SharedSMTRef>
+cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
+            vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
+            string mainFunctionName,
+            vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
+            FileOptions fileOpts) {
     SMTGenerationOpts::getInstance().BitVect = BoundedFlag;
     auto preprocessedFunctions =
         findFunction(preprocessedFuns, mainFunctionName);
     if (!preprocessedFunctions) {
         logError("No function with the supplied name\n");
-        return;
+        return {};
     }
     auto functions = preprocessedFunctions.getValue().map<llvm::Function *>(
         [](PreprocessedFunction f) { return f.fun; });
@@ -348,20 +350,38 @@ void cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                                       invariantCandidates);
         vector<SharedSMTRef> clauses =
             generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
+        char templateName[] = "tmpsmt_XXXXXX.smt2";
+        int tmpSMTFd = mkstemps(templateName, 5);
+        string templateFileName(templateName);
+        std::cerr << "tmpfile: " << templateFileName << "\n";
+        std::getline(std::cin, tmp);
         serializeSMT(clauses, false,
-                     SerializeOpts("/home/moritz/tmp/test.smt2",
-                                   !InstantiateStorage, false, BoundedFlag));
-        system("z3 /home/moritz/tmp/test.smt2 > /home/moritz/tmp/test.output");
-        FILE *z3Output = fopen("/home/moritz/tmp/test.output", "r");
-        auto result = parseResult(z3Output);
+                     SerializeOpts(templateFileName, !InstantiateStorage, false,
+                                   BoundedFlag));
+        string command = "z3 " + templateFileName;
+        FILE *out = popen(command.c_str(), "r");
+        auto result = parseResult(out);
+        pclose(out);
+        unlink(templateName);
+        close(tmpSMTFd);
         if (!result->isSat()) {
             break;
         }
         vals = parseValues(std::static_pointer_cast<Sat>(result)->model);
-        fclose(z3Output);
     } while (1 /* sat */);
+    auto invariantCandidates = makeInvariantDefinitions(
+        findSolutions(analysisResults.polynomialEquations),
+        analysisResults.heapPatternCandidates, freeVarsMap, DegreeFlag);
+
+    SMTGenerationOpts::initialize(
+        mainFunctionName, HeapFlag, false, false, false, false, false, false,
+        false, false, false, false, false, true, invariantCandidates);
+    vector<SharedSMTRef> clauses =
+        generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
     dumpPolynomials(analysisResults.polynomialEquations, freeVarsMap);
     dumpHeapPatterns(analysisResults.heapPatternCandidates);
+
+    return clauses;
 }
 
 void applyLoopTransformation(

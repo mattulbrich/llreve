@@ -90,17 +90,17 @@ int main(int argc, const char **argv) {
     fclose(patternFile);
 
     FileOptions fileOpts = getFileOptions(inputOpts.FileNames);
+    vector<smt::SharedSMTRef> smtExprs;
     if (CegarFlag) {
-        cegarDriver(modules, preprocessedFuns, MainFunctionFlag, patterns,
-                    fileOpts);
+        smtExprs = cegarDriver(modules, preprocessedFuns, MainFunctionFlag,
+                               patterns, fileOpts);
     } else {
-        vector<smt::SharedSMTRef> smtExprs = driver(
-            modules, preprocessedFuns, MainFunctionFlag, patterns, fileOpts);
-
-        serializeSMT(smtExprs, false,
-                     SerializeOpts(OutputFileNameFlag, !InstantiateStorage,
-                                   MergeImplications, BoundedFlag));
+        smtExprs = driver(modules, preprocessedFuns, MainFunctionFlag, patterns,
+                          fileOpts);
     }
+    serializeSMT(smtExprs, false,
+                 SerializeOpts(OutputFileNameFlag, !InstantiateStorage,
+                               MergeImplications, BoundedFlag));
 
     llvm::llvm_shutdown();
 }
