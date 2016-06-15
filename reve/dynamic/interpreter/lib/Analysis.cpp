@@ -302,12 +302,12 @@ void cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         std::cout << "at invariant: " << cexMark << "\n";
         for (auto it : variableValues.first) {
             llvm::errs() << it.first->getName() << " "
-                         << it.second->unsafeIntVal().asUnbounded().get_str()
+                         << unsafeIntVal(it.second).asUnbounded().get_str()
                          << "\n";
         }
         for (auto it : variableValues.second) {
             llvm::errs() << it.first->getName() << " "
-                         << it.second->unsafeIntVal().asUnbounded().get_str()
+                         << unsafeIntVal(it.second).asUnbounded().get_str()
                          << "\n";
         }
         for (auto ar : vals.arrays) {
@@ -323,12 +323,12 @@ void cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         auto firstBlock = *markMaps.first.MarkToBlocksMap.at(cexMark).begin();
         auto secondBlock = *markMaps.second.MarkToBlocksMap.at(cexMark).begin();
         std::string tmp;
-        getline(std::cin, tmp);
+        // getline(std::cin, tmp);
 
         MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
             functions, variableValues, getHeapsFromModel(vals.arrays),
             getHeapBackgrounds(vals.arrays), {firstBlock, secondBlock}, 1000);
-        analyzeExecution<const llvm::Value *>(calls, nameMap, debugAnalysis);
+        // analyzeExecution<const llvm::Value *>(calls, nameMap, debugAnalysis);
         analyzeExecution<const llvm::Value *>(
             calls, nameMap, [&analysisResults, &freeVarsMap, degree,
                              &patterns](MatchInfo<const llvm::Value *> match) {
@@ -529,7 +529,7 @@ void populateEquationsMap(PolynomialEquations &polynomialEquations,
         for (auto term : polynomialTerms) {
             mpz_class termVal = 1;
             for (auto var : term) {
-                termVal *= variables.at(var)->unsafeIntVal().asUnbounded();
+                termVal *= unsafeIntVal(variables.at(var)).asUnbounded();
             }
             equation.push_back(termVal);
         }
@@ -538,13 +538,13 @@ void populateEquationsMap(PolynomialEquations &polynomialEquations,
     equation.push_back(1);
     ExitIndex exitIndex = 0;
     if (variables.count("exitIndex$1_" + std::to_string(match.mark)) == 1) {
-        exitIndex = variables.at("exitIndex$1_" + std::to_string(match.mark))
-                        ->unsafeIntVal()
+        exitIndex = unsafeIntVal(variables.at("exitIndex$1_" +
+                                              std::to_string(match.mark)))
                         .asUnbounded();
     } else if (variables.count("exitIndex$2_" + std::to_string(match.mark)) ==
                1) {
-        exitIndex = variables.at("exitIndex$2_" + std::to_string(match.mark))
-                        ->unsafeIntVal()
+        exitIndex = unsafeIntVal(variables.at("exitIndex$2_" +
+                                              std::to_string(match.mark)))
                         .asUnbounded();
     }
     if (polynomialEquations[match.mark].count(exitIndex) == 0) {
@@ -614,10 +614,10 @@ void populateHeapPatterns(
     for (auto var : variables) {
         if (var.first->getName() ==
             "exitIndex$1" + std::to_string(match.mark)) {
-            exitIndex = var.second->unsafeIntVal().asUnbounded();
+            exitIndex = unsafeIntVal(var.second).asUnbounded();
         } else if (var.first->getName() ==
                    "exitIndex$2" + std::to_string(match.mark)) {
-            exitIndex = var.second->unsafeIntVal().asUnbounded();
+            exitIndex = unsafeIntVal(var.second).asUnbounded();
         }
     }
     bool newCandidates =
@@ -1048,7 +1048,7 @@ void instantiateBounds(map<int, map<string, Bound<VarIntVal>>> &boundsMap,
     variables.insert(match.steps.second->state.variables.begin(),
                      match.steps.second->state.variables.end());
     for (const auto &var : freeVars.at(match.mark)) {
-        VarIntVal val = variables.at(var.name)->unsafeIntVal();
+        VarIntVal val = unsafeIntVal(variables.at(var.name));
         if (boundsMap[match.mark].find(var.name) ==
             boundsMap[match.mark].end()) {
             boundsMap.at(match.mark)
@@ -1184,24 +1184,22 @@ void dumpLoopCounts(const LoopCountMap &loopCounts) {
     std::cerr << "----------\n";
 }
 
-std::map<const llvm::Value *, std::shared_ptr<VarVal>>
-getVarMap(const llvm::Function *fun, std::vector<mpz_class> vals) {
-    std::map<const llvm::Value *, std::shared_ptr<VarVal>> variableValues;
+std::map<const llvm::Value *, VarVal> getVarMap(const llvm::Function *fun,
+                                                std::vector<mpz_class> vals) {
+    std::map<const llvm::Value *, VarVal> variableValues;
     auto argIt = fun->arg_begin();
     for (size_t i = 0; i < vals.size(); ++i) {
         const llvm::Value *arg = &*argIt;
         // Pointers are always unbounded
         if (BoundedFlag && arg->getType()->isIntegerTy()) {
             variableValues.insert(
-                {arg, std::make_shared<VarInt>(Integer(
-                          makeBoundedInt(arg->getType()->getIntegerBitWidth(),
-                                         vals[i].get_si())))});
+                {arg,
+                 Integer(makeBoundedInt(arg->getType()->getIntegerBitWidth(),
+                                        vals[i].get_si()))});
         } else if (arg->getType()->isPointerTy()) {
-            variableValues.insert(
-                {arg, std::make_shared<VarInt>(Integer(vals[i]).asPointer())});
+            variableValues.insert({arg, Integer(vals[i]).asPointer()});
         } else {
-            variableValues.insert(
-                {arg, std::make_shared<VarInt>(Integer(vals[i]))});
+            variableValues.insert({arg, Integer(vals[i])});
         }
         ++argIt;
     }
@@ -1235,23 +1233,19 @@ instructionNameMap(MonoPair<const llvm::Function *> funs) {
     return nameMap;
 }
 
-MonoPair<std::map<const llvm::Value *, std::shared_ptr<VarVal>>>
-getVarMapFromModel(
+MonoPair<std::map<const llvm::Value *, VarVal>> getVarMapFromModel(
     std::map<std::string, const llvm::Value *> instructionNameMap,
     std::vector<smt::SortedVar> freeVars,
     std::map<std::string, mpz_class> vals) {
-    MonoPair<std::map<const llvm::Value *, std::shared_ptr<VarVal>>>
-        variableValues = makeMonoPair<
-            std::map<const llvm::Value *, std::shared_ptr<VarVal>>>({}, {});
+    MonoPair<std::map<const llvm::Value *, VarVal>> variableValues =
+        makeMonoPair<std::map<const llvm::Value *, VarVal>>({}, {});
     for (const auto &var : freeVars) {
         mpz_class val = vals.at(var.name + "_old");
         const llvm::Value *instr = instructionNameMap.at(var.name);
         if (varBelongsTo(var.name, 1)) {
-            variableValues.first.insert(
-                {instr, std::make_shared<VarInt>(Integer(val))});
+            variableValues.first.insert({instr, Integer(val)});
         } else {
-            variableValues.second.insert(
-                {instr, std::make_shared<VarInt>(Integer(val))});
+            variableValues.second.insert({instr, Integer(val)});
         }
     }
     return variableValues;
@@ -1281,17 +1275,16 @@ MonoPair<Integer> getHeapBackgrounds(std::map<std::string, ArrayVal> arrays) {
             Integer(arrays.at("HEAP$2_old").background)};
 }
 
-Heap randomHeap(
-    const llvm::Function &fun,
-    std::map<const llvm::Value *, std::shared_ptr<VarVal>> &variableValues,
-    int lengthBound, int valLowerBound, int valUpperBound,
-    unsigned int *seedp) {
+Heap randomHeap(const llvm::Function &fun,
+                const std::map<const llvm::Value *, VarVal> &variableValues,
+                int lengthBound, int valLowerBound, int valUpperBound,
+                unsigned int *seedp) {
     // We place an array with a random length <= lengthBound with random values
     // >= valLowerBound and <= valUpperBound at each pointer argument
     Heap heap;
     for (const auto &arg : fun.args()) {
         if (arg.getType()->isPointerTy()) {
-            VarIntVal arrayStart = variableValues.at(&arg)->unsafeIntVal();
+            VarIntVal arrayStart = unsafeIntVal(variableValues.at(&arg));
             unsigned int length =
                 static_cast<unsigned int>(rand_r(seedp) % (lengthBound + 1));
             for (unsigned int i = 0; i <= length; ++i) {

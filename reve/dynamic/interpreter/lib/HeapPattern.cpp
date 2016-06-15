@@ -4,7 +4,7 @@ template <>
 mpz_class Variable<const llvm::Value *>::eval(
     const VarMap<const llvm::Value *> &variables,
     const MonoPair<Heap> & /* unused */, const HoleMap & /* unused */) const {
-    return variables.at(varName)->unsafeIntVal().asUnbounded();
+    return unsafeIntVal(variables.at(varName)).asUnbounded();
 }
 
 template <>

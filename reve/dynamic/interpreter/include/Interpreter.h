@@ -24,37 +24,75 @@ using HeapAddress = Integer;
 enum class VarType { Int, Bool };
 const VarName ReturnName = nullptr;
 
-struct VarVal {
-    virtual VarType getType() const = 0;
-    virtual nlohmann::json toJSON() const = 0;
-    virtual ~VarVal();
-    VarVal(const VarVal &other) = default;
-    VarVal() = default;
-    VarVal &operator=(const VarVal &other) = default;
-    virtual VarIntVal unsafeIntVal() const = 0;
+VarType getType(const VarIntVal &v);
+nlohmann::json toJSON(const VarIntVal &v);
+VarIntVal unsafeIntVal(const VarIntVal &v);
+bool unsafeBool(const VarIntVal &v);
+
+VarType getType(const bool &b);
+nlohmann::json toJSON(const bool &b);
+VarIntVal unsafeIntVal(const bool &b);
+bool unsafeBool(const bool &b);
+
+class VarVal {
+  public:
+    template <typename T> VarVal(T x) : self_(new model<T>(std::move(x))) {}
+    /* This is only here to make it possible to use [] on maps */
+    VarVal() : self_(nullptr) {}
+
+    VarVal(const VarVal &x) {
+        if (x.self_) {
+            self_ = std::unique_ptr<const VarValConcept>(x.self_->copy_());
+        } else {
+            self_ = nullptr;
+        }
+    }
+    VarVal(VarVal &&) noexcept = default;
+
+    VarVal &operator=(const VarVal &x) {
+        VarVal tmp(x);
+        *this = std::move(tmp);
+        return *this;
+    }
+    VarVal &operator=(VarVal &&) noexcept = default;
+
+    friend VarType getType(const VarVal &x) { return x.self_->getType_(); }
+    friend nlohmann::json toJSON(const VarVal &x) { return x.self_->toJSON_(); }
+    friend VarIntVal unsafeIntVal(const VarVal &x) {
+        return x.self_->unsafeIntVal_();
+    }
+    friend bool unsafeBool(const VarVal &x) { return x.self_->unsafeBool_(); }
+
+  private:
+    struct VarValConcept {
+        // The virtual destructor exists purely to have something which can be
+        // implemented in a source file to pin the vtable
+        virtual ~VarValConcept();
+        VarValConcept() = default;
+        VarValConcept(const VarValConcept &x) = default;
+        virtual VarValConcept *copy_() const = 0;
+        virtual VarType getType_() const = 0;
+        virtual nlohmann::json toJSON_() const = 0;
+        virtual VarIntVal unsafeIntVal_() const = 0;
+        virtual bool unsafeBool_() const = 0;
+    };
+    template <typename T> struct model : VarValConcept {
+        model(T x) : data_(std::move(x)) {}
+        VarValConcept *copy_() const override { return new model(*this); }
+        VarType getType_() const override { return getType(data_); }
+        nlohmann::json toJSON_() const override { return toJSON(data_); }
+        VarIntVal unsafeIntVal_() const override { return unsafeIntVal(data_); }
+        bool unsafeBool_() const override { return unsafeBool(data_); }
+        T data_;
+    };
+
+    std::unique_ptr<const VarValConcept> self_;
 };
 
 bool varValEq(const VarVal &lhs, const VarVal &rhs);
 
-struct VarInt : VarVal {
-    VarIntVal val;
-    VarType getType() const override;
-    nlohmann::json toJSON() const override;
-    VarInt(VarIntVal val) : val(val) {}
-    VarInt() : val(0) {}
-    VarIntVal unsafeIntVal() const override;
-};
-
-struct VarBool : VarVal {
-    bool val;
-    VarType getType() const override;
-    nlohmann::json toJSON() const override;
-    VarBool(bool val) : val(val) {}
-    VarIntVal unsafeIntVal() const override;
-};
-
 using Heap = std::map<HeapAddress, VarIntVal>;
-template <typename T> using VarMap = std::map<T, std::shared_ptr<VarVal>>;
+template <typename T> using VarMap = std::map<T, VarVal>;
 using FastVarMap = VarMap<const llvm::Value *>;
 
 template <typename T> struct State {
@@ -171,15 +209,17 @@ struct TerminatorUpdate {
 
 /// The variables in the entry state will be renamed appropriately for both
 /// programs
-MonoPair<FastCall> interpretFunctionPair(
-    MonoPair<const llvm::Function *> funs,
-    MonoPair<std::map<const llvm::Value *, std::shared_ptr<VarVal>>> variables,
-    MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds, uint32_t maxSteps);
-MonoPair<FastCall> interpretFunctionPair(
-    MonoPair<const llvm::Function *> funs,
-    MonoPair<std::map<const llvm::Value *, std::shared_ptr<VarVal>>> variables,
-    MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds,
-    MonoPair<const llvm::BasicBlock *> startBlocks, uint32_t maxSteps);
+MonoPair<FastCall>
+interpretFunctionPair(MonoPair<const llvm::Function *> funs,
+                      MonoPair<std::map<const llvm::Value *, VarVal>> variables,
+                      MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds,
+                      uint32_t maxSteps);
+MonoPair<FastCall>
+interpretFunctionPair(MonoPair<const llvm::Function *> funs,
+                      MonoPair<std::map<const llvm::Value *, VarVal>> variables,
+                      MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds,
+                      MonoPair<const llvm::BasicBlock *> startBlocks,
+                      uint32_t maxSteps);
 auto interpretFunction(const llvm::Function &fun, FastState entry,
                        uint32_t maxSteps) -> FastCall;
 auto interpretFunction(const llvm::Function &fun, FastState entry,
@@ -196,7 +236,7 @@ auto interpretInstruction(const llvm::Instruction *instr, FastState &state)
 auto interpretTerminator(const llvm::TerminatorInst *instr, FastState &state)
     -> TerminatorUpdate;
 auto resolveValue(const llvm::Value *val, const FastState &state,
-                  const llvm::Type *type) -> std::shared_ptr<VarVal>;
+                  const llvm::Type *type) -> VarVal;
 auto interpretICmpInst(const llvm::ICmpInst *instr, FastState &state) -> void;
 auto interpretIntPredicate(const llvm::ICmpInst *instr,
                            llvm::CmpInst::Predicate pred, const VarIntVal &i0,
@@ -210,11 +250,11 @@ auto interpretBoolBinOp(const llvm::BinaryOperator *instr,
                         llvm::Instruction::BinaryOps op, bool b0, bool b1,
                         FastState &state) -> void;
 
-template <typename A, typename T> VarInt resolveGEP(T &gep, State<A> state) {
-    std::shared_ptr<VarVal> val = resolveValue(
-        gep.getPointerOperand(), state, gep.getPointerOperand()->getType());
-    assert(val->getType() == VarType::Int);
-    VarIntVal offset = std::static_pointer_cast<VarInt>(val)->val;
+template <typename A, typename T> VarIntVal resolveGEP(T &gep, State<A> state) {
+    VarVal val = resolveValue(gep.getPointerOperand(), state,
+                              gep.getPointerOperand()->getType());
+    assert(getType(val) == VarType::Int);
+    VarIntVal offset = unsafeIntVal(val);
     const auto type = gep.getSourceElementType();
     std::vector<llvm::Value *> indices;
     for (auto ix = gep.idx_begin(), e = gep.idx_end(); ix != e; ++ix) {
@@ -234,15 +274,12 @@ template <typename A, typename T> VarInt resolveGEP(T &gep, State<A> state) {
         const auto indexedType = llvm::GetElementPtrInst::getIndexedType(
             type, llvm::ArrayRef<llvm::Value *>(indices));
         const auto size = typeSize(indexedType, mod->getDataLayout());
-        std::shared_ptr<VarVal> val =
-            resolveValue(*ix, state, (*ix)->getType());
-        assert(val->getType() == VarType::Int);
-        offset +=
-            Integer(mpz_class(size)).asPointer() *
-            Integer(std::static_pointer_cast<VarInt>(val)->val.asUnbounded())
-                .asPointer();
+        VarVal val = resolveValue(*ix, state, (*ix)->getType());
+        assert(getType(val) == VarType::Int);
+        offset += Integer(mpz_class(size)).asPointer() *
+                  Integer(unsafeIntVal(val).asUnbounded()).asPointer();
     }
-    return VarInt(offset);
+    return offset;
 }
 
 std::string valueName(const llvm::Value *val);
