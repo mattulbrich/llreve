@@ -143,7 +143,7 @@ int main(int argc, const char **argv) {
                         FileName2Flag);
     FileOptions fileOpts = getFileOptions(inputOpts.FileNames);
     SerializeOpts serializeOpts(OutputFileNameFlag, DontInstantiate, false,
-                                BitVectFlag);
+                                BitVectFlag, true);
 
     MonoPair<shared_ptr<CodeGenAction>> acts =
         makeMonoPair(make_shared<clang::EmitLLVMOnlyAction>(),

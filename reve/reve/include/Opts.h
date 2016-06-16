@@ -79,11 +79,12 @@ class SerializeOpts {
     bool DontInstantiate;
     bool MergeImplications;
     bool RenameDefineFuns;
+    bool Pretty;
     SerializeOpts(std::string outputFileName, bool DontInstantiate,
-                  bool MergeImplications, bool RenameDefineFuns)
+                  bool MergeImplications, bool RenameDefineFuns, bool Pretty)
         : OutputFileName(outputFileName), DontInstantiate(DontInstantiate),
           MergeImplications(MergeImplications),
-          RenameDefineFuns(RenameDefineFuns) {}
+          RenameDefineFuns(RenameDefineFuns), Pretty(Pretty) {}
 };
 
 /// Options that are parsed from special comments inside the programs

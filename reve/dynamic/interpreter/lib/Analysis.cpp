@@ -355,7 +355,7 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         string templateFileName(templateName);
         serializeSMT(clauses, false,
                      SerializeOpts(templateFileName, !InstantiateStorage, false,
-                                   BoundedFlag));
+                                   BoundedFlag, false));
         string command = "z3 " + templateFileName;
         FILE *out = popen(command.c_str(), "r");
         auto result = parseResult(out);

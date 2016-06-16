@@ -100,7 +100,7 @@ int main(int argc, const char **argv) {
     }
     serializeSMT(smtExprs, false,
                  SerializeOpts(OutputFileNameFlag, !InstantiateStorage,
-                               MergeImplications, BoundedFlag));
+                               MergeImplications, BoundedFlag, true));
 
     llvm::llvm_shutdown();
 }
