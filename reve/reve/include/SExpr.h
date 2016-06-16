@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <memory>
 #include <ostream>
+#include <set>
 #include <vector>
 
 namespace sexpr {
@@ -30,11 +31,6 @@ template <typename T> class Apply : public SExpr<T> {
         : fun(std::move(fun)), args(std::move(args)) {}
     void serialize(std::ostream &os, size_t indent) const override {
         os << "(" << fun;
-        std::vector<std::string> atomicOps = {
-            "+",   "-", "*",     "<=",       "<",      ">",
-            ">=",  "=", "not",   "distinct", "select", "ite",
-            "div", "_", "bvadd", "bvsub",    "bvmul"};
-        std::vector<std::string> forceIndentOps = {"assert", "and", "rule"};
         bool atomicOp = std::find(atomicOps.begin(), atomicOps.end(), fun) !=
                         atomicOps.end();
         bool simpleOp = args.size() <= 1 &&
@@ -58,7 +54,17 @@ template <typename T> class Apply : public SExpr<T> {
     }
     T fun;
     std::vector<std::unique_ptr<const SExpr<T>>> args;
+    const static std::set<std::string> atomicOps;
+    const static std::set<std::string> forceIndentOps;
 };
+
+template <typename T>
+const std::set<std::string> Apply<T>::forceIndentOps = {"assert", "and",
+                                                        "rule"};
+template <typename T>
+const std::set<std::string> Apply<T>::atomicOps = {
+    "+",        "-",      "*",   "<=",  "<", ">",     ">=",    "=",    "not",
+    "distinct", "select", "ite", "div", "_", "bvadd", "bvsub", "bvmul"};
 
 template <typename T> class List : public SExpr<T> {
   public:
