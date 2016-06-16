@@ -159,9 +159,7 @@ template <typename T> class Primitive : public SMTExpr {
   public:
     explicit Primitive(const T val) : val(val) {}
     SExprRef toSExpr() const override {
-        std::stringstream sStream;
-        sStream << val;
-        return std::make_unique<sexpr::Value<std::string>>(sStream.str());
+        return std::make_unique<sexpr::Value<std::string>>(val);
     }
     const T val;
     std::set<std::string> uses() const override {
