@@ -376,8 +376,6 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         false, false, false, false, false, true, invariantCandidates);
     vector<SharedSMTRef> clauses =
         generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
-    dumpPolynomials(analysisResults.polynomialEquations, freeVarsMap);
-    dumpHeapPatterns(analysisResults.heapPatternCandidates);
 
     return clauses;
 }
