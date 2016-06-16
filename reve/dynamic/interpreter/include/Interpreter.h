@@ -58,6 +58,14 @@ class VarVal {
         return *this;
     }
     VarVal &operator=(VarVal &&) noexcept = default;
+    VarVal &operator=(VarIntVal x) {
+        self_.reset(new model<VarIntVal>(std::move(x)));
+        return *this;
+    }
+    VarVal &operator=(bool x) {
+        self_.reset(new model<bool>(std::move(x)));
+        return *this;
+    }
 
     friend VarType getType(const VarVal &x) { return x.self_->getType_(); }
     friend nlohmann::json toJSON(const VarVal &x) { return x.self_->toJSON_(); }

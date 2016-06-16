@@ -388,6 +388,7 @@ template <typename T> struct HeapEqual : public HeapPattern<T> {
     std::shared_ptr<HeapPattern<T>>
     negationNormalForm(bool negate) const override {
         assert(!negate);
+        unused(negate);
         return std::make_shared<HeapEqual<T>>();
     }
 };

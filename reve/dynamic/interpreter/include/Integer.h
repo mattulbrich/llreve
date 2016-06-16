@@ -19,7 +19,7 @@ struct Integer {
     };
     IntType type;
     Integer() : unbounded(mpz_class(0)), type(IntType::Unbounded) {}
-    explicit Integer(mpz_class i) : unbounded(i), type(IntType::Unbounded) {}
+    explicit Integer(mpz_class i) : unbounded(std::move(i)), type(IntType::Unbounded) {}
     explicit Integer(llvm::APInt i) : bounded(i), type(IntType::Bounded) {}
 
     friend std::ostream &operator<<(std::ostream &os, const Integer &obj);
