@@ -27,11 +27,13 @@ const VarName ReturnName = nullptr;
 VarType getType(const VarIntVal &v);
 nlohmann::json toJSON(const VarIntVal &v);
 VarIntVal unsafeIntVal(const VarIntVal &v);
+const VarIntVal &unsafeIntValRef(const VarIntVal &v);
 bool unsafeBool(const VarIntVal &v);
 
 VarType getType(const bool &b);
 nlohmann::json toJSON(const bool &b);
 VarIntVal unsafeIntVal(const bool &b);
+const VarIntVal &unsafeIntValRef(const bool &b);
 bool unsafeBool(const bool &b);
 
 // This technique is from the talk “Inheritance is The Base Class of Evil”
@@ -72,6 +74,9 @@ class VarVal {
     friend VarIntVal unsafeIntVal(const VarVal &x) {
         return x.self_->unsafeIntVal_();
     }
+    friend const VarIntVal &unsafeIntValRef(const VarVal &x) {
+        return x.self_->unsafeIntValRef_();
+    }
     friend bool unsafeBool(const VarVal &x) { return x.self_->unsafeBool_(); }
 
   private:
@@ -85,6 +90,7 @@ class VarVal {
         virtual VarType getType_() const = 0;
         virtual nlohmann::json toJSON_() const = 0;
         virtual VarIntVal unsafeIntVal_() const = 0;
+        virtual const VarIntVal &unsafeIntValRef_() const = 0;
         virtual bool unsafeBool_() const = 0;
     };
     template <typename T> struct model : VarValConcept {
@@ -93,6 +99,9 @@ class VarVal {
         VarType getType_() const override { return getType(data_); }
         nlohmann::json toJSON_() const override { return toJSON(data_); }
         VarIntVal unsafeIntVal_() const override { return unsafeIntVal(data_); }
+        const VarIntVal &unsafeIntValRef_() const override {
+            return unsafeIntValRef(data_);
+        }
         bool unsafeBool_() const override { return unsafeBool(data_); }
         T data_;
     };

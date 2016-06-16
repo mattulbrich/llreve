@@ -52,6 +52,7 @@ static llvm::cl::opt<unsigned, true> // The parser
 VarType getType(const VarIntVal & /* unused */) { return VarType::Int; }
 json toJSON(const VarIntVal &v) { return v.get_str(); }
 VarIntVal unsafeIntVal(const VarIntVal &v) { return v; }
+const VarIntVal &unsafeIntValRef(const VarIntVal &v) { return v; }
 bool unsafeBool(const VarIntVal & /* unused */) {
     logError("Called unsafeBool on an int\n");
     exit(1);
@@ -60,6 +61,10 @@ bool unsafeBool(const VarIntVal & /* unused */) {
 VarType getType(const bool & /* unused */) { return VarType::Bool; }
 json toJSON(const bool &b) { return json(b); }
 VarIntVal unsafeIntVal(const bool & /* unused */) {
+    logError("Called unsafeIntVal on a bool\n");
+    exit(1);
+}
+const VarIntVal &unsafeIntValRef(const bool & /* unused */) {
     logError("Called unsafeIntVal on a bool\n");
     exit(1);
 }
