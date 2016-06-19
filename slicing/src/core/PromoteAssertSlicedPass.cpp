@@ -5,6 +5,9 @@
 
 #include "llvm/IR/IntrinsicInst.h"
 
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/IR/Verifier.h"
+
 #include "core/Util.h"
 #include <iostream>
 #include <set>
@@ -43,6 +46,10 @@ bool PromoteAssertSlicedPass::runOnFunction(llvm::Function& fun) {
 	for (Instruction* instruction: toDelete) {
 		instruction->eraseFromParent();
 	}
+
+	bool hasError = llvm::verifyFunction(fun, &errs());
+	assert(!hasError && "Internal Error: PromoteAssertSlicedPass produced slice candidate, which ist not a valid llvm program.");
+
 	return true;
 }
 

@@ -16,8 +16,8 @@ using namespace std;
 using namespace llvm;
 
 TEST_CASE("Test benchmarks", "[benchmark],[bruteforce]") {
-    vector<string> benchmarkFiles;
-    vector<string> include;
+	vector<string> benchmarkFiles;
+	vector<string> include;
 
 	benchmarkFiles.push_back("../testdata/benchmarks/dead_code_after_ssa.c");
 	benchmarkFiles.push_back("../testdata/benchmarks/dead_code_unused_variable.c");
@@ -31,31 +31,31 @@ TEST_CASE("Test benchmarks", "[benchmark],[bruteforce]") {
 	benchmarkFiles.push_back("../testdata/benchmarks/unreachable_code_nested.c");
 	benchmarkFiles.push_back("../testdata/benchmarks/unreachable_code_simple.c");
 
-    for( string fileName : benchmarkFiles ){
-        cout << fileName << endl;
-        ModulePtr program = getModuleFromFile(fileName, "", include);
+	for( string fileName : benchmarkFiles ){
+		cout << fileName << endl;
+		ModulePtr program = getModuleFromFile(fileName, "", include);
 
-        CriterionPtr criterion;
-        CriterionPtr presentCriterion = shared_ptr<Criterion>(new PresentCriterion());
-        if (presentCriterion->getInstructions(*program).size() == 0) {
-            criterion = shared_ptr<Criterion>(new ReturnValueCriterion());
-        } else {
-            criterion = presentCriterion;
-        }
+		CriterionPtr criterion;
+		CriterionPtr presentCriterion = shared_ptr<Criterion>(new PresentCriterion());
+		if (presentCriterion->getInstructions(*program).size() == 0) {
+			criterion = shared_ptr<Criterion>(new ReturnValueCriterion());
+		} else {
+			criterion = presentCriterion;
+		}
 
-        SlicingMethodPtr method = shared_ptr<SlicingMethod>(new BruteForce(program));
-        ModulePtr slice = method->computeSlice(criterion);
+		SlicingMethodPtr method = shared_ptr<SlicingMethod>(new BruteForce(program));
+		ModulePtr slice = method->computeSlice(criterion);
 
-        bool noAssertSlicedLeft = true;
-        for (Function& fun:*slice) {
-            for(Instruction& instruction : Util::getInstructions(fun)) {
-                bool isAssertSliced = PromoteAssertSlicedPass::isAssertSliced(instruction);
-                noAssertSlicedLeft &= !isAssertSliced;
-            }
-        }
-        CHECK( noAssertSlicedLeft );
+		bool noAssertSlicedLeft = true;
+		for (Function& fun:*slice) {
+			for(Instruction& instruction : Util::getInstructions(fun)) {
+				bool isAssertSliced = PromoteAssertSlicedPass::isAssertSliced(instruction);
+				noAssertSlicedLeft &= !isAssertSliced;
+			}
+		}
+		CHECK( noAssertSlicedLeft );
 
-        ValidationResult result = SliceCandidateValidation::validate(&*program, &*slice);
-        CHECK(result == ValidationResult::valid);
-    }
+		ValidationResult result = SliceCandidateValidation::validate(&*program, &*slice);
+		CHECK(result == ValidationResult::valid);
+	}
 }

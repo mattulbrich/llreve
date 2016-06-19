@@ -15,7 +15,7 @@ using namespace std;
 using namespace llvm;
 
 void testSyntacticSlicing(string fileName) {
-	shared_ptr<llvm::Module> program = getModuleFromFile(fileName);
+	shared_ptr<llvm::Module> program = getModuleFromSource(fileName);
 	shared_ptr<llvm::Module> sliceCandidate = CloneModule(&*program);
 
 	string ir;

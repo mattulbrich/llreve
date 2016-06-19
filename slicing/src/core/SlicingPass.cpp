@@ -9,6 +9,7 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/DebugInfoMetadata.h"
+#include "llvm/IR/Verifier.h"
 
 #include "core/DeleteVisitor.h"
 
@@ -110,6 +111,9 @@ bool SlicingPass::runOnFunction(llvm::Function& function){
 		markNotSliced(instruction);
 		this->hasUnSlicedInstructions_ = true;
 	}
+
+	bool hasError = llvm::verifyFunction(function, &errs());
+	assert(!hasError && "Internal Error: Slicing pass produced slice candidate, which ist not a valid llvm program.");
 
 	return true;
 }
