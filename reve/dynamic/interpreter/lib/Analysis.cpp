@@ -275,23 +275,13 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
 
     // Run the interpreter on the unrolled code
     MergedAnalysisResults analysisResults;
-    const MonoPair<PathMap> pathMaps =
+    MonoPair<PathMap> pathMaps =
         preprocessedFunctions.getValue().map<PathMap>(
             [](PreprocessedFunction fun) { return fun.results.paths; });
     smt::FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
     size_t degree = DegreeFlag;
-    // Set initial values
-    ModelValues vals;
-    vals.arrays.insert({"HEAP$1_old", {0, {}}});
-    vals.arrays.insert({"HEAP$2_old", {0, {}}});
-    for (const auto &arg : functions.first->args()) {
-        vals.values.insert({std::string(arg.getName()) + "_old", 0});
-    }
-    for (const auto &arg : functions.second->args()) {
-        vals.values.insert({std::string(arg.getName()) + "_old", 0});
-    }
-    vals.values.insert({"INV_INDEX", ENTRY_MARK});
+    ModelValues vals = initialModelValues(functions);
     auto instrNameMap = instructionNameMap(functions);
     do {
         int cexMark = static_cast<int>(vals.values.at("INV_INDEX").get_si());
@@ -334,11 +324,31 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         analyzeExecution<const llvm::Value *>(
             calls, nameMap, [&analysisResults, &freeVarsMap, degree,
                              &patterns](MatchInfo<const llvm::Value *> match) {
+                findLoopCounts<const llvm::Value *>(analysisResults.loopCounts,
+                                                    match);
                 populateEquationsMap(analysisResults.polynomialEquations,
                                      freeVarsMap, match, degree);
                 populateHeapPatterns(analysisResults.heapPatternCandidates,
                                      patterns, freeVarsMap, match);
             });
+        map<int, LoopTransformation> loopTransformations =
+            findLoopTransformations(analysisResults.loopCounts.loopCounts);
+        dumpLoopTransformations(loopTransformations);
+
+        // // Peel and unroll loops
+        if (applyLoopTransformation(preprocessedFunctions.getValue(),
+                                    loopTransformations, markMaps)) {
+            // Reset data and start over
+            analysisResults = MergedAnalysisResults();
+            vals = initialModelValues(functions);
+            // The paths have changed so we need to update the free variables
+            pathMaps = preprocessedFunctions.getValue().map<PathMap>(
+                [](PreprocessedFunction fun) { return fun.results.paths; });
+            freeVarsMap =
+                freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
+            std::cerr << "Transformed program, resetting inputs\n";
+            continue;
+        }
 
         auto invariantCandidates = makeInvariantDefinitions(
             findSolutions(analysisResults.polynomialEquations),
@@ -380,16 +390,18 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     return clauses;
 }
 
-void applyLoopTransformation(
+bool applyLoopTransformation(
     MonoPair<PreprocessedFunction> &functions,
     const map<int, LoopTransformation> &loopTransformations,
     const MonoPair<BidirBlockMarkMap> &marks) {
+    bool modified = false;
     for (auto mapIt : loopTransformations) {
         switch (mapIt.second.type) {
         case LoopTransformType::Peel:
             if (mapIt.second.count == 0) {
                 continue;
             }
+            modified = true;
             switch (mapIt.second.side) {
             case LoopTransformSide::Left:
                 assert(mapIt.second.count == 1);
@@ -418,6 +430,7 @@ void applyLoopTransformation(
     // Update path analysis
     functions.first.results.paths = findPaths(marks.first);
     functions.second.results.paths = findPaths(marks.second);
+    return modified;
 }
 
 void dumpLoopTransformations(map<int, LoopTransformation> loopTransformations) {
@@ -1435,4 +1448,18 @@ mergeHeapPatternCandidates(HeapPatternCandidates candidates1,
         }
     }
     return candidates1;
+}
+
+ModelValues initialModelValues(MonoPair<const llvm::Function *> funs) {
+    ModelValues vals;
+    vals.arrays.insert({"HEAP$1_old", {0, {}}});
+    vals.arrays.insert({"HEAP$2_old", {0, {}}});
+    for (const auto &arg : funs.first->args()) {
+        vals.values.insert({std::string(arg.getName()) + "_old", 0});
+    }
+    for (const auto &arg : funs.second->args()) {
+        vals.values.insert({std::string(arg.getName()) + "_old", 0});
+    }
+    vals.values.insert({"INV_INDEX", ENTRY_MARK});
+    return vals;
 }

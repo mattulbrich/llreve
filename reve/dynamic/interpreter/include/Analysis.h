@@ -281,7 +281,7 @@ void iterateTracesInRange(
 }
 void dumpLoopTransformations(
     std::map<int, LoopTransformation> loopTransformations);
-void applyLoopTransformation(
+bool applyLoopTransformation(
     MonoPair<PreprocessedFunction> &functions,
     const std::map<int, LoopTransformation> &loopTransformations,
     const MonoPair<BidirBlockMarkMap> &mark);
@@ -411,3 +411,5 @@ HeapPatternCandidatesMap mergeHeapPatternMaps(HeapPatternCandidatesMap cand1,
 HeapPatternCandidates
 mergeHeapPatternCandidates(HeapPatternCandidates candidates1,
                            HeapPatternCandidates candidates2);
+
+ModelValues initialModelValues(MonoPair<const llvm::Function*> funs);
