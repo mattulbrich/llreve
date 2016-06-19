@@ -19,21 +19,21 @@ TEST_CASE("Test benchmarks", "[benchmark],[bruteforce]") {
 	vector<string> benchmarkFiles;
 	vector<string> include;
 
-	benchmarkFiles.push_back("../testdata/benchmarks/dead_code_after_ssa.c");
-	benchmarkFiles.push_back("../testdata/benchmarks/dead_code_unused_variable.c");
-	benchmarkFiles.push_back("../testdata/benchmarks/identity_not_modifying.c");
-	benchmarkFiles.push_back("../testdata/benchmarks/identity_plus_minus_50.c");
-	benchmarkFiles.push_back("../testdata/benchmarks/informationflow_cyclic.c");
-	//benchmarkFiles.push_back("../testdata/benchmarks/informationflow_dynamic_override.c");
-	benchmarkFiles.push_back("../testdata/benchmarks/informationflow_end_of_loop_override.c");
-	benchmarkFiles.push_back("../testdata/benchmarks/redundant_code_simple.c");
-	benchmarkFiles.push_back("../testdata/benchmarks/requires_path_sensitivity.c");
-	benchmarkFiles.push_back("../testdata/benchmarks/unreachable_code_nested.c");
-	benchmarkFiles.push_back("../testdata/benchmarks/unreachable_code_simple.c");
+	// benchmarkFiles.push_back("../testdata/benchmarks/dead_code_after_ssa.c");
+	// benchmarkFiles.push_back("../testdata/benchmarks/dead_code_unused_variable.c");
+	// benchmarkFiles.push_back("../testdata/benchmarks/identity_not_modifying.c");
+	// benchmarkFiles.push_back("../testdata/benchmarks/identity_plus_minus_50.c");
+	// benchmarkFiles.push_back("../testdata/benchmarks/informationflow_cyclic.c");
+	benchmarkFiles.push_back("../testdata/benchmarks/informationflow_dynamic_override.c");
+	// benchmarkFiles.push_back("../testdata/benchmarks/informationflow_end_of_loop_override.c");
+	// benchmarkFiles.push_back("../testdata/benchmarks/redundant_code_simple.c");
+	// benchmarkFiles.push_back("../testdata/benchmarks/requires_path_sensitivity.c");
+	// benchmarkFiles.push_back("../testdata/benchmarks/unreachable_code_nested.c");
+	// benchmarkFiles.push_back("../testdata/benchmarks/unreachable_code_simple.c");
 
 	for( string fileName : benchmarkFiles ){
 		cout << fileName << endl;
-		ModulePtr program = getModuleFromFile(fileName, "", include);
+		ModulePtr program = getModuleFromSource(fileName, "", include);
 
 		CriterionPtr criterion;
 		CriterionPtr presentCriterion = shared_ptr<Criterion>(new PresentCriterion());

@@ -18,6 +18,13 @@ public:
 	bool visitInstruction(llvm::Instruction &I);
 	bool visitTerminatorInst(llvm::TerminatorInst &I);
 	bool visitCallInst(llvm::CallInst &I);
+//	bool visitBranchInst(llvm::BranchInst &I);
+
+	/**
+	 * Phi nodes may contain inlined constants and arguments,
+	 * from privious blocks. Those will be deleted.
+	 */
+	bool visitPHINode(llvm::PHINode &I);
 
 private:
 	llvm::DominatorTree* domTree_;
@@ -28,4 +35,5 @@ private:
 	bool handleNoUses(llvm::Instruction& instruction);
 	bool handleHasPriviousDef(llvm::Instruction& instruction, llvm::DIVariable* variable);
 	bool handleIsArgument(llvm::Instruction& instruction, llvm::DIVariable* variable);
+	bool handleSinglePhiUse(llvm::Instruction& instruction);
 };
