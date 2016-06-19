@@ -17,9 +17,13 @@
 using namespace std;
 using namespace llvm;
 
+BruteForce::BruteForce(ModulePtr program, llvm::raw_ostream* ostream):SlicingMethod(program),ostream_(ostream){
+	callsToReve_ = 0;
+}
 
 shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 	ModulePtr program = getProgram();
+	callsToReve_ = 0;
 	int numFunctions = 0;
 	int numInstructions = 0;
 	for (Function& function: *program) {
@@ -35,8 +39,12 @@ shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 	ModulePtr bestCandidate = shared_ptr<Module>(nullptr);
 	int maxSliced = -1;
 
-	cout << "|--------------------|" << endl;
-	cout << "|";
+	if (ostream_) {
+		*ostream_ << "|--------------------|\n";
+		*ostream_ << "|";
+		ostream_->flush();
+	}
+
 	int progress = 0;
 
 	int iterations = 1 << numInstructions;
@@ -45,8 +53,10 @@ shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 	for (int pattern = 0; pattern < iterations; pattern++){
 		if ((progress * step) < pattern) {
 			progress++;
-			cout << "=";
-			cout.flush();
+			if (ostream_) {
+				*ostream_ << "=";
+				ostream_->flush();
+			}
 		}
 
 		ModulePtr sliceCandidate = CloneModule(&*program);
@@ -74,6 +84,7 @@ shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 		PM.run(*sliceCandidate);
 
 		if (!slicingPass->hasUnSlicedInstructions() && sliced >= maxSliced) {
+			++callsToReve_;
 			ValidationResult isValid = SliceCandidateValidation::validate(&*program, &*sliceCandidate, c);
 			if (isValid == ValidationResult::valid) {
 				maxSliced = sliced;
@@ -81,7 +92,15 @@ shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 			}
 		}
 	}
-	cout << "|" << endl;
+	if (ostream_) {
+		*ostream_ << "|\n";
+		ostream_->flush();
+	}
 
 	return bestCandidate;
+}
+
+
+unsigned BruteForce::getNumberOfReveCalls(){
+	return callsToReve_;
 }

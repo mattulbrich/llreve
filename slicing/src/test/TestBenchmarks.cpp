@@ -11,6 +11,9 @@
 #include "core/PromoteAssertSlicedPass.h"
 #include "core/SliceCandidateValidation.h"
 
+#include <ctime>
+#include <chrono>
+
 
 using namespace std;
 using namespace llvm;
@@ -18,22 +21,28 @@ using namespace llvm;
 TEST_CASE("Test benchmarks", "[benchmark],[bruteforce]") {
 	vector<string> benchmarkFiles;
 	vector<string> include;
+	string folder = "../testdata/benchmarks/";
 
-	// benchmarkFiles.push_back("../testdata/benchmarks/dead_code_after_ssa.c");
-	// benchmarkFiles.push_back("../testdata/benchmarks/dead_code_unused_variable.c");
-	// benchmarkFiles.push_back("../testdata/benchmarks/identity_not_modifying.c");
-	// benchmarkFiles.push_back("../testdata/benchmarks/identity_plus_minus_50.c");
-	// benchmarkFiles.push_back("../testdata/benchmarks/informationflow_cyclic.c");
-	benchmarkFiles.push_back("../testdata/benchmarks/informationflow_dynamic_override.c");
-	// benchmarkFiles.push_back("../testdata/benchmarks/informationflow_end_of_loop_override.c");
-	// benchmarkFiles.push_back("../testdata/benchmarks/redundant_code_simple.c");
-	// benchmarkFiles.push_back("../testdata/benchmarks/requires_path_sensitivity.c");
-	// benchmarkFiles.push_back("../testdata/benchmarks/unreachable_code_nested.c");
-	// benchmarkFiles.push_back("../testdata/benchmarks/unreachable_code_simple.c");
+	benchmarkFiles.push_back("dead_code_after_ssa.c");
+	benchmarkFiles.push_back("dead_code_unused_variable.c");
+	benchmarkFiles.push_back("identity_not_modifying.c");
+	benchmarkFiles.push_back("identity_plus_minus_50.c");
+	benchmarkFiles.push_back("informationflow_cyclic.c");
+	benchmarkFiles.push_back("informationflow_dynamic_override.c");
+	benchmarkFiles.push_back("informationflow_end_of_loop_override.c");
+	benchmarkFiles.push_back("redundant_code_simple.c");
+	benchmarkFiles.push_back("requires_path_sensitivity.c");
+	benchmarkFiles.push_back("unreachable_code_nested.c");
+	benchmarkFiles.push_back("unreachable_code_simple.c");
 
+	cout << "file name \t reve calls \t cpu time in s \t wall clock time in s " << endl;
 	for( string fileName : benchmarkFiles ){
-		cout << fileName << endl;
-		ModulePtr program = getModuleFromSource(fileName, "", include);
+		cout << fileName << "\t";
+		cout.flush();
+		std::clock_t startCpuTime = std::clock();
+		auto startWallClockTime = std::chrono::system_clock::now();
+
+		ModulePtr program = getModuleFromSource(folder + fileName, "", include);
 
 		CriterionPtr criterion;
 		CriterionPtr presentCriterion = shared_ptr<Criterion>(new PresentCriterion());
@@ -43,7 +52,8 @@ TEST_CASE("Test benchmarks", "[benchmark],[bruteforce]") {
 			criterion = presentCriterion;
 		}
 
-		SlicingMethodPtr method = shared_ptr<SlicingMethod>(new BruteForce(program));
+		BruteForce* bf = new BruteForce(program, nullptr);
+		SlicingMethodPtr method = shared_ptr<SlicingMethod>(bf);
 		ModulePtr slice = method->computeSlice(criterion);
 
 		bool noAssertSlicedLeft = true;
@@ -57,5 +67,9 @@ TEST_CASE("Test benchmarks", "[benchmark],[bruteforce]") {
 
 		ValidationResult result = SliceCandidateValidation::validate(&*program, &*slice);
 		CHECK(result == ValidationResult::valid);
+
+		double cpuDuration = (std::clock() - startCpuTime) / double(CLOCKS_PER_SEC);
+		std::chrono::duration<double> wctDuration = (std::chrono::system_clock::now() - startWallClockTime);
+		cout << bf->getNumberOfReveCalls() << "\t" << cpuDuration << "\t" << wctDuration.count() << endl;
 	}
 }
