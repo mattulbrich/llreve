@@ -1,6 +1,7 @@
 #include "core/DeleteVisitor.h"
 #include "core/Criterion.h"
 #include "core/AddVariableNamePass.h"
+#include "util/FileOperations.h"
 
 #include "llvm/IR/Instructions.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
@@ -39,70 +40,88 @@ bool DeleteVisitor::visitCallInst(CallInst &instruction){
 }
 }
 
-// bool DeleteVisitor::visitBranchInst (BranchInst &instruction){
-// 	unsigned instructionCount = 0;
-// 	BasicBlock& instructionBlock = *instruction.getParent();
-// 	for (Instruction& i :instructionBlock){
-// 		instructionCount++;
-// 	}
+bool DeleteVisitor::visitBranchInst (BranchInst &instruction){
+	unsigned instructionCount = 0;
+	BasicBlock& instructionBlock = *instruction.getParent();
 
-// 	if (instruction.isUnconditional() && instructionCount == 1) {
-// 		BasicBlock* successor = instruction.getSuccessor(0);
-// 		bool canRemoveFromAllUsers = true;
-// 		for (User* user:instructionBlock.users()) {
-// 			if (!isa<BranchInst>(user)) {
-// 				canRemoveFromAllUsers = false;
-// 			}
-// 		}
+	for (Instruction& i :instructionBlock){
+		instructionCount++;
+	}
 
-// 		for (Instruction& instructionInSuccessor:*successor) {
-// 			if (PHINode* phi = dyn_cast<PHINode>(&instructionInSuccessor)) {
-// 				for (unsigned i = 0; i < phi->getNumIncomingValues(); i++) {
-// 					BasicBlock* block = phi->getIncomingBlock(i);
-// 					if (block == &instructionBlock) {
-// 						canRemoveFromAllUsers = false;
-// 					}
-// 				}
-// 			}
-// 		}
+	if (instruction.isUnconditional() && instructionCount == 1) {
+		BasicBlock* successor = instruction.getSuccessor(0);
+		Function& function = *instructionBlock.getParent();
+		bool canRemoveFromAllUsers = true;
+		if (&function.getEntryBlock() == successor
+			|| &function.getEntryBlock() == &instructionBlock) {
+			// Entry blocks may have no predecessor
+			// therefore no block can have the entry block as successor
+			// And the entry block should not be deleted
+			canRemoveFromAllUsers = false;
+		}
 
-// 		if (canRemoveFromAllUsers) {
-// 			for (User* user:instructionBlock.users()) {
-// 				if (BranchInst* userBranch = dyn_cast<BranchInst>(user)) {
-// 					for (unsigned i = 0; i < userBranch->getNumSuccessors(); ++i) {
-// 						if (userBranch->getSuccessor(i) == &instructionBlock) {
-// 							userBranch->setSuccessor(i, successor);
-// 						}
-// 					}
+		for (User* user:instructionBlock.users()) {
+			if (!isa<BranchInst>(user)) {
+				canRemoveFromAllUsers = false;
+			}
+		}
 
-// 					if (userBranch->isConditional()) {
-// 						bool allSuccessorsSame = true; // and succssor
-// 						for (unsigned i = 0; i < userBranch->getNumSuccessors(); ++i) {
-// 							if (userBranch->getSuccessor(i) != successor) {
-// 								allSuccessorsSame = false;
-// 							}
-// 						}
+		for (Instruction& instructionInSuccessor:*successor) {
+			if (PHINode* phi = dyn_cast<PHINode>(&instructionInSuccessor)) {
+				for (unsigned i = 0; i < phi->getNumIncomingValues(); i++) {
+					BasicBlock* block = phi->getIncomingBlock(i);
+					if (block == &instructionBlock) {
+						canRemoveFromAllUsers = false;
+					}
+				}
+			}
+		}
 
-// 						if (allSuccessorsSame) {
-// 							IRBuilder<> Builder(userBranch);
-// 							Builder.CreateBr(successor);
-// 							userBranch->eraseFromParent();
-// 						}
-// 					}
-// 				}
-// 			}
+		if (canRemoveFromAllUsers) {
+			set<User*> users;
+			for (User* user:instructionBlock.users()) {
+				users.insert(user);
+			}
 
-// 			Function* function = instructionBlock.getParent();
-// 			instruction.eraseFromParent();
-// 			assert(instructionBlock.hasNUses(0));
-// 			instructionBlock.eraseFromParent();
+			for (User* user:users) {
+				if (BranchInst* userBranch = dyn_cast<BranchInst>(user)) {
+					for (unsigned i = 0; i < userBranch->getNumSuccessors(); ++i) {
+						if (userBranch->getSuccessor(i) == &instructionBlock) {
+							userBranch->setSuccessor(i, successor);
+						}
+					}
 
-// 			return true;
-// 		}
-// 	}
+					if (userBranch->isConditional()) {
+						bool allSuccessorsSame = true; // and succssor
+						for (unsigned i = 0; i < userBranch->getNumSuccessors(); ++i) {
+							if (userBranch->getSuccessor(i) != successor) {
+								allSuccessorsSame = false;
+							}
+						}
 
-// 	return visitTerminatorInst(instruction);
-// }
+						if (allSuccessorsSame) {
+							BasicBlock* userBlock = userBranch->getParent();
+							BranchInst::Create(successor, userBlock);
+							//IRBuilder<> Builder(userBranch);
+							//Builder.CreateBr(successor);
+							userBranch->eraseFromParent();
+						}
+					}
+				}
+			}
+
+			instruction.eraseFromParent();
+
+			assert(instructionBlock.hasNUses(0));
+			//instructionBlock.eraseFromParent();
+
+
+			return true;
+		}
+	}
+
+	return visitTerminatorInst(instruction);
+}
 
 bool DeleteVisitor::visitPHINode(llvm::PHINode &instruction) {
 	// Phi nodes may contain inlined constants and arguments from privious blocks.

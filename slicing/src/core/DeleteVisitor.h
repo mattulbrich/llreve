@@ -18,7 +18,7 @@ public:
 	bool visitInstruction(llvm::Instruction &I);
 	bool visitTerminatorInst(llvm::TerminatorInst &I);
 	bool visitCallInst(llvm::CallInst &I);
-//	bool visitBranchInst(llvm::BranchInst &I);
+	bool visitBranchInst(llvm::BranchInst &I);
 
 	/**
 	 * Phi nodes may contain inlined constants and arguments,
