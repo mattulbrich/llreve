@@ -18,7 +18,7 @@ s/!assert_sliced ![0-9]*/!assert_sliced/g
 ' > sedScript
 
 #create replacement script for !srcVariable !num with the actual variable
-sed -n 's/!\([0-9]*\) = !DILocalVariable(name: "\([a-Z0-9]*\).*/s\/!srcVariable !\1\/\t#=\2\/g/p' $1 >> sedScript
+sed -n 's/!\([0-9]*\) = !DILocalVariable(name: "\([^""]*\)".*/s\/!srcVariable !\1\/\t#=\2\/g/p' $1 >> sedScript
 
 #create replacement script for !srcVariable !num with the actual variable
 ## supress output
@@ -28,7 +28,6 @@ sed -n 's/!\([0-9]*\) = !DILocalVariable(name: "\([a-Z0-9]*\).*/s\/!srcVariable 
 ## foo = search pattern
 ## baa = s/foz/baz/g (i.e. a line in our generated script)
 ## \1,\2 are the found occurences
-sed -n 's/!\([0-9]*\) = !DILocalVariable(name: "\([a-Z0-9]*\).*/s\/!srcVariable !\1\/\t#=\2\/g/p' $1 >> sedScript
 sed -n 's/!\([0-9]*\) = !{!"not sliced"}.*/s\/!slice !\1\/\t# marked but not sliced\/g/p' $1 >> sedScript
 sed -n 's/!\([0-9]*\) = !{!"to be sliced"}.*/s\/!slice !\1\/\t# to be sliced\/g/p' $1 >> sedScript
 
