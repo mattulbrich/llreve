@@ -6,6 +6,7 @@
 #include "util/LambdaFunctionPass.h"
 #include "core/Util.h"
 #include "core/SlicingPass.h"
+#include "util/misc.h"
 #include <iostream>
 #include <bitset>
 
@@ -19,22 +20,17 @@ using namespace llvm;
 
 BruteForce::BruteForce(ModulePtr program, llvm::raw_ostream* ostream):SlicingMethod(program),ostream_(ostream){
 	callsToReve_ = 0;
+	numberOfTries_ = 0;
 }
 
 shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 	ModulePtr program = getProgram();
 	callsToReve_ = 0;
-	int numFunctions = 0;
-	int numInstructions = 0;
-	for (Function& function: *program) {
-		numFunctions++;
-		for(Instruction& i : Util::getInstructions(function)) {
-			numInstructions++;
-		}
-	}
 
-	// We do not want to slice the criterion itself
-	numInstructions -= c->getInstructions(*program).size();
+	int numInstructions = 0;
+	for_each_relevant_instruction(*program, *c, [&numInstructions](Instruction& instruction){
+		numInstructions++;
+	});
 
 	ModulePtr bestCandidate = shared_ptr<Module>(nullptr);
 	int maxSliced = -1;
@@ -47,10 +43,11 @@ shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 
 	int progress = 0;
 
-	int iterations = 1 << numInstructions;
+	unsigned iterations = 1 << numInstructions;
 	float step = iterations / 20.f;
 
-	for (int pattern = 0; pattern < iterations; pattern++){
+	numberOfTries_ = iterations;
+	for (unsigned pattern = 0; pattern < iterations; pattern++){
 		if ((progress * step) < pattern) {
 			progress++;
 			if (ostream_) {
@@ -60,22 +57,16 @@ shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 		}
 
 		ModulePtr sliceCandidate = CloneModule(&*program);
-		set<Instruction*> criterionInstructions = c->getInstructions(*sliceCandidate);
 		int sliced = 0;
 		int instructionCounter = 0;
 
-		for (Function& function: *sliceCandidate) {
-			for(Instruction& instruction : Util::getInstructions(function)) {
-				const bool isCriterion = criterionInstructions.find(&instruction) != criterionInstructions.end();
-				if (!isCriterion) {
-					if (pattern & (1 << instructionCounter)) {
-						SlicingPass::toBeSliced(instruction);
-						sliced++;
-					}
-					instructionCounter++;
-				}
+		for_each_relevant_instruction(*sliceCandidate, *c, [&](Instruction& instruction){
+			if (pattern & (1 << instructionCounter)) {
+				SlicingPass::toBeSliced(instruction);
+				sliced++;
 			}
-		}
+			instructionCounter++;
+		});
 
 		//Will be deleted from pass manager!
 		SlicingPass* slicingPass = new SlicingPass();
@@ -100,7 +91,27 @@ shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 	return bestCandidate;
 }
 
+void BruteForce::for_each_relevant_instruction(Module& program,
+	Criterion& criterion, std::function<void (llvm::Instruction& instruction)> lambda) {
+	set<Instruction*> criterionInstructions = criterion.getInstructions(program);
+
+
+	for (Function& function: program) {
+		if (!Util::isSpecialFunction(function)) {
+			for(Instruction& instruction : Util::getInstructions(function)) {
+				const bool isCriterion = criterionInstructions.find(&instruction) != criterionInstructions.end();
+				if (!isCriterion) {
+					lambda(instruction);
+				}
+			}
+		}
+	}
+}
 
 unsigned BruteForce::getNumberOfReveCalls(){
 	return callsToReve_;
+}
+
+unsigned BruteForce::getNumberOfTries(){
+	return numberOfTries_;
 }

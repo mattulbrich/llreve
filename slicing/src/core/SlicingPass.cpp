@@ -58,7 +58,7 @@ bool SlicingPass::isToBeSliced(llvm::Instruction& instruction){
 bool SlicingPass::isNotSliced(llvm::Instruction& instruction){
 	if (auto metadata = instruction.getMetadata(SLICE)) {
 		std::string data = cast<MDString>(metadata->getOperand(0))->getString();
-		if (data == NOT_SLICED.c_str()) {
+		if (data == NOT_SLICED) {
 			return true;
 		}
 	}
@@ -73,14 +73,11 @@ bool SlicingPass::runOnFunction(llvm::Function& function){
 
 	for(llvm::BasicBlock& block: function) {
 		for(llvm::Instruction& instruction: block) {
-			if (SlicingPass::isToBeSliced(instruction) &&
-				!isa<BranchInst>(instruction)) {
-				instructionsToDelete.push(&instruction);
-			} else {
-				// actually it might be removed, if the containing
-				// basic block is empty. But than the mark is removed
-				// as well.
+			if (SlicingPass::isToBeSliced(instruction)) {
 				markNotSliced(instruction);
+				if (!isa<BranchInst>(instruction)) {
+					instructionsToDelete.push(&instruction);
+				}
 			}
 		}
 	}
@@ -134,15 +131,13 @@ bool SlicingPass::runOnFunction(llvm::Function& function){
 	while (!activeQueue->empty()) {
 		Instruction& instruction = *activeQueue->front();
 		activeQueue->pop();
-
-		markNotSliced(instruction);
 	}
 
-	// for(Instruction& instruction : Util::getInstructions(function)) {
-	// 	if (isNotSliced(instruction)) {
-	// 		this->hasUnSlicedInstructions_ = true;
-	// 	}
-	// }
+	for(Instruction& instruction : Util::getInstructions(function)) {
+		if (isNotSliced(instruction)) {
+			this->hasUnSlicedInstructions_ = true;
+		}
+	}
 
 	bool hasError = llvm::verifyFunction(function, &errs());
 	assert(!hasError && "Internal Error: Slicing pass produced slice candidate, which ist not a valid llvm program.");

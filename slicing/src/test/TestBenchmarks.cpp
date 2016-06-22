@@ -35,7 +35,7 @@ TEST_CASE("Test benchmarks", "[benchmark],[bruteforce]") {
 	benchmarkFiles.push_back("unreachable_code_nested.c");
 	benchmarkFiles.push_back("unreachable_code_simple.c");
 
-	cout << "file name \t reve calls \t cpu time in s \t wall clock time in s " << endl;
+	cout << "file name \t tried slices \t reve calls \t cpu time in s \t wall clock time in s " << endl;
 	for( string fileName : benchmarkFiles ){
 		cout << fileName << "\t";
 		cout.flush();
@@ -70,6 +70,6 @@ TEST_CASE("Test benchmarks", "[benchmark],[bruteforce]") {
 
 		double cpuDuration = (std::clock() - startCpuTime) / double(CLOCKS_PER_SEC);
 		std::chrono::duration<double> wctDuration = (std::chrono::system_clock::now() - startWallClockTime);
-		cout << bf->getNumberOfReveCalls() << "\t" << cpuDuration << "\t" << wctDuration.count() << endl;
+		cout << bf->getNumberOfTries() << "\t" << bf->getNumberOfReveCalls() << "\t" << cpuDuration << "\t" << wctDuration.count() << endl;
 	}
 }
