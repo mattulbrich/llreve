@@ -25,7 +25,6 @@ BruteForce::BruteForce(ModulePtr program, llvm::raw_ostream* ostream):SlicingMet
 
 shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 	ModulePtr program = getProgram();
-	callsToReve_ = 0;
 
 	unsigned numInstructions = 0;
 	for_each_relevant_instruction(*program, *c, [&numInstructions](Instruction& instruction){
@@ -46,12 +45,12 @@ shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 	unsigned maxIterations = 1 << numInstructions;
 	float step = maxIterations / 20.f;
 
-	numberOfTries_ = maxIterations;
+	numberOfPossibleTries_ = maxIterations;
+	numberOfTries_ = 0;
+	callsToReve_ = 0;
 
-	int iterations = -1;
+	int iterations = 0;
 	for_each_pattern(numInstructions, [&](const vector<bool>& pattern, bool* done){
-		iterations++;
-
 		if ((progress * step) < iterations) {
 			progress++;
 			if (ostream_) {
@@ -80,7 +79,7 @@ shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 
 		if (!slicingPass->hasUnSlicedInstructions()) {
 			assert(sliced >= maxSliced && "InternalError: The first valid slice should be the largest!");
-			++callsToReve_;
+			callsToReve_++;
 
 			ValidationResult isValid = SliceCandidateValidation::validate(&*program, &*sliceCandidate, c);
 			if (isValid == ValidationResult::valid) {
@@ -89,6 +88,9 @@ shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 				*done = true;
 			}
 		}
+
+		numberOfTries_++;
+		iterations++;
 	});
 
 	if (ostream_) {
@@ -143,4 +145,8 @@ unsigned BruteForce::getNumberOfReveCalls(){
 
 unsigned BruteForce::getNumberOfTries(){
 	return numberOfTries_;
+}
+
+unsigned BruteForce::getNumberOfPossibleTries(){
+	return numberOfPossibleTries_;
 }

@@ -35,7 +35,7 @@ TEST_CASE("Test benchmarks", "[benchmark],[bruteforce]") {
 	benchmarkFiles.push_back("unreachable_code_nested.c");
 	benchmarkFiles.push_back("unreachable_code_simple.c");
 
-	cout << "file name \t tried slices \t reve calls \t cpu time in s \t wall clock time in s " << endl;
+	cout << "file name \t possible slices \t tried slices \t reve calls \t cpu time in s \t wall clock time in s " << endl;
 	for( string fileName : benchmarkFiles ){
 		cout << fileName << "\t";
 		cout.flush();
@@ -43,6 +43,7 @@ TEST_CASE("Test benchmarks", "[benchmark],[bruteforce]") {
 		auto startWallClockTime = std::chrono::system_clock::now();
 
 		ModulePtr program = getModuleFromSource(folder + fileName, "", include);
+		writeModuleToFile("out/" + fileName + ".orig", *program);
 
 		CriterionPtr criterion;
 		CriterionPtr presentCriterion = shared_ptr<Criterion>(new PresentCriterion());
@@ -55,6 +56,7 @@ TEST_CASE("Test benchmarks", "[benchmark],[bruteforce]") {
 		BruteForce* bf = new BruteForce(program, nullptr);
 		SlicingMethodPtr method = shared_ptr<SlicingMethod>(bf);
 		ModulePtr slice = method->computeSlice(criterion);
+		writeModuleToFile("out/" + fileName + ".slice", *slice);
 
 		bool noAssertSlicedLeft = true;
 		for (Function& fun:*slice) {
@@ -70,6 +72,6 @@ TEST_CASE("Test benchmarks", "[benchmark],[bruteforce]") {
 
 		double cpuDuration = (std::clock() - startCpuTime) / double(CLOCKS_PER_SEC);
 		std::chrono::duration<double> wctDuration = (std::chrono::system_clock::now() - startWallClockTime);
-		cout << bf->getNumberOfTries() << "\t" << bf->getNumberOfReveCalls() << "\t" << cpuDuration << "\t" << wctDuration.count() << endl;
+		cout << bf->getNumberOfPossibleTries() << "\t" << bf->getNumberOfTries() << "\t" << bf->getNumberOfReveCalls() << "\t" << cpuDuration << "\t" << wctDuration.count() << endl;
 	}
 }
