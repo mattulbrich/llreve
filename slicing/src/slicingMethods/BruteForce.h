@@ -17,11 +17,13 @@ public:
 	virtual ModulePtr computeSlice(CriterionPtr c) override;
 	unsigned getNumberOfReveCalls();
 	unsigned getNumberOfTries();
+	unsigned getNumberOfPossibleTries();
 
 private:
 	llvm::raw_ostream* ostream_;
 	unsigned callsToReve_;
 	unsigned numberOfTries_;
+	unsigned numberOfPossibleTries_;
 
 	void for_each_relevant_instruction(llvm::Module& program, Criterion& criterion,
 		std::function<void (llvm::Instruction& instruction)> lambda);
