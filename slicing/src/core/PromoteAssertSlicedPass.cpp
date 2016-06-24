@@ -2,6 +2,7 @@
 #include <istream>
 // *** END ***
 #include "PromoteAssertSlicedPass.h"
+#include "core/ExplicitAssignPass.h"
 
 #include "llvm/IR/IntrinsicInst.h"
 
@@ -29,11 +30,25 @@ PromoteAssertSlicedPass::~PromoteAssertSlicedPass() {
 bool PromoteAssertSlicedPass::runOnFunction(llvm::Function& fun) {
 	std::set<Instruction*> toDelete;
 
+	Instruction* priviousInstruction = nullptr;
 	for(Instruction& instruction : Util::getInstructions(fun)) {
 		if (CallInst* call = dyn_cast<CallInst>(&instruction)) {
 			if (call->getCalledFunction()
 					&& call->getCalledFunction()->getName() == FUNCTION_NAME) {
-				Instruction* assertedInstruction = dyn_cast<Instruction>(call->getArgOperand(0));
+				Value* assertedValue = call->getArgOperand(0);
+
+				Instruction* assertedInstruction = dyn_cast<Instruction>(assertedValue);
+
+				if (priviousInstruction)
+					if (CallInst* assignment = dyn_cast<CallInst>(priviousInstruction))
+						if (assignment->getCalledFunction()
+							&& assignment->getCalledFunction()->getName()
+								== ExplicitAssignPass::FUNCTION_NAME){
+							if (assignment->getArgOperand(0) == call->getArgOperand(0)) {
+								assertedInstruction = assignment;
+							}
+				}
+
 				if (assertedInstruction) {
 					markAssertSliced(*assertedInstruction);
 					assert(!instruction.hasNUsesOrMore(1) && "Please make sure __assert_sliced is not used!");
@@ -41,6 +56,7 @@ bool PromoteAssertSlicedPass::runOnFunction(llvm::Function& fun) {
 				}
 			}
 		}
+		priviousInstruction = &instruction;
 	}
 
 	for (Instruction* instruction: toDelete) {

@@ -7,7 +7,7 @@ int foo(int heigh, int low_x) {
 	int z = 0;
 	if ( low_x == 3) {
 		__assert_sliced(
-		y = heigh + 0);
+		y = heigh);
 	}
 	z = y + 1;
 	if ( low_x != 3) {

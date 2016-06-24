@@ -27,7 +27,7 @@ shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 	ModulePtr program = getProgram();
 	callsToReve_ = 0;
 
-	int numInstructions = 0;
+	unsigned numInstructions = 0;
 	for_each_relevant_instruction(*program, *c, [&numInstructions](Instruction& instruction){
 		numInstructions++;
 	});
@@ -43,12 +43,16 @@ shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 
 	int progress = 0;
 
-	unsigned iterations = 1 << numInstructions;
-	float step = iterations / 20.f;
+	unsigned maxIterations = 1 << numInstructions;
+	float step = maxIterations / 20.f;
 
-	numberOfTries_ = iterations;
-	for (unsigned pattern = 0; pattern < iterations; pattern++){
-		if ((progress * step) < pattern) {
+	numberOfTries_ = maxIterations;
+
+	int iterations = -1;
+	for_each_pattern(numInstructions, [&](const vector<bool>& pattern, bool* done){
+		iterations++;
+
+		if ((progress * step) < iterations) {
 			progress++;
 			if (ostream_) {
 				*ostream_ << "=";
@@ -58,10 +62,10 @@ shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 
 		ModulePtr sliceCandidate = CloneModule(&*program);
 		int sliced = 0;
-		int instructionCounter = 0;
+		unsigned instructionCounter = 0;
 
 		for_each_relevant_instruction(*sliceCandidate, *c, [&](Instruction& instruction){
-			if (pattern & (1 << instructionCounter)) {
+			if (pattern[instructionCounter]) {
 				SlicingPass::toBeSliced(instruction);
 				sliced++;
 			}
@@ -74,21 +78,46 @@ shared_ptr<Module> BruteForce::computeSlice(CriterionPtr c) {
 		PM.add(slicingPass);
 		PM.run(*sliceCandidate);
 
-		if (!slicingPass->hasUnSlicedInstructions() && sliced >= maxSliced) {
+		if (!slicingPass->hasUnSlicedInstructions()) {
+			assert(sliced >= maxSliced && "InternalError: The first valid slice should be the largest!");
 			++callsToReve_;
+
 			ValidationResult isValid = SliceCandidateValidation::validate(&*program, &*sliceCandidate, c);
 			if (isValid == ValidationResult::valid) {
 				maxSliced = sliced;
 				bestCandidate = sliceCandidate;
+				*done = true;
 			}
 		}
-	}
+	});
+
 	if (ostream_) {
 		*ostream_ << "|\n";
 		ostream_->flush();
 	}
 
 	return bestCandidate;
+}
+
+void BruteForce::for_each_pattern(unsigned numInstructions, std::function<void (vector<bool>& pattern, bool* done)> lambda) {
+	vector<bool> pattern(numInstructions, true);
+	bool done = false;
+
+	for (unsigned numberOfZero = 0; numberOfZero <= numInstructions; numberOfZero++) {
+		std::sort(pattern.begin(), pattern.end());
+		if (numberOfZero > 0) {
+			pattern[numberOfZero - 1] = false;
+		}
+
+		do {
+			lambda(pattern, &done);
+			if (done)
+				break;
+		} while (std::next_permutation(pattern.begin(), pattern.end()));
+
+		if (done)
+			break;
+	}
 }
 
 void BruteForce::for_each_relevant_instruction(Module& program,

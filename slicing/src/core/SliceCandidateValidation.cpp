@@ -1,6 +1,7 @@
 #include "SliceCandidateValidation.h"
 
 #include "llvm/Transforms/Utils/Cloning.h"
+#include "core/StripExplicitAssignPass.h"
 
 #include "Opts.h"
 #include "Preprocess.h"
@@ -43,6 +44,12 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 
 	shared_ptr<Module> programCopy(CloneModule(program));
 	shared_ptr<Module> candiateCopy(CloneModule(candidate));
+
+	llvm::legacy::PassManager PM;
+	PM.add(new StripExplicitAssignPass());
+	PM.run(*programCopy);
+	PM.run(*candiateCopy);
+
 
 	MonoPair<shared_ptr<Module>> modules(programCopy, candiateCopy);
 

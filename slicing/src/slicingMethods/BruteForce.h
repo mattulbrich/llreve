@@ -4,6 +4,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include "core/Criterion.h"
 
+#include <vector>
+
 
 class BruteForce: public SlicingMethod {
 public:
@@ -23,4 +25,5 @@ private:
 
 	void for_each_relevant_instruction(llvm::Module& program, Criterion& criterion,
 		std::function<void (llvm::Instruction& instruction)> lambda);
+	void for_each_pattern(unsigned numInstructions, std::function<void (std::vector<bool>& pattern, bool* done)> lambda);
 };

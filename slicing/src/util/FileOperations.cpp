@@ -2,6 +2,7 @@
 
 #include "core/AddVariableNamePass.h"
 #include "core/PromoteAssertSlicedPass.h"
+#include "core/ExplicitAssignPass.h"
 #include "core/Util.h"
 
 #include "Opts.h"
@@ -45,6 +46,7 @@ shared_ptr<llvm::Module> getModuleFromSource(string fileName, string resourceDir
 	shared_ptr<llvm::Module> program = modules.first;
 
 	llvm::legacy::PassManager PM;
+	PM.add(new ExplicitAssignPass());
 	PM.add(llvm::createPromoteMemoryToRegisterPass());
 	PM.add(new AddVariableNamePass());
 	PM.add(llvm::createStripSymbolsPass(true));

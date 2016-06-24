@@ -14,6 +14,9 @@ s/nsw //g
 # remove value of assert_sliced (its always the same anyway)
 s/!assert_sliced ![0-9]*/!assert_sliced/g
 
+# remove identitys
+s/call @__identity(\([^)]*\)),/\1/g
+
 #replace variable names
 ' > sedScript
 
