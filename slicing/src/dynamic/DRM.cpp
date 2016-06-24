@@ -8,7 +8,7 @@ using namespace llvm;
 LinearizedFunction::LinearizedFunction(
 		Function& func) {
 	
-	int index = 0;
+	unsigned int index = 0;
 	
 	for(Instruction& i : Util::getInstructions(func)) {
 		mapInstToInt[&i] = index++;
@@ -29,16 +29,16 @@ LinearizedFunction::~LinearizedFunction(void) {
 	delete [] mapIntToInst;
 }
 
-Instruction& operator[](
+Instruction& LinearizedFunction::operator[](
 		unsigned int const index) const {
 	
 	return *mapIntToInst[index];
 }
 
-unsigned int operator[](
+unsigned int LinearizedFunction::operator[](
 		Instruction const& inst)  const {
 	
-	return mapInstToInt[&inst];
+	return mapInstToInt.at(&inst);
 }
 
 BitArray const& DRM::computeSlice(

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "util/BitArray.h"
+
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instruction.h"
 
@@ -32,7 +34,7 @@ class DRM {
 	
 	private:
 	
-	LinearizedFunction const& func;
+	//LinearizedFunction const& func;
 	BitArray const*           matrix;
 	BitArray                  accumulator;
 };
