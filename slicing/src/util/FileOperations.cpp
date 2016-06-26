@@ -5,6 +5,8 @@
 #include "core/ExplicitAssignPass.h"
 #include "core/Util.h"
 
+#include "util/FixNamesPass.h"
+
 #include "Opts.h"
 #include "Compile.h"
 #include "Helper.h"
@@ -51,6 +53,7 @@ shared_ptr<llvm::Module> getModuleFromSource(string fileName, string resourceDir
 	PM.add(new AddVariableNamePass());
 	PM.add(llvm::createStripSymbolsPass(true));
 	PM.add(new PromoteAssertSlicedPass());
+	PM.add(new FixNamesPass());
 	PM.run(*program);
 
 	bool hasError = llvm::verifyModule(*program, &errs());
@@ -60,6 +63,7 @@ shared_ptr<llvm::Module> getModuleFromSource(string fileName, string resourceDir
 		for (Instruction& instruction : Util::getInstructions(function)) {
 			for (Use& use:instruction.operands()) {
 				if (isa<UndefValue>(use)){
+					writeModuleToFile("program.llvm", *program);
 					// Todo this is actually an input error and should be handled
 					// by exception.
 					logError("Found undefined Variable, make sure you define all Variables.");
