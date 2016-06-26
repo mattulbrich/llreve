@@ -1,5 +1,31 @@
 #!/bin/bash
 
-../scripts/prepare program.llvm
-../scripts/prepare slice.llvm
-meld program.llvm slice.llvm
+if [ ! -f ../scripts/show ]; then
+    echo "Please make sure to run from build directory!"
+    exit 1
+fi
+
+if [[ $# -eq 0 ]]; then
+	../scripts/prepare program.llvm
+	../scripts/prepare slice.llvm
+	meld program.llvm slice.llvm
+else
+	name=${1%.}
+	name=${name%.orig}
+
+	orig=$name.orig
+	slice=$name.slice
+
+	if [ ! -f $orig ]; then
+		echo "Could not find original program: $orig"
+		exit 2
+	fi
+	if [ ! -f $slice ]; then
+		echo "Could not find sliced program: $slice"
+		exit 2
+	fi
+
+	../scripts/prepare $orig
+	../scripts/prepare $slice
+	meld $orig $slice
+fi
