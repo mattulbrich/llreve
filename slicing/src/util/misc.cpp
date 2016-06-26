@@ -1,7 +1,7 @@
 #include "misc.h"
 
-#include "core/PromoteAssertSlicedPass.h"
-#include "core/ExplicitAssignPass.h"
+#include "preprocessing/PromoteAssertSlicedPass.h"
+#include "preprocessing/ExplicitAssignPass.h"
 #include "core/Criterion.h"
 
 using namespace llvm;

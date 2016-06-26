@@ -3,7 +3,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Instructions.h"
 
-#include "core/PromoteAssertSlicedPass.h"
+#include "preprocessing/PromoteAssertSlicedPass.h"
 #include "core/Util.h"
 #include "util/misc.h"
 

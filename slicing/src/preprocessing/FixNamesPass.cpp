@@ -7,7 +7,7 @@
 
 #include "llvm/IR/DebugInfoMetadata.h"
 
-#include "core/AddVariableNamePass.h"
+#include "preprocessing/AddVariableNamePass.h"
 
 #include <sstream>
 

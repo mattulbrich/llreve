@@ -1,6 +1,6 @@
 #include "StripExplicitAssignPass.h"
 
-#include "core/ExplicitAssignPass.h"
+#include "preprocessing/ExplicitAssignPass.h"
 
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Function.h"

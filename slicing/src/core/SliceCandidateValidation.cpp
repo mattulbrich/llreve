@@ -1,7 +1,7 @@
 #include "SliceCandidateValidation.h"
 
 #include "llvm/Transforms/Utils/Cloning.h"
-#include "core/StripExplicitAssignPass.h"
+#include "preprocessing/StripExplicitAssignPass.h"
 
 #include "Opts.h"
 #include "Preprocess.h"

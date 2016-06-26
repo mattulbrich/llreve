@@ -2,7 +2,7 @@
 #include <istream>
 // *** END ***
 #include "PromoteAssertSlicedPass.h"
-#include "core/ExplicitAssignPass.h"
+#include "preprocessing/ExplicitAssignPass.h"
 
 #include "llvm/IR/IntrinsicInst.h"
 

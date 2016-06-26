@@ -2,7 +2,7 @@
 #include <istream>
 // *** END ***
 #include "SlicingPass.h"
-#include "AddVariableNamePass.h"
+#include "preprocessing/AddVariableNamePass.h"
 
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Instruction.h"

@@ -12,7 +12,7 @@
 #include "llvm/Transforms/Scalar.h"
 
 #include "core/SlicingPass.h"
-#include "core/AddVariableNamePass.h"
+#include "preprocessing/AddVariableNamePass.h"
 #include "util/LambdaFunctionPass.h"
 
 #include "llvm/IR/Verifier.h"

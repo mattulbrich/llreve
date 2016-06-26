@@ -1,11 +1,11 @@
 #include "FileOperations.h"
 
-#include "core/AddVariableNamePass.h"
-#include "core/PromoteAssertSlicedPass.h"
-#include "core/ExplicitAssignPass.h"
-#include "core/Util.h"
+#include "preprocessing/AddVariableNamePass.h"
+#include "preprocessing/PromoteAssertSlicedPass.h"
+#include "preprocessing/ExplicitAssignPass.h"
+#include "preprocessing/FixNamesPass.h"
 
-#include "util/FixNamesPass.h"
+#include "core/Util.h"
 
 #include "Opts.h"
 #include "Compile.h"

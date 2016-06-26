@@ -1,9 +1,9 @@
 #include "catch.hpp"
 
-#include "core/ExplicitAssignPass.h"
-#include "core/StripExplicitAssignPass.h"
-#include "core/PromoteAssertSlicedPass.h"
-#include "core/AddVariableNamePass.h"
+#include "preprocessing/ExplicitAssignPass.h"
+#include "preprocessing/StripExplicitAssignPass.h"
+#include "preprocessing/PromoteAssertSlicedPass.h"
+#include "preprocessing/AddVariableNamePass.h"
 
 #include "util/FileOperations.h"
 

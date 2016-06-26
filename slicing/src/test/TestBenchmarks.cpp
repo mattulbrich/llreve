@@ -8,7 +8,7 @@
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Module.h>
 #include "core/Util.h"
-#include "core/PromoteAssertSlicedPass.h"
+#include "preprocessing/PromoteAssertSlicedPass.h"
 #include "core/SliceCandidateValidation.h"
 
 #include <ctime>

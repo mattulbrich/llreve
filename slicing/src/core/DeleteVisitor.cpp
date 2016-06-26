@@ -1,6 +1,6 @@
 #include "core/DeleteVisitor.h"
 #include "core/Criterion.h"
-#include "core/AddVariableNamePass.h"
+#include "preprocessing/AddVariableNamePass.h"
 #include "util/FileOperations.h"
 
 #include "llvm/IR/Instructions.h"
