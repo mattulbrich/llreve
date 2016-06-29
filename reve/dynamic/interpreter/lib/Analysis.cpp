@@ -50,6 +50,8 @@ using namespace std::placeholders;
 
 static llvm::cl::opt<bool>
     MultinomialsFlag("multinomials", llvm::cl::desc("Use true multinomials"));
+static llvm::cl::opt<bool>
+    PrettyFlag("pretty", llvm::cl::desc("Pretty print intermediate output"));
 std::string InputFileFlag;
 static llvm::cl::opt<std::string, true>
     InputFileFlagStorage("input",
@@ -315,7 +317,6 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         auto firstBlock = *markMaps.first.MarkToBlocksMap.at(cexMark).begin();
         auto secondBlock = *markMaps.second.MarkToBlocksMap.at(cexMark).begin();
         std::string tmp;
-        // getline(std::cin, tmp);
 
         MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
             functions, variableValues, getHeapsFromModel(vals.arrays),
@@ -370,7 +371,7 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         string templateFileName(templateName);
         serializeSMT(clauses, false,
                      SerializeOpts(templateFileName, !InstantiateStorage, false,
-                                   BoundedFlag, false));
+                                   BoundedFlag, PrettyFlag));
         string command = "z3 " + templateFileName;
         FILE *out = popen(command.c_str(), "r");
         auto result = parseResult(out);
@@ -381,6 +382,7 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
             break;
         }
         vals = parseValues(std::static_pointer_cast<Sat>(result)->model);
+        // getline(std::cin, tmp);
     } while (1 /* sat */);
     auto invariantCandidates = makeInvariantDefinitions(
         findSolutions(analysisResults.polynomialEquations),
