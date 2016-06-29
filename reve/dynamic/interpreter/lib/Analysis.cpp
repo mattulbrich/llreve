@@ -359,7 +359,7 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                                       invariantCandidates);
         vector<SharedSMTRef> clauses =
             generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
-        char templateName[] = "tmpsmt_XXXXXX.smt2";
+        char templateName[] = "/tmp/tmpsmt_XXXXXX.smt2";
         int tmpSMTFd = mkstemps(templateName, 5);
         string templateFileName(templateName);
         serializeSMT(clauses, false,
