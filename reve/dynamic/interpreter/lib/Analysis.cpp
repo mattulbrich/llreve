@@ -275,9 +275,8 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
 
     // Run the interpreter on the unrolled code
     MergedAnalysisResults analysisResults;
-    MonoPair<PathMap> pathMaps =
-        preprocessedFunctions.getValue().map<PathMap>(
-            [](PreprocessedFunction fun) { return fun.results.paths; });
+    MonoPair<PathMap> pathMaps = preprocessedFunctions.getValue().map<PathMap>(
+        [](PreprocessedFunction fun) { return fun.results.paths; });
     smt::FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
     size_t degree = DegreeFlag;
@@ -344,8 +343,8 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
             // The paths have changed so we need to update the free variables
             pathMaps = preprocessedFunctions.getValue().map<PathMap>(
                 [](PreprocessedFunction fun) { return fun.results.paths; });
-            freeVarsMap =
-                freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
+            freeVarsMap = freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
+            instrNameMap = instructionNameMap(functions);
             std::cerr << "Transformed program, resetting inputs\n";
             continue;
         }
@@ -463,6 +462,9 @@ map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map) {
     for (auto mapIt : map) {
         int mark = mapIt.first;
         for (auto sample : mapIt.second) {
+            if (sample.first < 3 || sample.second < 3) {
+                continue;
+            }
             if (peelCount.count(mark) == 0) {
                 peelCount.insert(
                     std::make_pair(mark, sample.first - sample.second));
@@ -503,7 +505,7 @@ map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map) {
             transforms.insert(std::make_pair(
                 mark, LoopTransformation(LoopTransformType::Peel, side,
                                          static_cast<size_t>(abs(it.second)))));
-        } else if (unrollQuotients.count(mark) == 1) {
+        } else if (unrollQuotients.count(mark) > 0) {
             float factor = unrollQuotients.at(mark);
             LoopTransformSide side =
                 factor < 1 ? LoopTransformSide::Left : LoopTransformSide::Right;
@@ -1030,21 +1032,25 @@ makeInvariantDefinitions(const PolynomialSolutions &solutions,
         vector<SharedSMTRef> exitClauses;
         for (auto exitIt : mapIt.second) {
             ExitIndex exit = exitIt.first;
+            // TODO Figure out why we get to a point where these maps are empty
             SharedSMTRef left = makeInvariantDefinition(
                 exitIt.second.left,
-                patterns.at(mark).at(exit).left.hasValue()
+                patterns.count(mark) > 0 && patterns.at(mark).count(exit) > 0 &&
+                        patterns.at(mark).at(exit).left.hasValue()
                     ? patterns.at(mark).at(exit).left.getValue()
                     : HeapPatternCandidates(),
                 freeVarsMap.at(mark), degree);
             SharedSMTRef right = makeInvariantDefinition(
                 exitIt.second.right,
-                patterns.at(mark).at(exit).right.hasValue()
+                patterns.count(mark) > 0 && patterns.at(mark).count(exit) > 0 &&
+                        patterns.at(mark).at(exit).right.hasValue()
                     ? patterns.at(mark).at(exit).right.getValue()
                     : HeapPatternCandidates(),
                 freeVarsMap.at(mark), degree);
             SharedSMTRef none = makeInvariantDefinition(
                 exitIt.second.none,
-                patterns.at(mark).at(exit).none.hasValue()
+                patterns.count(mark) > 0 && patterns.at(mark).count(exit) > 0 &&
+                        patterns.at(mark).at(exit).none.hasValue()
                     ? patterns.at(mark).at(exit).none.getValue()
                     : HeapPatternCandidates(),
                 freeVarsMap.at(mark), degree);
