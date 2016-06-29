@@ -1461,10 +1461,10 @@ ModelValues initialModelValues(MonoPair<const llvm::Function *> funs) {
     vals.arrays.insert({"HEAP$1_old", {0, {}}});
     vals.arrays.insert({"HEAP$2_old", {0, {}}});
     for (const auto &arg : funs.first->args()) {
-        vals.values.insert({std::string(arg.getName()) + "_old", 0});
+        vals.values.insert({std::string(arg.getName()) + "_old", 5});
     }
     for (const auto &arg : funs.second->args()) {
-        vals.values.insert({std::string(arg.getName()) + "_old", 0});
+        vals.values.insert({std::string(arg.getName()) + "_old", 5});
     }
     vals.values.insert({"INV_INDEX", ENTRY_MARK});
     return vals;
