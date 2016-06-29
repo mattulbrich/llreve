@@ -160,11 +160,13 @@ BoundsMap updateBounds(
     const std::map<int, std::map<std::string, Bound<VarIntVal>>> &update);
 void populateEquationsMap(PolynomialEquations &equationsMap,
                           smt::FreeVarsMap freeVarsMap,
-                          MatchInfo<const llvm::Value *> match, size_t degree);
+                          MatchInfo<const llvm::Value *> match,
+                          ExitIndex exitIndex, size_t degree);
 void populateHeapPatterns(
     HeapPatternCandidatesMap &heapPatternCandidates,
     std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
-    smt::FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match);
+    smt::FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match,
+    ExitIndex exitIndex);
 void dumpPolynomials(const PolynomialEquations &equationsMap,
                      const smt::FreeVarsMap &freeVarsmap);
 void dumpHeapPatterns(const HeapPatternCandidatesMap &heapPatternsMap);
@@ -412,4 +414,6 @@ HeapPatternCandidates
 mergeHeapPatternCandidates(HeapPatternCandidates candidates1,
                            HeapPatternCandidates candidates2);
 
-ModelValues initialModelValues(MonoPair<const llvm::Function*> funs);
+ModelValues initialModelValues(MonoPair<const llvm::Function *> funs);
+
+ExitIndex getExitIndex(const MatchInfo<const llvm::Value *> match);

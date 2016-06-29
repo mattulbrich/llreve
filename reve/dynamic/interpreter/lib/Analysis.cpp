@@ -140,14 +140,15 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                 calls, nameMap,
                 [&localAnalysisResults, &freeVarsMap, degree,
                  &patterns](MatchInfo<const llvm::Value *> match) {
+                    ExitIndex exitIndex = getExitIndex(match);
                     findLoopCounts<const llvm::Value *>(
                         localAnalysisResults.loopCounts, match);
                     populateEquationsMap(
                         localAnalysisResults.polynomialEquations, freeVarsMap,
-                        match, degree);
+                        match, exitIndex, degree);
                     populateHeapPatterns(
                         localAnalysisResults.heapPatternCandidates, patterns,
-                        freeVarsMap, match);
+                        freeVarsMap, match, exitIndex);
                 });
         });
     loopTransformations =
@@ -323,12 +324,17 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         analyzeExecution<const llvm::Value *>(
             calls, nameMap, [&analysisResults, &freeVarsMap, degree,
                              &patterns](MatchInfo<const llvm::Value *> match) {
+                ExitIndex exitIndex = getExitIndex(match);
+                VarMap<const llvm::Value *> variables(
+                    match.steps.first->state.variables);
+                variables.insert(match.steps.second->state.variables.begin(),
+                                 match.steps.second->state.variables.end());
                 findLoopCounts<const llvm::Value *>(analysisResults.loopCounts,
                                                     match);
                 populateEquationsMap(analysisResults.polynomialEquations,
-                                     freeVarsMap, match, degree);
+                                     freeVarsMap, match, exitIndex, degree);
                 populateHeapPatterns(analysisResults.heapPatternCandidates,
-                                     patterns, freeVarsMap, match);
+                                     patterns, freeVarsMap, match, exitIndex);
             });
         map<int, LoopTransformation> loopTransformations =
             findLoopTransformations(analysisResults.loopCounts.loopCounts);
@@ -545,7 +551,8 @@ vector<vector<string>> polynomialTermsOfDegree(vector<smt::SortedVar> variables,
 
 void populateEquationsMap(PolynomialEquations &polynomialEquations,
                           smt::FreeVarsMap freeVarsMap,
-                          MatchInfo<const llvm::Value *> match, size_t degree) {
+                          MatchInfo<const llvm::Value *> match,
+                          ExitIndex exitIndex, size_t degree) {
     VarMap<string> variables;
     for (auto varIt : match.steps.first->state.variables) {
         variables.insert(std::make_pair(varIt.first->getName(), varIt.second));
@@ -567,17 +574,6 @@ void populateEquationsMap(PolynomialEquations &polynomialEquations,
     }
     // Add a constant at the end of each vector
     equation.push_back(1);
-    ExitIndex exitIndex = 0;
-    if (variables.count("exitIndex$1_" + std::to_string(match.mark)) == 1) {
-        exitIndex = unsafeIntVal(variables.at("exitIndex$1_" +
-                                              std::to_string(match.mark)))
-                        .asUnbounded();
-    } else if (variables.count("exitIndex$2_" + std::to_string(match.mark)) ==
-               1) {
-        exitIndex = unsafeIntVal(variables.at("exitIndex$2_" +
-                                              std::to_string(match.mark)))
-                        .asUnbounded();
-    }
     if (polynomialEquations[match.mark].count(exitIndex) == 0) {
         polynomialEquations.at(match.mark)
             .insert(
@@ -631,26 +627,33 @@ void populateEquationsMap(PolynomialEquations &polynomialEquations,
     }
 }
 
+ExitIndex getExitIndex(const MatchInfo<const llvm::Value *> match) {
+    for (auto var : match.steps.first->state.variables) {
+        if (var.first->getName() ==
+            "exitIndex$1_" + std::to_string(match.mark)) {
+            return unsafeIntVal(var.second).asUnbounded();
+        }
+    }
+    for (auto var : match.steps.second->state.variables) {
+        if (var.first->getName() ==
+            "exitIndex$1_" + std::to_string(match.mark)) {
+            return unsafeIntVal(var.second).asUnbounded();
+        }
+    }
+    return 0;
+}
+
 void populateHeapPatterns(
     HeapPatternCandidatesMap &heapPatternCandidates,
     vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
-    smt::FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match) {
+    smt::FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match,
+    ExitIndex exitIndex) {
     VarMap<const llvm::Value *> variables(match.steps.first->state.variables);
     variables.insert(match.steps.second->state.variables.begin(),
                      match.steps.second->state.variables.end());
     // TODO don’t copy heaps
     MonoPair<Heap> heaps = makeMonoPair(match.steps.first->state.heap,
                                         match.steps.second->state.heap);
-    ExitIndex exitIndex = 0;
-    for (auto var : variables) {
-        if (var.first->getName() ==
-            "exitIndex$1_" + std::to_string(match.mark)) {
-            exitIndex = unsafeIntVal(var.second).asUnbounded();
-        } else if (var.first->getName() ==
-                   "exitIndex$2_" + std::to_string(match.mark)) {
-            exitIndex = unsafeIntVal(var.second).asUnbounded();
-        }
-    }
     bool newCandidates =
         heapPatternCandidates[match.mark].count(exitIndex) == 0;
     if (!newCandidates) {
