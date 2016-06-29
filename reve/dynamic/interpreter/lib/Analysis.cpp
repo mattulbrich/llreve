@@ -644,10 +644,10 @@ void populateHeapPatterns(
     ExitIndex exitIndex = 0;
     for (auto var : variables) {
         if (var.first->getName() ==
-            "exitIndex$1" + std::to_string(match.mark)) {
+            "exitIndex$1_" + std::to_string(match.mark)) {
             exitIndex = unsafeIntVal(var.second).asUnbounded();
         } else if (var.first->getName() ==
-                   "exitIndex$2" + std::to_string(match.mark)) {
+                   "exitIndex$2_" + std::to_string(match.mark)) {
             exitIndex = unsafeIntVal(var.second).asUnbounded();
         }
     }
@@ -1032,25 +1032,21 @@ makeInvariantDefinitions(const PolynomialSolutions &solutions,
         vector<SharedSMTRef> exitClauses;
         for (auto exitIt : mapIt.second) {
             ExitIndex exit = exitIt.first;
-            // TODO Figure out why we get to a point where these maps are empty
             SharedSMTRef left = makeInvariantDefinition(
                 exitIt.second.left,
-                patterns.count(mark) > 0 && patterns.at(mark).count(exit) > 0 &&
-                        patterns.at(mark).at(exit).left.hasValue()
+                patterns.at(mark).at(exit).left.hasValue()
                     ? patterns.at(mark).at(exit).left.getValue()
                     : HeapPatternCandidates(),
                 freeVarsMap.at(mark), degree);
             SharedSMTRef right = makeInvariantDefinition(
                 exitIt.second.right,
-                patterns.count(mark) > 0 && patterns.at(mark).count(exit) > 0 &&
-                        patterns.at(mark).at(exit).right.hasValue()
+                patterns.at(mark).at(exit).right.hasValue()
                     ? patterns.at(mark).at(exit).right.getValue()
                     : HeapPatternCandidates(),
                 freeVarsMap.at(mark), degree);
             SharedSMTRef none = makeInvariantDefinition(
                 exitIt.second.none,
-                patterns.count(mark) > 0 && patterns.at(mark).count(exit) > 0 &&
-                        patterns.at(mark).at(exit).none.hasValue()
+                patterns.at(mark).at(exit).none.hasValue()
                     ? patterns.at(mark).at(exit).none.getValue()
                     : HeapPatternCandidates(),
                 freeVarsMap.at(mark), degree);
