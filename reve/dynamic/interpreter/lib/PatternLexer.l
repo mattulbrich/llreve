@@ -12,8 +12,8 @@ using namespace std;
 [ \t\n]         ;
 \(              { return LPAR; }
 \)              { return RPAR; }
-\<              { return LE; }
-\≤              { return LT; }
+\<              { return LT; }
+\≤              { return LE; }
 =               { return EQ; }
 ≥               { return GE; }
 >               { return GT; }
