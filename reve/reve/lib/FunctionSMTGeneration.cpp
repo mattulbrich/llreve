@@ -850,11 +850,34 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
     }
 
     if (main && blockIndex == ENTRY_MARK) {
+        if(SMTGenerationOpts::getInstance().InitPredicate) {
+            vector<SharedSMTRef> args;
+            vector<SortedVar> quantified_vars;
+            for (const auto &arg : freeVars) {
+                string name = arg.name + "_old";
+                if(arg.type == "(Array Int Int)") {
+                    string newvar = "$i" + std::to_string(quantified_vars.size());
+                    quantified_vars.push_back(SortedVar(newvar, "Int"));
+                    args.push_back(makeBinOp("select", stringExpr(name), stringExpr(newvar)));
+                    args.push_back(stringExpr(newvar));
+                } else {
+                    args.push_back(stringExpr(name));
+                }
+            }
+            SharedSMTRef op = std::make_shared<Op>("INIT", args);
+            if(!quantified_vars.empty()) {
+                op = std::make_shared<Forall>(quantified_vars, op);
+            }
+
+            clause = makeBinOp("=>", op, clause);
+
+        } else {
         vector<string> args;
         for (const auto &arg : freeVars) {
             args.push_back(arg.name + "_old");
         }
         clause = makeBinOp("=>", makeOp("IN_INV", args), clause);
+        }
     } else {
         InvariantAttr attr = main ? InvariantAttr::MAIN : InvariantAttr::PRE;
         preVars = fillUpArgs(preVars, freeVarsMap, memory, prog, attr);
