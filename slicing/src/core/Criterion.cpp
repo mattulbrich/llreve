@@ -3,10 +3,14 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Instructions.h"
 
+#include "preprocessing/PromoteAssertSlicedPass.h"
 #include "core/Util.h"
+#include "util/misc.h"
 
 using namespace std;
 using namespace llvm;
+
+const string Criterion::FUNCTION_NAME = "__criterion";
 
 Criterion::Criterion(){}
 
@@ -29,8 +33,7 @@ std::set<llvm::Instruction*> ReturnValueCriterion::getInstructions(llvm::Module&
 	bool multipleFunctions = false;
 	set<Instruction*> instructions;
 	for (Function& function:module) {
-		if (function.getName() != "__criterion"
-			&& function.getName() != "__mark") {
+		if (!Util::isSpecialFunction(function)) {
 			assert(!multipleFunctions && "Can't use slicing after return value for programs with more than one function!");
 		multipleFunctions = true;
 
@@ -51,13 +54,12 @@ std::set<llvm::Instruction*> PresentCriterion::getInstructions(llvm::Module& mod
 	bool multipleCriterions = false;
 	set<Instruction*> instructions;
 	for (Function& function:module) {
-		if (function.getName() != "__criterion"
-			&& function.getName() != "__mark") {
+		if (!Util::isSpecialFunction(function)) {
 
 			for (Instruction& instruction: Util::getInstructions(function)) {
 				if (CallInst* callInst = dyn_cast<CallInst>(&instruction)) {
 					if ((callInst->getCalledFunction() != nullptr) &&
-						(callInst->getCalledFunction()->getName() == "__criterion")){
+						(callInst->getCalledFunction()->getName() == Criterion::FUNCTION_NAME)){
 
 						assert(!multipleCriterions && "Can't use slicing for multiple criterions!");
 						multipleCriterions = true;

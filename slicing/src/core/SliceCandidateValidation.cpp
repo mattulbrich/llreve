@@ -1,6 +1,7 @@
 #include "SliceCandidateValidation.h"
 
 #include "llvm/Transforms/Utils/Cloning.h"
+#include "preprocessing/StripExplicitAssignPass.h"
 
 #include "Opts.h"
 #include "Preprocess.h"
@@ -44,6 +45,12 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 	shared_ptr<Module> programCopy(CloneModule(program));
 	shared_ptr<Module> candiateCopy(CloneModule(candidate));
 
+	llvm::legacy::PassManager PM;
+	PM.add(new StripExplicitAssignPass());
+	PM.run(*programCopy);
+	PM.run(*candiateCopy);
+
+
 	MonoPair<shared_ptr<Module>> modules(programCopy, candiateCopy);
 
 	auto preprocessedFuns = preprocessFunctions(modules, preprocessOpts);
@@ -51,7 +58,7 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 	vector<SharedSMTRef> smtExprs =
 	generateSMT(modules, preprocessedFuns, fileOpts);
 
-	SerializeOpts serializeOpts(outputFileName, false, false, false);
+	SerializeOpts serializeOpts(outputFileName, false, false, false, true);
 	serializeSMT(smtExprs, SMTGenerationOpts::getInstance().MuZ, serializeOpts);
 
 	SatResult satResult = SmtSolver::getInstance().checkSat(outputFileName);

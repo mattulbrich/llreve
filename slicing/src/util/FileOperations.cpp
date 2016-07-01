@@ -1,24 +1,35 @@
 #include "FileOperations.h"
 
-#include "llvm/Support/CommandLine.h"
+#include "preprocessing/AddVariableNamePass.h"
+#include "preprocessing/PromoteAssertSlicedPass.h"
+#include "preprocessing/ExplicitAssignPass.h"
+#include "preprocessing/FixNamesPass.h"
+
+#include "core/Util.h"
+
 #include "Opts.h"
 #include "Compile.h"
+#include "Helper.h"
 
 #include "llvm/IR/LegacyPassManager.h"
-//#include "llvm/IR/IRPrintingPasses.h"
-//#include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
-#include "core/AddVariableNamePass.h"
 #include "llvm/Transforms/IPO.h"
+#include "llvm/Support/CommandLine.h"
 
 #include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/IR/Verifier.h"
+
+#include "llvm/IR/IRPrintingPasses.h"
+#include "llvm/IR/Constants.h"
+
 
 
 using namespace std;
 using namespace llvm;
 using namespace clang;
 
-shared_ptr<llvm::Module> getModuleFromFile(string fileName, string resourceDir, vector<std::string> includes){
+shared_ptr<llvm::Module> getModuleFromSource(string fileName, string resourceDir, vector<std::string> includes){
 	// The CodeGenAction does need an LLVMContext. If none is provided, than
 	// it will create its own AND delet it on destructor. This would render
 	// the produced module unusable. Therefore we need an LLVMContext, which
@@ -37,11 +48,40 @@ shared_ptr<llvm::Module> getModuleFromFile(string fileName, string resourceDir, 
 	shared_ptr<llvm::Module> program = modules.first;
 
 	llvm::legacy::PassManager PM;
+	PM.add(new ExplicitAssignPass());
 	PM.add(llvm::createPromoteMemoryToRegisterPass());
 	PM.add(new AddVariableNamePass());
 	PM.add(llvm::createStripSymbolsPass(true));
+	PM.add(new PromoteAssertSlicedPass());
+	PM.add(new FixNamesPass());
 	PM.run(*program);
+
+	bool hasError = llvm::verifyModule(*program, &errs());
+	assert(!hasError && "Error during initial construction of module!");
+
+	for (Function& function: *program) {
+		for (Instruction& instruction : Util::getInstructions(function)) {
+			for (Use& use:instruction.operands()) {
+				if (isa<UndefValue>(use)){
+					writeModuleToFile("program.llvm", *program);
+					// Todo this is actually an input error and should be handled
+					// by exception.
+					logError("Found undefined Variable, make sure you define all Variables.");
+					abort();
+				}
+			}
+		}
+	}
 
 	shared_ptr<llvm::Module> sliceCandidate = CloneModule(&*program);
 	return program;
+}
+
+void writeModuleToFile(string fileName, llvm::Module& module) {
+	std::error_code EC;
+	raw_fd_ostream programOut(StringRef(fileName), EC, llvm::sys::fs::OpenFlags::F_None);
+
+	llvm::legacy::PassManager PM;
+	PM.add(llvm::createPrintModulePass(programOut));
+	PM.run(module);
 }

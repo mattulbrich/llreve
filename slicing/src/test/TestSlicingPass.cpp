@@ -10,7 +10,7 @@
 #include "llvm/Transforms/Scalar.h"
 
 #include "core/SlicingPass.h"
-#include "core/AddVariableNamePass.h"
+#include "preprocessing/AddVariableNamePass.h"
 #include "util/LambdaFunctionPass.h"
 
 #include "llvm/IR/Verifier.h"
@@ -45,20 +45,20 @@ TEST_CASE("Slicing pass does remove a statement", "[SlicingPass]") {
 	llvm::raw_string_ostream stream(ir);
 
 	llvm::legacy::PassManager PM;
-	PM.add(llvm::createPromoteMemoryToRegisterPass());		
+	PM.add(llvm::createPromoteMemoryToRegisterPass());
 	PM.add(new AddVariableNamePass());
 	PM.add(llvm::createStripSymbolsPass(true));
 	PM.add(new LambdaFunctionPass([&](Function& function)->bool{
 		int i = 0;
 		for(llvm::BasicBlock& block: function) {
-			for(llvm::Instruction& instruction: block) {			
-				i++;				
-				if (i == 13) 
+			for(llvm::Instruction& instruction: block) {
+				i++;
+				if (i == 13)
 				{
 					SlicingPass::toBeSliced(instruction);
 				}
 				stream << i << ": " << instruction << "\n";
-			}			
+			}
 		}
 		return true;
 	}));
