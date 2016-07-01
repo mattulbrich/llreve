@@ -10,6 +10,8 @@
 #include <sstream>
 #include <string>
 
+#include "z3++.h"
+
 namespace smt {
 
 using SExpr = const sexpr::SExpr<std::string>;
@@ -43,6 +45,8 @@ class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
     // Necessary to prevent horn2vmt from fucking up
     virtual std::shared_ptr<const SMTExpr>
     renameDefineFuns(std::string suffix) const;
+    virtual z3::expr toZ3(z3::context &cxt, z3::solver &solver,
+                          std::map<std::string, z3::expr> &nameMap) const;
 };
 
 using SharedSMTRef = std::shared_ptr<const SMTExpr>;

@@ -374,7 +374,13 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         serializeSMT(clauses, false,
                      SerializeOpts(templateFileName, !InstantiateStorage, false,
                                    BoundedFlag, PrettyFlag));
-        string command = "z3 " + templateFileName;
+        std::cout << "Written to " << templateFileName << "\n";
+        z3::context z3Cxt;
+        z3::solver z3Solver(z3Cxt);
+        std::map<std::string, z3::expr> nameMap;
+        for (const auto &clause : clauses) {
+            z3Solver.add(clause->toZ3(z3Cxt, z3Solver, nameMap));
+        }
         struct popen_noshell_pass_to_pclose pclose_arg;
         const char *argv[] = {"z3", templateFileName.c_str(),
                               static_cast<char *>(NULL)};

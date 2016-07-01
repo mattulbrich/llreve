@@ -420,6 +420,12 @@ SharedSMTRef SMTExpr::renameDefineFuns(string /* unused */) const {
     return shared_from_this();
 }
 
+z3::expr SMTExpr::toZ3(z3::context &cxt, z3::solver &solver,
+                       std::map<std::string, z3::expr> &nameMap) const {
+    std::cerr << "Unsupported smt expr\n";
+    exit(1);
+}
+
 SharedSMTRef FunDef::renameDefineFuns(string suffix) const {
     vector<SortedVar> newArgs;
     for (const auto &arg : args) {

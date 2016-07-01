@@ -12,11 +12,12 @@ set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
 
 find_package(LLVM 3.8 REQUIRED CONFIG)
 find_package(GMP)
+find_package(Z3)
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
-include_directories(include ${CMAKE_CURRENT_SOURCE_DIR}/../../reve/include ${LLVM_INCLUDE_DIRS} ${GMP_INCLUDE_DIR})
+include_directories(include ${CMAKE_CURRENT_SOURCE_DIR}/../../reve/include ${LLVM_INCLUDE_DIRS} ${GMP_INCLUDE_DIR} ${Z3_INCLUDE_DIR})
 add_definitions(${LLVM_DEFINITIONS})
 
 find_package(BISON)
@@ -59,6 +60,7 @@ target_link_libraries(reve-analyzer
   libreve-interpreter
   ${GMP_LIBRARIES}
   ${GMPXX_LIBRARIES}
+  ${Z3_LIBRARIES}
   ${FL_LIBRARY}
   popen-noshell
 )
