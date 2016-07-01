@@ -376,7 +376,9 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                                    BoundedFlag, PrettyFlag));
         string command = "z3 " + templateFileName;
         struct popen_noshell_pass_to_pclose pclose_arg;
-        FILE *out = popen_noshell_compat(command.c_str(), "r", &pclose_arg);
+        const char *argv[] = {"z3", templateFileName.c_str(),
+                              static_cast<char *>(NULL)};
+        FILE *out = popen_noshell("z3", argv, "r", &pclose_arg, 0);
         auto result = parseResult(out);
         pclose_noshell(&pclose_arg);
         unlink(templateName);
