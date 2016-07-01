@@ -10,6 +10,7 @@
 #include "core/Util.h"
 #include "preprocessing/PromoteAssertSlicedPass.h"
 #include "core/SliceCandidateValidation.h"
+#include "util/misc.h"
 
 #include <ctime>
 #include <chrono>
@@ -30,12 +31,14 @@ TEST_CASE("Test benchmarks", "[benchmark],[bruteforce]") {
 	benchmarkFiles.push_back("informationflow_cyclic.c");
 	benchmarkFiles.push_back("informationflow_dynamic_override.c");
 	benchmarkFiles.push_back("informationflow_end_of_loop_override.c");
+	benchmarkFiles.push_back("intermediate.c");
 	benchmarkFiles.push_back("redundant_code_simple.c");
 	benchmarkFiles.push_back("requires_path_sensitivity.c");
 	benchmarkFiles.push_back("unreachable_code_nested.c");
 	benchmarkFiles.push_back("unreachable_code_simple.c");
+	benchmarkFiles.push_back("whole_loop_removable.c");
 
-	cout << "file name \t possible slices \t tried slices \t reve calls \t cpu time in s \t wall clock time in s " << endl;
+	cout << "file name \t possible slices \t tried slices \t reve calls \t instructions program \t instructions slice \t cpu time in s \t wall clock time in s " << endl;
 	for( string fileName : benchmarkFiles ){
 		cout << fileName << "\t";
 		cout.flush();
@@ -58,20 +61,39 @@ TEST_CASE("Test benchmarks", "[benchmark],[bruteforce]") {
 		ModulePtr slice = method->computeSlice(criterion);
 		writeModuleToFile("out/" + fileName + ".slice", *slice);
 
+		unsigned instructionsInSlice = 0;
 		bool noAssertSlicedLeft = true;
 		for (Function& fun:*slice) {
-			for(Instruction& instruction : Util::getInstructions(fun)) {
-				bool isAssertSliced = PromoteAssertSlicedPass::isAssertSliced(instruction);
-				noAssertSlicedLeft &= !isAssertSliced;
+			if (!Util::isSpecialFunction(fun)) {
+				for(Instruction& instruction : Util::getInstructions(fun)) {
+					bool isAssertSliced = PromoteAssertSlicedPass::isAssertSliced(instruction);
+					noAssertSlicedLeft &= !isAssertSliced;
+					instructionsInSlice++;
+				}
+			}
+		}
+
+		unsigned instructionsInProgram = 0;
+		for (Function& fun:*program) {
+			if (!Util::isSpecialFunction(fun)) {
+				for(Instruction& instruction : Util::getInstructions(fun)) {
+					instructionsInProgram++;
+				}
 			}
 		}
 		CHECK( noAssertSlicedLeft );
 
-		ValidationResult result = SliceCandidateValidation::validate(&*program, &*slice);
+		ValidationResult result = SliceCandidateValidation::validate(&*program, &*slice, criterion);
 		CHECK(result == ValidationResult::valid);
 
 		double cpuDuration = (std::clock() - startCpuTime) / double(CLOCKS_PER_SEC);
 		std::chrono::duration<double> wctDuration = (std::chrono::system_clock::now() - startWallClockTime);
-		cout << bf->getNumberOfPossibleTries() << "\t" << bf->getNumberOfTries() << "\t" << bf->getNumberOfReveCalls() << "\t" << cpuDuration << "\t" << wctDuration.count() << endl;
+		cout << bf->getNumberOfPossibleTries() << "\t"
+			<< bf->getNumberOfTries() << "\t"
+			<< bf->getNumberOfReveCalls() << "\t"
+			<< instructionsInProgram << "\t"
+			<< instructionsInSlice << "\t"
+			<< cpuDuration << "\t"
+			<< wctDuration.count() << endl;
 	}
 }

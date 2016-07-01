@@ -15,8 +15,10 @@ int foo(int a, int z) {
 	else
 		y = 0;
 
-	if ( y > 0 )
+	if ( y > 0 ) {
 		z = x;
+		__criterion(z);
+	}
 
 	return z;
 }
