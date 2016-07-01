@@ -46,15 +46,19 @@ add_library(libreve-interpreter
   ${FLEX_PatternLexer_OUTPUTS}
   ${BISON_SMTParser_OUTPUTS}
   ${FLEX_SMTLexer_OUTPUTS})
+add_library(popen-noshell
+  "lib/popen_noshell.c"
+  "include/popen_noshell.h")
 add_executable(reve-analyzer src/ReveAnalyzer.cpp ${headers})
 
 target_link_libraries(libreve-interpreter
+  popen-noshell
   libreve
 )
 target_link_libraries(reve-analyzer
-  libreve
   libreve-interpreter
   ${GMP_LIBRARIES}
   ${GMPXX_LIBRARIES}
   ${FL_LIBRARY}
-  )
+  popen-noshell
+)

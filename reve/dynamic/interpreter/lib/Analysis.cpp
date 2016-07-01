@@ -25,6 +25,8 @@
 
 #include "llvm/IR/Verifier.h"
 
+#include "popen_noshell.h"
+
 using llvm::Module;
 using llvm::Optional;
 
@@ -373,9 +375,10 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                      SerializeOpts(templateFileName, !InstantiateStorage, false,
                                    BoundedFlag, PrettyFlag));
         string command = "z3 " + templateFileName;
-        FILE *out = popen(command.c_str(), "r");
+        struct popen_noshell_pass_to_pclose pclose_arg;
+        FILE *out = popen_noshell_compat(command.c_str(), "r", &pclose_arg);
         auto result = parseResult(out);
-        pclose(out);
+        pclose_noshell(&pclose_arg);
         unlink(templateName);
         close(tmpSMTFd);
         if (!result->isSat()) {
