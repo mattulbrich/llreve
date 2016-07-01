@@ -142,6 +142,22 @@ SExprRef VarDecl::toSExpr() const {
     return std::make_unique<Apply<std::string>>("declare-var", std::move(args));
 }
 
+void VarDecl::toZ3(z3::context &cxt, z3::solver &solver,
+                   std::map<std::string, z3::expr> &nameMap,
+                   std::map<std::string, Z3DefineFun> &defineFunMap) const {
+    if (type == "Int") {
+        z3::expr c = cxt.int_const(varName.c_str());
+        auto it = nameMap.insert({varName, c});
+        if (!it.second) {
+            std::cerr << "Replacing a map entry: " << varName << "\n";
+            it.first->second = c;
+        }
+    } else {
+        std::cerr << "Unsupported type\n";
+        exit(1);
+    }
+}
+
 set<string> SMTExpr::uses() const { return {}; }
 
 set<string> Assert::uses() const { return expr->uses(); }
@@ -420,10 +436,138 @@ SharedSMTRef SMTExpr::renameDefineFuns(string /* unused */) const {
     return shared_from_this();
 }
 
-z3::expr SMTExpr::toZ3(z3::context &cxt, z3::solver &solver,
-                       std::map<std::string, z3::expr> &nameMap) const {
-    std::cerr << "Unsupported smt expr\n";
+void SMTExpr::toZ3(z3::context &cxt, z3::solver &solver,
+                   std::map<std::string, z3::expr> &nameMap,
+                   std::map<std::string, Z3DefineFun> &defineFunMap) const {
+    std::cerr << "Unsupported smt toplevel\n";
     exit(1);
+}
+
+z3::expr
+SMTExpr::toZ3Expr(z3::context &cxt, z3::solver &solver,
+                  std::map<std::string, z3::expr> &nameMap,
+                  std::map<std::string, Z3DefineFun> &defineFunMap) const {
+    std::cerr << "Unsupported smt expr\n";
+    std::cerr << *toSExpr();
+    exit(1);
+}
+
+template <typename T>
+z3::expr
+Primitive<T>::toZ3Expr(z3::context &cxt, z3::solver &solver,
+                       std::map<std::string, z3::expr> &nameMap,
+                       std::map<std::string, Z3DefineFun> &defineFunMap) const {
+    std::cerr << "Unsupported primitive\n";
+    exit(1);
+}
+
+template <>
+z3::expr Primitive<std::string>::toZ3Expr(
+    z3::context &cxt, z3::solver &solver,
+    std::map<std::string, z3::expr> &nameMap,
+    std::map<std::string, Z3DefineFun> &defineFunMap) const {
+    if (val == "false") {
+        return cxt.bool_val(false);
+    }
+    if (!val.empty() && isdigit(val.at(0))) {
+        return cxt.int_val(std::stoi(val));
+    }
+
+    if (nameMap.count(val) == 0) {
+        std::cerr << "Couldn’t find " << val << "\n";
+        exit(1);
+    } else {
+        return nameMap.at(val);
+    }
+}
+
+z3::expr Op::toZ3Expr(z3::context &cxt, z3::solver &solver,
+                      std::map<std::string, z3::expr> &nameMap,
+                      std::map<std::string, Z3DefineFun> &defineFunMap) const {
+    if (defineFunMap.count(opName) > 0) {
+        std::cerr << "Instantiating function definition\n";
+    } else {
+        if (opName == "and") {
+            z3::expr result =
+                args.front()->toZ3Expr(cxt, solver, nameMap, defineFunMap);
+            for (size_t i = 1; i < args.size(); ++i) {
+                result =
+                    result &&
+                    args.at(i)->toZ3Expr(cxt, solver, nameMap, defineFunMap);
+            }
+            return result;
+        } else if (opName == "or") {
+            z3::expr result =
+                args.front()->toZ3Expr(cxt, solver, nameMap, defineFunMap);
+            for (size_t i = 1; i < args.size(); ++i) {
+                result =
+                    result ||
+                    args.at(i)->toZ3Expr(cxt, solver, nameMap, defineFunMap);
+            }
+            return result;
+        } else if (opName == "+") {
+            z3::expr result =
+                args.front()->toZ3Expr(cxt, solver, nameMap, defineFunMap);
+            for (size_t i = 1; i < args.size(); ++i) {
+                result =
+                    result +
+                    args.at(i)->toZ3Expr(cxt, solver, nameMap, defineFunMap);
+            }
+            return result;
+        } else if (opName == "*") {
+            z3::expr result =
+                args.front()->toZ3Expr(cxt, solver, nameMap, defineFunMap);
+            for (size_t i = 1; i < args.size(); ++i) {
+                result =
+                    result *
+                    args.at(i)->toZ3Expr(cxt, solver, nameMap, defineFunMap);
+            }
+            return result;
+        } else if (opName == "=") {
+            assert(args.size() == 2);
+            z3::expr firstArg =
+                args.at(0)->toZ3Expr(cxt, solver, nameMap, defineFunMap);
+            z3::expr secondArg =
+                args.at(1)->toZ3Expr(cxt, solver, nameMap, defineFunMap);
+            return firstArg == secondArg;
+        } else if (opName == ">=") {
+            assert(args.size() == 2);
+            z3::expr firstArg =
+                args.at(0)->toZ3Expr(cxt, solver, nameMap, defineFunMap);
+            z3::expr secondArg =
+                args.at(1)->toZ3Expr(cxt, solver, nameMap, defineFunMap);
+            return firstArg >= secondArg;
+        } else if (opName == ">") {
+            assert(args.size() == 2);
+            z3::expr firstArg =
+                args.at(0)->toZ3Expr(cxt, solver, nameMap, defineFunMap);
+            z3::expr secondArg =
+                args.at(1)->toZ3Expr(cxt, solver, nameMap, defineFunMap);
+            return firstArg >= secondArg;
+        } else {
+            std::cerr << "Unsupported opname " << opName << "\n";
+            exit(1);
+        }
+    }
+}
+
+void FunDef::toZ3(z3::context &cxt, z3::solver &solver,
+                  std::map<std::string, z3::expr> &nameMap,
+                  std::map<std::string, Z3DefineFun> &defineFunMap) const {
+    z3::expr_vector vars(cxt);
+    for (const auto &arg : args) {
+        if (arg.type == "Int") {
+            z3::expr c = cxt.int_const(arg.name.c_str());
+            vars.push_back(c);
+            auto it = nameMap.insert({arg.name, c});
+            if (!it.second) {
+                std::cerr << "Replacing a map entry: " << arg.name << "\n";
+                it.first->second = c;
+            }
+        }
+    }
+    z3::expr z3Body = body->toZ3Expr(cxt, solver, nameMap, defineFunMap);
+    defineFunMap.insert({funName, {vars, z3Body}});
 }
 
 SharedSMTRef FunDef::renameDefineFuns(string suffix) const {

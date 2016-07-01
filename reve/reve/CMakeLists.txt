@@ -10,6 +10,7 @@ set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
 
 find_package(LLVM 3.8 REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
+find_package(Z3)
 
 exec_program(llvm-config ARGS --cxxflags OUTPUT_VARIABLE LLVM_CXXFLAGS)
 separate_arguments(LLVM_CXXFLAGS)
@@ -71,6 +72,7 @@ target_link_libraries(libreve
   clangEdit
   clangLex
   ${llvm_libs}
+  ${Z3_LIBRARIES}
   )
 target_link_libraries(reve
   libreve

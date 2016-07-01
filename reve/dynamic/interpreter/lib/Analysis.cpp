@@ -378,8 +378,9 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         z3::context z3Cxt;
         z3::solver z3Solver(z3Cxt);
         std::map<std::string, z3::expr> nameMap;
+        std::map<std::string, smt::Z3DefineFun> defineFunMap;
         for (const auto &clause : clauses) {
-            z3Solver.add(clause->toZ3(z3Cxt, z3Solver, nameMap));
+            clause->toZ3(z3Cxt, z3Solver, nameMap, defineFunMap);
         }
         struct popen_noshell_pass_to_pclose pclose_arg;
         const char *argv[] = {"z3", templateFileName.c_str(),
