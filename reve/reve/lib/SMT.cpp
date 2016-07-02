@@ -565,9 +565,19 @@ Op::toZ3Expr(z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
             z3::expr e = args.at(0)->toZ3Expr(cxt, nameMap, defineFunMap);
             return !e;
         } else if (opName == "-") {
-            assert(args.size() == 1);
-            z3::expr e = args.at(0)->toZ3Expr(cxt, nameMap, defineFunMap);
-            return -e;
+            if (args.size() == 1) {
+                z3::expr e = args.at(0)->toZ3Expr(cxt, nameMap, defineFunMap);
+                return -e;
+            } else if (args.size() == 2) {
+                z3::expr firstArg =
+                    args.at(0)->toZ3Expr(cxt, nameMap, defineFunMap);
+                z3::expr secondArg =
+                    args.at(1)->toZ3Expr(cxt, nameMap, defineFunMap);
+                return firstArg - secondArg;
+            } else {
+                std::cerr << "Cannot subtract more than two arguments\n";
+                exit(1);
+            }
         } else if (opName == "ite") {
             assert(args.size() == 3);
             z3::expr cond = args.at(0)->toZ3Expr(cxt, nameMap, defineFunMap);

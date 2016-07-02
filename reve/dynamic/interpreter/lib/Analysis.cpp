@@ -408,7 +408,7 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     return clauses;
 }
 
-ModelValues parseZ3Model(const z3::context& z3Cxt, const z3::model &model,
+ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
                          const std::map<std::string, z3::expr> &nameMap,
                          const smt::FreeVarsMap &freeVarsMap) {
     ModelValues modelValues;
