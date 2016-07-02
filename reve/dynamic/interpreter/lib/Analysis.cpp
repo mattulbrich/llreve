@@ -287,6 +287,8 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     size_t degree = DegreeFlag;
     ModelValues vals = initialModelValues(functions);
     auto instrNameMap = instructionNameMap(functions);
+    z3::context z3Cxt;
+    z3::solver z3Solver(z3Cxt);
     do {
         int cexMark = static_cast<int>(vals.values.at("INV_INDEX").get_si());
         // reconstruct input from counterexample
@@ -368,8 +370,7 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                                       invariantCandidates);
         vector<SharedSMTRef> clauses =
             generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
-        z3::context z3Cxt;
-        z3::solver z3Solver(z3Cxt);
+        z3Solver.reset();
         std::map<std::string, z3::expr> nameMap;
         std::map<std::string, smt::Z3DefineFun> defineFunMap;
         for (const auto &clause : clauses) {
