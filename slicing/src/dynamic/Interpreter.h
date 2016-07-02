@@ -1,102 +1,68 @@
 #pragma once
 
 #include "llvm/ADT/APInt.h"
+#include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instruction.h"
 
+#include <initializer_list>
+#include <list>
 #include <unordered_map>
-
-class Integer {
-	
-	public:
-	
-	Integer(llvm::APInt& apInt) : constant(false), pValue(&apInt) {}
-	Integer(llvm::ConstantInt const& constInt) :
-		constant(true),
-		pValue  (new llvm::APInt(constInt.getValue())) {}
-	~Integer(void);
-	
-	private:
-	
-	bool         const constant;
-	llvm::APInt* const pValue;
-};
-
-// The input signature equals the function signature
-class FunctionInput {
-	
-	public:
-	
-	llvm::Function const& func;
-};
-
-// This class provides indices for each value in a function, that are used in a
-// concrete function state
-class FunctionStateTemplate {
-	
-	public:
-	
-	llvm::Function const& func;
-	
-	FunctionStateTemplate(llvm::Function const& func);
-	
-	unsigned int getValueCount(void) const;
-	
-	unsigned int operator[](llvm::Value const& value) const;
-	
-	private:
-	
-	std::unordered_map<llvm::Value const*, unsigned int> indices;
-};
-
-// The state signature is the union of the input signature and all variables
-// that occure within the function
-class FunctionState {
-	
-	public:
-	
-	FunctionStateTemplate const& stateTemplate;
-	
-	FunctionState(FunctionStateTemplate const& stateTemplate);
-	~FunctionState(void);
-	
-	llvm::APInt& getUIntValue(llvm::Value const& value);
-	
-	private:
-	
-	// Array which values are of type APInt or APSInt
-	void** values;
-};
+#include <vector>
 
 class Interpreter {
 	
 	public:
 	
 	llvm::Function const& func;
+	llvm::APInt    const  valueVoid;
+	llvm::APInt    const  valueUndef;
 	
-	Interpreter(FunctionInput const& input);
+	Interpreter(
+		llvm::Function const& func,
+		uint64_t       const  input[]);
+	~Interpreter(void);
 	
-	Interpreter& executeNextInstruction(void);
+	// Return value indicates whether the interpretation has termated before
+	// 'maxStepCount' has been reached
+	bool execute(
+		unsigned long const maxStepCount = static_cast<unsigned long>(-1));
 	
-	// Provides the current state
-	FunctionState const& getState(void) const;
+	// Return value indicates whether the execution has changed the state
+	bool executeNextInstruction(void);
 	
 	// Provide the instructions that caused the current state and that will be
 	// executed in this state
 	llvm::Instruction const* getRecentInstruction(void) const;
 	llvm::Instruction const* getNextInstruction  (void) const;
 	
+	llvm::APInt const* getReturnValue(void) const;
+	
+	llvm::APInt const& operator[](llvm::Value const& value) const;
+	
 	private:
 	
-	llvm::Instruction const* pRecentInst;
-	llvm::Instruction const* pNextInst;
-	FunctionState     const* pCurrentState;
+	llvm::BasicBlock::const_iterator _instIt;
 	
-	Integer& resolveValue(llvm::Value const* pVal);
+	llvm::Instruction const* _pRecentInst;
+	llvm::Instruction const* _pNextInst;
+	llvm::APInt       const* _pRetValue;
+	
+	std::unordered_map<llvm::Value const*, llvm::APInt const*>         _state;
+	std::list<std::pair<llvm::Instruction const*, llvm::APInt const*>> _trace;
+	
+	unsigned int getValueBitWidth(llvm::Value const& value) const;
+	bool         isIntValue      (llvm::Value const& value) const;
+	llvm::APInt  resolveValue    (llvm::Value const* pVal)  const;
+	
+	void moveToNextInstruction(void);
 	
 	// There is special function for every instruction type
-	void executeBinaryOperator(void);
-	void executeBranchInst(void);
-	void executePHINode(void);
+	llvm::APInt executeBinaryOperator(void);
+	void        executeBranchInst(void);
+	llvm::APInt executeCallInst(void);
+	bool        executeICmpInst(void);
+	llvm::APInt executePHINode(void);
+	void        executeReturnInst(void);
 };
