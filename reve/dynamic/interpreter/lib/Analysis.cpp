@@ -368,13 +368,6 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                                       invariantCandidates);
         vector<SharedSMTRef> clauses =
             generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
-        char templateName[] = "/tmp/tmpsmt_XXXXXX.smt2";
-        int tmpSMTFd = mkstemps(templateName, 5);
-        string templateFileName(templateName);
-        serializeSMT(clauses, false,
-                     SerializeOpts(templateFileName, !InstantiateStorage, false,
-                                   BoundedFlag, PrettyFlag));
-        std::cout << "Written to " << templateFileName << "\n";
         z3::context z3Cxt;
         z3::solver z3Solver(z3Cxt);
         std::map<std::string, z3::expr> nameMap;
@@ -382,19 +375,24 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         for (const auto &clause : clauses) {
             clause->toZ3(z3Cxt, z3Solver, nameMap, defineFunMap);
         }
-        struct popen_noshell_pass_to_pclose pclose_arg;
-        const char *argv[] = {"z3", templateFileName.c_str(),
-                              static_cast<char *>(NULL)};
-        FILE *out = popen_noshell("z3", argv, "r", &pclose_arg, 0);
-        auto result = parseResult(out);
-        pclose_noshell(&pclose_arg);
-        unlink(templateName);
-        close(tmpSMTFd);
-        if (!result->isSat()) {
+        bool unsat = false;
+        switch (z3Solver.check()) {
+        case z3::unsat:
+            std::cout << "Unsat\n";
+            unsat = true;
+            break;
+        case z3::sat:
+            std::cout << "Sat\n";
+            break;
+        case z3::unknown:
+            std::cout << "Fuck why is this unknown\n";
+            exit(1);
+        }
+        if (unsat) {
             break;
         }
-        vals = parseValues(std::static_pointer_cast<Sat>(result)->model);
-        // getline(std::cin, tmp);
+        z3::model z3Model = z3Solver.get_model();
+        vals = parseZ3Model(z3Cxt, z3Model, nameMap, freeVarsMap);
     } while (1 /* sat */);
     auto invariantCandidates = makeInvariantDefinitions(
         findSolutions(analysisResults.polynomialEquations),
@@ -407,6 +405,21 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
 
     return clauses;
+}
+
+ModelValues parseZ3Model(const z3::context& z3Cxt, const z3::model &model,
+                         const std::map<std::string, z3::expr> &nameMap,
+                         const smt::FreeVarsMap &freeVarsMap) {
+    ModelValues modelValues;
+
+    int mark = model.eval(nameMap.at("INV_INDEX")).get_numeral_int();
+    modelValues.values.insert({"INV_INDEX", mark});
+    for (const auto &var : freeVarsMap.at(mark)) {
+        std::string stringVal = Z3_get_numeral_string(
+            z3Cxt, model.eval(nameMap.at(var.name + "_old")));
+        modelValues.values.insert({var.name + "_old", mpz_class(stringVal)});
+    }
+    return modelValues;
 }
 
 bool applyLoopTransformation(
