@@ -24,42 +24,95 @@ using HeapAddress = Integer;
 enum class VarType { Int, Bool };
 const VarName ReturnName = nullptr;
 
-struct VarVal {
-    virtual VarType getType() const = 0;
-    virtual nlohmann::json toJSON() const = 0;
-    virtual cbor_item_t *toCBOR() const = 0;
-    virtual ~VarVal();
-    VarVal(const VarVal &other) = default;
-    VarVal() = default;
-    VarVal &operator=(const VarVal &other) = default;
-    virtual VarIntVal unsafeIntVal() const = 0;
+VarType getType(const VarIntVal &v);
+nlohmann::json toJSON(const VarIntVal &v);
+VarIntVal unsafeIntVal(const VarIntVal &v);
+const VarIntVal &unsafeIntValRef(const VarIntVal &v);
+bool unsafeBool(const VarIntVal &v);
+
+VarType getType(const bool &b);
+nlohmann::json toJSON(const bool &b);
+VarIntVal unsafeIntVal(const bool &b);
+const VarIntVal &unsafeIntValRef(const bool &b);
+bool unsafeBool(const bool &b);
+
+// This technique is from the talk “Inheritance is The Base Class of Evil”
+// https://channel9.msdn.com/Events/GoingNative/2013/Inheritance-Is-The-Base-Class-of-Evil
+// It gives us value semantics and polymorphism at the same time
+class VarVal {
+  public:
+    template <typename T> VarVal(T x) : self_(new model<T>(std::move(x))) {}
+    /* This is only here to make it possible to use [] on maps */
+    VarVal() : self_(nullptr) {}
+
+    VarVal(const VarVal &x) {
+        if (x.self_) {
+            self_ = std::unique_ptr<const VarValConcept>(x.self_->copy_());
+        } else {
+            self_ = nullptr;
+        }
+    }
+    VarVal(VarVal &&) noexcept = default;
+
+    VarVal &operator=(const VarVal &x) {
+        VarVal tmp(x);
+        *this = std::move(tmp);
+        return *this;
+    }
+    VarVal &operator=(VarVal &&) noexcept = default;
+    VarVal &operator=(VarIntVal x) {
+        self_.reset(new model<VarIntVal>(std::move(x)));
+        return *this;
+    }
+    VarVal &operator=(bool x) {
+        self_.reset(new model<bool>(std::move(x)));
+        return *this;
+    }
+
+    friend VarType getType(const VarVal &x) { return x.self_->getType_(); }
+    friend nlohmann::json toJSON(const VarVal &x) { return x.self_->toJSON_(); }
+    friend VarIntVal unsafeIntVal(const VarVal &x) {
+        return x.self_->unsafeIntVal_();
+    }
+    friend const VarIntVal &unsafeIntValRef(const VarVal &x) {
+        return x.self_->unsafeIntValRef_();
+    }
+    friend bool unsafeBool(const VarVal &x) { return x.self_->unsafeBool_(); }
+
+  private:
+    struct VarValConcept {
+        // The virtual destructor exists purely to have something which can be
+        // implemented in a source file to pin the vtable
+        virtual ~VarValConcept();
+        VarValConcept() = default;
+        VarValConcept(const VarValConcept &x) = default;
+        virtual VarValConcept *copy_() const = 0;
+        virtual VarType getType_() const = 0;
+        virtual nlohmann::json toJSON_() const = 0;
+        virtual VarIntVal unsafeIntVal_() const = 0;
+        virtual const VarIntVal &unsafeIntValRef_() const = 0;
+        virtual bool unsafeBool_() const = 0;
+    };
+    template <typename T> struct model : VarValConcept {
+        model(T x) : data_(std::move(x)) {}
+        VarValConcept *copy_() const override { return new model(*this); }
+        VarType getType_() const override { return getType(data_); }
+        nlohmann::json toJSON_() const override { return toJSON(data_); }
+        VarIntVal unsafeIntVal_() const override { return unsafeIntVal(data_); }
+        const VarIntVal &unsafeIntValRef_() const override {
+            return unsafeIntValRef(data_);
+        }
+        bool unsafeBool_() const override { return unsafeBool(data_); }
+        T data_;
+    };
+
+    std::unique_ptr<const VarValConcept> self_;
 };
 
 bool varValEq(const VarVal &lhs, const VarVal &rhs);
 
-std::shared_ptr<VarVal> cborToVarVal(const cbor_item_t *item);
-
-struct VarInt : VarVal {
-    VarIntVal val;
-    VarType getType() const override;
-    nlohmann::json toJSON() const override;
-    cbor_item_t *toCBOR() const override;
-    VarInt(VarIntVal val) : val(val) {}
-    VarInt() : val(0) {}
-    VarIntVal unsafeIntVal() const override;
-};
-
-struct VarBool : VarVal {
-    bool val;
-    VarType getType() const override;
-    nlohmann::json toJSON() const override;
-    cbor_item_t *toCBOR() const override;
-    VarBool(bool val) : val(val) {}
-    VarIntVal unsafeIntVal() const override;
-};
-
 using Heap = std::map<HeapAddress, VarIntVal>;
-template <typename T> using VarMap = std::map<T, std::shared_ptr<VarVal>>;
+template <typename T> using VarMap = std::map<T, VarVal>;
 using FastVarMap = VarMap<const llvm::Value *>;
 
 template <typename T> struct State {
@@ -67,7 +120,9 @@ template <typename T> struct State {
     // If an address is not in the map, it’s value is zero
     // Note that the values in the map can also be zero
     Heap heap;
-    State(VarMap<T> variables, Heap heap) : variables(variables), heap(heap) {}
+    Integer heapBackground;
+    State(VarMap<T> variables, Heap heap, Integer heapBackground)
+        : variables(variables), heap(heap), heapBackground(heapBackground) {}
     State() = default;
 };
 
@@ -84,10 +139,7 @@ template <typename T> struct Step {
     Step &operator=(const Step &other) = default;
     virtual nlohmann::json
     toJSON(std::function<std::string(T)> varName) const = 0;
-    virtual cbor_item_t *toCBOR() const = 0;
 };
-
-std::shared_ptr<Step<std::string>> cborToStep(const cbor_item_t *item);
 
 template <typename T> struct BlockStep;
 
@@ -95,12 +147,12 @@ template <typename T> struct Call : Step<T> {
     std::string functionName;
     State<T> entryState;
     State<T> returnState;
-    std::vector<std::shared_ptr<BlockStep<T>>> steps;
+    std::vector<BlockStep<T>> steps;
     // Did we exit because we ran out of steps?
     bool earlyExit;
     uint32_t blocksVisited;
     Call(std::string functionName, State<T> entryState, State<T> returnState,
-         std::vector<std::shared_ptr<BlockStep<T>>> steps, bool earlyExit,
+         std::vector<BlockStep<T>> steps, bool earlyExit,
          uint32_t blocksVisited)
         : functionName(std::move(functionName)),
           entryState(std::move(entryState)),
@@ -114,23 +166,16 @@ template <typename T> struct Call : Step<T> {
         j["return_state"] = stateToJSON<T>(returnState, varName);
         std::vector<nlohmann::json> jsonSteps;
         for (auto step : steps) {
-            jsonSteps.push_back(step->toJSON(varName));
+            jsonSteps.push_back(step.toJSON(varName));
         }
         j["steps"] = jsonSteps;
         j["early_exit"] = earlyExit;
         j["blocks_visited"] = blocksVisited;
         return j;
     }
-    cbor_item_t *toCBOR() const override {
-        logError("Only specialized version cab be serialized to cbor\n");
-        return nullptr;
-    }
 };
 
 using FastCall = Call<const llvm::Value *>;
-template <> cbor_item_t *FastCall::toCBOR() const;
-
-Call<std::string> cborToCall(const cbor_item_t *item);
 
 template <typename T> struct BlockStep : Step<T> {
     BlockName blockName;
@@ -152,16 +197,7 @@ template <typename T> struct BlockStep : Step<T> {
         j["calls"] = jsonCalls;
         return j;
     }
-    cbor_item_t *toCBOR() const override {
-        logError("Only specialized version can be serialized to cbor\n");
-        return nullptr;
-    }
 };
-
-template <> cbor_item_t *BlockStep<const llvm::Value *>::toCBOR() const;
-
-std::shared_ptr<BlockStep<std::string>>
-cborToBlockStep(const cbor_item_t *item);
 
 template <typename T> struct BlockUpdate {
     // State after phi nodes
@@ -193,15 +229,26 @@ struct TerminatorUpdate {
 
 /// The variables in the entry state will be renamed appropriately for both
 /// programs
-MonoPair<FastCall> interpretFunctionPair(
-    MonoPair<const llvm::Function *> funs,
-    MonoPair<std::map<const llvm::Value *, std::shared_ptr<VarVal>>> variables,
-    MonoPair<Heap> heaps, uint32_t maxSteps);
+MonoPair<FastCall>
+interpretFunctionPair(MonoPair<const llvm::Function *> funs,
+                      MonoPair<std::map<const llvm::Value *, VarVal>> variables,
+                      MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds,
+                      uint32_t maxSteps);
+MonoPair<FastCall>
+interpretFunctionPair(MonoPair<const llvm::Function *> funs,
+                      MonoPair<std::map<const llvm::Value *, VarVal>> variables,
+                      MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds,
+                      MonoPair<const llvm::BasicBlock *> startBlocks,
+                      uint32_t maxSteps);
 auto interpretFunction(const llvm::Function &fun, FastState entry,
                        uint32_t maxSteps) -> FastCall;
+auto interpretFunction(const llvm::Function &fun, FastState entry,
+                       const llvm::BasicBlock *bb, uint32_t maxSteps)
+    -> FastCall;
 auto interpretBlock(const llvm::BasicBlock &block,
                     const llvm::BasicBlock *prevBlock, FastState &state,
-                    uint32_t maxStep) -> BlockUpdate<const llvm::Value *>;
+                    bool skipPhi, uint32_t maxStep)
+    -> BlockUpdate<const llvm::Value *>;
 auto interpretPHI(const llvm::PHINode &instr, FastState &state,
                   const llvm::BasicBlock *prevBlock) -> void;
 auto interpretInstruction(const llvm::Instruction *instr, FastState &state)
@@ -209,7 +256,7 @@ auto interpretInstruction(const llvm::Instruction *instr, FastState &state)
 auto interpretTerminator(const llvm::TerminatorInst *instr, FastState &state)
     -> TerminatorUpdate;
 auto resolveValue(const llvm::Value *val, const FastState &state,
-                  const llvm::Type *type) -> std::shared_ptr<VarVal>;
+                  const llvm::Type *type) -> VarVal;
 auto interpretICmpInst(const llvm::ICmpInst *instr, FastState &state) -> void;
 auto interpretIntPredicate(const llvm::ICmpInst *instr,
                            llvm::CmpInst::Predicate pred, const VarIntVal &i0,
@@ -223,14 +270,11 @@ auto interpretBoolBinOp(const llvm::BinaryOperator *instr,
                         llvm::Instruction::BinaryOps op, bool b0, bool b1,
                         FastState &state) -> void;
 
-cbor_item_t *stateToCBOR(FastState state);
-State<std::string> cborToState(const cbor_item_t *item);
-
-template <typename A, typename T> VarInt resolveGEP(T &gep, State<A> state) {
-    std::shared_ptr<VarVal> val = resolveValue(
-        gep.getPointerOperand(), state, gep.getPointerOperand()->getType());
-    assert(val->getType() == VarType::Int);
-    VarIntVal offset = std::static_pointer_cast<VarInt>(val)->val;
+template <typename A, typename T> VarIntVal resolveGEP(T &gep, State<A> state) {
+    VarVal val = resolveValue(gep.getPointerOperand(), state,
+                              gep.getPointerOperand()->getType());
+    assert(getType(val) == VarType::Int);
+    VarIntVal offset = unsafeIntVal(val);
     const auto type = gep.getSourceElementType();
     std::vector<llvm::Value *> indices;
     for (auto ix = gep.idx_begin(), e = gep.idx_end(); ix != e; ++ix) {
@@ -250,25 +294,13 @@ template <typename A, typename T> VarInt resolveGEP(T &gep, State<A> state) {
         const auto indexedType = llvm::GetElementPtrInst::getIndexedType(
             type, llvm::ArrayRef<llvm::Value *>(indices));
         const auto size = typeSize(indexedType, mod->getDataLayout());
-        std::shared_ptr<VarVal> val =
-            resolveValue(*ix, state, (*ix)->getType());
-        assert(val->getType() == VarType::Int);
-        offset +=
-            Integer(mpz_class(size)).asPointer() *
-            Integer(std::static_pointer_cast<VarInt>(val)->val.asUnbounded())
-                .asPointer();
+        VarVal val = resolveValue(*ix, state, (*ix)->getType());
+        assert(getType(val) == VarType::Int);
+        offset += Integer(mpz_class(size)).asPointer() *
+                  Integer(unsafeIntVal(val).asUnbounded()).asPointer();
     }
-    return VarInt(offset);
+    return offset;
 }
-
-std::string cborToString(const cbor_item_t *item);
-VarIntVal cborToVarIntVal(const cbor_item_t *item);
-
-template <typename T>
-std::vector<T> cborToVector(const cbor_item_t *item,
-                            std::function<T(const cbor_item_t *)> fun);
-std::map<std::string, const cbor_item_t *>
-cborToKeyMap(const cbor_item_t *item);
 
 std::string valueName(const llvm::Value *val);
 

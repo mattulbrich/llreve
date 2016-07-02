@@ -5,6 +5,7 @@
 #include "HeapPattern.h"
 #include "Interpreter.h"
 #include "MarkAnalysis.h"
+#include "Model.h"
 #include "MonoPair.h"
 #include "Opts.h"
 #include "ParseInput.h"
@@ -16,8 +17,6 @@
 #include <thread>
 
 extern std::string InputFileFlag;
-
-extern bool InstantiateStorage;
 
 enum class LoopInfo {
     Left,  // The left call is looping alone
@@ -40,6 +39,14 @@ template <typename T> struct LoopInfoData {
         : left(left), right(right), none(none) {}
 };
 
+template <typename T1, typename T2>
+void zipWith(LoopInfoData<T1> &loop1, LoopInfoData<T2> &loop2,
+             std::function<void(T1 &, T2 &)> f) {
+    f(loop1.left, loop2.left);
+    f(loop1.right, loop2.right);
+    f(loop1.none, loop2.none);
+}
+
 using ExitIndex = mpz_class;
 
 using BlockNameMap = std::map<std::string, std::set<int>>;
@@ -57,13 +64,19 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
        std::string mainFunctionName,
        std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
        FileOptions fileopts);
+std::vector<smt::SharedSMTRef> cegarDriver(
+    MonoPair<std::shared_ptr<llvm::Module>> modules,
+    std::vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
+    std::string mainFunctionName,
+    std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
+    FileOptions fileopts);
 llvm::Optional<MonoPair<PreprocessedFunction>>
 findFunction(const std::vector<MonoPair<PreprocessedFunction>> functions,
              std::string functionName);
-Heap randomHeap(
-    const llvm::Function &fun,
-    std::map<const llvm::Value *, std::shared_ptr<VarVal>> &variableValues,
-    int lengthBound, int valLowerBound, int valUpperBound, unsigned int *seedp);
+Heap randomHeap(const llvm::Function &fun,
+                const std::map<const llvm::Value *, VarVal> &variableValues,
+                int lengthBound, int valLowerBound, int valUpperBound,
+                unsigned int *seedp);
 
 using Equality = MonoPair<std::string>;
 using PolynomialEquations =
@@ -100,8 +113,8 @@ template <typename T> struct MatchInfo {
 
 // Walks through the two calls and calls the function for every pair of matching
 // marks
-bool normalMarkBlock(const BlockNameMap &map, BlockName &blockName);
-void debugAnalysis(MatchInfo<std::string> match);
+bool normalMarkBlock(const BlockNameMap &map, const BlockName &blockName);
+void debugAnalysis(MatchInfo<const llvm::Value *> match);
 void dumpLoopCounts(const LoopCountMap &loopCounts);
 std::map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map);
 struct LoopCountsAndMark {
@@ -147,11 +160,13 @@ BoundsMap updateBounds(
     const std::map<int, std::map<std::string, Bound<VarIntVal>>> &update);
 void populateEquationsMap(PolynomialEquations &equationsMap,
                           smt::FreeVarsMap freeVarsMap,
-                          MatchInfo<const llvm::Value *> match, size_t degree);
+                          MatchInfo<const llvm::Value *> match,
+                          ExitIndex exitIndex, size_t degree);
 void populateHeapPatterns(
     HeapPatternCandidatesMap &heapPatternCandidates,
     std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
-    smt::FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match);
+    smt::FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match,
+    ExitIndex exitIndex);
 void dumpPolynomials(const PolynomialEquations &equationsMap,
                      const smt::FreeVarsMap &freeVarsmap);
 void dumpHeapPatterns(const HeapPatternCandidatesMap &heapPatternsMap);
@@ -176,12 +191,22 @@ std::map<int,
          std::map<ExitIndex, LoopInfoData<std::set<MonoPair<std::string>>>>>
 extractEqualities(const PolynomialEquations &equations,
                   const std::vector<std::string> &freeVars);
-void iterateDeserialized(
-    std::string directory,
-    std::function<void(MonoPair<Call<std::string>> &)> callback);
 
-std::map<const llvm::Value *, std::shared_ptr<VarVal>>
-getVarMap(const llvm::Function *fun, std::vector<mpz_class> vals);
+std::map<const llvm::Value *, VarVal> getVarMap(const llvm::Function *fun,
+                                                std::vector<mpz_class> vals);
+
+std::map<std::string, const llvm::Value *>
+instructionNameMap(const llvm::Function *fun);
+std::map<std::string, const llvm::Value *>
+instructionNameMap(MonoPair<const llvm::Function *> funs);
+
+MonoPair<std::map<const llvm::Value *, VarVal>> getVarMapFromModel(
+    std::map<std::string, const llvm::Value *> instructionNameMap,
+    std::vector<smt::SortedVar> freeVars,
+    std::map<std::string, mpz_class> vals);
+Heap getHeapFromModel(const ArrayVal &ar);
+MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays);
+MonoPair<Integer> getHeapBackgrounds(std::map<std::string, ArrayVal> arrays);
 
 template <typename T>
 void workerThread(
@@ -192,9 +217,8 @@ void workerThread(
     // Each thread has it’s own seed
     unsigned int seedp = static_cast<unsigned int>(time(NULL));
     for (WorkItem item = q.pop(); item.counter >= 0; item = q.pop()) {
-        MonoPair<std::map<const llvm::Value *, std::shared_ptr<VarVal>>>
-            variableValues = makeMonoPair<
-                std::map<const llvm::Value *, std::shared_ptr<VarVal>>>({}, {});
+        MonoPair<std::map<const llvm::Value *, VarVal>> variableValues =
+            makeMonoPair<std::map<const llvm::Value *, VarVal>>({}, {});
         variableValues.first = getVarMap(funs.first, item.vals.first);
         variableValues.second = getVarMap(funs.second, item.vals.second);
         if (!item.heapSet) {
@@ -203,8 +227,10 @@ void workerThread(
             item.heaps.first = heap;
             item.heaps.second = heap;
         }
+        MonoPair<Integer> heapBackgrounds = item.heapBackgrounds.map<Integer>(
+            [](auto b) { return Integer(b); });
         MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
-            funs, std::move(variableValues), item.heaps, 1000);
+            funs, std::move(variableValues), item.heaps, heapBackgrounds, 1000);
         callback(std::move(calls), state);
     }
 }
@@ -234,19 +260,19 @@ void iterateTracesInRange(
            funs.second->getArgumentList().size());
     if (!InputFileFlag.empty()) {
         std::vector<WorkItem> items = parseInput(InputFileFlag);
-        for (const auto& item : items) {
+        for (const auto &item : items) {
             q.push(item);
         }
     } else {
         for (const auto &vals : Range(lowerBound, upperBound,
                                       funs.first->getArgumentList().size())) {
-            q.push({{vals, vals}, {{}, {}}, false, counter});
+            q.push({{vals, vals}, {0, 0}, {{}, {}}, false, counter});
             ++counter;
         }
     }
     for (size_t i = 0; i < threads.size(); ++i) {
         // Each of these items will terminate exactly one thread
-        q.push({{{}, {}}, {{}, {}}, false, -1});
+        q.push({{{}, {}}, {0, 0}, {{}, {}}, false, -1});
     }
     for (auto &t : threads) {
         t.join();
@@ -257,7 +283,7 @@ void iterateTracesInRange(
 }
 void dumpLoopTransformations(
     std::map<int, LoopTransformation> loopTransformations);
-void applyLoopTransformation(
+bool applyLoopTransformation(
     MonoPair<PreprocessedFunction> &functions,
     const std::map<int, LoopTransformation> &loopTransformations,
     const MonoPair<BidirBlockMarkMap> &mark);
@@ -268,10 +294,8 @@ template <typename T>
 void analyzeExecution(const MonoPair<Call<T>> &calls,
                       MonoPair<BlockNameMap> nameMaps,
                       std::function<void(MatchInfo<T>)> fun) {
-    const std::vector<std::shared_ptr<BlockStep<T>>> &steps1 =
-        calls.first.steps;
-    const std::vector<std::shared_ptr<BlockStep<T>>> &steps2 =
-        calls.second.steps;
+    const std::vector<BlockStep<T>> &steps1 = calls.first.steps;
+    const std::vector<BlockStep<T>> &steps2 = calls.second.steps;
     auto stepsIt1 = steps1.begin();
     auto stepsIt2 = steps2.begin();
     auto prevStepIt1 = *stepsIt1;
@@ -279,30 +303,30 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
     while (stepsIt1 != steps1.end() && stepsIt2 != steps2.end()) {
         // Advance until a mark is reached
         while (stepsIt1 != steps1.end() &&
-               !normalMarkBlock(nameMaps.first, (*stepsIt1)->blockName)) {
+               !normalMarkBlock(nameMaps.first, stepsIt1->blockName)) {
             stepsIt1++;
         }
         while (stepsIt2 != steps2.end() &&
-               !normalMarkBlock(nameMaps.second, (*stepsIt2)->blockName)) {
+               !normalMarkBlock(nameMaps.second, stepsIt2->blockName)) {
             stepsIt2++;
         }
         if (stepsIt1 == steps1.end() && stepsIt2 == steps2.end()) {
             break;
         }
         // Check marks
-        if (!intersection(nameMaps.first.at((*stepsIt1)->blockName),
-                          nameMaps.second.at((*stepsIt2)->blockName))
+        if (!intersection(nameMaps.first.at(stepsIt1->blockName),
+                          nameMaps.second.at(stepsIt2->blockName))
                  .empty()) {
-            assert(intersection(nameMaps.first.at((*stepsIt1)->blockName),
-                                nameMaps.second.at((*stepsIt2)->blockName))
+            assert(intersection(nameMaps.first.at(stepsIt1->blockName),
+                                nameMaps.second.at(stepsIt2->blockName))
                        .size() == 1);
             // We resolve the ambiguity in the marks by hoping that for one
             // program there is only one choice
-            int mark = *intersection(nameMaps.first.at((*stepsIt1)->blockName),
-                                     nameMaps.second.at((*stepsIt2)->blockName))
+            int mark = *intersection(nameMaps.first.at(stepsIt1->blockName),
+                                     nameMaps.second.at(stepsIt2->blockName))
                             .begin();
             // Perfect synchronization
-            fun(MatchInfo<T>(makeMonoPair(&**stepsIt1, &**stepsIt2),
+            fun(MatchInfo<T>(makeMonoPair(&*stepsIt1, &*stepsIt2),
                              LoopInfo::None, mark));
             prevStepIt1 = *stepsIt1;
             prevStepIt2 = *stepsIt2;
@@ -311,8 +335,8 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
         } else {
             // In the first round this is not true, but we should never fall in
             // this case in the first round
-            assert(prevStepIt1 != *stepsIt1);
-            assert(prevStepIt2 != *stepsIt2);
+            assert(&prevStepIt1 != &*stepsIt1);
+            assert(&prevStepIt2 != &*stepsIt2);
 
             // One side has to wait for the other to finish its loop
             LoopInfo loop = LoopInfo::Left;
@@ -322,7 +346,7 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
             auto end = steps1.end();
             auto nameMap = nameMaps.first;
             auto otherNameMap = nameMaps.second;
-            if ((*stepsIt2)->blockName == prevStepIt2->blockName) {
+            if (stepsIt2->blockName == prevStepIt2.blockName) {
                 loop = LoopInfo::Right;
                 stepsIt = stepsIt2;
                 prevStepIt = prevStepIt2;
@@ -333,22 +357,22 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
             }
             // Keep looping one program until it moves on
             do {
-                assert(intersection(nameMap.at(prevStepIt->blockName),
-                                    otherNameMap.at(prevStepItOther->blockName))
+                assert(intersection(nameMap.at(prevStepIt.blockName),
+                                    otherNameMap.at(prevStepItOther.blockName))
                            .size() == 1);
                 int mark =
-                    *intersection(nameMap.at(prevStepIt->blockName),
-                                  otherNameMap.at(prevStepItOther->blockName))
+                    *intersection(nameMap.at(prevStepIt.blockName),
+                                  otherNameMap.at(prevStepItOther.blockName))
                          .begin();
                 // Make sure the first program is always the first argument
                 if (loop == LoopInfo::Left) {
-                    const BlockStep<T> *firstStep = &**stepsIt;
-                    const BlockStep<T> *secondStep = &*prevStepItOther;
+                    const BlockStep<T> *firstStep = &*stepsIt;
+                    const BlockStep<T> *secondStep = &prevStepItOther;
                     fun(MatchInfo<T>(makeMonoPair(firstStep, secondStep), loop,
                                      mark));
                 } else {
-                    const BlockStep<T> *secondStep = &**stepsIt;
-                    const BlockStep<T> *firstStep = &*prevStepItOther;
+                    const BlockStep<T> *secondStep = &*stepsIt;
+                    const BlockStep<T> *firstStep = &prevStepItOther;
                     fun(MatchInfo<T>(makeMonoPair(firstStep, secondStep), loop,
                                      mark));
                 }
@@ -356,10 +380,10 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
                 do {
                     stepsIt++;
                 } while (stepsIt != end &&
-                         !normalMarkBlock(nameMap, (*stepsIt)->blockName));
+                         !normalMarkBlock(nameMap, stepsIt->blockName));
                 // Did we return to the same mark?
             } while (stepsIt != end &&
-                     (*stepsIt)->blockName == prevStepIt->blockName);
+                     stepsIt->blockName == prevStepIt.blockName);
             // Getting a reference to the iterator and modifying that doesn't
             // seem to work so we copy it and set it again
             if (loop == LoopInfo::Left) {
@@ -384,5 +408,12 @@ struct MergedAnalysisResults {
 MergedAnalysisResults mergeAnalysisResults(MergedAnalysisResults res1,
                                            MergedAnalysisResults res2);
 
-HeapPatternCandidatesMap mergeHeapPatterns(HeapPatternCandidatesMap cand1,
-                                           HeapPatternCandidatesMap cand2);
+HeapPatternCandidatesMap mergeHeapPatternMaps(HeapPatternCandidatesMap cand1,
+                                              HeapPatternCandidatesMap cand2);
+HeapPatternCandidates
+mergeHeapPatternCandidates(HeapPatternCandidates candidates1,
+                           HeapPatternCandidates candidates2);
+
+ModelValues initialModelValues(MonoPair<const llvm::Function *> funs);
+
+ExitIndex getExitIndex(const MatchInfo<const llvm::Value *> match);

@@ -4,11 +4,11 @@
 int foo ( int p ) {
 	int x, y;
 	__assert_sliced(
-	y = p + 0);
-	x = p + 0;
+	y = p);
+	x = p;
 	if ( p ) {
 		__assert_sliced(
-		x = y + 0);
+		x = y);
 	}
 	return x ;
 }

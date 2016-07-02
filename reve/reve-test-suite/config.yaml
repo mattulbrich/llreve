@@ -6,6 +6,7 @@ ignored-dirs:
   - linux
   - torch
   - voting
+  - loop/scale
 ignored-files:
   - a_1.c
   - heap/findmax_1.c

@@ -58,7 +58,7 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 	vector<SharedSMTRef> smtExprs =
 	generateSMT(modules, preprocessedFuns, fileOpts);
 
-	SerializeOpts serializeOpts(outputFileName, false, false, false);
+	SerializeOpts serializeOpts(outputFileName, false, false, false, true);
 	serializeSMT(smtExprs, SMTGenerationOpts::getInstance().MuZ, serializeOpts);
 
 	SatResult satResult = SmtSolver::getInstance().checkSat(outputFileName);

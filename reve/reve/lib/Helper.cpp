@@ -114,14 +114,18 @@ int typeSize(llvm::Type *Ty, const llvm::DataLayout &layout) {
 std::vector<smt::SortedVar> filterVars(int program,
                                        std::vector<smt::SortedVar> vars) {
     std::vector<smt::SortedVar> filteredVars;
-    const string programName = std::to_string(program);
     for (const auto &var : vars) {
-        const auto pos = var.name.rfind("$");
-        if (var.name.substr(pos + 1, programName.length()) == programName) {
+        if (varBelongsTo(var.name, program)) {
             filteredVars.push_back(var);
         }
     }
     return filteredVars;
+}
+
+bool varBelongsTo(std::string varName, int program) {
+    const std::string programName = std::to_string(program);
+    const auto pos = varName.rfind("$");
+    return varName.substr(pos + 1, programName.length()) == programName;
 }
 
 string argSort(string arg) {

@@ -7,6 +7,8 @@
 
 using HoleMap = std::map<size_t, mpz_class>;
 
+extern bool InstantiateStorage;
+
 enum class PatternType { Binary, Unary, HeapEquality, Range, ExprProp };
 
 enum class ExprType {
@@ -183,17 +185,16 @@ template <typename T> struct BinaryHeapPattern : public HeapPattern<T> {
     bool matches(const VarMap<const llvm::Value *> &variables,
                  const MonoPair<Heap> &heaps,
                  const HoleMap &holes) const override {
-        MonoPair<bool> argMatches =
-            args.template map<bool>([&variables, &heaps, &holes](auto pat) {
-                return pat->matches(variables, heaps, holes);
-            });
         switch (op) {
         case BinaryBooleanOp::And:
-            return argMatches.first && argMatches.second;
+            return args.first->matches(variables, heaps, holes) &&
+                   args.second->matches(variables, heaps, holes);
         case BinaryBooleanOp::Or:
-            return argMatches.first || argMatches.second;
+            return args.first->matches(variables, heaps, holes) ||
+                   args.second->matches(variables, heaps, holes);
         case BinaryBooleanOp::Impl:
-            return !argMatches.first || argMatches.second;
+            return !args.first->matches(variables, heaps, holes) ||
+                   args.second->matches(variables, heaps, holes);
         }
     }
     std::ostream &dump(std::ostream &os) const override {
@@ -368,11 +369,17 @@ template <typename T> struct HeapEqual : public HeapPattern<T> {
         return os;
     }
     smt::SMTRef toSMT() const override {
-        std::vector<smt::SortedVar> args = {smt::SortedVar("heapIndex", "Int")};
-        smt::SharedSMTRef expr =
-            makeBinOp("=", smt::makeBinOp("select", "HEAP$1", "heapIndex"),
-                      smt::makeBinOp("select", "HEAP$2", "heapIndex"));
-        return std::make_unique<smt::Forall>(args, expr);
+        if (InstantiateStorage) {
+            std::vector<smt::SortedVar> args = {
+                smt::SortedVar("heapIndex", "Int")};
+            smt::SharedSMTRef expr =
+                makeBinOp("=", smt::makeBinOp("select", "HEAP$1", "heapIndex"),
+                          smt::makeBinOp("select", "HEAP$2", "heapIndex"));
+
+            return std::make_unique<smt::Forall>(args, expr);
+        } else {
+            return smt::makeBinOp("=", "HEAP$1", "HEAP$2");
+        }
     }
     bool equalTo(const HeapPattern<T> &other) const override {
         return other.getType() == PatternType::HeapEquality;
@@ -380,6 +387,7 @@ template <typename T> struct HeapEqual : public HeapPattern<T> {
     std::shared_ptr<HeapPattern<T>>
     negationNormalForm(bool negate) const override {
         assert(!negate);
+        unused(negate);
         return std::make_shared<HeapEqual<T>>();
     }
 };
@@ -598,7 +606,6 @@ template <typename T> struct Constant : public HeapExpr<T> {
     mpz_class eval(const VarMap<const llvm::Value *> &variables,
                    const MonoPair<Heap> & /* unused */,
                    const HoleMap & /* unused */) const override {
-        assert(variables.empty());
         unused(variables);
         return value;
     }
@@ -736,16 +743,15 @@ template <typename T> struct BinaryIntExpr : public HeapExpr<T> {
     mpz_class eval(const VarMap<const llvm::Value *> &variables,
                    const MonoPair<Heap> &heaps,
                    const HoleMap &holes) const override {
-        MonoPair<mpz_class> vals =
-            args.template map<mpz_class>([&variables, &heaps, &holes](
-                auto arg) { return arg->eval(variables, heaps, holes); });
+        mpz_class val1 = args.first->eval(variables, heaps, holes);
+        mpz_class val2 = args.second->eval(variables, heaps, holes);
         switch (op) {
         case BinaryIntOp::Mul:
-            return vals.first * vals.second;
+            return val1 * val2;
         case BinaryIntOp::Add:
-            return vals.first + vals.second;
+            return val1 + val2;
         case BinaryIntOp::Subtract:
-            return vals.first - vals.second;
+            return val1 - val2;
         }
     }
     std::ostream &dump(std::ostream &os) const override {
@@ -991,20 +997,19 @@ template <typename T> struct HeapExprProp : public HeapPattern<T> {
     bool matches(const VarMap<const llvm::Value *> &variables,
                  const MonoPair<Heap> &heaps,
                  const HoleMap &holes) const override {
-        MonoPair<mpz_class> vals =
-            args.template map<mpz_class>([&variables, &heaps, &holes](
-                auto arg) { return arg->eval(variables, heaps, holes); });
+        mpz_class val1 = args.first->eval(variables, heaps, holes);
+        mpz_class val2 = args.second->eval(variables, heaps, holes);
         switch (op) {
         case BinaryIntProp::LT:
-            return vals.first < vals.second;
+            return val1 < val2;
         case BinaryIntProp::LE:
-            return vals.first <= vals.second;
+            return val1 <= val2;
         case BinaryIntProp::EQ:
-            return vals.first == vals.second;
+            return val1 == val2;
         case BinaryIntProp::GE:
-            return vals.first >= vals.second;
+            return val1 >= val2;
         case BinaryIntProp::GT:
-            return vals.first > vals.second;
+            return val1 > val2;
         }
     }
     std::ostream &dump(std::ostream &os) const override {
@@ -1015,13 +1020,13 @@ template <typename T> struct HeapExprProp : public HeapPattern<T> {
             os << " < ";
             break;
         case BinaryIntProp::LE:
-            os << " <= ";
+            os << " ≤ ";
             break;
         case BinaryIntProp::EQ:
             os << " = ";
             break;
         case BinaryIntProp::GE:
-            os << " >= ";
+            os << " ≥ ";
             break;
         case BinaryIntProp::GT:
             os << " > ";

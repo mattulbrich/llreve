@@ -229,7 +229,8 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
 
     const smt::FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, memory);
-    if (SMTGenerationOpts::getInstance().MuZ) {
+    if (SMTGenerationOpts::getInstance().MuZ ||
+        SMTGenerationOpts::getInstance().Invert) {
         const vector<SharedSMTRef> variables = declareVariables(freeVarsMap);
         declarations.insert(declarations.end(), variables.begin(),
                             variables.end());
@@ -271,6 +272,7 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     for (auto &it : transposedPaths) {
         it.second.erase(it.first);
     }
+    vector<SharedSMTRef> negations;
     for (const auto &it : synchronizedPaths) {
         const int startIndex = it.first;
         vector<SharedSMTRef> pathsStartingHere;
@@ -287,14 +289,7 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
                 pathsStartingHere.push_back(pathFun(endInvariant));
             }
         }
-        if (!SMTGenerationOpts::getInstance().Nest) {
-            for (auto path : pathsStartingHere) {
-                auto clause = forallStartingAt(
-                    path, freeVarsMap.at(startIndex), startIndex,
-                    ProgramSelection::Both, funName, true, freeVarsMap, memory);
-                smtExprs.push_back(make_shared<Assert>(clause));
-            }
-        } else {
+        if (SMTGenerationOpts::getInstance().Nest) {
             auto clause = forallStartingAt(
                 make_shared<Op>("and", pathsStartingHere),
                 freeVarsMap.at(startIndex), startIndex, ProgramSelection::Both,
@@ -313,7 +308,25 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
                 }
             }
             smtExprs.push_back(make_shared<Assert>(clause));
+        } else {
+            for (auto path : pathsStartingHere) {
+                auto clause = forallStartingAt(
+                    path, freeVarsMap.at(startIndex), startIndex,
+                    ProgramSelection::Both, funName, true, freeVarsMap, memory);
+                if (SMTGenerationOpts::getInstance().Invert) {
+                    negations.push_back(makeBinOp(
+                        "and",
+                        makeBinOp("=", "INV_INDEX", std::to_string(startIndex)),
+                        makeUnaryOp("not", clause)));
+                } else {
+                    smtExprs.push_back(make_shared<Assert>(clause));
+                }
+            }
         }
+    }
+    if (SMTGenerationOpts::getInstance().Invert) {
+        smtExprs.push_back(
+            make_shared<Assert>(make_shared<Op>("or", negations)));
     }
     smtExprs.insert(smtExprs.end(), forbiddenPaths.begin(),
                     forbiddenPaths.end());
@@ -850,7 +863,8 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
         clause = makeBinOp("=>", std::move(preInv), clause);
     }
 
-    if (SMTGenerationOpts::getInstance().MuZ) {
+    if (SMTGenerationOpts::getInstance().MuZ ||
+        SMTGenerationOpts::getInstance().Invert) {
         // μZ rules are implicitly universally quantified
         return clause;
     }
@@ -1317,6 +1331,9 @@ vector<SharedSMTRef> declareVariables(smt::FreeVarsMap freeVarsMap) {
     vector<SharedSMTRef> variables;
     for (const auto &var : uniqueVars) {
         variables.push_back(make_shared<VarDecl>(var.name + "_old", var.type));
+    }
+    if (SMTGenerationOpts::getInstance().Invert) {
+        variables.push_back(make_shared<VarDecl>("INV_INDEX", "Int"));
     }
     return variables;
 }

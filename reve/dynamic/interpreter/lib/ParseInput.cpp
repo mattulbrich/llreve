@@ -3,7 +3,9 @@
 #include <fstream>
 
 // Each line contains one set of input values
-// The format of a single line is vars1|vars2|heap1|heap2| where vars1 and vars2
+// The format of a single line is
+// vars1|vars2|heapbackground1|heapbackground2|heap1|heap2| where vars1 and
+// vars2
 // are semicolon separated list of numbers in the order the functions receive
 // them and heap1 and heap2 are semicolon separated lists of comma separated
 // tuples representing the heap index and the heap value
@@ -22,10 +24,11 @@ vector<WorkItem> parseInput(string fileName) {
         if (parts.size() == 0) {
             return result;
         }
-        assert(parts.size() == 4);
+        assert(parts.size() == 6);
         result.push_back(
             {{getVariables(parts.at(0)), getVariables(parts.at(1))},
-             {getHeap(parts.at(2)), getHeap(parts.at(3))},
+             {mpz_class(parts.at(2)), mpz_class(parts.at(3))},
+             {getHeap(parts.at(4)), getHeap(parts.at(5))},
              true,
              i});
         ++i;

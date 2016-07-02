@@ -5,6 +5,7 @@
 #include "Analysis.h"
 #include "Compat.h"
 #include "Compile.h"
+#include "Model.h"
 #include "ModuleSMTGeneration.h"
 #include "Opts.h"
 #include "Preprocess.h"
@@ -32,6 +33,7 @@ static llvm::cl::opt<string> FileName1Flag(llvm::cl::Positional,
 static llvm::cl::opt<string> FileName2Flag(llvm::cl::Positional,
                                            llvm::cl::desc("FILE2"),
                                            llvm::cl::Required);
+static llvm::cl::opt<bool> CegarFlag("cegar", llvm::cl::desc("Cegar"));
 static llvm::cl::opt<string>
     PatternFileFlag("patterns",
                     llvm::cl::desc("Path to file containing patterns"),
@@ -88,12 +90,17 @@ int main(int argc, const char **argv) {
     fclose(patternFile);
 
     FileOptions fileOpts = getFileOptions(inputOpts.FileNames);
-    vector<smt::SharedSMTRef> smtExprs =
-        driver(modules, preprocessedFuns, MainFunctionFlag, patterns, fileOpts);
-
+    vector<smt::SharedSMTRef> smtExprs;
+    if (CegarFlag) {
+        smtExprs = cegarDriver(modules, preprocessedFuns, MainFunctionFlag,
+                               patterns, fileOpts);
+    } else {
+        smtExprs = driver(modules, preprocessedFuns, MainFunctionFlag, patterns,
+                          fileOpts);
+    }
     serializeSMT(smtExprs, false,
                  SerializeOpts(OutputFileNameFlag, !InstantiateStorage,
-                               MergeImplications, BoundedFlag));
+                               MergeImplications, BoundedFlag, true));
 
     llvm::llvm_shutdown();
 }

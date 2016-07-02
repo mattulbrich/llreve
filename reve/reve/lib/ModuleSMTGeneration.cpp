@@ -40,7 +40,8 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
     }
     std::vector<SharedSMTRef> assertions;
     std::vector<SharedSMTRef> smtExprs;
-    if (!SMTGenerationOpts::getInstance().MuZ) {
+    if (!SMTGenerationOpts::getInstance().MuZ &&
+        !SMTGenerationOpts::getInstance().Invert) {
         smtExprs.push_back(std::make_shared<SetLogic>("HORN"));
     }
 
@@ -114,7 +115,8 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
     for (auto &fun1 : mod1) {
         if (fun1.isDeclaration() && !fun1.isIntrinsic()) {
             auto fun2P = mod2.getFunction(fun1.getName());
-            if (fun2P && fun1.getName() != "__mark" && fun1.getName() != "__splitmark") {
+            if (fun2P && fun1.getName() != "__mark" &&
+                fun1.getName() != "__splitmark") {
                 llvm::Function &fun2 = *fun2P;
                 // Calculate the number of varargs used in function calls
                 set<uint32_t> varArgs = getVarArgs(fun1);

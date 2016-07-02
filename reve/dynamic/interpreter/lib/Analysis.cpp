@@ -9,6 +9,7 @@
 #include "ModuleSMTGeneration.h"
 #include "MonoPair.h"
 #include "PathAnalysis.h"
+#include "Serialize.h"
 #include "SerializeTraces.h"
 #include "Unroll.h"
 
@@ -19,9 +20,12 @@
 
 // I don't care about windows
 #include <dirent.h>
+#include <stdio.h>
 #include <sys/stat.h>
 
 #include "llvm/IR/Verifier.h"
+
+#include "popen_noshell.h"
 
 using llvm::Module;
 using llvm::Optional;
@@ -48,6 +52,8 @@ using namespace std::placeholders;
 
 static llvm::cl::opt<bool>
     MultinomialsFlag("multinomials", llvm::cl::desc("Use true multinomials"));
+static llvm::cl::opt<bool>
+    PrettyFlag("pretty", llvm::cl::desc("Pretty print intermediate output"));
 std::string InputFileFlag;
 static llvm::cl::opt<std::string, true>
     InputFileFlagStorage("input",
@@ -67,52 +73,9 @@ static llvm::cl::opt<bool, true>
     InstantiateFlag("instantiate", llvm::cl::desc("Instantiate arrays"),
                     llvm::cl::location(InstantiateStorage));
 static llvm::cl::opt<bool> HeapFlag("heap", llvm::cl::desc("Activate heap"));
-
-void iterateDeserialized(
-    string directory, std::function<void(MonoPair<Call<string>> &)> callback) {
-    DIR *dir = opendir(directory.c_str());
-    if (dir == nullptr) {
-        logError("Couldn't open directory: " + directory + "\n");
-    }
-    struct dirent *dirEntry;
-    std::regex firstFileRegex("^(.*_)1(_\\d+.cbor)$", std::regex::ECMAScript);
-    while ((dirEntry = readdir(dir))) {
-        string fileName1 = directory + "/" + dirEntry->d_name;
-        std::smatch sm;
-        if (!std::regex_match(fileName1, sm, firstFileRegex)) {
-            continue;
-        }
-        std::string fileName2 = sm[1].str() + "2" + sm[2].str();
-        ifstream file1(fileName1, ios::binary | ios::ate);
-        ifstream file2(fileName2, ios::binary | ios::ate);
-        std::streamsize size1 = file1.tellg();
-        std::streamsize size2 = file2.tellg();
-        file1.seekg(0, ios::beg);
-        file2.seekg(0, ios::beg);
-
-        std::vector<char> buffer1(static_cast<size_t>(size1));
-        std::vector<char> buffer2(static_cast<size_t>(size2));
-        if (!file1.read(buffer1.data(), size1) ||
-            !file2.read(buffer2.data(), size2)) {
-            logError("Couldn't read one of the files: " + fileName1 + "\n");
-        }
-
-        // deserialize
-        struct cbor_load_result res;
-        cbor_item_t *root =
-            cbor_load(reinterpret_cast<unsigned char *>(buffer1.data()),
-                      static_cast<size_t>(size1), &res);
-        Call<std::string> c1 = cborToCall(root);
-        cbor_decref(&root);
-        root = cbor_load(reinterpret_cast<unsigned char *>(buffer2.data()),
-                         static_cast<size_t>(size2), &res);
-        Call<std::string> c2 = cborToCall(root);
-        cbor_decref(&root);
-        MonoPair<Call<string>> calls = makeMonoPair(c1, c2);
-        callback(calls);
-    }
-    closedir(dir);
-}
+static llvm::cl::opt<bool>
+    InvertFlag("invert",
+               llvm::cl::desc("Check for satisfiability of negation"));
 
 vector<SharedSMTRef>
 driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
@@ -181,14 +144,15 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                 calls, nameMap,
                 [&localAnalysisResults, &freeVarsMap, degree,
                  &patterns](MatchInfo<const llvm::Value *> match) {
+                    ExitIndex exitIndex = getExitIndex(match);
                     findLoopCounts<const llvm::Value *>(
                         localAnalysisResults.loopCounts, match);
                     populateEquationsMap(
                         localAnalysisResults.polynomialEquations, freeVarsMap,
-                        match, degree);
+                        match, exitIndex, degree);
                     populateHeapPatterns(
                         localAnalysisResults.heapPatternCandidates, patterns,
-                        freeVarsMap, match);
+                        freeVarsMap, match, exitIndex);
                 });
         });
     loopTransformations =
@@ -201,17 +165,15 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         findSolutions(analysisResults.polynomialEquations),
         analysisResults.heapPatternCandidates, freeVarsMap, DegreeFlag);
     if (ImplicationsFlag) {
-        SMTGenerationOpts::initialize(mainFunctionName, HeapFlag, false, false,
-                                      false, false, false, false, false, false,
-                                      false, false, BoundedFlag, {});
+        SMTGenerationOpts::initialize(
+            mainFunctionName, HeapFlag, false, false, false, false, false,
+            false, false, false, false, false, BoundedFlag, InvertFlag, {});
     } else {
         SMTGenerationOpts::initialize(mainFunctionName, HeapFlag, false, false,
                                       false, false, false, false, false, false,
-                                      false, false, BoundedFlag,
+                                      false, false, BoundedFlag, InvertFlag,
                                       invariantCandidates);
     }
-    llvm::verifyModule(*modules.first);
-    llvm::verifyModule(*modules.second);
     // TODO pass all functions
     vector<SharedSMTRef> clauses =
         generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
@@ -287,16 +249,171 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     return clauses;
 }
 
-void applyLoopTransformation(
+std::vector<smt::SharedSMTRef>
+cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
+            vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
+            string mainFunctionName,
+            vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
+            FileOptions fileOpts) {
+    SMTGenerationOpts::getInstance().BitVect = BoundedFlag;
+    auto preprocessedFunctions =
+        findFunction(preprocessedFuns, mainFunctionName);
+    if (!preprocessedFunctions) {
+        logError("No function with the supplied name\n");
+        return {};
+    }
+    auto functions = preprocessedFunctions.getValue().map<llvm::Function *>(
+        [](PreprocessedFunction f) { return f.fun; });
+    const MonoPair<BidirBlockMarkMap> markMaps =
+        preprocessedFunctions.getValue().map<BidirBlockMarkMap>(
+            [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
+    MonoPair<BlockNameMap> nameMap = markMaps.map<BlockNameMap>(blockNameMap);
+    const auto funArgsPair =
+        functionArgs(*preprocessedFunctions.getValue().first.fun,
+                     *preprocessedFunctions.getValue().second.fun);
+    const auto funArgs = funArgsPair.foldl<vector<smt::SortedVar>>(
+        {},
+        [](auto acc, auto args) {
+            acc.insert(acc.end(), args.begin(), args.end());
+            return acc;
+        });
+
+    // Run the interpreter on the unrolled code
+    MergedAnalysisResults analysisResults;
+    MonoPair<PathMap> pathMaps = preprocessedFunctions.getValue().map<PathMap>(
+        [](PreprocessedFunction fun) { return fun.results.paths; });
+    smt::FreeVarsMap freeVarsMap =
+        freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
+    size_t degree = DegreeFlag;
+    ModelValues vals = initialModelValues(functions);
+    auto instrNameMap = instructionNameMap(functions);
+    do {
+        int cexMark = static_cast<int>(vals.values.at("INV_INDEX").get_si());
+        // reconstruct input from counterexample
+        auto variableValues = getVarMapFromModel(
+            instrNameMap, freeVarsMap.at(cexMark), vals.values);
+
+        // dump new example
+        std::cout << "---\nFound counterexample:\n";
+        std::cout << "at invariant: " << cexMark << "\n";
+        for (auto it : variableValues.first) {
+            llvm::errs() << it.first->getName() << " "
+                         << unsafeIntVal(it.second).asUnbounded().get_str()
+                         << "\n";
+        }
+        for (auto it : variableValues.second) {
+            llvm::errs() << it.first->getName() << " "
+                         << unsafeIntVal(it.second).asUnbounded().get_str()
+                         << "\n";
+        }
+        for (auto ar : vals.arrays) {
+            std::cout << ar.first << "\n";
+            std::cout << "background: " << ar.second.background << "\n";
+            for (auto val : ar.second.vals) {
+                std::cout << val.first << ":" << val.second << "\n";
+            }
+        }
+
+        assert(markMaps.first.MarkToBlocksMap.at(cexMark).size() == 1);
+        assert(markMaps.second.MarkToBlocksMap.at(cexMark).size() == 1);
+        auto firstBlock = *markMaps.first.MarkToBlocksMap.at(cexMark).begin();
+        auto secondBlock = *markMaps.second.MarkToBlocksMap.at(cexMark).begin();
+        std::string tmp;
+
+        MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
+            functions, variableValues, getHeapsFromModel(vals.arrays),
+            getHeapBackgrounds(vals.arrays), {firstBlock, secondBlock}, 1000);
+        // analyzeExecution<const llvm::Value *>(calls, nameMap, debugAnalysis);
+        analyzeExecution<const llvm::Value *>(
+            calls, nameMap, [&analysisResults, &freeVarsMap, degree,
+                             &patterns](MatchInfo<const llvm::Value *> match) {
+                ExitIndex exitIndex = getExitIndex(match);
+                VarMap<const llvm::Value *> variables(
+                    match.steps.first->state.variables);
+                variables.insert(match.steps.second->state.variables.begin(),
+                                 match.steps.second->state.variables.end());
+                findLoopCounts<const llvm::Value *>(analysisResults.loopCounts,
+                                                    match);
+                populateEquationsMap(analysisResults.polynomialEquations,
+                                     freeVarsMap, match, exitIndex, degree);
+                populateHeapPatterns(analysisResults.heapPatternCandidates,
+                                     patterns, freeVarsMap, match, exitIndex);
+            });
+        map<int, LoopTransformation> loopTransformations =
+            findLoopTransformations(analysisResults.loopCounts.loopCounts);
+        dumpLoopTransformations(loopTransformations);
+
+        // // Peel and unroll loops
+        if (applyLoopTransformation(preprocessedFunctions.getValue(),
+                                    loopTransformations, markMaps)) {
+            // Reset data and start over
+            analysisResults = MergedAnalysisResults();
+            vals = initialModelValues(functions);
+            // The paths have changed so we need to update the free variables
+            pathMaps = preprocessedFunctions.getValue().map<PathMap>(
+                [](PreprocessedFunction fun) { return fun.results.paths; });
+            freeVarsMap = freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
+            instrNameMap = instructionNameMap(functions);
+            std::cerr << "Transformed program, resetting inputs\n";
+            continue;
+        }
+
+        auto invariantCandidates = makeInvariantDefinitions(
+            findSolutions(analysisResults.polynomialEquations),
+            analysisResults.heapPatternCandidates, freeVarsMap, DegreeFlag);
+
+        SMTGenerationOpts::initialize(mainFunctionName, HeapFlag, false, false,
+                                      false, false, false, false, false, false,
+                                      false, false, false, true,
+                                      invariantCandidates);
+        vector<SharedSMTRef> clauses =
+            generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
+        char templateName[] = "/tmp/tmpsmt_XXXXXX.smt2";
+        int tmpSMTFd = mkstemps(templateName, 5);
+        string templateFileName(templateName);
+        serializeSMT(clauses, false,
+                     SerializeOpts(templateFileName, !InstantiateStorage, false,
+                                   BoundedFlag, PrettyFlag));
+        string command = "z3 " + templateFileName;
+        struct popen_noshell_pass_to_pclose pclose_arg;
+        const char *argv[] = {"z3", templateFileName.c_str(),
+                              static_cast<char *>(NULL)};
+        FILE *out = popen_noshell("z3", argv, "r", &pclose_arg, 0);
+        auto result = parseResult(out);
+        pclose_noshell(&pclose_arg);
+        unlink(templateName);
+        close(tmpSMTFd);
+        if (!result->isSat()) {
+            break;
+        }
+        vals = parseValues(std::static_pointer_cast<Sat>(result)->model);
+        // getline(std::cin, tmp);
+    } while (1 /* sat */);
+    auto invariantCandidates = makeInvariantDefinitions(
+        findSolutions(analysisResults.polynomialEquations),
+        analysisResults.heapPatternCandidates, freeVarsMap, DegreeFlag);
+
+    SMTGenerationOpts::initialize(
+        mainFunctionName, HeapFlag, false, false, false, false, false, false,
+        false, false, false, false, false, true, invariantCandidates);
+    vector<SharedSMTRef> clauses =
+        generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
+
+    return clauses;
+}
+
+bool applyLoopTransformation(
     MonoPair<PreprocessedFunction> &functions,
     const map<int, LoopTransformation> &loopTransformations,
     const MonoPair<BidirBlockMarkMap> &marks) {
+    bool modified = false;
     for (auto mapIt : loopTransformations) {
         switch (mapIt.second.type) {
         case LoopTransformType::Peel:
             if (mapIt.second.count == 0) {
                 continue;
             }
+            modified = true;
             switch (mapIt.second.side) {
             case LoopTransformSide::Left:
                 assert(mapIt.second.count == 1);
@@ -325,6 +442,7 @@ void applyLoopTransformation(
     // Update path analysis
     functions.first.results.paths = findPaths(marks.first);
     functions.second.results.paths = findPaths(marks.second);
+    return modified;
 }
 
 void dumpLoopTransformations(map<int, LoopTransformation> loopTransformations) {
@@ -357,6 +475,9 @@ map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map) {
     for (auto mapIt : map) {
         int mark = mapIt.first;
         for (auto sample : mapIt.second) {
+            if (sample.first < 3 || sample.second < 3) {
+                continue;
+            }
             if (peelCount.count(mark) == 0) {
                 peelCount.insert(
                     std::make_pair(mark, sample.first - sample.second));
@@ -397,7 +518,7 @@ map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map) {
             transforms.insert(std::make_pair(
                 mark, LoopTransformation(LoopTransformType::Peel, side,
                                          static_cast<size_t>(abs(it.second)))));
-        } else if (unrollQuotients.count(mark) == 1) {
+        } else if (unrollQuotients.count(mark) > 0) {
             float factor = unrollQuotients.at(mark);
             LoopTransformSide side =
                 factor < 1 ? LoopTransformSide::Left : LoopTransformSide::Right;
@@ -437,7 +558,8 @@ vector<vector<string>> polynomialTermsOfDegree(vector<smt::SortedVar> variables,
 
 void populateEquationsMap(PolynomialEquations &polynomialEquations,
                           smt::FreeVarsMap freeVarsMap,
-                          MatchInfo<const llvm::Value *> match, size_t degree) {
+                          MatchInfo<const llvm::Value *> match,
+                          ExitIndex exitIndex, size_t degree) {
     VarMap<string> variables;
     for (auto varIt : match.steps.first->state.variables) {
         variables.insert(std::make_pair(varIt.first->getName(), varIt.second));
@@ -452,24 +574,13 @@ void populateEquationsMap(PolynomialEquations &polynomialEquations,
         for (auto term : polynomialTerms) {
             mpz_class termVal = 1;
             for (auto var : term) {
-                termVal *= variables.at(var)->unsafeIntVal().asUnbounded();
+                termVal *= unsafeIntVal(variables.at(var)).asUnbounded();
             }
             equation.push_back(termVal);
         }
     }
     // Add a constant at the end of each vector
     equation.push_back(1);
-    ExitIndex exitIndex = 0;
-    if (variables.count("exitIndex$1_" + std::to_string(match.mark)) == 1) {
-        exitIndex = variables.at("exitIndex$1_" + std::to_string(match.mark))
-                        ->unsafeIntVal()
-                        .asUnbounded();
-    } else if (variables.count("exitIndex$2_" + std::to_string(match.mark)) ==
-               1) {
-        exitIndex = variables.at("exitIndex$2_" + std::to_string(match.mark))
-                        ->unsafeIntVal()
-                        .asUnbounded();
-    }
     if (polynomialEquations[match.mark].count(exitIndex) == 0) {
         polynomialEquations.at(match.mark)
             .insert(
@@ -523,27 +634,55 @@ void populateEquationsMap(PolynomialEquations &polynomialEquations,
     }
 }
 
+ExitIndex getExitIndex(const MatchInfo<const llvm::Value *> match) {
+    for (auto var : match.steps.first->state.variables) {
+        if (var.first->getName() ==
+            "exitIndex$1_" + std::to_string(match.mark)) {
+            return unsafeIntVal(var.second).asUnbounded();
+        }
+    }
+    for (auto var : match.steps.second->state.variables) {
+        if (var.first->getName() ==
+            "exitIndex$1_" + std::to_string(match.mark)) {
+            return unsafeIntVal(var.second).asUnbounded();
+        }
+    }
+    return 0;
+}
+
 void populateHeapPatterns(
     HeapPatternCandidatesMap &heapPatternCandidates,
     vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
-    smt::FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match) {
+    smt::FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match,
+    ExitIndex exitIndex) {
     VarMap<const llvm::Value *> variables(match.steps.first->state.variables);
     variables.insert(match.steps.second->state.variables.begin(),
                      match.steps.second->state.variables.end());
     // TODO don’t copy heaps
     MonoPair<Heap> heaps = makeMonoPair(match.steps.first->state.heap,
                                         match.steps.second->state.heap);
-    ExitIndex exitIndex = 0;
-    for (auto var : variables) {
-        if (var.first->getName() ==
-            "exitIndex$1" + std::to_string(match.mark)) {
-            exitIndex = var.second->unsafeIntVal().asUnbounded();
-        } else if (var.first->getName() ==
-                   "exitIndex$2" + std::to_string(match.mark)) {
-            exitIndex = var.second->unsafeIntVal().asUnbounded();
+    bool newCandidates =
+        heapPatternCandidates[match.mark].count(exitIndex) == 0;
+    if (!newCandidates) {
+        switch (match.loopInfo) {
+        case LoopInfo::Left:
+            newCandidates = !heapPatternCandidates.at(match.mark)
+                                 .at(exitIndex)
+                                 .left.hasValue();
+            break;
+        case LoopInfo::Right:
+            newCandidates = !heapPatternCandidates.at(match.mark)
+                                 .at(exitIndex)
+                                 .right.hasValue();
+            break;
+        case LoopInfo::None:
+            newCandidates = !heapPatternCandidates.at(match.mark)
+                                 .at(exitIndex)
+                                 .none.hasValue();
+            break;
         }
     }
-    if (heapPatternCandidates[match.mark].count(exitIndex) == 0) {
+    if (newCandidates) {
         list<shared_ptr<HeapPattern<const llvm::Value *>>> candidates;
         for (auto pat : patterns) {
             auto newCandidates =
@@ -558,14 +697,23 @@ void populateHeapPatterns(
                                   Optional<HeapPatternCandidates>())));
         switch (match.loopInfo) {
         case LoopInfo::Left:
+            assert(!heapPatternCandidates.at(match.mark)
+                        .at(exitIndex)
+                        .left.hasValue());
             heapPatternCandidates.at(match.mark).at(exitIndex).left =
                 std::move(candidates);
             break;
         case LoopInfo::Right:
+            assert(!heapPatternCandidates.at(match.mark)
+                        .at(exitIndex)
+                        .right.hasValue());
             heapPatternCandidates.at(match.mark).at(exitIndex).right =
                 std::move(candidates);
             break;
         case LoopInfo::None:
+            assert(!heapPatternCandidates.at(match.mark)
+                        .at(exitIndex)
+                        .none.hasValue());
             heapPatternCandidates.at(match.mark).at(exitIndex).none =
                 std::move(candidates);
             break;
@@ -619,7 +767,7 @@ findFunction(const vector<MonoPair<PreprocessedFunction>> functions,
     return Optional<MonoPair<PreprocessedFunction>>();
 }
 
-bool normalMarkBlock(const BlockNameMap &map, BlockName &blockName) {
+bool normalMarkBlock(const BlockNameMap &map, const BlockName &blockName) {
     auto it = map.find(blockName);
     if (it == map.end()) {
         return false;
@@ -627,7 +775,7 @@ bool normalMarkBlock(const BlockNameMap &map, BlockName &blockName) {
     return it->second.count(ENTRY_MARK) == 0;
 }
 
-void debugAnalysis(MatchInfo<string> match) {
+void debugAnalysis(MatchInfo<const llvm::Value *> match) {
     switch (match.loopInfo) {
     case LoopInfo::None:
         std::cerr << "Perfect sync";
@@ -641,10 +789,12 @@ void debugAnalysis(MatchInfo<string> match) {
     }
     std::cerr << std::endl;
     std::cerr << "First state:" << std::endl;
-    std::cerr << match.steps.first->toJSON(identity<string>).dump(4)
+    std::cerr << match.steps.first->toJSON([](auto x) { return x->getName(); })
+                     .dump(4)
               << std::endl;
     std::cerr << "Second state:" << std::endl;
-    std::cerr << match.steps.second->toJSON(identity<string>).dump(4)
+    std::cerr << match.steps.second->toJSON([](auto x) { return x->getName(); })
+                     .dump(4)
               << std::endl;
     std::cerr << std::endl << std::endl;
 }
@@ -939,7 +1089,7 @@ void instantiateBounds(map<int, map<string, Bound<VarIntVal>>> &boundsMap,
     variables.insert(match.steps.second->state.variables.begin(),
                      match.steps.second->state.variables.end());
     for (const auto &var : freeVars.at(match.mark)) {
-        VarIntVal val = variables.at(var.name)->unsafeIntVal();
+        VarIntVal val = unsafeIntVal(variables.at(var.name));
         if (boundsMap[match.mark].find(var.name) ==
             boundsMap[match.mark].end()) {
             boundsMap.at(match.mark)
@@ -1075,24 +1225,22 @@ void dumpLoopCounts(const LoopCountMap &loopCounts) {
     std::cerr << "----------\n";
 }
 
-std::map<const llvm::Value *, std::shared_ptr<VarVal>>
-getVarMap(const llvm::Function *fun, std::vector<mpz_class> vals) {
-    std::map<const llvm::Value *, std::shared_ptr<VarVal>> variableValues;
+std::map<const llvm::Value *, VarVal> getVarMap(const llvm::Function *fun,
+                                                std::vector<mpz_class> vals) {
+    std::map<const llvm::Value *, VarVal> variableValues;
     auto argIt = fun->arg_begin();
     for (size_t i = 0; i < vals.size(); ++i) {
         const llvm::Value *arg = &*argIt;
         // Pointers are always unbounded
         if (BoundedFlag && arg->getType()->isIntegerTy()) {
             variableValues.insert(
-                {arg, std::make_shared<VarInt>(Integer(
-                          makeBoundedInt(arg->getType()->getIntegerBitWidth(),
-                                         vals[i].get_si())))});
+                {arg,
+                 Integer(makeBoundedInt(arg->getType()->getIntegerBitWidth(),
+                                        vals[i].get_si()))});
         } else if (arg->getType()->isPointerTy()) {
-            variableValues.insert(
-                {arg, std::make_shared<VarInt>(Integer(vals[i]).asPointer())});
+            variableValues.insert({arg, Integer(vals[i]).asPointer()});
         } else {
-            variableValues.insert(
-                {arg, std::make_shared<VarInt>(Integer(vals[i]))});
+            variableValues.insert({arg, Integer(vals[i])});
         }
         ++argIt;
     }
@@ -1100,17 +1248,84 @@ getVarMap(const llvm::Function *fun, std::vector<mpz_class> vals) {
     return variableValues;
 }
 
-Heap randomHeap(
-    const llvm::Function &fun,
-    std::map<const llvm::Value *, std::shared_ptr<VarVal>> &variableValues,
-    int lengthBound, int valLowerBound, int valUpperBound,
-    unsigned int *seedp) {
+std::map<std::string, const llvm::Value *>
+instructionNameMap(const llvm::Function *fun) {
+    std::map<std::string, const llvm::Value *> nameMap;
+    for (const auto &arg : fun->args()) {
+        nameMap.insert({arg.getName(), &arg});
+    }
+    for (const auto &bb : *fun) {
+        for (const auto &instr : bb) {
+            if (!instr.getName().empty()) {
+                nameMap.insert({instr.getName(), &instr});
+            }
+        }
+    }
+    return nameMap;
+}
+
+std::map<std::string, const llvm::Value *>
+instructionNameMap(MonoPair<const llvm::Function *> funs) {
+    std::map<std::string, const llvm::Value *> nameMap =
+        instructionNameMap(funs.first);
+    std::map<std::string, const llvm::Value *> nameMap2 =
+        instructionNameMap(funs.second);
+    nameMap.insert(nameMap2.begin(), nameMap2.end());
+    return nameMap;
+}
+
+MonoPair<std::map<const llvm::Value *, VarVal>> getVarMapFromModel(
+    std::map<std::string, const llvm::Value *> instructionNameMap,
+    std::vector<smt::SortedVar> freeVars,
+    std::map<std::string, mpz_class> vals) {
+    MonoPair<std::map<const llvm::Value *, VarVal>> variableValues =
+        makeMonoPair<std::map<const llvm::Value *, VarVal>>({}, {});
+    for (const auto &var : freeVars) {
+        mpz_class val = vals.at(var.name + "_old");
+        const llvm::Value *instr = instructionNameMap.at(var.name);
+        if (varBelongsTo(var.name, 1)) {
+            variableValues.first.insert({instr, Integer(val)});
+        } else {
+            variableValues.second.insert({instr, Integer(val)});
+        }
+    }
+    return variableValues;
+}
+
+Heap getHeapFromModel(const ArrayVal &ar) {
+    Heap result;
+    for (auto it : ar.vals) {
+        result.insert({Integer(it.first), Integer(it.second)});
+    }
+    return result;
+}
+
+MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays) {
+    if (!HeapFlag) {
+        return {{}, {}};
+    }
+    return {getHeapFromModel(arrays.at("HEAP$1_old")),
+            getHeapFromModel(arrays.at("HEAP$2_old"))};
+}
+
+MonoPair<Integer> getHeapBackgrounds(std::map<std::string, ArrayVal> arrays) {
+    if (!HeapFlag) {
+        return {Integer(mpz_class(0)), Integer(mpz_class(0))};
+    }
+    return {Integer(arrays.at("HEAP$1_old").background),
+            Integer(arrays.at("HEAP$2_old").background)};
+}
+
+Heap randomHeap(const llvm::Function &fun,
+                const std::map<const llvm::Value *, VarVal> &variableValues,
+                int lengthBound, int valLowerBound, int valUpperBound,
+                unsigned int *seedp) {
     // We place an array with a random length <= lengthBound with random values
     // >= valLowerBound and <= valUpperBound at each pointer argument
     Heap heap;
     for (const auto &arg : fun.args()) {
         if (arg.getType()->isPointerTy()) {
-            VarIntVal arrayStart = variableValues.at(&arg)->unsafeIntVal();
+            VarIntVal arrayStart = unsafeIntVal(variableValues.at(&arg));
             unsigned int length =
                 static_cast<unsigned int>(rand_r(seedp) % (lengthBound + 1));
             for (unsigned int i = 0; i <= length; ++i) {
@@ -1149,7 +1364,7 @@ MergedAnalysisResults mergeAnalysisResults(MergedAnalysisResults res1,
     result.loopCounts = mergeLoopCounts(res1.loopCounts, res2.loopCounts);
     result.polynomialEquations = mergePolynomialEquations(
         res1.polynomialEquations, res2.polynomialEquations);
-    result.heapPatternCandidates = mergeHeapPatterns(
+    result.heapPatternCandidates = mergeHeapPatternMaps(
         res1.heapPatternCandidates, res2.heapPatternCandidates);
     return result;
 }
@@ -1190,84 +1405,27 @@ PolynomialEquations mergePolynomialEquations(PolynomialEquations eq1,
     return result;
 }
 
-HeapPatternCandidatesMap mergeHeapPatterns(HeapPatternCandidatesMap cand1,
-                                           HeapPatternCandidatesMap cand2) {
+HeapPatternCandidatesMap mergeHeapPatternMaps(HeapPatternCandidatesMap cand1,
+                                              HeapPatternCandidatesMap cand2) {
     HeapPatternCandidatesMap result = cand1;
-    for (auto it : result) {
+    for (auto &it : result) {
         int mark = it.first;
-        for (auto exitIt : it.second) {
+        for (auto &exitIt : it.second) {
             ExitIndex exit = exitIt.first;
-            if (exitIt.second.left.hasValue()) {
-                if (cand2[mark][exit].left.hasValue()) {
-                    const auto &leftPats =
-                        cand2.at(mark).at(exit).left.getValue();
-                    auto listIt = exitIt.second.left.getValue().begin();
-                    while (listIt != exitIt.second.left.getValue().end()) {
-                        bool breaked = false;
-                        for (const auto &pat : leftPats) {
-                            if ((*listIt)->equalTo(*pat)) {
-                                breaked = true;
-                                break;
+            if (cand2.count(mark) > 0 && cand2.at(mark).count(exit) > 0) {
+                zipWith<llvm::Optional<HeapPatternCandidates>,
+                        llvm::Optional<HeapPatternCandidates>>(
+                    exitIt.second, cand2.at(mark).at(exit),
+                    [](auto &resultPat, auto &otherPat) {
+                        if (resultPat.hasValue()) {
+                            if (otherPat.hasValue()) {
+                                resultPat = mergeHeapPatternCandidates(
+                                    resultPat.getValue(), otherPat.getValue());
                             }
-                        }
-                        if (!breaked) {
-                            listIt =
-                                exitIt.second.left.getValue().erase(listIt);
                         } else {
-                            ++listIt;
+                            resultPat = otherPat;
                         }
-                    }
-                }
-            } else {
-                exitIt.second.left = cand2[mark][exit].left;
-            }
-            if (exitIt.second.right.hasValue()) {
-                if (cand2[mark][exit].right.hasValue()) {
-                    const auto &rightPats =
-                        cand2.at(mark).at(exit).right.getValue();
-                    auto listIt = exitIt.second.right.getValue().begin();
-                    while (listIt != exitIt.second.right.getValue().end()) {
-                        bool breaked = false;
-                        for (const auto &pat : rightPats) {
-                            if ((*listIt)->equalTo(*pat)) {
-                                breaked = true;
-                                break;
-                            }
-                        }
-                        if (!breaked) {
-                            listIt =
-                                exitIt.second.right.getValue().erase(listIt);
-                        } else {
-                            ++listIt;
-                        }
-                    }
-                }
-            } else {
-                exitIt.second.right = cand2[mark][exit].right;
-            }
-            if (exitIt.second.none.hasValue()) {
-                if (cand2[mark][exit].none.hasValue()) {
-                    const auto &nonePats =
-                        cand2.at(mark).at(exit).none.getValue();
-                    auto listIt = exitIt.second.none.getValue().begin();
-                    while (listIt != exitIt.second.none.getValue().end()) {
-                        bool breaked = false;
-                        for (const auto &pat : nonePats) {
-                            if ((*listIt)->equalTo(*pat)) {
-                                breaked = true;
-                                break;
-                            }
-                        }
-                        if (!breaked) {
-                            listIt =
-                                exitIt.second.none.getValue().erase(listIt);
-                        } else {
-                            ++listIt;
-                        }
-                    }
-                }
-            } else {
-                exitIt.second.none = cand2[mark][exit].none;
+                    });
             }
         }
     }
@@ -1281,4 +1439,39 @@ HeapPatternCandidatesMap mergeHeapPatterns(HeapPatternCandidatesMap cand1,
         }
     }
     return result;
+}
+
+HeapPatternCandidates
+mergeHeapPatternCandidates(HeapPatternCandidates candidates1,
+                           HeapPatternCandidates candidates2) {
+    auto it = candidates1.begin();
+    while (it != candidates1.end()) {
+        bool breaked = false;
+        for (const auto &pat : candidates2) {
+            if ((*it)->equalTo(*pat)) {
+                breaked = true;
+                break;
+            }
+        }
+        if (!breaked) {
+            it = candidates1.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    return candidates1;
+}
+
+ModelValues initialModelValues(MonoPair<const llvm::Function *> funs) {
+    ModelValues vals;
+    vals.arrays.insert({"HEAP$1_old", {0, {}}});
+    vals.arrays.insert({"HEAP$2_old", {0, {}}});
+    for (const auto &arg : funs.first->args()) {
+        vals.values.insert({std::string(arg.getName()) + "_old", 5});
+    }
+    for (const auto &arg : funs.second->args()) {
+        vals.values.insert({std::string(arg.getName()) + "_old", 5});
+    }
+    vals.values.insert({"INV_INDEX", ENTRY_MARK});
+    return vals;
 }

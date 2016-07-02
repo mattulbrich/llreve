@@ -34,6 +34,7 @@ class SMTGenerationOpts {
                            bool noByteHeap, bool everythingSigned,
                            bool singleInvariant, bool muZ, bool perfectSync,
                            bool nest, bool passInputThrough, bool bitvect,
+                           bool invert,
                            std::map<int, smt::SharedSMTRef> invariants);
     std::string MainFunction;
     bool Heap;
@@ -48,6 +49,7 @@ class SMTGenerationOpts {
     bool Nest;
     bool PassInputThrough;
     bool BitVect;
+    bool Invert;
     // If an invariant is not in the map a declaration is added and it’s up to
     // the SMT solver to find it
     std::map<int, smt::SharedSMTRef> Invariants;
@@ -77,11 +79,12 @@ class SerializeOpts {
     bool DontInstantiate;
     bool MergeImplications;
     bool RenameDefineFuns;
+    bool Pretty;
     SerializeOpts(std::string outputFileName, bool DontInstantiate,
-                  bool MergeImplications, bool RenameDefineFuns)
+                  bool MergeImplications, bool RenameDefineFuns, bool Pretty)
         : OutputFileName(outputFileName), DontInstantiate(DontInstantiate),
           MergeImplications(MergeImplications),
-          RenameDefineFuns(RenameDefineFuns) {}
+          RenameDefineFuns(RenameDefineFuns), Pretty(Pretty) {}
 };
 
 /// Options that are parsed from special comments inside the programs

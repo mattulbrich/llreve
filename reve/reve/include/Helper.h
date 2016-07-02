@@ -166,3 +166,4 @@ auto llvmTypeToSMTSort(const llvm::Type *type) -> std::string;
 auto llvmValToSortedVar(const llvm::Value *val) -> smt::SortedVar;
 auto arrayType() -> std::string;
 auto toSMTSortedVar(smt::SortedVar var) -> smt::SortedVar;
+bool varBelongsTo(std::string varName, int program);
