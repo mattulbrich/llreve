@@ -568,6 +568,12 @@ Op::toZ3Expr(z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
             assert(args.size() == 1);
             z3::expr e = args.at(0)->toZ3Expr(cxt, nameMap, defineFunMap);
             return -e;
+        } else if (opName == "ite") {
+            assert(args.size() == 3);
+            z3::expr cond = args.at(0)->toZ3Expr(cxt, nameMap, defineFunMap);
+            z3::expr ifTrue = args.at(1)->toZ3Expr(cxt, nameMap, defineFunMap);
+            z3::expr ifFalse = args.at(2)->toZ3Expr(cxt, nameMap, defineFunMap);
+            return z3::ite(cond, ifTrue, ifFalse);
         } else {
             if (args.size() != 2) {
                 std::cerr << "Unsupported opname " << opName << "\n";
