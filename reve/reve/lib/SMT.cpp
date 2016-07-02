@@ -151,6 +151,13 @@ void VarDecl::toZ3(z3::context &cxt, z3::solver & /* unused */,
         if (!it.second) {
             it.first->second = c;
         }
+    } else if (type == "(Array Int Int)") {
+        z3::sort intArraySort = cxt.array_sort(cxt.int_sort(), cxt.int_sort());
+        z3::expr c = cxt.constant(varName.c_str(), intArraySort);
+        auto it = nameMap.insert({varName, c});
+        if (!it.second) {
+            it.first->second = c;
+        }
     } else {
         std::cerr << "Unsupported type\n";
         exit(1);
@@ -584,6 +591,14 @@ Op::toZ3Expr(z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
             z3::expr ifTrue = args.at(1)->toZ3Expr(cxt, nameMap, defineFunMap);
             z3::expr ifFalse = args.at(2)->toZ3Expr(cxt, nameMap, defineFunMap);
             return z3::ite(cond, ifTrue, ifFalse);
+        } else if (opName == "store") {
+            z3::expr array =
+                args.at(0)->toZ3Expr(cxt, nameMap, defineFunMap);
+            z3::expr index =
+                args.at(1)->toZ3Expr(cxt, nameMap, defineFunMap);
+            z3::expr val =
+                args.at(1)->toZ3Expr(cxt, nameMap, defineFunMap);
+            return z3::store(array, index, val);
         } else {
             if (args.size() != 2) {
                 std::cerr << "Unsupported opname " << opName << "\n";
@@ -605,6 +620,10 @@ Op::toZ3Expr(z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
                 return firstArg < secondArg;
             } else if (opName == "=>") {
                 return z3::implies(firstArg, secondArg);
+            } else if (opName == "div") {
+                return firstArg / secondArg;
+            } else if (opName == "select") {
+                return z3::select(firstArg, secondArg);
             } else {
                 std::cerr << "Unsupported opname " << opName << "\n";
                 exit(1);
@@ -625,6 +644,18 @@ void FunDef::toZ3(z3::context &cxt, z3::solver & /* unused */,
             if (!it.second) {
                 it.first->second = c;
             }
+        } else if (arg.type == "(Array Int Int)") {
+            z3::sort intArraySort =
+                cxt.array_sort(cxt.int_sort(), cxt.int_sort());
+            z3::expr c = cxt.constant(arg.name.c_str(), intArraySort);
+            vars.push_back(c);
+            auto it = nameMap.insert({arg.name, c});
+            if (!it.second) {
+                it.first->second = c;
+            }
+        } else {
+            std::cerr << "Unknown argument type: " << arg.type << "\n";
+            exit(1);
         }
     }
     z3::expr z3Body = body->toZ3Expr(cxt, nameMap, defineFunMap);

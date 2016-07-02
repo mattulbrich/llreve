@@ -420,6 +420,24 @@ ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
             z3Cxt, model.eval(nameMap.at(var.name + "_old")));
         modelValues.values.insert({var.name + "_old", mpz_class(stringVal)});
     }
+    if (HeapFlag) {
+        auto heap1Eval = model.eval(nameMap.at("HEAP$1_old"));
+        auto heap2Eval = model.eval(nameMap.at("HEAP$2_old"));
+        if (heap1Eval.decl().decl_kind() == Z3_OP_CONST_ARRAY) {
+            mpz_class background(
+                Z3_get_numeral_string(z3Cxt, heap1Eval.arg(0)));
+            modelValues.arrays.insert({"HEAP$1_old", {background, {}}});
+        } else {
+            std::cerr << "Unsupported array kind\n";
+        }
+        if (heap2Eval.decl().decl_kind() == Z3_OP_CONST_ARRAY) {
+            mpz_class background(
+                Z3_get_numeral_string(z3Cxt, heap2Eval.arg(0)));
+            modelValues.arrays.insert({"HEAP$2_old", {background, {}}});
+        } else {
+            std::cerr << "Unsupported array kind\n";
+        }
+    }
     return modelValues;
 }
 
