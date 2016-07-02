@@ -868,6 +868,8 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
         // μZ rules are implicitly universally quantified
         return clause;
     }
+
+    vars.push_back(SortedVar("__everyValue", "Int"));
     return std::make_unique<Forall>(vars, clause);
 }
 

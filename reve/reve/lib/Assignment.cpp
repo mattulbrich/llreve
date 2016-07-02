@@ -51,6 +51,9 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
                         memcpyIntrinsic(CallInst, prog);
                     definitions.insert(definitions.end(), defs.begin(),
                                        defs.end());
+                } if (fun->getName() == "__everyValue") {
+                    definitions.push_back(
+                    DefOrCallInfo(makeAssignment(CallInst->getName(), std::make_unique<smt::Primitive<string>>("__everyValue"))));
                 } else {
                     if (heap & HEAP_MASK) {
                         definitions.push_back(DefOrCallInfo(
