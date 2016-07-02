@@ -142,9 +142,9 @@ SExprRef VarDecl::toSExpr() const {
     return std::make_unique<Apply<std::string>>("declare-var", std::move(args));
 }
 
-void VarDecl::toZ3(z3::context &cxt, z3::solver &solver,
+void VarDecl::toZ3(z3::context &cxt, z3::solver & /* unused */,
                    std::map<std::string, z3::expr> &nameMap,
-                   std::map<std::string, Z3DefineFun> &defineFunMap) const {
+                   std::map<std::string, Z3DefineFun> & /* unused */) const {
     if (type == "Int") {
         z3::expr c = cxt.int_const(varName.c_str());
         auto it = nameMap.insert({varName, c});
@@ -231,15 +231,15 @@ SharedSMTRef CheckSat::compressLets(std::vector<Assignment> defs) const {
     return shared_from_this();
 }
 
-void CheckSat::toZ3(z3::context &cxt, z3::solver &solver,
-                    std::map<std::string, z3::expr> &nameMap,
-                    std::map<std::string, Z3DefineFun> &defineFunMap) const {
+void CheckSat::toZ3(z3::context & /* unused */, z3::solver & /* unused */,
+                    std::map<std::string, z3::expr> & /* unused */,
+                    std::map<std::string, Z3DefineFun> & /* unused */) const {
     /* noop */
 }
 
-void GetModel::toZ3(z3::context &cxt, z3::solver &solver,
-                    std::map<std::string, z3::expr> &nameMap,
-                    std::map<std::string, Z3DefineFun> &defineFunMap) const {
+void GetModel::toZ3(z3::context & /* unused */, z3::solver & /* unused */,
+                    std::map<std::string, z3::expr> & /* unused */,
+                    std::map<std::string, Z3DefineFun> & /* unused */) const {
     /* noop */
 }
 
@@ -453,17 +453,17 @@ SharedSMTRef SMTExpr::renameDefineFuns(string /* unused */) const {
     return shared_from_this();
 }
 
-void SMTExpr::toZ3(z3::context &cxt, z3::solver &solver,
-                   std::map<std::string, z3::expr> &nameMap,
-                   std::map<std::string, Z3DefineFun> &defineFunMap) const {
+void SMTExpr::toZ3(z3::context & /* unused */, z3::solver & /* unused */,
+                   std::map<std::string, z3::expr> & /* unused */,
+                   std::map<std::string, Z3DefineFun> & /* unused */) const {
     std::cerr << "Unsupported smt toplevel\n";
     std::cerr << *toSExpr();
     exit(1);
 }
 
 z3::expr SMTExpr::toZ3Expr(
-    z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
-    const std::map<std::string, Z3DefineFun> &defineFunMap) const {
+    z3::context & /* unused */, std::map<std::string, z3::expr> & /* unused */,
+    const std::map<std::string, Z3DefineFun> & /* unused */) const {
     std::cerr << "Unsupported smt expr\n";
     std::cerr << *toSExpr();
     exit(1);
@@ -471,8 +471,8 @@ z3::expr SMTExpr::toZ3Expr(
 
 template <typename T>
 z3::expr Primitive<T>::toZ3Expr(
-    z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
-    const std::map<std::string, Z3DefineFun> &defineFunMap) const {
+    z3::context & /* unused */, std::map<std::string, z3::expr> & /* unusued */,
+    const std::map<std::string, Z3DefineFun> & /* unused */) const {
     std::cerr << "Unsupported primitive\n";
     exit(1);
 }
@@ -480,7 +480,7 @@ z3::expr Primitive<T>::toZ3Expr(
 template <>
 z3::expr Primitive<std::string>::toZ3Expr(
     z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
-    const std::map<std::string, Z3DefineFun> &defineFunMap) const {
+    const std::map<std::string, Z3DefineFun> & /* unused */) const {
     if (val == "false") {
         return cxt.bool_val(false);
     }
@@ -564,6 +564,10 @@ Op::toZ3Expr(z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
             assert(args.size() == 1);
             z3::expr e = args.at(0)->toZ3Expr(cxt, nameMap, defineFunMap);
             return !e;
+        } else if (opName == "-") {
+            assert(args.size() == 1);
+            z3::expr e = args.at(0)->toZ3Expr(cxt, nameMap, defineFunMap);
+            return -e;
         } else {
             if (args.size() != 2) {
                 std::cerr << "Unsupported opname " << opName << "\n";
@@ -593,7 +597,7 @@ Op::toZ3Expr(z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
     }
 }
 
-void FunDef::toZ3(z3::context &cxt, z3::solver &solver,
+void FunDef::toZ3(z3::context &cxt, z3::solver & /* unused */,
                   std::map<std::string, z3::expr> &nameMap,
                   std::map<std::string, Z3DefineFun> &defineFunMap) const {
     z3::expr_vector vars(cxt);
