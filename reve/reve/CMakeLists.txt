@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/../dynamic/interpreter/cmake/")
 project(llvm-reve)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_COMPILER "clang++")
