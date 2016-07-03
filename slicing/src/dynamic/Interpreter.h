@@ -9,6 +9,7 @@
 #include <initializer_list>
 #include <list>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 class Interpreter {
@@ -18,6 +19,8 @@ class Interpreter {
 	llvm::Function const& func;
 	llvm::APInt    const  valueVoid;
 	llvm::APInt    const  valueUndef;
+	
+	std::unordered_set<llvm::Instruction const*> recentDataDependencies;
 	
 	Interpreter(
 		llvm::Function const& func,
@@ -54,7 +57,7 @@ class Interpreter {
 	
 	unsigned int getValueBitWidth(llvm::Value const& value) const;
 	bool         isIntValue      (llvm::Value const& value) const;
-	llvm::APInt  resolveValue    (llvm::Value const* pVal)  const;
+	llvm::APInt  resolveValue    (llvm::Value const* pVal);
 	
 	void moveToNextInstruction(void);
 	

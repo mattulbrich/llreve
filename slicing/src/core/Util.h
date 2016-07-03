@@ -420,4 +420,17 @@ std::string toString(
 	llvm::Value const& value,
 	bool const         isForDebug = false);
 
+// Function for freeing the resources of an array including its elements
+
+template <class ElementType> void deleteArrayDeep(
+		ElementType** const array,
+		unsigned long const length) {
+	
+	for(unsigned long i = 0; i < length; i++) {
+		delete array[i];
+	}
+	
+	delete [] array;
+}
+
 }

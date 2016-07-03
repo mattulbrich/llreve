@@ -70,6 +70,10 @@ bool Interpreter::executeNextInstruction(void) {
 	
 	APInt const* pNewValue = nullptr;
 	
+	// Reset the data dependencies, they will be filled during execution of the
+	// next instruction by calling 'resolveValue()'
+	recentDataDependencies.clear();
+	
 	if(isa<BinaryOperator>(_pNextInst)) {
 		pNewValue = new APInt(executeBinaryOperator());
 	} else if(isa<BranchInst>(_pNextInst)) {
@@ -152,16 +156,20 @@ void Interpreter::moveToNextInstruction(void) {
 }
 
 APInt Interpreter::resolveValue(
-		Value const* pVal) const {
+		Value const* pVal) {
 	
-	if(isa<Instruction>(pVal) || isa<Argument>(pVal)) {
+	if(Instruction const* pInst = dyn_cast<Instruction>(pVal)) {
+		
+		recentDataDependencies.insert(pInst);
+		return *_state.at(pVal);
+		
+	} else if(isa<Argument>(pVal)) {
 		
 		return *_state.at(pVal);
 		
-	} else if (auto const constInt = dyn_cast<ConstantInt>(pVal)) {
+	} else if (ConstantInt const* pConstInt = dyn_cast<ConstantInt>(pVal)) {
 		
-		// For the moment treat all as integers, no matter which bit width
-		return constInt->getValue();
+		return pConstInt->getValue();
 		
 	//} else if (isa<ConstantPointerNull>(val)) {
 		//return make_shared<VarInt>(Integer(makeBoundedInt(64, 0)));
