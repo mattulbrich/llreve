@@ -49,3 +49,7 @@ class DRM {
 	llvm::APInt** const _matrix;
 	llvm::APInt         _accumulator;
 };
+
+class AddCtrlDepToDRMPass {
+	
+};

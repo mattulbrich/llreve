@@ -72,10 +72,10 @@ DRM::DRM(
 		_matrix[i]->setBit(i); // The instruction itself is always reachable
 	}
 	
-	legacy::PassManager PM;
-	PM.add(new PostDominatorTree());
-	PM.add(new CDGPass());
-	PM.run(*sliceCandidate);
+	//legacy::PassManager PM;
+	//PM.add(new PostDominatorTree());
+	//PM.add(new CDGPass());
+	//PM.run(*sliceCandidate);
 	
 	// Initialize the interpreter with the counterexample
 	Interpreter interpreter(linFunc.func, cex);
