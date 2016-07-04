@@ -421,3 +421,5 @@ ExitIndex getExitIndex(const MatchInfo<const llvm::Value *> match);
 ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
                          const std::map<std::string, z3::expr> &nameMap,
                          const smt::FreeVarsMap &freeVarsMap);
+
+ArrayVal getArrayVal(const z3::context &z3Cxt, z3::expr arrayExpr);

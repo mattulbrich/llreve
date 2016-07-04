@@ -423,22 +423,28 @@ ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
     if (HeapFlag) {
         auto heap1Eval = model.eval(nameMap.at("HEAP$1_old"));
         auto heap2Eval = model.eval(nameMap.at("HEAP$2_old"));
-        if (heap1Eval.decl().decl_kind() == Z3_OP_CONST_ARRAY) {
-            mpz_class background(
-                Z3_get_numeral_string(z3Cxt, heap1Eval.arg(0)));
-            modelValues.arrays.insert({"HEAP$1_old", {background, {}}});
-        } else {
-            std::cerr << "Unsupported array kind\n";
-        }
-        if (heap2Eval.decl().decl_kind() == Z3_OP_CONST_ARRAY) {
-            mpz_class background(
-                Z3_get_numeral_string(z3Cxt, heap2Eval.arg(0)));
-            modelValues.arrays.insert({"HEAP$2_old", {background, {}}});
-        } else {
-            std::cerr << "Unsupported array kind\n";
-        }
+        modelValues.arrays.insert(
+            {"HEAP$1_old", getArrayVal(z3Cxt, heap1Eval)});
+        modelValues.arrays.insert(
+            {"HEAP$2_old", getArrayVal(z3Cxt, heap2Eval)});
     }
     return modelValues;
+}
+
+ArrayVal getArrayVal(const z3::context &z3Cxt, z3::expr arrayExpr) {
+    ArrayVal ret;
+    while (arrayExpr.decl().decl_kind() == Z3_OP_STORE) {
+        ret.vals.insert(
+            {mpz_class(Z3_get_numeral_string(z3Cxt, arrayExpr.arg(1))),
+             mpz_class(Z3_get_numeral_string(z3Cxt, arrayExpr.arg(2)))});
+        arrayExpr = arrayExpr.arg(0);
+    }
+    if (arrayExpr.decl().decl_kind() != Z3_OP_CONST_ARRAY) {
+        logError("Expected constant array\n");
+        exit(1);
+    }
+    ret.background = mpz_class(Z3_get_numeral_string(z3Cxt, arrayExpr.arg(0)));
+    return ret;
 }
 
 bool applyLoopTransformation(
