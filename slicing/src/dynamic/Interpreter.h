@@ -24,7 +24,8 @@ class Interpreter {
 	
 	Interpreter(
 		llvm::Function const& func,
-		uint64_t       const  input[]);
+		uint64_t       const  input[],
+		bool           const  branchDependencies = true);
 	~Interpreter(void);
 	
 	// Return value indicates whether the interpretation has termated before
@@ -46,8 +47,11 @@ class Interpreter {
 	
 	private:
 	
+	bool const _computeBranchDep;
+	
 	llvm::BasicBlock::const_iterator _instIt;
 	
+	llvm::BasicBlock  const* _pLastBB; // Current BB is stored via '_pNextInst'
 	llvm::Instruction const* _pRecentInst;
 	llvm::Instruction const* _pNextInst;
 	llvm::APInt       const* _pRetValue;

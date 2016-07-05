@@ -1,6 +1,7 @@
 #include "Interpreter.h"
 
 #include "core/Util.h"
+#include "preprocessing/ExplicitAssignPass.h"
 
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/InstrTypes.h"
@@ -14,11 +15,14 @@ using namespace llvm;
 
 Interpreter::Interpreter(
 		Function const& func,
-		uint64_t const  input[]) :
-	func        (func),
-	_instIt     (func.getEntryBlock().begin()),
-	_pRecentInst(nullptr),
-	_pNextInst  (&*_instIt) {
+		uint64_t const  input[],
+		bool     const  branchDependencies) :
+	func             (func),
+	_computeBranchDep(branchDependencies),
+	_instIt          (func.getEntryBlock().begin()),
+	_pLastBB         (nullptr),
+	_pRecentInst     (nullptr),
+	_pNextInst       (&*_instIt) {
 	
 	unsigned int curIndex = 0;
 	
@@ -92,6 +96,21 @@ bool Interpreter::executeNextInstruction(void) {
 		executeReturnInst();
 	} else {
 		assert(false);
+	}
+	
+	// Include the branch instructions in the dependencies
+	if(_computeBranchDep) {
+		
+		unordered_set<Instruction const*> branchDependencies;
+		
+		for(Instruction const* i : recentDataDependencies) {
+			if(i->getParent() != _pNextInst->getParent()) {
+				branchDependencies.insert(i->getParent()->getTerminator());
+			}
+		}
+		
+		recentDataDependencies.insert(
+			branchDependencies.begin(), branchDependencies.end());
 	}
 	
 	// Update state and execution trace
@@ -235,32 +254,43 @@ void Interpreter::executeBranchInst(void) {
 	}
 	
 	// Move to the next basic block
-	_instIt = branchInst.getSuccessor(successorIndex)->begin();
+	_pLastBB = branchInst.getParent();
+	_instIt  = branchInst.getSuccessor(successorIndex)->begin();
 }
 
 APInt Interpreter::executeCallInst(void) {
 	
-	CallInst const& callInst = *dyn_cast<CallInst>(_pNextInst);
+	CallInst const& callInst        = *dyn_cast<CallInst>(_pNextInst);
+	Function const* pCalledFunction = callInst.getCalledFunction();
 	
-	assert(callInst.getCalledFunction() != nullptr);
+	assert(pCalledFunction != nullptr);
 	
-	unsigned int const argCount = callInst.getNumArgOperands();
-	uint64_t*    const args     = new uint64_t[argCount];
-	
-	// Collect arguments
-	for(unsigned int i = 0; i < argCount; i++) {
-		args[i] = resolveValue(callInst.getArgOperand(i)).getLimitedValue();
+	if(pCalledFunction->getName().str() == ExplicitAssignPass::FUNCTION_NAME) {
+		
+		assert(callInst.getNumArgOperands() == 1);
+		
+		return resolveValue(callInst.getArgOperand(0));
+		
+	} else {
+		
+		unsigned int const argCount = callInst.getNumArgOperands();
+		uint64_t*    const args     = new uint64_t[argCount];
+		
+		// Collect arguments
+		for(unsigned int i = 0; i < argCount; i++) {
+			args[i] = resolveValue(callInst.getArgOperand(i)).getLimitedValue();
+		}
+		
+		Interpreter interpreter(*callInst.getCalledFunction(), args);
+		
+		// Interprete the function
+		interpreter.execute();
+		
+		// Free resources for the argument array
+		delete [] args;
+		
+		return *interpreter.getReturnValue();
 	}
-	
-	Interpreter interpreter(*callInst.getCalledFunction(), args);
-	
-	// Interprete the function
-	interpreter.execute();
-	
-	// Free resources for the argument array
-	delete [] args;
-	
-	return *interpreter.getReturnValue();
 }
 
 bool Interpreter::executeICmpInst(void) {
@@ -291,8 +321,7 @@ bool Interpreter::executeICmpInst(void) {
 APInt Interpreter::executePHINode(void) {
 	
 	return resolveValue(
-		dyn_cast<PHINode>(_pNextInst)->
-		getIncomingValueForBlock(_pRecentInst->getParent()));
+		dyn_cast<PHINode>(_pNextInst)->getIncomingValueForBlock(_pLastBB));
 }
 
 void Interpreter::executeReturnInst(void) {
