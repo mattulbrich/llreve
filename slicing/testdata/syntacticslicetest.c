@@ -1,3 +1,5 @@
+#include "benchmarks/slicing_marks.h"
+
 int foo(int a) {
 	int i;	// sliced
 	i = 0;	// sliced

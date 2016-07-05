@@ -5,6 +5,7 @@
 
 #include "SlicingPass.h"
 #include "Util.h"
+#include "util/misc.cpp"
 
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/CFG.h"
@@ -29,9 +30,14 @@ void SyntacticSlicePass::getAnalysisUsage(
 
 bool SyntacticSlicePass::runOnFunction(
 		Function& func) {
-
+	
+	// Ignore special functions like '__criterion()'
+	if(Util::isSpecialFunction(func)) {
+		return false;
+	}
+	
 	PDGPass const& pdg = getAnalysis<PDGPass>();
-
+	
 	set<Instruction*>                         initInstructions = criterion->getInstructions(*func.getParent());
 	unordered_set<GenericNode<Instruction*>*> remainInSlice;
 	
@@ -43,6 +49,6 @@ bool SyntacticSlicePass::runOnFunction(
 			SlicingPass::toBeSliced(i);
 		}
 	}
-
+	
 	return true;
 }
