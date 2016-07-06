@@ -286,7 +286,7 @@ SharedSMTRef Let::instantiateArrays() const {
 }
 
 SharedSMTRef Op::instantiateArrays() const {
-    if (opName.compare(0, 4, "INV_") == 0) {
+    if (opName.compare(0, 4, "INV_") == 0 || opName == "INIT") {
         std::vector<SortedVar> indices;
         std::vector<SharedSMTRef> newArgs;
         for (const auto &arg : args) {
