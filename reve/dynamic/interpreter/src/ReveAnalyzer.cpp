@@ -19,6 +19,8 @@
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Transforms/IPO.h"
 
+#include <sys/stat.h>
+
 using std::string;
 using std::vector;
 using std::shared_ptr;
@@ -80,6 +82,19 @@ int main(int argc, const char **argv) {
     PM.run(*modules.second);
     vector<MonoPair<PreprocessedFunction>> preprocessedFuns =
         preprocessFunctions(modules, preprocessOpts);
+    // fopen doesn’t signal if the path points to a directory, thus we have to
+    // check for that separately and to catch the error.
+    struct stat s;
+    int ret = stat(PatternFileFlag.c_str(), &s);
+    if (ret != 0) {
+        logError("Couldn’t open pattern file\n");
+        exit(1);
+    }
+    if (s.st_mode & S_IFDIR) {
+        logError("Pattern file points to a directory\n");
+        exit(1);
+    }
+
     FILE *patternFile = fopen(PatternFileFlag.c_str(), "r");
     if (patternFile == nullptr) {
         logError("Couldn’t open pattern file\n");
