@@ -2,7 +2,7 @@
 
 #include "llvm/Transforms/Utils/Cloning.h"
 
-#include "core/PDGPass.h"
+#include "core/DependencyGraphPasses.h"
 #include "core/SlicingPass.h"
 #include "core/SyntacticSlicePass.h"
 #include "core/Util.h"
@@ -19,6 +19,8 @@ shared_ptr<Module> SyntacticSlicing::computeSlice(CriterionPtr criterion) {
 
 	llvm::legacy::PassManager PM;
 	PM.add(new llvm::PostDominatorTree());
+	PM.add(new CDGPass());
+	PM.add(new DDGPass());
 	PM.add(new PDGPass());
 	PM.add(new SyntacticSlicePass(criterion));
 	PM.add(new SlicingPass());

@@ -1,0 +1,10 @@
+#!/bin/bash
+# You need to make sure that eld is within the environment
+# one posibility is to add this file to a bin folder (i.e. ~/bin)
+# Make sure to replace path-to-your-eld-installation with the correct path.
+# You can use eld or eld-client. eld is neccessary for good debug output,
+# while it is bedder to use eld-client for multiple calls.
+
+# Eldarica can be downloaded from https://github.com/uuverifiers/eldarica
+# You can simply extract the nightly build and set the following path accordingly.
+[path-to-your-eld-installation]/eld-client "$@"

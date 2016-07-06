@@ -1,14 +1,22 @@
+// *** ADDED BY HEADER FIXUP ***
+#include <istream>
+// *** END ***
 #include "SlicingPass.h"
-#include "AddVariableNamePass.h"
+#include "preprocessing/AddVariableNamePass.h"
 
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/DebugInfoMetadata.h"
+#include "llvm/IR/Verifier.h"
+
+#include "core/DeleteVisitor.h"
+#include "core/Util.h"
 
 #include "llvm/IR/Dominators.h"
 
+#include <queue>
 #include <set>
 #include <iostream>
 
@@ -17,145 +25,130 @@ using namespace llvm;
 
 char SlicingPass::ID = 0;
 
+const std::string SlicingPass::TO_BE_SLICED = "to be sliced";
+const std::string SlicingPass::NOT_SLICED = "not sliced";
+const std::string SlicingPass::SLICE = "slice";
+
+SlicingPass::SlicingPass() : llvm::FunctionPass(ID) {
+	this->hasUnSlicedInstructions_ = false;
+}
+
 void SlicingPass::toBeSliced(llvm::Instruction& instruction) {
 	LLVMContext& context = instruction.getContext();
-	MDNode* node = MDNode::get(context, ConstantAsMetadata::get(ConstantInt::getTrue(context)));
-	instruction.setMetadata("sliced", node);
+	MDString* metadata = MDString::get(context, TO_BE_SLICED.c_str());
+	MDNode* node = MDNode::get(context, metadata);
+	instruction.setMetadata(SLICE, node);
+}
+
+void SlicingPass::markNotSliced(llvm::Instruction& instruction) {
+	LLVMContext& context = instruction.getContext();
+	MDString* metadata = MDString::get(context, NOT_SLICED.c_str());
+	MDNode* node = MDNode::get(context, metadata);
+	instruction.setMetadata(SLICE, node);
 }
 
 bool SlicingPass::isToBeSliced(llvm::Instruction& instruction){
-	if (instruction.getMetadata("sliced")) {
+	if (instruction.getMetadata(SLICE)) {
 		return true;
 	} else {
 		return false;
 	}
 }
 
-bool SlicingPass::isPriviousDef(const DIVariable* variable, Instruction& instruction) {
-	return variable == AddVariableNamePass::getSrcVariable(instruction);
-}
-
-Instruction* SlicingPass::findPriviousDef(const DIVariable* variable, Instruction& instruction) {
-	BasicBlock* parent = instruction.getParent();
-	if (!parent) {
-		return nullptr;
-	}
-
-	auto treeNode = this->domTree->getNode(parent);
-
-	Instruction* result = nullptr;
-	while (!result && treeNode) {
-		BasicBlock* block = treeNode->getBlock();
-		for (Instruction& instructionInBlock: *block) {
-			if (this->isPriviousDef(variable, instructionInBlock)) {
-				// double check, as we might still be in the same block.
-				if (this->domTree->dominates(&instructionInBlock, &instruction)) {
-					result = &instructionInBlock;
-				}
-			}
-		}
-		treeNode = treeNode->getIDom();
-	}
-
-	return result;
-}
-
-bool SlicingPass::handleTerminatingInstruction(Instruction& instruction){
-	if (isa<llvm::TerminatorInst>(instruction)) {
-		return true;
-	} else {
-		return false;
-	}
-}
-
-bool SlicingPass::handleCriterion(Instruction& instruction){
-	if (CallInst* call = dyn_cast<CallInst>(&instruction)) {
-		if (call->getCalledFunction()
-			&& call->getCalledFunction()->getName() == "__criterion") {
-		return true;
-	}}
-
-	return false;
-}
-
-bool SlicingPass::handleNoUses(llvm::Instruction& instruction){
-	if (!instruction.hasNUsesOrMore(1)) {
-		instruction.eraseFromParent();
-		return true;
-	}
-	return false;
-}
-
-bool SlicingPass::handleHasPriviousDef(llvm::Instruction& instruction, DIVariable* variable) {
-	if (variable){
-		Instruction* priviousDef = this->findPriviousDef(variable,instruction);
-		if (priviousDef) {
-			instruction.replaceAllUsesWith(priviousDef);
-			instruction.eraseFromParent();
+bool SlicingPass::isNotSliced(llvm::Instruction& instruction){
+	if (auto metadata = instruction.getMetadata(SLICE)) {
+		std::string data = cast<MDString>(metadata->getOperand(0))->getString();
+		if (data == NOT_SLICED) {
 			return true;
 		}
 	}
-	return false;
-}
-
-bool SlicingPass::handleIsArgument(llvm::Instruction& instruction, DIVariable* variable){
-	if (variable){
-		if (DILocalVariable* localVariable = dyn_cast<DILocalVariable>(variable)) {
-			if (localVariable->isParameter()) {
-				Function* function = instruction.getFunction();
-				if (function) {
-					unsigned arg = localVariable->getArg();
-					unsigned i = 1;
-					Argument* searchedArgument = nullptr;
-
-					for (Argument& argument : function->getArgumentList()) {
-						if (arg == i) {
-							searchedArgument = &argument;
-							break;
-						}
-						i++;
-					}
-
-					if (searchedArgument) {
-						instruction.replaceAllUsesWith(searchedArgument);
-						instruction.eraseFromParent();
-						return true;
-					}
-				}
-			}
-		}
-	}
 
 	return false;
 }
+
 
 bool SlicingPass::runOnFunction(llvm::Function& function){
 	this->domTree = &getAnalysis<llvm::DominatorTreeWrapperPass>().getDomTree();
-	std::set<llvm::Instruction*> instructionsToDelete;
+	std::queue<llvm::Instruction*> instructionsToDelete;
 
 	for(llvm::BasicBlock& block: function) {
 		for(llvm::Instruction& instruction: block) {
 			if (SlicingPass::isToBeSliced(instruction)) {
-				instructionsToDelete.insert(&instruction);
+				markNotSliced(instruction);
+				if (!isa<BranchInst>(instruction)) {
+					instructionsToDelete.push(&instruction);
+				}
 			}
 		}
 	}
 
-	for(llvm::Instruction* ins: instructionsToDelete) {
-		Instruction& instruction = *ins;
-		DIVariable* variable = AddVariableNamePass::getSrcVariable(instruction);
+	std::queue<llvm::Instruction*> secondTry;
 
-		bool done =
-			   handleTerminatingInstruction(instruction)
-			|| handleCriterion(instruction)
-			|| handleNoUses(instruction)
-			|| handleHasPriviousDef(instruction, variable)
-			|| handleIsArgument(instruction, variable);
+	std::queue<llvm::Instruction*>* activeQueue = &instructionsToDelete;
+	std::queue<llvm::Instruction*>* secondQueue = &secondTry;
+
+	bool changed = true;
+	while(changed) {
+		changed = false;
+
+		while (!activeQueue->empty()) {
+			Instruction& instruction = *activeQueue->front();
+			activeQueue->pop();
+
+			DeleteVisitor visitor(this->domTree);
+			bool deleted = visitor.visit(instruction);
+
+			if (!deleted) {
+				secondQueue->push(&instruction);
+			} else {
+				changed = true;
+			}
+		}
+
+		std::set<BasicBlock*> deletedBlocks;
+		for (BasicBlock& block:function){
+			DeleteVisitor visitor(this->domTree);
+			bool deleted = visitor.visit(block.getTerminator());
+			if (deleted) {
+				changed = true;
+			}
+
+			if (block.empty() && &function.getEntryBlock() != &block) {
+				deletedBlocks.insert(&block);
+			}
+		}
+
+		for (BasicBlock* block: deletedBlocks){
+			block->eraseFromParent();
+		}
+
+		std::queue<llvm::Instruction*>* temp;
+		temp = activeQueue;
+		activeQueue = secondQueue;
+		secondQueue = temp;
 	}
+
+	while (!activeQueue->empty()) {
+		Instruction& instruction = *activeQueue->front();
+		activeQueue->pop();
+	}
+
+	for(Instruction& instruction : Util::getInstructions(function)) {
+		if (isNotSliced(instruction)) {
+			this->hasUnSlicedInstructions_ = true;
+		}
+	}
+
+	bool hasError = llvm::verifyFunction(function, &errs());
+	assert(!hasError && "Internal Error: Slicing pass produced slice candidate, which ist not a valid llvm program.");
 
 	return true;
 }
 
 void SlicingPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
 	AU.addRequired<llvm::DominatorTreeWrapperPass>();
+}
+
+bool SlicingPass::hasUnSlicedInstructions(){
+	return this->hasUnSlicedInstructions_;
 }

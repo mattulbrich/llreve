@@ -51,7 +51,7 @@ void AddVariableNamePass::setAndPropagate(DIVariable* srcVariable, Instruction* 
 					if (presentSrcVariable == nullptr) {
 						setSrcVariable(*phi, srcVariable);
 						visit.push(phi);
-					} 
+					}
 				}
 			}
 		}
@@ -62,15 +62,19 @@ bool AddVariableNamePass::runOnFunction(llvm::Function &function) {
 	std::set<Instruction*> hasNoName;
 	this->hasNoName = &hasNoName;
 
+	Instruction* previousInstruction = nullptr;
 	//propagate variables
 	for (BasicBlock& block : function) {
 		for (Instruction& instruction : block) {
 			if (DbgValueInst* dbgValue = dyn_cast<DbgValueInst>(&instruction)) {
 				if (Instruction* ssaVar = dyn_cast<Instruction>(dbgValue->getValue())) {
-					DIVariable* srcVariable = dbgValue->getVariable();
-					setAndPropagate(srcVariable, ssaVar);
+					if (ssaVar == previousInstruction) { //correct debug information is imediatly after the instruction
+						DIVariable* srcVariable = dbgValue->getVariable();
+						setAndPropagate(srcVariable, ssaVar);
+					}
 				}
 			}
+			previousInstruction = &instruction;
 		}
 	}
 
@@ -101,9 +105,9 @@ DIVariable* AddVariableNamePass::getSrcVariable(llvm::Instruction& instruction) 
 	if (metadata) {
 		if (DIVariable* result = dyn_cast<DIVariable>(metadata)) {
 			return result;
-		} 
+		}
 	}
-	
+
 	return nullptr;
 
 }

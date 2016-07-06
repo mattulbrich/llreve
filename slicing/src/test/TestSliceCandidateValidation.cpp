@@ -12,7 +12,7 @@
 #include "llvm/Transforms/Scalar.h"
 
 #include "core/SlicingPass.h"
-#include "core/AddVariableNamePass.h"
+#include "preprocessing/AddVariableNamePass.h"
 #include "util/LambdaFunctionPass.h"
 
 #include "llvm/IR/Verifier.h"
@@ -31,7 +31,7 @@ using clang::CodeGenAction;
 void testSingleLineElemination(string fileName, int line, ValidationResult expectedResult);
 
 void testSingleLineElemination(string fileName, int line, ValidationResult expectedResult) {
-	shared_ptr<llvm::Module> program = getModuleFromFile(fileName);
+	shared_ptr<llvm::Module> program = getModuleFromSource(fileName);
 	shared_ptr<llvm::Module> sliceCandidate = CloneModule(&*program);
 
 	{

@@ -25,6 +25,8 @@
 
 #include "llvm/IR/Verifier.h"
 
+#include "popen_noshell.h"
+
 using llvm::Module;
 using llvm::Optional;
 
@@ -285,6 +287,8 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
     size_t degree = DegreeFlag;
     ModelValues vals = initialModelValues(functions);
     auto instrNameMap = instructionNameMap(functions);
+    z3::context z3Cxt;
+    z3::solver z3Solver(z3Cxt);
     do {
         int cexMark = static_cast<int>(vals.values.at("INV_INDEX").get_si());
         // reconstruct input from counterexample
@@ -366,23 +370,30 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                                       invariantCandidates);
         vector<SharedSMTRef> clauses =
             generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
-        char templateName[] = "/tmp/tmpsmt_XXXXXX.smt2";
-        int tmpSMTFd = mkstemps(templateName, 5);
-        string templateFileName(templateName);
-        serializeSMT(clauses, false,
-                     SerializeOpts(templateFileName, !InstantiateStorage, false,
-                                   BoundedFlag, PrettyFlag));
-        string command = "z3 " + templateFileName;
-        FILE *out = popen(command.c_str(), "r");
-        auto result = parseResult(out);
-        pclose(out);
-        unlink(templateName);
-        close(tmpSMTFd);
-        if (!result->isSat()) {
+        z3Solver.reset();
+        std::map<std::string, z3::expr> nameMap;
+        std::map<std::string, smt::Z3DefineFun> defineFunMap;
+        for (const auto &clause : clauses) {
+            clause->toZ3(z3Cxt, z3Solver, nameMap, defineFunMap);
+        }
+        bool unsat = false;
+        switch (z3Solver.check()) {
+        case z3::unsat:
+            std::cout << "Unsat\n";
+            unsat = true;
+            break;
+        case z3::sat:
+            std::cout << "Sat\n";
+            break;
+        case z3::unknown:
+            std::cout << "Fuck why is this unknown\n";
+            exit(1);
+        }
+        if (unsat) {
             break;
         }
-        vals = parseValues(std::static_pointer_cast<Sat>(result)->model);
-        // getline(std::cin, tmp);
+        z3::model z3Model = z3Solver.get_model();
+        vals = parseZ3Model(z3Cxt, z3Model, nameMap, freeVarsMap);
     } while (1 /* sat */);
     auto invariantCandidates = makeInvariantDefinitions(
         findSolutions(analysisResults.polynomialEquations),
@@ -395,6 +406,45 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
 
     return clauses;
+}
+
+ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
+                         const std::map<std::string, z3::expr> &nameMap,
+                         const smt::FreeVarsMap &freeVarsMap) {
+    ModelValues modelValues;
+
+    int mark = model.eval(nameMap.at("INV_INDEX")).get_numeral_int();
+    modelValues.values.insert({"INV_INDEX", mark});
+    for (const auto &var : freeVarsMap.at(mark)) {
+        std::string stringVal = Z3_get_numeral_string(
+            z3Cxt, model.eval(nameMap.at(var.name + "_old")));
+        modelValues.values.insert({var.name + "_old", mpz_class(stringVal)});
+    }
+    if (HeapFlag) {
+        auto heap1Eval = model.eval(nameMap.at("HEAP$1_old"));
+        auto heap2Eval = model.eval(nameMap.at("HEAP$2_old"));
+        modelValues.arrays.insert(
+            {"HEAP$1_old", getArrayVal(z3Cxt, heap1Eval)});
+        modelValues.arrays.insert(
+            {"HEAP$2_old", getArrayVal(z3Cxt, heap2Eval)});
+    }
+    return modelValues;
+}
+
+ArrayVal getArrayVal(const z3::context &z3Cxt, z3::expr arrayExpr) {
+    ArrayVal ret;
+    while (arrayExpr.decl().decl_kind() == Z3_OP_STORE) {
+        ret.vals.insert(
+            {mpz_class(Z3_get_numeral_string(z3Cxt, arrayExpr.arg(1))),
+             mpz_class(Z3_get_numeral_string(z3Cxt, arrayExpr.arg(2)))});
+        arrayExpr = arrayExpr.arg(0);
+    }
+    if (arrayExpr.decl().decl_kind() != Z3_OP_CONST_ARRAY) {
+        logError("Expected constant array\n");
+        exit(1);
+    }
+    ret.background = mpz_class(Z3_get_numeral_string(z3Cxt, arrayExpr.arg(0)));
+    return ret;
 }
 
 bool applyLoopTransformation(
@@ -999,7 +1049,7 @@ makeInvariantDefinitions(const PolynomialSolutions &solutions,
                          const HeapPatternCandidatesMap &patterns,
                          const smt::FreeVarsMap &freeVarsMap, size_t degree) {
     map<int, SharedSMTRef> definitions;
-    for (auto mapIt : solutions) {
+    for (auto mapIt : freeVarsMap) {
         int mark = mapIt.first;
         vector<SortedVar> args;
         vector<string> stringArgs;
@@ -1034,36 +1084,41 @@ makeInvariantDefinitions(const PolynomialSolutions &solutions,
                 args.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
             }
         }
+        auto solutionsMapIt = solutions.find(mark);
         vector<SharedSMTRef> exitClauses;
-        for (auto exitIt : mapIt.second) {
-            ExitIndex exit = exitIt.first;
-            SharedSMTRef left = makeInvariantDefinition(
-                exitIt.second.left,
-                patterns.at(mark).at(exit).left.hasValue()
-                    ? patterns.at(mark).at(exit).left.getValue()
-                    : HeapPatternCandidates(),
-                freeVarsMap.at(mark), degree);
-            SharedSMTRef right = makeInvariantDefinition(
-                exitIt.second.right,
-                patterns.at(mark).at(exit).right.hasValue()
-                    ? patterns.at(mark).at(exit).right.getValue()
-                    : HeapPatternCandidates(),
-                freeVarsMap.at(mark), degree);
-            SharedSMTRef none = makeInvariantDefinition(
-                exitIt.second.none,
-                patterns.at(mark).at(exit).none.hasValue()
-                    ? patterns.at(mark).at(exit).none.getValue()
-                    : HeapPatternCandidates(),
-                freeVarsMap.at(mark), degree);
-            vector<SharedSMTRef> invariantDisjunction = {left, right, none};
-            SharedSMTRef invariant =
-                make_shared<Op>("or", invariantDisjunction);
-            exitClauses.push_back(invariant);
-            // if (bounds.find(mark) != bounds.end()) {
-            //     invariant =
-            //         makeBinOp("and", invariant,
-            //                   makeBoundsDefinitions(bounds.at(mark)));
-            // }
+        if (solutionsMapIt == solutions.end()) {
+            exitClauses.push_back(smt::stringExpr("false"));
+        } else {
+            for (auto exitIt : solutionsMapIt->second) {
+                ExitIndex exit = exitIt.first;
+                SharedSMTRef left = makeInvariantDefinition(
+                    exitIt.second.left,
+                    patterns.at(mark).at(exit).left.hasValue()
+                        ? patterns.at(mark).at(exit).left.getValue()
+                        : HeapPatternCandidates(),
+                    freeVarsMap.at(mark), degree);
+                SharedSMTRef right = makeInvariantDefinition(
+                    exitIt.second.right,
+                    patterns.at(mark).at(exit).right.hasValue()
+                        ? patterns.at(mark).at(exit).right.getValue()
+                        : HeapPatternCandidates(),
+                    freeVarsMap.at(mark), degree);
+                SharedSMTRef none = makeInvariantDefinition(
+                    exitIt.second.none,
+                    patterns.at(mark).at(exit).none.hasValue()
+                        ? patterns.at(mark).at(exit).none.getValue()
+                        : HeapPatternCandidates(),
+                    freeVarsMap.at(mark), degree);
+                vector<SharedSMTRef> invariantDisjunction = {left, right, none};
+                SharedSMTRef invariant =
+                    make_shared<Op>("or", invariantDisjunction);
+                exitClauses.push_back(invariant);
+                // if (bounds.find(mark) != bounds.end()) {
+                //     invariant =
+                //         makeBinOp("and", invariant,
+                //                   makeBoundsDefinitions(bounds.at(mark)));
+                // }
+            }
         }
         string invariantName = "INV_MAIN_" + std::to_string(mark);
         if (ImplicationsFlag) {

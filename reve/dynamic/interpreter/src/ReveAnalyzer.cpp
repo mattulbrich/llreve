@@ -81,6 +81,10 @@ int main(int argc, const char **argv) {
     vector<MonoPair<PreprocessedFunction>> preprocessedFuns =
         preprocessFunctions(modules, preprocessOpts);
     FILE *patternFile = fopen(PatternFileFlag.c_str(), "r");
+    if (patternFile == nullptr) {
+        logError("Couldn’t open pattern file\n");
+        exit(1);
+    }
     auto patterns = parsePatterns(patternFile);
     std::cerr << "Found " << patterns.size() << " patterns\n";
     for (auto pat : patterns) {

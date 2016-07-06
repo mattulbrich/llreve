@@ -12,6 +12,7 @@ typedef std::shared_ptr<Criterion> CriterionPtr;
 class Criterion{
 public:
 	Criterion();
+	static const std::string FUNCTION_NAME;
 	virtual bool isReturnValue() const;
 	virtual std::set<llvm::Instruction*> getInstructions(llvm::Module& module) const = 0;
 	virtual ~Criterion() = default;

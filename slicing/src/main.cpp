@@ -64,23 +64,22 @@ void parseArgs(int argc, const char **argv) {
 	llvm::cl::ParseCommandLineOptions(argc, argv);
 }
 
-void store(string fileName, Module& module) {
-	std::error_code EC;
-	raw_fd_ostream programOut(StringRef(fileName), EC, llvm::sys::fs::OpenFlags::F_None);
-
-	llvm::legacy::PassManager PM;
-	PM.add(llvm::createPrintModulePass(programOut));
-	PM.run(module);
-}
-
 int main(int argc, const char **argv) {
 	parseArgs(argc, argv);
-	ModulePtr program = getModuleFromFile(FileName, ResourceDir, Includes);
+	ModulePtr program = getModuleFromSource(FileName, ResourceDir, Includes);
 
 	CriterionPtr criterion;
+	CriterionPtr presentCriterion = shared_ptr<Criterion>(new PresentCriterion());
 	if (CriterionPresentFlag) {
-		criterion = shared_ptr<Criterion>(new PresentCriterion());
+		if (presentCriterion->getInstructions(*program).size() == 0){
+			outs() << "ERROR: Criterion present flag set, but no criterion found! \n";
+			exit(1);
+		}
+		criterion = presentCriterion;
 	} else {
+		if (presentCriterion->getInstructions(*program).size() > 0){
+			outs() << "WARNING: Criterion present flag not set, but criterion found! Slice is for return value!\n";
+		}
 		criterion = shared_ptr<Criterion>(new ReturnValueCriterion());
 	}
 
@@ -100,8 +99,8 @@ int main(int argc, const char **argv) {
 	if (!slice){
 		outs() << "An error occured. Could not produce slice. \n";
 	} else {
-		store("program.llvm", *program);
-		store("slice.llvm", *slice);
+		writeModuleToFile("program.llvm", *program);
+		writeModuleToFile("slice.llvm", *slice);
 		outs() << "See program.llvm and slice.llvm for the resulting LLVMIRs \n";
 	}
 

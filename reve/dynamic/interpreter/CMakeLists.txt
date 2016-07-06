@@ -16,7 +16,7 @@ find_package(GMP)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
-include_directories(include ${CMAKE_CURRENT_SOURCE_DIR}/../../reve/include ${LLVM_INCLUDE_DIRS} ${GMP_INCLUDE_DIR})
+include_directories(include ${CMAKE_CURRENT_SOURCE_DIR}/../../reve/include ${LLVM_INCLUDE_DIRS} ${GMP_INCLUDE_DIR} ${Z3_INCLUDE_DIR})
 add_definitions(${LLVM_DEFINITIONS})
 
 find_package(BISON)
@@ -25,11 +25,11 @@ find_package(FLEX)
 file(GLOB sources lib/*.cpp)
 file(GLOB headers include/*.h)
 
-BISON_TARGET(PatternParser lib/PatternParser.y ${CMAKE_CURRENT_BINARY_DIR}/PatternParser.cpp VERBOSE ${CMAKE_CURRENT_BINARY_DIR}/pattern.output)
+BISON_TARGET(PatternParser lib/PatternParser.y ${CMAKE_CURRENT_BINARY_DIR}/PatternParser.cpp)
 FLEX_TARGET(PatternLexer lib/PatternLexer.l  ${CMAKE_CURRENT_BINARY_DIR}/PatternLexer.cpp)
 ADD_FLEX_BISON_DEPENDENCY(PatternLexer PatternParser)
 
-BISON_TARGET(SMTParser lib/SMTParser.y ${CMAKE_CURRENT_BINARY_DIR}/SMTParser.cpp VERBOSE ${CMAKE_CURRENT_BINARY_DIR}/smt.output)
+BISON_TARGET(SMTParser lib/SMTParser.y ${CMAKE_CURRENT_BINARY_DIR}/SMTParser.cpp)
 FLEX_TARGET(SMTLexer lib/SMTLexer.l  ${CMAKE_CURRENT_BINARY_DIR}/SMTLexer.cpp)
 ADD_FLEX_BISON_DEPENDENCY(SMTLexer SMTParser)
 
@@ -46,15 +46,19 @@ add_library(libreve-interpreter
   ${FLEX_PatternLexer_OUTPUTS}
   ${BISON_SMTParser_OUTPUTS}
   ${FLEX_SMTLexer_OUTPUTS})
+add_library(popen-noshell
+  "lib/popen_noshell.c"
+  "include/popen_noshell.h")
 add_executable(reve-analyzer src/ReveAnalyzer.cpp ${headers})
 
 target_link_libraries(libreve-interpreter
+  popen-noshell
   libreve
 )
 target_link_libraries(reve-analyzer
-  libreve
   libreve-interpreter
   ${GMP_LIBRARIES}
   ${GMPXX_LIBRARIES}
   ${FL_LIBRARY}
-  )
+  popen-noshell
+)

@@ -9,7 +9,7 @@ macro(set_compiler_settings)
 	set(CMAKE_CXX_COMPILER "clang++")
 	set(CXX_WARNINGS_FLAGS "-Weverything -Wno-c++98-compat -Wno-exit-time-destructors -Wno-global-constructors -Wno-padded -Wno-switch-enum -Wno-shadow")
 	set(CXX_OTHER_FLAGS "--system-header-prefix=llvm --system-header-prefix=clang")
-	set(CXX_STANDARD_FLAGS "-std=c++14 -stdlib=libc++ -fno-rtti")
+	set(CXX_STANDARD_FLAGS "-std=c++14 -stdlib=libc++ -fno-rtti -g")
 	#Use cmake -D CLANG_FLAGS=yourFlags to add custom flags
 	set(USER_FLAGS "${CLANG_FLAGS}")
 	set(CMAKE_CXX_FLAGS "${CXX_WARNINGS_FLAGS} ${CXX_STANDARD_FLAGS} ${CXX_OTHER_FLAGS} ${USER_FLAGS}")
@@ -25,7 +25,7 @@ macro (load_llvm)
 	message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
 	include_directories(${LLVM_INCLUDE_DIRS})
-	add_definitions(${LLVM_DEFINITIONS})	
+	add_definitions(${LLVM_DEFINITIONS})
 endmacro(load_llvm)
 
 #Compile libreve, make it aviable, make sure it is recompiled on change
@@ -34,11 +34,11 @@ macro (load_libreve)
 
 	set(reve_build_dir ${CMAKE_BINARY_DIR}/reve)
 	set(reve_dir ${CMAKE_CURRENT_SOURCE_DIR}/../../reve/reve)
-	
+
 	file(MAKE_DIRECTORY ${reve_build_dir})
 
 	# First, we need to compile lib reve, otherwise we would not have
-	# 'libreve-exports.cmake' and cmake would not now where to find 
+	# 'libreve-exports.cmake' and cmake would not now where to find
 	# the library to link against.
 	#
 	# Will be run on initial 'cmake' or after changes to this file.
@@ -61,7 +61,7 @@ macro (load_libreve)
 	add_custom_target(librevebuild
 			COMMAND ${CMAKE_COMMAND} --build .
 			WORKING_DIRECTORY ${reve_build_dir}
-		)	
+		)
 endmacro(load_libreve)
 
 macro(find_sources)
@@ -90,7 +90,7 @@ load_libreve()
 find_sources()
 
 # Pack all non executable sources into library to prevent
-# repeated building of source files. 
+# repeated building of source files.
 add_library(all_sources ${sources})
 target_link_libraries(all_sources libreve)
 
