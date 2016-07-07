@@ -165,14 +165,15 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         findSolutions(analysisResults.polynomialEquations),
         analysisResults.heapPatternCandidates, freeVarsMap, DegreeFlag);
     if (ImplicationsFlag) {
-        SMTGenerationOpts::initialize(
-            mainFunctionName, HeapFlag, false, false, false, false, false,
-            false, false, false, false, false, BoundedFlag, InvertFlag, {});
+        SMTGenerationOpts::initialize(mainFunctionName, HeapFlag, false, false,
+                                      false, false, false, false, false, false,
+                                      false, false, BoundedFlag, InvertFlag,
+                                      false, {});
     } else {
         SMTGenerationOpts::initialize(mainFunctionName, HeapFlag, false, false,
                                       false, false, false, false, false, false,
                                       false, false, BoundedFlag, InvertFlag,
-                                      invariantCandidates);
+                                      false, invariantCandidates);
     }
     // TODO pass all functions
     vector<SharedSMTRef> clauses =
@@ -366,7 +367,7 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
 
         SMTGenerationOpts::initialize(mainFunctionName, HeapFlag, false, false,
                                       false, false, false, false, false, false,
-                                      false, false, false, true,
+                                      false, false, false, true, false,
                                       invariantCandidates);
         vector<SharedSMTRef> clauses =
             generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
@@ -401,7 +402,7 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
 
     SMTGenerationOpts::initialize(
         mainFunctionName, HeapFlag, false, false, false, false, false, false,
-        false, false, false, false, false, true, invariantCandidates);
+        false, false, false, false, false, true, false, invariantCandidates);
     vector<SharedSMTRef> clauses =
         generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
 
