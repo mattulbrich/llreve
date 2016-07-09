@@ -33,7 +33,10 @@ auto stringConstants(const llvm::Module &mod, std::string heap)
 auto inInvariant(MonoPair<const llvm::Function *> funs, smt::SharedSMTRef body,
                  Memory memory, const llvm::Module &mod1,
                  const llvm::Module &mod2, bool strings, bool inInvariant)
-    -> smt::SharedSMTRef;
+  -> std::shared_ptr<smt::FunDef>;
 auto outInvariant(MonoPair<std::vector<smt::SortedVar>> funArgs,
                   smt::SharedSMTRef body, Memory memory, const llvm::Type *type)
     -> smt::SharedSMTRef;
+
+smt::SharedSMTRef initPredicate(std::shared_ptr<const smt::FunDef> inInv);
+smt::SharedSMTRef initImplication(std::shared_ptr<const smt::FunDef> funDecl);

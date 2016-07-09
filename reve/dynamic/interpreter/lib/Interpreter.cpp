@@ -326,9 +326,13 @@ void interpretPHI(const PHINode &instr, FastState &state,
 TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
                                      FastState &state) {
     if (const auto retInst = dyn_cast<ReturnInst>(instr)) {
-        state.variables[ReturnName] =
-            resolveValue(retInst->getReturnValue(), state,
-                         retInst->getReturnValue()->getType());
+        if (retInst->getReturnValue() == nullptr) {
+            state.variables[ReturnName] = 0;
+        } else {
+            state.variables[ReturnName] =
+                resolveValue(retInst->getReturnValue(), state,
+                             retInst->getReturnValue()->getType());
+        }
         return TerminatorUpdate(nullptr);
     } else if (const auto branchInst = dyn_cast<BranchInst>(instr)) {
         if (branchInst->isUnconditional()) {
