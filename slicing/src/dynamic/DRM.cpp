@@ -61,7 +61,7 @@ unsigned int LinearizedFunction::operator[](
 
 DRM::DRM(
 		LinearizedFunction const& linFunc,
-		uint64_t           const  cex[]) :
+		CEXType            const& cex) :
 	linFunc     (linFunc),
 	_instCount  (linFunc.getInstructionCount()),
 	_matrix     (new APInt*[_instCount]),
@@ -152,7 +152,7 @@ DRM::~DRM(void) {
 }
 
 APInt const& DRM::computeSlice(
-		APInt const& apriori) {
+		APInt const& apriori) const {
 	
 	assert(apriori.getBitWidth() == _instCount);
 	
@@ -197,6 +197,28 @@ void DRM::printReachability(
 	for(unsigned int i = 0; i < _instCount; i++) {
 		out << (row[i] ? "X" : " ") << " ";
 	}
+}
+
+bool DRMCompare::operator()(
+		DRM const& lhs,
+		DRM const& rhs) const {
+	
+	assert(lhs._instCount == rhs._instCount);
+	
+	for(unsigned int i = 0; i < lhs._instCount; i++) {
+		if(lhs._matrix[i]->ult(*rhs._matrix[i])) {
+			return true;
+		}
+	}
+	
+	return false;
+}
+
+bool APIntCompare::operator()(
+		APInt const& lhs,
+		APInt const& rhs) const {
+	
+	return lhs.ult(rhs);
 }
 
 char CtrlDepExtractionPass::ID = 0;

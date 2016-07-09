@@ -16,6 +16,8 @@ class Interpreter {
 	
 	public:
 	
+	typedef std::vector<uint64_t> InputType;
+	
 	llvm::Function const& func;
 	llvm::APInt    const  valueVoid;
 	llvm::APInt    const  valueUndef;
@@ -24,7 +26,7 @@ class Interpreter {
 	
 	Interpreter(
 		llvm::Function const& func,
-		uint64_t       const  input[],
+		InputType      const& input,
 		bool           const  branchDependencies = true);
 	~Interpreter(void);
 	

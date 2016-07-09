@@ -14,9 +14,9 @@ using namespace std;
 using namespace llvm;
 
 Interpreter::Interpreter(
-		Function const& func,
-		uint64_t const  input[],
-		bool     const  branchDependencies) :
+		Function  const& func,
+		InputType const& input,
+		bool      const  branchDependencies) :
 	func             (func),
 	_computeBranchDep(branchDependencies),
 	_instIt          (func.getEntryBlock().begin()),
@@ -273,11 +273,10 @@ APInt Interpreter::executeCallInst(void) {
 		
 	} else {
 		
-		unsigned int const argCount = callInst.getNumArgOperands();
-		uint64_t*    const args     = new uint64_t[argCount];
+		InputType args(callInst.getNumArgOperands());
 		
 		// Collect arguments
-		for(unsigned int i = 0; i < argCount; i++) {
+		for(unsigned int i = 0; i < args.size(); i++) {
 			args[i] = resolveValue(callInst.getArgOperand(i)).getLimitedValue();
 		}
 		
@@ -285,9 +284,6 @@ APInt Interpreter::executeCallInst(void) {
 		
 		// Interprete the function
 		interpreter.execute();
-		
-		// Free resources for the argument array
-		delete [] args;
 		
 		return *interpreter.getReturnValue();
 	}

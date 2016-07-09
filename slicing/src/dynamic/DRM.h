@@ -10,6 +10,7 @@
 
 #include <list>
 #include <unordered_map>
+#include <vector>
 
 class LinearizedFunction {
 	
@@ -36,19 +37,23 @@ class DRM {
 	
 	public:
 	
+	friend class DRMCompare;
+	
+	typedef Interpreter::InputType CEXType;
+	
 	LinearizedFunction const& linFunc;
 	
-	DRM(LinearizedFunction const& linFunc, uint64_t const cex[]);
+	DRM(LinearizedFunction const& linFunc, CEXType const& cex);
 	~DRM(void);
 	
-	llvm::APInt const& computeSlice(llvm::APInt const& apriori);
+	llvm::APInt const& computeSlice(llvm::APInt const& apriori) const;
 	void               print       (llvm::raw_ostream& out) const;
 	
 	private:
 	
-	unsigned int  const _instCount;
-	llvm::APInt** const _matrix;
-	llvm::APInt         _accumulator;
+	unsigned int  const   _instCount;
+	llvm::APInt** const   _matrix;
+	llvm::APInt   mutable _accumulator;
 	
 	static llvm::APInt const* findNode(
 		std::list<llvm::APInt const*> const& elements,
@@ -57,6 +62,21 @@ class DRM {
 	void printReachability(
 		llvm::APInt const& row,
 		llvm::raw_ostream& out) const;
+};
+
+class DRMCompare {
+	
+	public:
+	
+	// Comparison is defined as lexicographical comparison of the rows
+	bool operator() (DRM const& lhs, DRM const& rhs) const;
+};
+
+class APIntCompare {
+	
+	public:
+	
+	bool operator() (llvm::APInt const& lhs, llvm::APInt const& rhs) const;
 };
 
 class CtrlDepExtractionPass : public llvm::FunctionPass {
