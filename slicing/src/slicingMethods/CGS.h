@@ -27,7 +27,7 @@ class CandidateNode {
 	CandidateNode(CGS& cgs, llvm::APInt const& slice) :
 		cgs(cgs), slice(slice), state(State::notchecked), pSlice(nullptr) {}
 	
-	CandidateNode& validate        (DRM::CEXType& cex);
+	CandidateNode& validate        (CEXType& cex);
 	State          getState        (void);
 	ModulePtr      getSlicedProgram(void);
 	
@@ -60,7 +60,7 @@ class CGS : public SlicingMethod {
 	LinearizedFunction* pCurLinFunc;
 	CriterionPtr        pCurCriterion;
 	
-	std::set<DRM::CEXType const>                              _counterexamples;
+	std::set<CEXType const>                                   _counterexamples;
 	std::set<DRM const,                         DRMCompare>   _drms;
 	std::map<llvm::APInt const, CandidateNode*, APIntCompare> _sliceCandidates;
 };

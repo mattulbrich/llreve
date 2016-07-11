@@ -8,8 +8,6 @@
 #include "ModuleSMTGeneration.h"
 #include "Serialize.h"
 
-#include "smtSolver/SmtSolver.h"
-
 using namespace llvm;
 using namespace std;
 
@@ -17,7 +15,7 @@ using smt::SharedSMTRef;
 
 
 ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm::Module* candidate,
-	CriterionPtr criterion, CounterExample* counterExample){
+	CriterionPtr criterion, CEXType* pCEX){
 	string outputFileName("candidate.smt");
 
 	SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
@@ -61,7 +59,7 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 	SerializeOpts serializeOpts(outputFileName, false, false, false, true);
 	serializeSMT(smtExprs, SMTGenerationOpts::getInstance().MuZ, serializeOpts);
 
-	SatResult satResult = SmtSolver::getInstance().checkSat(outputFileName);
+	SatResult satResult = SmtSolver::getInstance().checkSat(outputFileName, pCEX);
 	ValidationResult result;
 
 	switch (satResult) {

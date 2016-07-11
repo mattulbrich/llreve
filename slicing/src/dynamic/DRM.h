@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Interpreter.h"
+#include "smtSolver/SmtSolver.h"
 
 #include "llvm/ADT/APInt.h"
 #include "llvm/IR/Function.h"
@@ -38,8 +39,6 @@ class DRM {
 	public:
 	
 	friend class DRMCompare;
-	
-	typedef Interpreter::InputType CEXType;
 	
 	LinearizedFunction const& linFunc;
 	

@@ -11,7 +11,7 @@ SmtCommand::~SmtCommand() = default;
 
 SmtSolverCommandLineAdapter::~SmtSolverCommandLineAdapter() = default;
 
-SatResult SmtSolverCommandLineAdapter::checkSat(std::string smtFilePath){
+SatResult SmtSolverCommandLineAdapter::checkSat(std::string smtFilePath, CEXType* pCEX){
 	std::string resultFilePath = "solverResult.txt";
 	std::string command = this->getCommand().getCommandStr(smtFilePath, resultFilePath);
 
@@ -32,5 +32,5 @@ SatResult SmtSolverCommandLineAdapter::checkSat(std::string smtFilePath){
 		exit(1);
 	}
 
-	return this->parseResult(resultFilePath);
+	return this->parseResult(resultFilePath, pCEX);
 }

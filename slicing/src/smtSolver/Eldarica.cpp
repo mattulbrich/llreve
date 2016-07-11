@@ -14,7 +14,7 @@ std::string EldaricaCommand::getCommandStr(std::string smtFilePath, std::string 
 }
 
 
-SatResult Eldarica::parseResult(std::string resultFile) {
+SatResult Eldarica::parseResult(std::string resultFile, CEXType* pCEX) {
 	std::ifstream input(resultFile);
 	std::string line;
 	SatResult result = SatResult::unknown;

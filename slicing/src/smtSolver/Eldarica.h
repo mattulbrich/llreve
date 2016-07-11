@@ -14,7 +14,7 @@ private:
 class Eldarica : public SmtSolverCommandLineAdapter {
 public:
 	Eldarica(std::string pathToEldarica):SmtSolverCommandLineAdapter(), command(pathToEldarica) {}
-	virtual SatResult parseResult(std::string resultFile) override;
+	virtual SatResult parseResult(std::string resultFile, CEXType* pCEX) override;
 	virtual SmtCommand& getCommand() override;
 private:
 	EldaricaCommand command;

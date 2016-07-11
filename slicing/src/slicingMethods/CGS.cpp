@@ -26,7 +26,7 @@ CandidateNode::State CandidateNode::getState(void) {
 }
 
 CandidateNode& CandidateNode::validate(
-		DRM::CEXType& cex) {
+		CEXType& cex) {
 	
 	assert(!pSlice);
 	
@@ -47,18 +47,16 @@ CandidateNode& CandidateNode::validate(
 	pm.run(*pSlice);
 	
 	ValidationResult validationResult = SliceCandidateValidation::validate(
-		const_cast<Module*>(&cgs.module), &*pSlice, cgs.getCurCriterion());
+		const_cast<Module*>(&cgs.module),
+		&*pSlice,
+		cgs.getCurCriterion(),
+		&cex);
 	
 	// Copy the validation state to the internal extended state
 	switch(validationResult) {
 		case ValidationResult::valid:   state = State::valid;   break;
 		case ValidationResult::invalid: state = State::invalid; break;
 		case ValidationResult::unknown: state = State::unknown; break;
-	}
-	
-	// Extract the counterexample
-	if(state == State::invalid) {
-		
 	}
 	
 	return *this;
@@ -71,21 +69,17 @@ ModulePtr CGS::computeSlice(
 	set<Instruction*> critInstructionSet = criterion->getInstructions(module);
 	Function&         func               =
 		*(*critInstructionSet.begin())->getParent()->getParent();
-	//ModulePtr         sliceCandidate;
-	//unordered_set<CandidateNode*> 
 	
 	LinearizedFunction linFunc         (func);
 	APInt              critInstructions(linFunc.getInstructionCount(), 0);
 	APInt              unionSlice      (linFunc.getInstructionCount(), 0);
 	CandidateNode*     pCurCandidate   (&getCandidateNode(unionSlice));
 	bool               performSDS;
+	DRM const*         pCurDRM;
+	CEXType            cex;
 	
 	pCurLinFunc   = &linFunc;
 	pCurCriterion = criterion;
-	
-	// Array to store the current counterexample
-	//uint64_t* cex = new uint64_t[linFunc.func.getArgumentList().size()];
-	DRM::CEXType cex;
 	
 	// Mark all instructions that must be in the slice by default
 	for(Instruction* i : criterion->getInstructions(module)) {
@@ -96,32 +90,40 @@ ModulePtr CGS::computeSlice(
 		CandidateNode::State::valid) {
 		
 		performSDS = true;
+		pCurDRM    = nullptr;
 		
 		// Check whether a counterexample is available
 		if(pCurCandidate->getState() == CandidateNode::State::invalid) {
 			
-			auto       cexCreation = _counterexamples.emplace(cex);
-			DRM const* pLatestDRM  = nullptr;
+			auto cexCreation = _counterexamples.emplace(cex);
+			auto drmCreation = _drms.emplace(linFunc, *cexCreation.first);
 			
-			// Check whether the counterexample is new
-			if(cexCreation.second) {
-				
-				auto drmCreation = _drms.emplace(linFunc, *cexCreation.first);
-				pLatestDRM       = &*drmCreation.first;
-				
-				// Check whether the resulting DRM is new
-				if(drmCreation.second) {
-					// Create the union slice
-					unionSlice    |= pLatestDRM->computeSlice(critInstructions);
-					pCurCandidate  = &getCandidateNode(unionSlice);
-					performSDS     = false;
-				}
+			pCurDRM = &*drmCreation.first;
+			
+			// Check whether the counterexample and DRM are new
+			if(cexCreation.second && drmCreation.second) {
+				// Create the union slice
+				unionSlice    |= pCurDRM->computeSlice(critInstructions);
+				pCurCandidate  = &getCandidateNode(unionSlice);
+				performSDS     = false;
 			}
 		}
 		
 		if(performSDS) {
 			assert(false);
 			// TODO: perform SDS step
+			
+			// If a counterexample is available, try extending the candidate
+			// with the corresponding DRM
+			if(pCurDRM) {
+				
+				
+				
+			} else {
+				
+				
+			}
+			
 		}
 	}
 	
