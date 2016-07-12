@@ -15,6 +15,14 @@
 using namespace std;
 using namespace llvm;
 
+CandidateNode& CandidateNode::createSuccessor(
+		DRM const& drm) {
+	
+	successors[&drm] = &cgs.getCandidateNode(drm.computeSlice(slice));
+	
+	return *successors[&drm];
+}
+
 ModulePtr CandidateNode::getSlicedProgram(void) {
 	
 	return pSlice;
@@ -110,14 +118,12 @@ ModulePtr CGS::computeSlice(
 		}
 		
 		if(performSDS) {
-			assert(false);
-			// TODO: perform SDS step
 			
 			// If a counterexample is available, try extending the candidate
 			// with the corresponding DRM
 			if(pCurDRM) {
 				
-				
+				pCurCandidate = &pCurCandidate->createSuccessor(*pCurDRM);
 				
 			} else {
 				

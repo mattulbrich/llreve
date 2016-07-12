@@ -31,6 +31,8 @@ class CandidateNode {
 	State          getState        (void);
 	ModulePtr      getSlicedProgram(void);
 	
+	CandidateNode& createSuccessor(DRM const& drm);
+	
 	private:
 	
 	State     state;
