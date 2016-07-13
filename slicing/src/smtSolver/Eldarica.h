@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <regex>
 #include "SmtSolverCommandLineAdapter.h"
 
 class EldaricaCommand : public SmtCommand {
@@ -17,5 +18,8 @@ public:
 	virtual SatResult parseResult(std::string resultFile, CEXType* pCEX) override;
 	virtual SmtCommand& getCommand() override;
 private:
+	static std::regex const patternSat;
+	static std::regex const patternUnsat;
+	static std::regex const patternInitPred;
 	EldaricaCommand command;
 };

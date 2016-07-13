@@ -12,13 +12,15 @@
 #include <cassert>
 #include <unordered_set>
 
+#include <iostream>
+
 using namespace std;
 using namespace llvm;
 
 CandidateNode& CandidateNode::createSuccessor(
 		DRM const& drm) {
 	
-	successors[&drm] = &cgs.getCandidateNode(drm.computeSlice(slice));
+	successors[&drm] = &cge.getCandidateNode(drm.computeSlice(slice));
 	
 	return *successors[&drm];
 }
@@ -40,9 +42,9 @@ CandidateNode& CandidateNode::validate(
 	
 	ValueToValueMapTy   valueMap;
 	legacy::PassManager pm;
-	LinearizedFunction& linFunc = cgs.getCurLinFunction();
+	LinearizedFunction& linFunc = cge.linFunc;
 	
-	pSlice = CloneModule(&cgs.module, valueMap);
+	pSlice = CloneModule(&cge.module, valueMap);
 	
 	// Mark all instruction that get sliced
 	for(Instruction const& i : Util::getInstructions(linFunc.func)) {
@@ -55,9 +57,9 @@ CandidateNode& CandidateNode::validate(
 	pm.run(*pSlice);
 	
 	ValidationResult validationResult = SliceCandidateValidation::validate(
-		const_cast<Module*>(&cgs.module),
+		const_cast<Module*>(&cge.module),
 		&*pSlice,
-		cgs.getCurCriterion(),
+		cge.pCriterion,
 		&cex);
 	
 	// Copy the validation state to the internal extended state
@@ -70,6 +72,84 @@ CandidateNode& CandidateNode::validate(
 	return *this;
 }
 
+CandidateGenerationEngine::CandidateGenerationEngine(
+		llvm::Module&       module,
+		CriterionPtr const  pCriterion,
+		LinearizedFunction& linFunc) :
+	module           (module),
+	pCriterion       (pCriterion),
+	linFunc          (linFunc),
+	_instCount       (linFunc.getInstructionCount()),
+	_critInstructions(_instCount, 0),
+	_pUnionSlice     (nullptr),
+	_pBestValidSlice (nullptr) {
+	
+	APInt fullSlice(_instCount, 0);
+	
+	// Mark all instructions that must be in the slice by default
+	for(Instruction* i : pCriterion->getInstructions(*const_cast<Function*>(&linFunc.func)->getParent())) {
+		_critInstructions.setBit(linFunc[*i]);
+	}
+	
+	fullSlice.setAllBits();
+	_pBestValidSlice = &getCandidateNode(fullSlice);
+}
+
+CandidateNode& CandidateGenerationEngine::generateCandidate(void) {
+	
+	if(!_pUnionSlice) {
+		
+		CEXType cex(_instCount);
+		
+		// Initialize the first counterexample with a 0-vector
+		for(unsigned int i = 0; i < _instCount; i++) {
+			cex[i] = 0;
+		}
+		
+		return generateCandidate(cex);
+		
+	} else {
+		
+		assert(false);
+	}
+}
+
+CandidateNode& CandidateGenerationEngine::generateCandidate(
+		CEXType& cex) {
+	
+	auto drmCreation = _drms.emplace(linFunc, cex);
+	
+	APInt const dynSlice = drmCreation.first->computeSlice(_critInstructions);
+	
+	if(_pUnionSlice) {
+		_pUnionSlice = &getCandidateNode(_pUnionSlice->slice | dynSlice);
+	} else {
+		_pUnionSlice = &getCandidateNode(dynSlice);
+	}
+	
+	return *_pUnionSlice;
+}
+
+CandidateNode& CandidateGenerationEngine::getCandidateNode(
+		APInt const& slice) {
+	
+	if(_sliceCandidates.find(slice) == _sliceCandidates.end()) {
+		_sliceCandidates[slice] = new CandidateNode(*this, slice);
+	}
+	
+	return *_sliceCandidates[slice];
+}
+
+bool CandidateGenerationEngine::updateBestValidSlice(
+		CandidateNode& slice) {
+	
+	assert(slice.size < _pBestValidSlice->size);
+	
+	_pBestValidSlice = &slice;
+	
+	return &slice == _pBestValidSlice;
+}
+
 ModulePtr CGS::computeSlice(
 		CriterionPtr criterion) {
 	
@@ -79,21 +159,39 @@ ModulePtr CGS::computeSlice(
 		*(*critInstructionSet.begin())->getParent()->getParent();
 	
 	LinearizedFunction linFunc         (func);
-	APInt              critInstructions(linFunc.getInstructionCount(), 0);
-	APInt              unionSlice      (linFunc.getInstructionCount(), 0);
-	CandidateNode*     pCurCandidate   (&getCandidateNode(unionSlice));
-	bool               performSDS;
-	DRM const*         pCurDRM;
-	CEXType            cex;
+	CEXType            cex             (func.getArgumentList().size());
 	
-	pCurLinFunc   = &linFunc;
-	pCurCriterion = criterion;
+	CandidateGenerationEngine cge(module, criterion, linFunc);
+	CandidateNode*            pCurCandidate(&cge.generateCandidate());
 	
-	// Mark all instructions that must be in the slice by default
-	for(Instruction* i : criterion->getInstructions(module)) {
-		critInstructions.setBit(linFunc[*i]);
+	linFunc.print(_out);
+	
+	while(pCurCandidate->validate(cex).getState() !=
+		CandidateNode::State::valid) {
+		
+		printSlice(pCurCandidate->slice) << "  ";
+		
+		switch(pCurCandidate->getState()) {
+			case CandidateNode::State::valid: _out << "valid\n"; break;
+			case CandidateNode::State::invalid:
+				_out << "invalid ";
+				printCounterexample(cex) << "\n";
+				break;
+			case CandidateNode::State::unknown: _out << "unknown\n"; break;
+		}
+		
+		pCurCandidate =
+			pCurCandidate->getState() == CandidateNode::State::invalid ?
+			&cge.generateCandidate(cex) :
+			&cge.generateCandidate();
 	}
 	
+	cge.updateBestValidSlice(*pCurCandidate);
+	
+	_out << "Final Slice: ";
+	printSlice(pCurCandidate->slice) << "\n";
+	
+	/*
 	while(pCurCandidate->validate(cex).getState() !=
 		CandidateNode::State::valid) {
 		
@@ -132,62 +230,33 @@ ModulePtr CGS::computeSlice(
 			
 		}
 	}
-	
+	*/
 	return pCurCandidate->getSlicedProgram();
-	/*
-	// TODO: Change for counterexample
-	// (All arguments are set to 0)
-	int argCount = linFunc.func.getArgumentList().size();
-	uint64_t* input = new uint64_t[argCount];
-	for(int i = 0; i < argCount; i++) input[i] = 0;
+}
+
+raw_ostream& CGS::printCounterexample(
+		CEXType const& cex) {
 	
-	linFunc.print(_ostream);
+	_out << "[";
 	
-	DRM testDRM(linFunc, input);
-	
-	testDRM.print(_ostream);
-	
-	
-	ValueToValueMapTy valueMap;
-	ModulePtr sliceCandidate = CloneModule(&program, valueMap);
-	
-	APInt apriori(linFunc.getInstructionCount(), 0);
-	for(Instruction* i : criterion->getInstructions(program)) {
-		apriori.setBit(linFunc[*i]);
-	}
-	
-	APInt const& slice = testDRM.computeSlice(apriori);
-	
-	for(Instruction& i : Util::getInstructions(func)) {
-		if(!slice[linFunc[i]]) {
-			SlicingPass::toBeSliced(*dyn_cast<Instruction>(valueMap[&i]));
+	if(!cex.empty()) {
+		_out << " " << cex[0] << " ";
+		for(unsigned int i = 1; i < cex.size(); i++) {
+			_out << ", " << cex[i] << " ";
 		}
 	}
 	
-	llvm::legacy::PassManager pm;
-	pm.add(new SlicingPass());
-	pm.run(*sliceCandidate);
+	_out << "]";
 	
-	return sliceCandidate;
-	*/
+	return _out;
 }
 
-CandidateNode& CGS::getCandidateNode(
+raw_ostream& CGS::printSlice(
 		APInt const& slice) {
 	
-	if(_sliceCandidates.find(slice) == _sliceCandidates.end()) {
-		_sliceCandidates[slice] = new CandidateNode(*this, slice);
+	for(unsigned int i = 0; i < slice.getBitWidth(); i++) {
+		_out << (slice[i] ? "X" : "_");
 	}
 	
-	return *_sliceCandidates[slice];
-}
-
-CriterionPtr& CGS::getCurCriterion(void) {
-	
-	return pCurCriterion;
-}
-	
-LinearizedFunction& CGS::getCurLinFunction(void) {
-	
-	return *pCurLinFunc;
+	return _out;
 }

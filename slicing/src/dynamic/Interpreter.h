@@ -16,7 +16,7 @@ class Interpreter {
 	
 	public:
 	
-	typedef std::vector<uint64_t> InputType;
+	typedef std::vector<int64_t> InputType;
 	
 	llvm::Function const& func;
 	llvm::APInt    const  valueVoid;

@@ -28,7 +28,17 @@ Interpreter::Interpreter(
 	
 	// Initialize the argument values with the input passed as argument
 	for(Argument const& i : func.getArgumentList()) {
-		_state[&i] = new APInt(getValueBitWidth(i), input[curIndex++]);
+		
+		int64_t const value = input[curIndex++];
+		APInt         apValue(
+			getValueBitWidth(i), static_cast<uint64_t>(abs(value)));
+		
+		// Correct signedness
+		if(value < 0) {
+			apValue = -apValue;
+		}
+		
+		_state[&i] = new APInt(apValue);
 	}
 	
 	// Initialize the instruction values with undefined values
@@ -276,6 +286,7 @@ APInt Interpreter::executeCallInst(void) {
 		InputType args(callInst.getNumArgOperands());
 		
 		// Collect arguments
+		// TODO: Signedness
 		for(unsigned int i = 0; i < args.size(); i++) {
 			args[i] = resolveValue(callInst.getArgOperand(i)).getLimitedValue();
 		}

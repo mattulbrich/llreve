@@ -19,9 +19,7 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 	string outputFileName("candidate.smt");
 
 	SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
-	smtOpts.PerfectSync = true;
-	smtOpts.InitPredicate = true;
-
+	
 	auto criterionInstructions = criterion->getInstructions(*program);
 	assert(criterionInstructions.size() > 0 && "Internal Error: Got criterion with no instructions.");
 	Function* slicedFunction = nullptr;
@@ -30,8 +28,20 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 		assert((!slicedFunction || function == slicedFunction) && "Not Supported: Got criterion with multiple functions.");
 
 		slicedFunction = function;
-		smtOpts.MainFunction = smtOpts.MainFunction = slicedFunction->getName().str();
 	}
+	
+	// Wrong way to do it
+	//smtOpts.PerfectSync = smtOpts.InitPredicate = true;
+	//smtOpts.MainFunction = slicedFunction->getName().str();
+	
+	// Better way to do it
+	smtOpts.initialize(
+		slicedFunction->getName().str(),
+		false, false, false, false, false, false, false, false,
+		true, // PerfectSync
+		false, false, false, false,
+		true, // InitPredicate
+		map<int, smt::SharedSMTRef>());
 
 	MonoPair<string> fileNames("","");
 	FileOptions fileOpts = getFileOptions(fileNames);
