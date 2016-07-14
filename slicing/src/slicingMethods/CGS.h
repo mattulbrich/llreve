@@ -72,6 +72,7 @@ class CandidateGenerationEngine {
 	
 	unsigned int const _instCount;
 	llvm::APInt        _critInstructions;
+	CandidateNode*     _pFullSlice;
 	CandidateNode*     _pUnionSlice;
 	CandidateNode*     _pBestValidSlice;
 	

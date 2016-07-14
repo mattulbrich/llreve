@@ -6,7 +6,8 @@
 
 std::regex const Eldarica::patternSat("sat");
 std::regex const Eldarica::patternUnsat("unsat");
-std::regex const Eldarica::patternInitPred("INIT\\((?:(-?[[:digit:]]+)(, )?)*\\)");
+std::regex const Eldarica::patternInitPred("INIT\\((?:-?[[:digit:]]+(?:, )?)*\\)");
+std::regex const Eldarica::patternInitPredTokenizer("INIT\\(|, |\\)");
 
 std::string EldaricaCommand::getCommandStr(std::string smtFilePath, std::string resultFilePath) {
 	std::stringstream ss;
@@ -27,16 +28,22 @@ SatResult Eldarica::parseResult(std::string resultFile, CEXType* pCEX) {
 	
 	if(regex_search(input, patternUnsat)) {
 		
-		std::smatch result;
-		regex_search(input, result, patternInitPred);
-		
-		assert(result.size() - 1 > pCEX->size());
-		
-		// Ignore the first capture group as this is the regex itself
-		for(unsigned int i = 0; i < pCEX->size(); i++) {
-			(*pCEX)[i] = stoll(result[i + 1]);
+		if(pCEX) {
+			
+			std::smatch result;
+			regex_search(input, result, patternInitPred);
+			
+			std::string                initPred = result[0];
+			std::sregex_token_iterator itCex(
+				initPred.begin(), initPred.end(), patternInitPredTokenizer, -1);
+			
+			// Ignore the first token (empty string)
+			for(unsigned int i = 0; i < pCEX->size(); i++) {
+				++itCex;
+				(*pCEX)[i] = stoll(itCex->str());
+			}
 		}
-		
+			
 		return SatResult::unsat;
 		
 	} else if(regex_search(input, patternSat)) {

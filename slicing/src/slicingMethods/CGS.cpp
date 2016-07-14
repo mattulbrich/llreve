@@ -81,6 +81,7 @@ CandidateGenerationEngine::CandidateGenerationEngine(
 	linFunc          (linFunc),
 	_instCount       (linFunc.getInstructionCount()),
 	_critInstructions(_instCount, 0),
+	_pFullSlice      (nullptr),
 	_pUnionSlice     (nullptr),
 	_pBestValidSlice (nullptr) {
 	
@@ -92,7 +93,7 @@ CandidateGenerationEngine::CandidateGenerationEngine(
 	}
 	
 	fullSlice.setAllBits();
-	_pBestValidSlice = &getCandidateNode(fullSlice);
+	_pBestValidSlice = _pFullSlice = &getCandidateNode(fullSlice);
 }
 
 CandidateNode& CandidateGenerationEngine::generateCandidate(void) {
@@ -117,8 +118,7 @@ CandidateNode& CandidateGenerationEngine::generateCandidate(void) {
 CandidateNode& CandidateGenerationEngine::generateCandidate(
 		CEXType& cex) {
 	
-	auto drmCreation = _drms.emplace(linFunc, cex);
-	
+	auto        drmCreation = _drms.emplace(linFunc, cex);
 	APInt const dynSlice = drmCreation.first->computeSlice(_critInstructions);
 	
 	if(_pUnionSlice) {
@@ -127,27 +127,43 @@ CandidateNode& CandidateGenerationEngine::generateCandidate(
 		_pUnionSlice = &getCandidateNode(dynSlice);
 	}
 	
+	// TODO: Delete outdated candidates
+	
 	return *_pUnionSlice;
 }
 
 CandidateNode& CandidateGenerationEngine::getCandidateNode(
 		APInt const& slice) {
-	
+	//cout << "getCandidateNode: ";
+	//for(unsigned int i = 0; i < slice.getBitWidth(); i++) {
+	//	cout << (slice[i] ? "X" : "_");
+	//}
+	//cout << " " << _sliceCandidates.size() << " -> ";
 	if(_sliceCandidates.find(slice) == _sliceCandidates.end()) {
 		_sliceCandidates[slice] = new CandidateNode(*this, slice);
 	}
-	
+	//cout << _sliceCandidates.size() << " (" << _sliceCandidates[slice] << ")" << endl;
 	return *_sliceCandidates[slice];
 }
 
 bool CandidateGenerationEngine::updateBestValidSlice(
 		CandidateNode& slice) {
 	
-	assert(slice.size < _pBestValidSlice->size);
+	if(&slice == _pBestValidSlice && _pBestValidSlice == _pFullSlice) {
+		
+		// The program can't be sliced at all
+		return true;
+		
+	} else {
+		
+		assert(slice.size < _pBestValidSlice->size);
 	
-	_pBestValidSlice = &slice;
-	
-	return &slice == _pBestValidSlice;
+		_pBestValidSlice = &slice;
+		
+		// TODO: Delete outdated candidates
+		
+		return &slice == _pBestValidSlice;
+	}
 }
 
 ModulePtr CGS::computeSlice(

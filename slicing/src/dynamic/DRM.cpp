@@ -128,6 +128,7 @@ DRM::DRM(
 	// Create the reachability matrix
 	for(unsigned int i = 0; i < _instCount; i++) {
 		_matrix[i] = new APInt(_instCount, 0);
+		_matrix[i]->setBit(i); // A node is always reachable from itself
 		for(APInt const* j : nodes[i]) {
 			*_matrix[i] |= *j;
 		}
