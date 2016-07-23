@@ -877,11 +877,17 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
     }
 
     if (main && blockIndex == ENTRY_MARK) {
+        string opname =
+            SMTGenerationOpts::getInstance().InitPredicate ?
+            "INIT" : "IN_INV";
+
         vector<string> args;
         for (const auto &arg : freeVars) {
             args.push_back(arg.name + "_old");
         }
-        clause = makeBinOp("=>", makeOp("IN_INV", args), clause);
+
+        clause = makeBinOp("=>", makeOp(opname, args), clause);
+
     } else {
         InvariantAttr attr = main ? InvariantAttr::MAIN : InvariantAttr::PRE;
         preVars = fillUpArgs(preVars, freeVarsMap, memory, prog, attr);

@@ -2,44 +2,62 @@
 #include <fstream>
 #include <sstream>
 #include <cassert>
+#include <iostream>
+
+std::regex const Eldarica::patternSat("sat");
+std::regex const Eldarica::patternUnsat("unsat");
+std::regex const Eldarica::patternUnkown("unknown");
+std::regex const Eldarica::patternInitPred("INIT\\((?:-?[[:digit:]]+(?:, )?)*\\)");
+std::regex const Eldarica::patternInitPredTokenizer("INIT\\(|, |\\)");
 
 std::string EldaricaCommand::getCommandStr(std::string smtFilePath, std::string resultFilePath) {
 	std::stringstream ss;
 	ss << this->pathToEldarica;
-	ss << " -hsmt ";
+	ss << " -hsmt -cex ";
 	ss << smtFilePath;
 	ss << " > ";
 	ss << resultFilePath;
 	return ss.str();
 }
 
+SatResult Eldarica::parseResult(std::string resultFile, CEXType* pCEX) {
 
-SatResult Eldarica::parseResult(std::string resultFile) {
-	std::ifstream input(resultFile);
-	std::string line;
-	SatResult result = SatResult::unknown;
-	bool foundResult = false;
-	while (getline(input, line)) {
-		if (line == "sat") {
-			result = SatResult::sat;
-			foundResult = true;
-			break;
-		}
-		if (line == "unsat") {
-			result = SatResult::unsat;
-			foundResult = true;
-			break;
-		}
-		if (line == "unknown") {
-			result = SatResult::unknown;
-			foundResult = true;
-			break;
+	std::ifstream inputStream(resultFile);
+	std::string   input(
+		(std::istreambuf_iterator<char>(inputStream)),
+		 std::istreambuf_iterator<char>());
+
+	if(regex_search(input, patternUnsat)) {
+
+		if(pCEX) {
+
+			std::smatch result;
+			regex_search(input, result, patternInitPred);
+
+			std::string                initPred = result[0];
+			std::sregex_token_iterator itCex(
+				initPred.begin(), initPred.end(), patternInitPredTokenizer, -1);
+
+			// Ignore the first token (empty string)
+			for(unsigned int i = 0; i < pCEX->size(); i++) {
+				++itCex;
+				(*pCEX)[i] = stoll(itCex->str());
+			}
 		}
 
+		return SatResult::unsat;
+
+	} else if(regex_search(input, patternSat)) {
+
+		return SatResult::sat;
+
+	} else if(regex_search(input, patternUnkown)) {
+		return SatResult::unknown;
+	} else {
+		std::cout << "unknown result: " << input;
+		assert(false && "Did not find result information, please report a bug!");
+		return SatResult::unknown;
 	}
-	assert(foundResult && "Did not find result information, please report a bug!");
-
-	return result;
 }
 
 SmtCommand& Eldarica::getCommand(){

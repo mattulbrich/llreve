@@ -42,7 +42,7 @@ template <typename T> class Apply : public SExpr<T> {
                 std::find(forceIndentOps.begin(), forceIndentOps.end(), fun) ==
                     forceIndentOps.end();
             bool inv = fun.substr(0, 3) == "INV" || fun == "OUT_INV" ||
-                       fun == "IN_INV";
+                       fun == "IN_INV" || fun == "INIT";
             if (atomicOp || simpleOp || inv) {
                 for (auto &arg : args) {
                     os << " ";

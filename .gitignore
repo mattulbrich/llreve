@@ -19,3 +19,7 @@ __pycache__/
 /reve/reve/shake/*.smt2
 TAGS
 /reve/dynamic/interpreter/build
+eldarica_mod
+eldarica
+cex
+z3

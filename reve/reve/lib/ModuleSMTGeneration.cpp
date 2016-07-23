@@ -68,13 +68,18 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
     for (auto &funPair : preprocessedFuns) {
         // Main function
         if (funPair.first.fun->getName() == smtOpts.MainFunction) {
-            smtExprs.push_back(inInvariant(
+            auto inInv = inInvariant(
                 makeMonoPair(funPair.first.fun, funPair.second.fun),
                 fileOpts.InRelation, mem, *modules.first, *modules.second,
-                smtOpts.GlobalConstants, fileOpts.AdditionalInRelation));
+                smtOpts.GlobalConstants, fileOpts.AdditionalInRelation);
+            smtExprs.push_back(inInv);
             smtExprs.push_back(outInvariant(
                 functionArgs(*funPair.first.fun, *funPair.second.fun),
                 fileOpts.OutRelation, mem, funPair.first.fun->getReturnType()));
+            if(smtOpts.InitPredicate) {
+                smtExprs.push_back(initPredicate(inInv));
+                assertions.push_back(initImplication(inInv));
+            }
             auto newSmtExprs = mainAssertion(funPair, declarations,
                                              smtOpts.OnlyRecursive, mem);
             assertions.insert(assertions.end(), newSmtExprs.begin(),
@@ -378,7 +383,7 @@ vector<SharedSMTRef> stringConstants(const llvm::Module &mod, string memory) {
     return stringConstants;
 }
 
-SharedSMTRef inInvariant(MonoPair<const llvm::Function *> funs,
+shared_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
                          SharedSMTRef body, Memory memory,
                          const llvm::Module &mod1, const llvm::Module &mod2,
                          bool strings, bool additionalIn) {
@@ -487,3 +492,45 @@ SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
 
     return make_shared<FunDef>("OUT_INV", funArgs, "Bool", body);
 }
+
+SharedSMTRef initPredicate(shared_ptr<const FunDef> inInv) {
+
+    vector<string> funArgs;
+    for(auto var : inInv->args) {
+        funArgs.push_back(var.type);
+    }
+
+    return make_shared<smt::FunDecl>("INIT", funArgs, "Bool");
+
+}
+
+SharedSMTRef initImplication(shared_ptr<const FunDef> funDecl) {
+
+    vector<SharedSMTRef> ininv_args;
+    vector<SharedSMTRef> init_args;
+    vector<SortedVar> quantified_vars;
+ 
+    for(auto var : funDecl->args) {
+        ininv_args.push_back(stringExpr(var.name));
+        if(var.type == "(Array Int Int)") {
+            string newvar = "$i_" + std::to_string(quantified_vars.size());
+            quantified_vars.push_back(SortedVar(newvar, "Int"));
+            init_args.push_back(makeBinOp("select", stringExpr(var.name), stringExpr(newvar)));
+            init_args.push_back(stringExpr(newvar));
+        } else {
+            init_args.push_back(stringExpr(var.name));
+        }
+    }
+
+    SharedSMTRef inAppl = std::make_shared<Op>("IN_INV", ininv_args);
+    SharedSMTRef initAppl = std::make_shared<Op>("INIT", init_args);
+
+    if(!quantified_vars.empty()) {
+        initAppl = std::make_shared<smt::Forall>(quantified_vars, initAppl);
+    }
+    SharedSMTRef clause = makeBinOp("=>", inAppl, initAppl);
+    auto forall = std::make_shared<smt::Forall>(funDecl->args, clause);
+
+    return make_shared<smt::Assert>(forall);
+}
+    

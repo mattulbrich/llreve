@@ -129,6 +129,9 @@ static llvm::cl::opt<bool>
     InvertFlag("invert", llvm::cl::desc("Check for satisfiabilty of negation"),
                llvm::cl::cat(ReveCategory));
 
+static llvm::cl::opt<bool>
+    InitPredFlag("init-pred", llvm::cl::desc("Introduce the toplevel predicate INIT"),
+               llvm::cl::cat(ReveCategory));
 int main(int argc, const char **argv) {
     parseCommandLineArguments(argc, argv);
 
@@ -138,7 +141,7 @@ int main(int argc, const char **argv) {
         MainFunctionFlag, HeapFlag, StackFlag, GlobalConstantsFlag,
         OnlyRecursiveFlag, NoByteHeapFlag, EverythingSignedFlag,
         SingleInvariantFlag, MuZFlag, PerfectSyncFlag, NestFlag,
-        PassInputThroughFlag, BitVectFlag, InvertFlag, {});
+        PassInputThroughFlag, BitVectFlag, InvertFlag, InitPredFlag, {});
     InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,
                         FileName2Flag);
     FileOptions fileOpts = getFileOptions(inputOpts.FileNames);

@@ -17,12 +17,12 @@ using smt::SharedSMTRef;
 
 
 ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm::Module* candidate,
-	CriterionPtr criterion, CounterExample* counterExample){
+	CriterionPtr criterion, CEXType* pCEX){
 	string outputFileName("candidate.smt");
 
 	SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
 	smtOpts.PerfectSync = true;
-	smtOpts.Heap = true;
+	// smtOpts.Heap = true;
 
 	auto criterionInstructions = criterion->getInstructions(*program);
 	assert(criterionInstructions.size() > 0 && "Internal Error: Got criterion with no instructions.");
@@ -62,7 +62,7 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 	SerializeOpts serializeOpts(outputFileName, false, false, false, true);
 	serializeSMT(smtExprs, SMTGenerationOpts::getInstance().MuZ, serializeOpts);
 
-	SatResult satResult = SmtSolver::getInstance().checkSat(outputFileName);
+	SatResult satResult = SmtSolver::getInstance().checkSat(outputFileName, pCEX);
 	ValidationResult result;
 
 	switch (satResult) {

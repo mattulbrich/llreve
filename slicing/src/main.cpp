@@ -11,6 +11,7 @@
 #include "util/FileOperations.h"
 #include "util/misc.h"
 #include "slicingMethods/BruteForce.h"
+#include "slicingMethods/CGS.h"
 #include "slicingMethods/SyntacticSlicing.h"
 #include "slicingMethods/impact_analysis_for_assignments/ImpactAnalysisForAssignments.h"
 #include "core/SliceCandidateValidation.h"
@@ -33,12 +34,13 @@ static llvm::cl::opt<std::string> FileName(llvm::cl::Positional,
 	llvm::cl::desc("<input file>"),
 	llvm::cl::Required);
 
-enum SlicingMethodOptions{syntactic, bruteforce, iaa};
+enum SlicingMethodOptions{syntactic, bruteforce, iaa, cgs};
 static cl::opt<SlicingMethodOptions> SlicingMethodOption(cl::desc("Choose slicing method:"),
 	cl::values(
 		clEnumVal(syntactic , "Classical syntactic slicing, folowd by verification of the slice."),
 		clEnumVal(bruteforce, "Bruteforce all slicecandidates, returns smalest."),
 		clEnumVal(iaa, "Use impact analysis for assignments to find unneccesary statments."),
+		clEnumVal(cgs, "Use counterexample guided slicing to find unneccesary instructions."),
 		clEnumValEnd),
 	llvm::cl::cat(SlicingCategory),
 	llvm::cl::Required);
@@ -98,7 +100,10 @@ int main(int argc, const char **argv) {
 		method = shared_ptr<SlicingMethod>(new BruteForce(program));
 		break;
 		case iaa:
-		method =  shared_ptr<SlicingMethod>(new ImpactAnalysisForAssignments(program));
+		method = shared_ptr<SlicingMethod>(new ImpactAnalysisForAssignments(program));
+		break;
+		case cgs:
+		method = shared_ptr<SlicingMethod>(new CGS(program));
 		break;
 	}
 

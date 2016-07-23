@@ -1,6 +1,7 @@
 #include "Interpreter.h"
 
 #include "core/Util.h"
+#include "preprocessing/ExplicitAssignPass.h"
 
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/InstrTypes.h"
@@ -13,18 +14,31 @@ using namespace std;
 using namespace llvm;
 
 Interpreter::Interpreter(
-		Function const& func,
-		uint64_t const  input[]) :
-	func        (func),
-	_instIt     (func.getEntryBlock().begin()),
-	_pRecentInst(nullptr),
-	_pNextInst  (&*_instIt) {
+		Function  const& func,
+		InputType const& input,
+		bool      const  branchDependencies) :
+	func             (func),
+	_computeBranchDep(branchDependencies),
+	_instIt          (func.getEntryBlock().begin()),
+	_pLastBB         (nullptr),
+	_pRecentInst     (nullptr),
+	_pNextInst       (&*_instIt) {
 	
 	unsigned int curIndex = 0;
 	
 	// Initialize the argument values with the input passed as argument
 	for(Argument const& i : func.getArgumentList()) {
-		_state[&i] = new APInt(getValueBitWidth(i), input[curIndex++]);
+		
+		int64_t const value = input[curIndex++];
+		APInt         apValue(
+			getValueBitWidth(i), static_cast<uint64_t>(abs(value)));
+		
+		// Correct signedness
+		if(value < 0) {
+			apValue = -apValue;
+		}
+		
+		_state[&i] = new APInt(apValue);
 	}
 	
 	// Initialize the instruction values with undefined values
@@ -70,6 +84,10 @@ bool Interpreter::executeNextInstruction(void) {
 	
 	APInt const* pNewValue = nullptr;
 	
+	// Reset the data dependencies, they will be filled during execution of the
+	// next instruction by calling 'resolveValue()'
+	recentDataDependencies.clear();
+	
 	if(isa<BinaryOperator>(_pNextInst)) {
 		pNewValue = new APInt(executeBinaryOperator());
 	} else if(isa<BranchInst>(_pNextInst)) {
@@ -88,6 +106,21 @@ bool Interpreter::executeNextInstruction(void) {
 		executeReturnInst();
 	} else {
 		assert(false);
+	}
+	
+	// Include the branch instructions in the dependencies
+	if(_computeBranchDep) {
+		
+		unordered_set<Instruction const*> branchDependencies;
+		
+		for(Instruction const* i : recentDataDependencies) {
+			if(i->getParent() != _pNextInst->getParent()) {
+				branchDependencies.insert(i->getParent()->getTerminator());
+			}
+		}
+		
+		recentDataDependencies.insert(
+			branchDependencies.begin(), branchDependencies.end());
 	}
 	
 	// Update state and execution trace
@@ -152,16 +185,20 @@ void Interpreter::moveToNextInstruction(void) {
 }
 
 APInt Interpreter::resolveValue(
-		Value const* pVal) const {
+		Value const* pVal) {
 	
-	if(isa<Instruction>(pVal) || isa<Argument>(pVal)) {
+	if(Instruction const* pInst = dyn_cast<Instruction>(pVal)) {
+		
+		recentDataDependencies.insert(pInst);
+		return *_state.at(pVal);
+		
+	} else if(isa<Argument>(pVal)) {
 		
 		return *_state.at(pVal);
 		
-	} else if (auto const constInt = dyn_cast<ConstantInt>(pVal)) {
+	} else if (ConstantInt const* pConstInt = dyn_cast<ConstantInt>(pVal)) {
 		
-		// For the moment treat all as integers, no matter which bit width
-		return constInt->getValue();
+		return pConstInt->getValue();
 		
 	//} else if (isa<ConstantPointerNull>(val)) {
 		//return make_shared<VarInt>(Integer(makeBoundedInt(64, 0)));
@@ -227,32 +264,40 @@ void Interpreter::executeBranchInst(void) {
 	}
 	
 	// Move to the next basic block
-	_instIt = branchInst.getSuccessor(successorIndex)->begin();
+	_pLastBB = branchInst.getParent();
+	_instIt  = branchInst.getSuccessor(successorIndex)->begin();
 }
 
 APInt Interpreter::executeCallInst(void) {
 	
-	CallInst const& callInst = *dyn_cast<CallInst>(_pNextInst);
+	CallInst const& callInst        = *dyn_cast<CallInst>(_pNextInst);
+	Function const* pCalledFunction = callInst.getCalledFunction();
 	
-	assert(callInst.getCalledFunction() != nullptr);
+	assert(pCalledFunction != nullptr);
 	
-	unsigned int const argCount = callInst.getNumArgOperands();
-	uint64_t*    const args     = new uint64_t[argCount];
-	
-	// Collect arguments
-	for(unsigned int i = 0; i < argCount; i++) {
-		args[i] = resolveValue(callInst.getArgOperand(i)).getLimitedValue();
+	if(pCalledFunction->getName().str() == ExplicitAssignPass::FUNCTION_NAME) {
+		
+		assert(callInst.getNumArgOperands() == 1);
+		
+		return resolveValue(callInst.getArgOperand(0));
+		
+	} else {
+		
+		InputType args(callInst.getNumArgOperands());
+		
+		// Collect arguments
+		// TODO: Signedness
+		for(unsigned int i = 0; i < args.size(); i++) {
+			args[i] = resolveValue(callInst.getArgOperand(i)).getLimitedValue();
+		}
+		
+		Interpreter interpreter(*callInst.getCalledFunction(), args);
+		
+		// Interprete the function
+		interpreter.execute();
+		
+		return *interpreter.getReturnValue();
 	}
-	
-	Interpreter interpreter(*callInst.getCalledFunction(), args);
-	
-	// Interprete the function
-	interpreter.execute();
-	
-	// Free resources for the argument array
-	delete [] args;
-	
-	return *interpreter.getReturnValue();
 }
 
 bool Interpreter::executeICmpInst(void) {
@@ -283,8 +328,7 @@ bool Interpreter::executeICmpInst(void) {
 APInt Interpreter::executePHINode(void) {
 	
 	return resolveValue(
-		dyn_cast<PHINode>(_pNextInst)->
-		getIncomingValueForBlock(_pRecentInst->getParent()));
+		dyn_cast<PHINode>(_pNextInst)->getIncomingValueForBlock(_pLastBB));
 }
 
 void Interpreter::executeReturnInst(void) {
