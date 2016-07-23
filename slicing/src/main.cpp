@@ -9,6 +9,7 @@
 
 
 #include "util/FileOperations.h"
+#include "util/misc.h"
 #include "slicingMethods/BruteForce.h"
 #include "slicingMethods/SyntacticSlicing.h"
 #include "slicingMethods/impact_analysis_for_assignments/ImpactAnalysisForAssignments.h"
@@ -42,7 +43,7 @@ static cl::opt<SlicingMethodOptions> SlicingMethodOption(cl::desc("Choose slicin
 	llvm::cl::cat(SlicingCategory),
 	llvm::cl::Required);
 
-bool criterionPresent = false;
+static bool criterionPresent = false;
 static llvm::cl::opt<bool,true> CriterionPresentFlag("criterion-present", llvm::cl::desc("Use if the code contains a __criterion function to mark the criterion."), cl::location(criterionPresent),
 	llvm::cl::cat(SlicingCategory));
 static llvm::cl::alias     CriterionPresentShort("p", cl::desc("Alias for -criterion-present"),
@@ -57,6 +58,8 @@ static llvm::cl::opt<string> ResourceDir(
 		"e.g. /usr/local/lib/clang/3.8.0"),
 	llvm::cl::cat(ClangCategory));
 
+static llvm::cl::opt<bool> RemoveFunctions("remove-functions", llvm::cl::desc("Removes unused functions from module before slicing."),
+	llvm::cl::cat(SlicingCategory));
 
 void parseArgs(int argc, const char **argv) {
 	vector<llvm::cl::OptionCategory*> optionCategorys;
@@ -97,6 +100,25 @@ int main(int argc, const char **argv) {
 		case iaa:
 		method =  shared_ptr<SlicingMethod>(new ImpactAnalysisForAssignments(program));
 		break;
+	}
+
+
+	if (RemoveFunctions) {
+		set<Instruction*> criterionInstructions = criterion->getInstructions(*program);
+		assert(criterionInstructions.size() == 1 && "Todo: improve implementation to work with multiple criterions");
+		Instruction* instruction = *criterionInstructions.begin();
+		Function* fun = instruction->getParent()->getParent();
+		vector<Function*> removeFun;
+		for (Function& function: *program) {
+			if (!Util::isSpecialFunction(function) && &function != fun) {
+				removeFun.push_back(&function);
+			}
+		}
+		for (Function* function:removeFun) {
+			Function* exFun = Function::Create(function->getFunctionType(), llvm::GlobalValue::LinkageTypes::ExternalLinkage, Twine(function->getName()), &*program);
+			function->replaceAllUsesWith(exFun);
+			function->eraseFromParent();
+		}
 	}
 
 	ModulePtr slice = method->computeSlice(criterion);

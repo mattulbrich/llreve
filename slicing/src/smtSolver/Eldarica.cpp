@@ -30,6 +30,12 @@ SatResult Eldarica::parseResult(std::string resultFile) {
 			foundResult = true;
 			break;
 		}
+		if (line == "unknown") {
+			result = SatResult::unknown;
+			foundResult = true;
+			break;
+		}
+
 	}
 	assert(foundResult && "Did not find result information, please report a bug!");
 

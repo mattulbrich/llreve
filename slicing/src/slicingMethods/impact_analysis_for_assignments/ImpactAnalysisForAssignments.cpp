@@ -75,7 +75,7 @@ ModulePtr ImpactAnalysisForAssignments::computeSlice(CriterionPtr criterion){
 	PM.run(*slice);
 
 	ValidationResult result = SliceCandidateValidation::validate(&*program, &*slice, criterion);
-	assert(result == ValidationResult::valid);
+	//assert(result == ValidationResult::valid);
 
 	return slice;
 }

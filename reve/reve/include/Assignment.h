@@ -1,4 +1,4 @@
-#pragma once
+	#pragma once
 
 #include "Memory.h"
 #include "Program.h"

@@ -22,6 +22,7 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 
 	SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
 	smtOpts.PerfectSync = true;
+	smtOpts.Heap = true;
 
 	auto criterionInstructions = criterion->getInstructions(*program);
 	assert(criterionInstructions.size() > 0 && "Internal Error: Got criterion with no instructions.");
