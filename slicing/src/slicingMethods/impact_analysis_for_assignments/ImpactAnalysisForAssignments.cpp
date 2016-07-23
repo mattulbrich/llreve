@@ -79,6 +79,9 @@ ModulePtr ImpactAnalysisForAssignments::computeSlice(CriterionPtr criterion){
 	std::cout << "Number of Reve calls: " << callsToReve_ << std::endl;
 
 	ValidationResult result = SliceCandidateValidation::validate(&*program, &*slice, criterion);
+	if (result != ValidationResult::valid) {
+		std::cout << "Error: Produced Slice is not Valid." << std::endl;
+	}
 	//assert(result == ValidationResult::valid);
 
 	return slice;

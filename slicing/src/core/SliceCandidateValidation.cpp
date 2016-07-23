@@ -8,8 +8,6 @@
 #include "ModuleSMTGeneration.h"
 #include "Serialize.h"
 
-#include "smtSolver/SmtSolver.h"
-
 using namespace llvm;
 using namespace std;
 
@@ -20,10 +18,6 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 	CriterionPtr criterion, CEXType* pCEX){
 	string outputFileName("candidate.smt");
 
-	SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
-	smtOpts.PerfectSync = true;
-	// smtOpts.Heap = true;
-
 	auto criterionInstructions = criterion->getInstructions(*program);
 	assert(criterionInstructions.size() > 0 && "Internal Error: Got criterion with no instructions.");
 	Function* slicedFunction = nullptr;
@@ -32,8 +26,20 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 		assert((!slicedFunction || function == slicedFunction) && "Not Supported: Got criterion with multiple functions.");
 
 		slicedFunction = function;
-		smtOpts.MainFunction = smtOpts.MainFunction = slicedFunction->getName().str();
 	}
+	assert((slicedFunction) && "Did not find sliced function.");
+
+	SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
+	// don't assign smtOpts member variables directly but use initialize
+	// see https://github.com/mattulbrich/llreve/issues/10 for details
+	smtOpts.initialize(
+		slicedFunction->getName().str(),
+		false, // Heap
+		false, false, false, false, false, false, false,
+		true, // PerfectSync
+		false, false, false, false,
+		true, // InitPredicate
+		map<int, smt::SharedSMTRef>());
 
 	MonoPair<string> fileNames("","");
 	FileOptions fileOpts = getFileOptions(fileNames);
