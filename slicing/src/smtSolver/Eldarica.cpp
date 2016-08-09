@@ -51,8 +51,6 @@ SatResult Eldarica::parseResult(std::string resultFile, CEXType* pCEX) {
 
 		return SatResult::sat;
 
-	} else if(regex_search(input, patternUnkown)) {
-		return SatResult::unknown;
 	} else if(regex_search(input, patternUnknown)) {
 		
 		return SatResult::unknown;
