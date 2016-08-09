@@ -20,6 +20,7 @@ public:
 private:
 	static std::regex const patternSat;
 	static std::regex const patternUnsat;
+	static std::regex const patternUnknown;
 	static std::regex const patternInitPred;
 	static std::regex const patternInitPredTokenizer;
 	EldaricaCommand command;

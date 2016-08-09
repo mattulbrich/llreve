@@ -37,7 +37,10 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 	// Better way to do it
 	smtOpts.initialize(
 		slicedFunction->getName().str(),
-		false, false, false, false, false, false, false, false,
+		false, // Heap
+		false, false, false,
+		false, // No-Byte-Heap
+		false, false, false,
 		true, // PerfectSync
 		false, false, false, false,
 		true, // InitPredicate

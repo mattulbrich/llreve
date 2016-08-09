@@ -177,10 +177,10 @@ ModulePtr CGS::computeSlice(
 	LinearizedFunction linFunc         (func);
 	CEXType            cex             (func.getArgumentList().size());
 	
+	linFunc.print(_out);
+	
 	CandidateGenerationEngine cge(module, criterion, linFunc);
 	CandidateNode*            pCurCandidate(&cge.generateCandidate());
-	
-	linFunc.print(_out);
 	
 	while(pCurCandidate->validate(cex).getState() !=
 		CandidateNode::State::valid) {

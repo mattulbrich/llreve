@@ -6,6 +6,7 @@
 
 std::regex const Eldarica::patternSat("sat");
 std::regex const Eldarica::patternUnsat("unsat");
+std::regex const Eldarica::patternUnknown("unknown");
 std::regex const Eldarica::patternInitPred("INIT\\((?:-?[[:digit:]]+(?:, )?)*\\)");
 std::regex const Eldarica::patternInitPredTokenizer("INIT\\(|, |\\)");
 
@@ -50,9 +51,15 @@ SatResult Eldarica::parseResult(std::string resultFile, CEXType* pCEX) {
 		
 		return SatResult::sat;
 		
+	} else if(regex_search(input, patternUnknown)) {
+		
+		return SatResult::unknown;
+		
 	} else {
 		
-		assert(false && "Did not find result information, please report a bug!");
+		assert(
+			false && "Did not find result information, please report a bug!");
+		
 		return SatResult::unknown;
 	}
 }
