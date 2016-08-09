@@ -5,7 +5,7 @@
 
 #include "SlicingPass.h"
 #include "Util.h"
-#include "util/misc.cpp"
+#include "util/misc.h"
 
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/CFG.h"
@@ -30,25 +30,25 @@ void SyntacticSlicePass::getAnalysisUsage(
 
 bool SyntacticSlicePass::runOnFunction(
 		Function& func) {
-	
+
 	// Ignore special functions like '__criterion()'
 	if(Util::isSpecialFunction(func)) {
 		return false;
 	}
-	
+
 	PDGPass const& pdg = getAnalysis<PDGPass>();
-	
+
 	set<Instruction*>                         initInstructions = criterion->getInstructions(*func.getParent());
 	unordered_set<GenericNode<Instruction*>*> remainInSlice;
-	
+
 	pdg.getInfluencingNodes(initInstructions, remainInSlice);
-	
+
 	// Mark all instructions, that are not in 'remainInSlice'
 	for(Instruction& i : Util::getInstructions(func)) {
 		if(remainInSlice.find(&pdg[i]) == remainInSlice.end()) {
 			SlicingPass::toBeSliced(i);
 		}
 	}
-	
+
 	return true;
 }

@@ -228,10 +228,34 @@ bool DeleteVisitor::handleNoUses(llvm::Instruction& instruction){
 
 bool DeleteVisitor::handleHasPriviousDef(llvm::Instruction& instruction, DIVariable* variable) {
 	if (variable){
-		Instruction* priviousDef = this->findPriviousDef(variable,instruction);
-		if (priviousDef) {
-			instruction.replaceAllUsesWith(priviousDef);
+		Instruction* previousDef = this->findPriviousDef(variable,instruction);
+		if (previousDef) {
+			// Store phi Nodes to remove them later if they become unneccessary
+			// vector<PHINode*> phiNodes;
+			// for (User* user: instruction.users()){
+			// 	if (PHINode* phiNode = dyn_cast<PHINode>(user)) {
+			// 		phiNodes.push_back(phiNode);
+			// 	}
+			// }
+
+			instruction.replaceAllUsesWith(previousDef);
 			instruction.eraseFromParent();
+
+			// for (PHINode* phiNode: phiNodes) {
+			// 	bool allSameAndPrevious = true;
+			// 	for (Use& use:phiNode->incoming_values()) {
+			// 		if (use.get() != previousDef) {
+			// 			allSameAndPrevious = false;
+			// 			break;
+			// 		}
+			// 	}
+			// 	if (allSameAndPrevious) {
+			// 		// Todo: this could lead to further unneccessary phiNodes
+			// 		phiNode->replaceAllUsesWith(previousDef);
+			// 		phiNode->eraseFromParent();
+			// 	}
+			// }
+
 			return true;
 		}
 	}

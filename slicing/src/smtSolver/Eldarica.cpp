@@ -21,42 +21,44 @@ std::string EldaricaCommand::getCommandStr(std::string smtFilePath, std::string 
 }
 
 SatResult Eldarica::parseResult(std::string resultFile, CEXType* pCEX) {
-	
+
 	std::ifstream inputStream(resultFile);
 	std::string   input(
 		(std::istreambuf_iterator<char>(inputStream)),
 		 std::istreambuf_iterator<char>());
-	
+
 	if(regex_search(input, patternUnsat)) {
-		
+
 		if(pCEX) {
-			
+
 			std::smatch result;
 			regex_search(input, result, patternInitPred);
-			
+
 			std::string                initPred = result[0];
 			std::sregex_token_iterator itCex(
 				initPred.begin(), initPred.end(), patternInitPredTokenizer, -1);
-			
+
 			// Ignore the first token (empty string)
 			for(unsigned int i = 0; i < pCEX->size(); i++) {
 				++itCex;
 				(*pCEX)[i] = stoll(itCex->str());
 			}
 		}
-			
+
 		return SatResult::unsat;
-		
+
 	} else if(regex_search(input, patternSat)) {
-		
+
 		return SatResult::sat;
-		
+
+	} else if(regex_search(input, patternUnkown)) {
+		return SatResult::unknown;
 	} else if(regex_search(input, patternUnknown)) {
 		
 		return SatResult::unknown;
 		
 	} else {
-		
+		std::cout << "unknown result: " << input;
 		assert(
 			false && "Did not find result information, please report a bug!");
 		

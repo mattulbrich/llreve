@@ -25,6 +25,7 @@ ImpactAnalysisForAssignments::ImpactAnalysisForAssignments(ModulePtr program):Sl
 
 
 ModulePtr ImpactAnalysisForAssignments::computeSlice(CriterionPtr criterion){
+	callsToReve_ = 0;
 	ModulePtr program = getProgram();
 	ModulePtr slice = CloneModule(&*program);
 	set<Instruction*> criterionInstructions = criterion->getInstructions(*slice);
@@ -47,6 +48,7 @@ ModulePtr ImpactAnalysisForAssignments::computeSlice(CriterionPtr criterion){
 					ReplaceInstWithInst(instToReplace->getParent()->getInstList(), ii,
 						CallInst::Create(createEveryValueFunction(impactAbstraction), parameterRef));
 
+					callsToReve_++;
 					ValidationResult result = SliceCandidateValidation::validate(&*slice, &*impactAbstraction, criterion);
 					if (result == ValidationResult::valid) {
 						SlicingPass::toBeSliced(instruction);
@@ -74,8 +76,13 @@ ModulePtr ImpactAnalysisForAssignments::computeSlice(CriterionPtr criterion){
 	PM.add(new SlicingPass());
 	PM.run(*slice);
 
+	std::cout << "Number of Reve calls: " << callsToReve_ << std::endl;
+
 	ValidationResult result = SliceCandidateValidation::validate(&*program, &*slice, criterion);
-	assert(result == ValidationResult::valid);
+	if (result != ValidationResult::valid) {
+		std::cout << "Error: Produced Slice is not Valid." << std::endl;
+	}
+	//assert(result == ValidationResult::valid);
 
 	return slice;
 }
@@ -91,4 +98,8 @@ llvm::Function* ImpactAnalysisForAssignments::createEveryValueFunction(ModulePtr
 			llvm::GlobalValue::LinkageTypes::ExternalLinkage,
 			Twine(EVERY_VALUE_FUNCTION_NAME),
 			&*impactAbstraction);
+}
+
+unsigned ImpactAnalysisForAssignments::getNumberOfReveCalls(){
+	return callsToReve_;
 }

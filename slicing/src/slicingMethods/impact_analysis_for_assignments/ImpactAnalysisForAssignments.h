@@ -10,7 +10,9 @@ public:
 	 */
 	ImpactAnalysisForAssignments(ModulePtr program);
 	virtual ModulePtr computeSlice(CriterionPtr c) override;
+	unsigned getNumberOfReveCalls();
 
 private:
 	llvm::Function* createEveryValueFunction(ModulePtr impactAbstraction, llvm::Type* type = nullptr);
+	unsigned callsToReve_;
 };

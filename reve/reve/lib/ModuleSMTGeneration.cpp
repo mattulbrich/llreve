@@ -92,7 +92,7 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
                doesNotRecurse(*funPair.second.fun)) ||
              smtOpts.OnlyRecursive)) {
             if (funPair.first.fun->getName() == "__criterion") {
-                auto newSmtExprs = slicingAssertion(funPair);
+                auto newSmtExprs = slicingAssertion(funPair, mem);
                 assertions.insert(assertions.end(), newSmtExprs.begin(),
                                   newSmtExprs.end());
             } else {

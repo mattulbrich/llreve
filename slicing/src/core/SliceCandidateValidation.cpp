@@ -18,8 +18,6 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 	CriterionPtr criterion, CEXType* pCEX){
 	string outputFileName("candidate.smt");
 
-	SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
-	
 	auto criterionInstructions = criterion->getInstructions(*program);
 	assert(criterionInstructions.size() > 0 && "Internal Error: Got criterion with no instructions.");
 	Function* slicedFunction = nullptr;
@@ -29,12 +27,11 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 
 		slicedFunction = function;
 	}
-	
-	// Wrong way to do it
-	//smtOpts.PerfectSync = smtOpts.InitPredicate = true;
-	//smtOpts.MainFunction = slicedFunction->getName().str();
-	
-	// Better way to do it
+	assert((slicedFunction) && "Did not find sliced function.");
+
+	SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
+	// don't assign smtOpts member variables directly but use initialize
+	// see https://github.com/mattulbrich/llreve/issues/10 for details
 	smtOpts.initialize(
 		slicedFunction->getName().str(),
 		false, // Heap

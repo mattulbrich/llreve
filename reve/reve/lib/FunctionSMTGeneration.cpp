@@ -141,7 +141,7 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     return smtExprs;
 }
 
-vector<SharedSMTRef> slicingAssertion(MonoPair<PreprocessedFunction> funPair) {
+vector<SharedSMTRef> slicingAssertion(MonoPair<PreprocessedFunction> funPair, Memory memory) {
     vector<SharedSMTRef> assertions;
 
     string typeBool = "Bool";
@@ -153,6 +153,13 @@ vector<SharedSMTRef> slicingAssertion(MonoPair<PreprocessedFunction> funPair) {
 
     auto funArgs1 = funArgs(*(funPair.first.fun), "arg1_", 0);
     auto funArgs2 = funArgs(*(funPair.second.fun), "arg2_", 0);
+    if (memory & HEAP_MASK) {
+        funArgs1.push_back(SortedVar("heap_idx$1", typeInt));
+        funArgs1.push_back(SortedVar("HEAP$1", arrayType()));
+
+        funArgs2.push_back(SortedVar("heap_idx$2", typeInt));
+        funArgs2.push_back(SortedVar("HEAP$2", arrayType()));
+    }
     assert(funArgs1.size() == funArgs2.size());
 
     args.insert(args.end(), funArgs1.begin(), funArgs1.end());
@@ -191,16 +198,36 @@ vector<SharedSMTRef> slicingAssertion(MonoPair<PreprocessedFunction> funPair) {
     args.push_back(SortedVar("ret1", typeInt));
     args.push_back(SortedVar("ret2", typeInt));
 
+    if (memory & HEAP_MASK) {
+        args.push_back(SortedVar("heap_idx$1_res", typeInt));
+        args.push_back(SortedVar("HEAP$1_res", arrayType()));
+        args.push_back(SortedVar("heap_idx$2_res", typeInt));
+        args.push_back(SortedVar("HEAP$2_res", arrayType()));
+    }
+
     SharedSMTRef invBody = stringExpr("true");
+    if (memory & HEAP_MASK) {
+        vector<SharedSMTRef> equalArgs;
+        for (auto argPair : makeZip(funArgs1, funArgs2)) {
+            equalArgs.push_back(
+                makeBinOp("=", argPair.first.name, argPair.second.name));
+        }
+    } else {
+
+    }
+
     name = invariantName(ENTRY_MARK, ProgramSelection::Both, "__criterion",
                          InvariantAttr::NONE, 0);
     assertions.push_back(make_shared<FunDef>(name, args, typeBool, invBody));
 
     makeMonoPair(funArgs1, funArgs2)
-        .indexedForEachProgram([&assertions, &invBody, typeInt,
-                                typeBool](auto funArgs, auto program) {
+        .indexedForEachProgram([&](auto funArgs, auto program) {
             funArgs.push_back(SortedVar(
                 "ret" + std::to_string(programIndex(program)), typeInt));
+            if (memory & HEAP_MASK) {
+                funArgs.push_back(SortedVar("heap_idx", typeInt));
+                funArgs.push_back(SortedVar("HEAP", arrayType()));
+            }
             std::string invName =
                 invariantName(ENTRY_MARK, asSelection(program), "__criterion",
                               InvariantAttr::NONE, 0);
