@@ -6,7 +6,7 @@ int __criterion(int x){
 	return x;
 }
 
-int countOccurrence(int x, int a, int N) {
+int countOccurrence(int x, int a[], int N) {
 	int result = 0;
 	int err = NO_ERROR;
 	if (a == 0)
@@ -14,7 +14,7 @@ int countOccurrence(int x, int a, int N) {
 	else
 		for (int i = 0; i < N; i++) {
 			if (0 <= i && i < N) {
-				if (a == x)
+				if (a[i] == x)
 					result++;
 			} else {
 				err = OUT_OF_BOUND;
@@ -23,6 +23,6 @@ int countOccurrence(int x, int a, int N) {
 			if (err)
 				break;
 		}
-	__criterion(err);
-	return err?err:result;
+
+	return err;
 }

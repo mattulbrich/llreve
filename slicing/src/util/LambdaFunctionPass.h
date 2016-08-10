@@ -23,3 +23,18 @@ private:
 	FunctionPassLambda lambda;
 
 };
+
+typedef std::function<bool (llvm::Module& module)> ModulePassLambda;
+class LambdaModulePass : public llvm::ModulePass {
+public:
+	static char ID;
+
+	LambdaModulePass() : llvm::ModulePass(ID), lambda(nullptr) {}
+	LambdaModulePass(ModulePassLambda lambda) : llvm::ModulePass(ID), lambda(lambda) {}
+
+	virtual bool runOnModule(llvm::Module &module) override;
+
+private:
+	ModulePassLambda lambda;
+
+};

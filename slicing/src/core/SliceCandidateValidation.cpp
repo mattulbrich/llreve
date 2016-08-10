@@ -16,7 +16,7 @@ using smt::SharedSMTRef;
 
 ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm::Module* candidate,
 	CriterionPtr criterion, CEXType* pCEX){
-	string outputFileName("candidate.smt");
+	string outputFileName("candidate.smt2");
 
 	auto criterionInstructions = criterion->getInstructions(*program);
 	assert(criterionInstructions.size() > 0 && "Internal Error: Got criterion with no instructions.");

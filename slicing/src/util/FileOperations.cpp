@@ -23,6 +23,8 @@
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/Constants.h"
 
+#include "util/LambdaFunctionPass.h"
+
 
 
 using namespace std;
@@ -47,9 +49,15 @@ shared_ptr<llvm::Module> getModuleFromSource(string fileName, string resourceDir
 	compileToModules("", inputOpts, acts);
 	shared_ptr<llvm::Module> program = modules.first;
 
+	writeModuleToFile("program.original.llvm", *program);
+
 	llvm::legacy::PassManager PM;
 	PM.add(new ExplicitAssignPass());
 	PM.add(llvm::createPromoteMemoryToRegisterPass());
+	PM.add(new LambdaModulePass([](llvm::Module& module)->bool{
+			writeModuleToFile("program.post_promote_mem2reg.llvm", module);
+			return false;
+		}));
 	PM.add(new AddVariableNamePass());
 	PM.add(llvm::createStripSymbolsPass(true));
 	PM.add(new PromoteAssertSlicedPass());
@@ -73,7 +81,7 @@ shared_ptr<llvm::Module> getModuleFromSource(string fileName, string resourceDir
 		}
 	}
 
-	shared_ptr<llvm::Module> sliceCandidate = CloneModule(&*program);
+	writeModuleToFile("program.post_preprocessing.llvm", *program);
 	return program;
 }
 

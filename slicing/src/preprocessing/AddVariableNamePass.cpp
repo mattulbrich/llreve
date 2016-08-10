@@ -66,11 +66,13 @@ bool AddVariableNamePass::runOnFunction(llvm::Function &function) {
 	//propagate variables
 	for (BasicBlock& block : function) {
 		for (Instruction& instruction : block) {
-			if (DbgValueInst* dbgValue = dyn_cast<DbgValueInst>(&instruction)) {
-				if (Instruction* ssaVar = dyn_cast<Instruction>(dbgValue->getValue())) {
-					if (ssaVar == previousInstruction) { //correct debug information is imediatly after the instruction
-						DIVariable* srcVariable = dbgValue->getVariable();
-						setAndPropagate(srcVariable, ssaVar);
+			if (DbgValueInst* dbgValueInst = dyn_cast<DbgValueInst>(&instruction)) {
+				if (auto dbgValue = dbgValueInst->getValue()) {
+					if (Instruction* ssaVar = dyn_cast<Instruction>(dbgValue)) {
+						if (ssaVar == previousInstruction) { //correct debug information is imediatly after the instruction
+							DIVariable* srcVariable = dbgValueInst->getVariable();
+							setAndPropagate(srcVariable, ssaVar);
+						}
 					}
 				}
 			}
