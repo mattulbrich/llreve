@@ -1,4 +1,14 @@
 /*
+ * This file is part of
+ *    llreve - Automatic regression verification for LLVM programs
+ *
+ * Copyright (C) 2016 Karlsruhe Institute of Technology
+ *
+ * The system is published under a BSD license.
+ * See LICENSE (distributed with this file) for details.
+ */
+
+/*
  *  Catch v1.5.4
  *  Generated: 2016-05-12 19:16:01.957320
  *  ----------------------------------------------------------

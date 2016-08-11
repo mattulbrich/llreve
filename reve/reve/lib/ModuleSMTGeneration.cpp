@@ -1,3 +1,13 @@
+/*
+ * This file is part of
+ *    llreve - Automatic regression verification for LLVM programs
+ *
+ * Copyright (C) 2016 Karlsruhe Institute of Technology
+ *
+ * The system is published under a BSD license.
+ * See LICENSE (distributed with this file) for details.
+ */
+
 #include "ModuleSMTGeneration.h"
 
 #include "Compat.h"
@@ -78,6 +88,7 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
                 fileOpts.OutRelation, mem, funPair.first.fun->getReturnType()));
             if(smtOpts.InitPredicate) {
                 smtExprs.push_back(initPredicate(inInv));
+                smtExprs.push_back(initPredicateComment(inInv));
                 assertions.push_back(initImplication(inInv));
             }
             auto newSmtExprs = mainAssertion(funPair, declarations,
@@ -502,6 +513,17 @@ SharedSMTRef initPredicate(shared_ptr<const FunDef> inInv) {
 
     return make_shared<smt::FunDecl>("INIT", funArgs, "Bool");
 
+}
+
+SharedSMTRef initPredicateComment(shared_ptr<const FunDef> inInv) {
+
+    std::stringstream comment;
+    comment << "; INIT-ARGS";
+    for(auto var : inInv->args) {
+        comment << " " << var.name;
+    }
+
+    return make_shared<smt::Comment>(comment.str());
 }
 
 SharedSMTRef initImplication(shared_ptr<const FunDef> funDecl) {

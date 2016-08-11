@@ -1,4 +1,14 @@
 /*
+ * This file is part of
+ *    llreve - Automatic regression verification for LLVM programs
+ *
+ * Copyright (C) 2016 Karlsruhe Institute of Technology
+ *
+ * The system is published under a BSD license.
+ * See LICENSE (distributed with this file) for details.
+ */
+
+/*
  * popen_noshell: A faster implementation of popen() and system() for Linux.
  * Copyright (c) 2009 Ivan Zahariev (famzah)
  * Version: 1.0
