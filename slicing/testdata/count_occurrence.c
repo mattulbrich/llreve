@@ -24,5 +24,6 @@ int countOccurrence(int x, int a[], int N) {
 				break;
 		}
 
-	return err;
+	__criterion(result);
+	return err?err:result;
 }
