@@ -70,6 +70,9 @@ static llvm::cl::opt<string> ResourceDir(
 static llvm::cl::opt<bool> RemoveFunctions("remove-functions", llvm::cl::desc("Removes unused functions from module before slicing."),
 	llvm::cl::cat(SlicingCategory));
 
+static llvm::cl::opt<bool> Heap("heap", llvm::cl::desc("Activate to handle programs with heap."),
+	llvm::cl::cat(SlicingCategory));
+
 void parseArgs(int argc, const char **argv) {
 	vector<llvm::cl::OptionCategory*> optionCategorys;
 	optionCategorys.push_back(&ClangCategory);
@@ -106,6 +109,10 @@ int main(int argc, const char **argv) {
 				criterion = presentCriterion;
 			}
 		break;
+	}
+
+	if (Heap) {
+		SliceCandidateValidation::activateHeap();
 	}
 
 	SlicingMethodPtr method;
