@@ -4,6 +4,7 @@
 #include "preprocessing/PromoteAssertSlicedPass.h"
 #include "preprocessing/ExplicitAssignPass.h"
 #include "preprocessing/FixNamesPass.h"
+#include "preprocessing/ReplaceUndefPass.h"
 
 #include "core/Util.h"
 
@@ -62,6 +63,7 @@ shared_ptr<llvm::Module> getModuleFromSource(string fileName, string resourceDir
 	PM.add(llvm::createStripSymbolsPass(true));
 	PM.add(new PromoteAssertSlicedPass());
 	PM.add(new FixNamesPass());
+	PM.add(new ReplaceUndefPass());
 	PM.run(*program);
 
 	bool hasError = llvm::verifyModule(*program, &errs());
