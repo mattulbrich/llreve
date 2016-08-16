@@ -13,4 +13,8 @@ public:
 	static ValidationResult validate(llvm::Module* program, llvm::Module* candidate,
 		CriterionPtr criterion = Criterion::getReturnValueCriterion(),
 		CEXType* pCEX = nullptr);
+
+	static void activateHeap();
+private:
+	static bool heap;
 };

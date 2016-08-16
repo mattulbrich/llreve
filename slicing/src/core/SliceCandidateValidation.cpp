@@ -13,6 +13,11 @@ using namespace std;
 
 using smt::SharedSMTRef;
 
+bool SliceCandidateValidation::heap = false;
+
+void SliceCandidateValidation::activateHeap(){
+	heap = true;
+}
 
 ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm::Module* candidate,
 	CriterionPtr criterion, CEXType* pCEX){
@@ -34,13 +39,13 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 	// see https://github.com/mattulbrich/llreve/issues/10 for details
 	smtOpts.initialize(
 		slicedFunction->getName().str(),
-		false, // Heap
+		heap, // Heap
 		false, false, false,
 		false, // No-Byte-Heap
 		false, false, false,
 		true, // PerfectSync
 		false, false, false, false,
-		true, // InitPredicate
+		!heap, // InitPredicate
 		map<int, smt::SharedSMTRef>());
 
 	MonoPair<string> fileNames("","");

@@ -143,6 +143,7 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
 
 vector<SharedSMTRef> slicingAssertion(MonoPair<PreprocessedFunction> funPair, Memory memory) {
     vector<SharedSMTRef> assertions;
+    SharedSMTRef invBody = nullptr;
 
     string typeBool = "Bool";
     string typeInt = "Int";
@@ -155,36 +156,42 @@ vector<SharedSMTRef> slicingAssertion(MonoPair<PreprocessedFunction> funPair, Me
     auto funArgs2 = funArgs(*(funPair.second.fun), "arg2_", 0);
     if (memory & HEAP_MASK) {
         funArgs1.push_back(SortedVar("heap_idx$1", typeInt));
-        funArgs1.push_back(SortedVar("HEAP$1", arrayType()));
+        funArgs1.push_back(SortedVar("heap_val$1", typeInt));
 
         funArgs2.push_back(SortedVar("heap_idx$2", typeInt));
-        funArgs2.push_back(SortedVar("HEAP$2", arrayType()));
+        funArgs2.push_back(SortedVar("heap_val$2", typeInt));
     }
     assert(funArgs1.size() == funArgs2.size());
 
     args.insert(args.end(), funArgs1.begin(), funArgs1.end());
     args.insert(args.end(), funArgs2.begin(), funArgs2.end());
 
+    // This body is equal to false. We cahnt use false as eldarica would crash
+    invBody = makeUnaryOp("not", makeBinOp("=", funArgs1.begin()->name, funArgs1.begin()->name));
+
     // Set preconditition for nonmutual calls to false. This ensures
     // that only mutual calls are allowed.
     // Note that we assume the number of arguments to be equal (number of
     // variables in the criterion). This is why we can use the same arg names.
     makeMonoPair(funArgs1, funArgs2)
-        .indexedForEachProgram([&assertions, typeBool](auto funArgs,
+        .indexedForEachProgram([&](auto funArgs,
                                                        auto program) {
             std::string invName =
                 invariantName(ENTRY_MARK, asSelection(program), "__criterion",
                               InvariantAttr::PRE, 0);
-            assertions.push_back(make_shared<FunDef>(invName, funArgs, typeBool,
-                                                     stringExpr("false")));
+            assertions.push_back(make_shared<FunDef>(invName, funArgs1, typeBool,
+                                                     invBody));
         });
 
     // Ensure all variables in the criterion are equal in both versions
     // of the program using the mutual precondition
     vector<SharedSMTRef> equalArgs;
     for (auto argPair : makeZip(funArgs1, funArgs2)) {
-        equalArgs.push_back(
-            makeBinOp("=", argPair.first.name, argPair.second.name));
+        if ((argPair.first.name != "heap_idx$1")
+            && argPair.first.name != "heap_val$1") {
+            equalArgs.push_back(
+                makeBinOp("=", argPair.first.name, argPair.second.name));
+        }
     }
 
     SharedSMTRef allEqual = make_shared<Op>("and", equalArgs);
@@ -195,38 +202,53 @@ vector<SharedSMTRef> slicingAssertion(MonoPair<PreprocessedFunction> funPair, Me
     // Finaly we need to set the invariant for the function itself to true.
     // (The __criterion function does nothing, therefore no restrictions arise)
     // This is true for mutual and non mutual calls.
-    args.push_back(SortedVar("ret1", typeInt));
-    args.push_back(SortedVar("ret2", typeInt));
+    args.push_back(SortedVar("ret$1", typeInt));
+    args.push_back(SortedVar("ret$2", typeInt));
 
     if (memory & HEAP_MASK) {
         args.push_back(SortedVar("heap_idx$1_res", typeInt));
-        args.push_back(SortedVar("HEAP$1_res", arrayType()));
+        args.push_back(SortedVar("heap_val$1_res", typeInt));
         args.push_back(SortedVar("heap_idx$2_res", typeInt));
-        args.push_back(SortedVar("HEAP$2_res", arrayType()));
+        args.push_back(SortedVar("heap_val$2_res", typeInt));
     }
 
-    SharedSMTRef invBody = stringExpr("true");
     if (memory & HEAP_MASK) {
         vector<SharedSMTRef> equalArgs;
-        for (auto argPair : makeZip(funArgs1, funArgs2)) {
-            equalArgs.push_back(
-                makeBinOp("=", argPair.first.name, argPair.second.name));
-        }
+        equalArgs.push_back(
+            makeBinOp("=>",
+                makeBinOp("=", "heap_idx$1", "heap_idx$1_res"),
+                makeBinOp("=", "heap_val$1", "heap_val$1_res")));
+        equalArgs.push_back(
+            makeBinOp("=>",
+                makeBinOp("=", "heap_idx$2", "heap_idx$2_res"),
+                makeBinOp("=", "heap_val$2", "heap_val$2_res")));
+        invBody = make_shared<Op>("and", equalArgs);
     } else {
-
+        invBody = stringExpr("true");
     }
 
     name = invariantName(ENTRY_MARK, ProgramSelection::Both, "__criterion",
                          InvariantAttr::NONE, 0);
     assertions.push_back(make_shared<FunDef>(name, args, typeBool, invBody));
 
-    makeMonoPair(funArgs1, funArgs2)
+    if (memory & HEAP_MASK) {
+        vector<SharedSMTRef> equalArgs;
+        equalArgs.push_back(
+            makeBinOp("=>",
+                makeBinOp("=", "heap_idx$1", "heap_idx$1_res"),
+                makeBinOp("=", "heap_val$1", "heap_val$1_res")));
+        invBody = make_shared<Op>("and", equalArgs);
+    } else {
+        invBody = stringExpr("true");
+    }
+
+    makeMonoPair(funArgs1, funArgs1)
         .indexedForEachProgram([&](auto funArgs, auto program) {
             funArgs.push_back(SortedVar(
-                "ret" + std::to_string(programIndex(program)), typeInt));
+                "ret", typeInt));
             if (memory & HEAP_MASK) {
-                funArgs.push_back(SortedVar("heap_idx", typeInt));
-                funArgs.push_back(SortedVar("HEAP", arrayType()));
+                funArgs.push_back(SortedVar("heap_idx$1_res", typeInt));
+                funArgs.push_back(SortedVar("heap_val$1_res", typeInt));
             }
             std::string invName =
                 invariantName(ENTRY_MARK, asSelection(program), "__criterion",

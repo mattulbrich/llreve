@@ -13,6 +13,7 @@
 #include "slicingMethods/BruteForce.h"
 #include "slicingMethods/CGS.h"
 #include "slicingMethods/SyntacticSlicing.h"
+#include "slicingMethods/IdSlice.h"
 #include "slicingMethods/impact_analysis_for_assignments/ImpactAnalysisForAssignments.h"
 #include "core/SliceCandidateValidation.h"
 
@@ -34,22 +35,28 @@ static llvm::cl::opt<std::string> FileName(llvm::cl::Positional,
 	llvm::cl::desc("<input file>"),
 	llvm::cl::Required);
 
-enum SlicingMethodOptions{syntactic, bruteforce, iaa, cgs};
+enum SlicingMethodOptions{syntactic, bf, iaa, cgs, id};
 static cl::opt<SlicingMethodOptions> SlicingMethodOption(cl::desc("Choose slicing method:"),
 	cl::values(
 		clEnumVal(syntactic , "Classical syntactic slicing, folowd by verification of the slice."),
-		clEnumVal(bruteforce, "Bruteforce all slicecandidates, returns smalest."),
+		clEnumVal(bf, "Bruteforce all slicecandidates, returns smalest."),
 		clEnumVal(iaa, "Use impact analysis for assignments to find unneccesary statments."),
 		clEnumVal(cgs, "Use counterexample guided slicing to find unneccesary instructions."),
+		clEnumVal(id, "Use the program it self as slice and verify validity."),
 		clEnumValEnd),
 	llvm::cl::cat(SlicingCategory),
 	llvm::cl::Required);
 
-static bool criterionPresent = false;
-static llvm::cl::opt<bool,true> CriterionPresentFlag("criterion-present", llvm::cl::desc("Use if the code contains a __criterion function to mark the criterion."), cl::location(criterionPresent),
-	llvm::cl::cat(SlicingCategory));
-static llvm::cl::alias     CriterionPresentShort("p", cl::desc("Alias for -criterion-present"),
-    cl::aliasopt(CriterionPresentFlag), llvm::cl::cat(SlicingCategory));
+enum CriterionModes{present, returnValue, automatic};
+static cl::opt<CriterionModes> CriterionMode(cl::desc("Chose crietion mode:"),
+	cl::values(
+		clEnumValN(present, "p","Chose if __criterion is present."),
+		clEnumValN(returnValue, "r","Chose to slice after return value."),
+		clEnumVal(automatic, "Chose to slice for __criterion if present, return value otherwise. (default)"),
+		clEnumValEnd),
+	cl::init(automatic),
+	llvm::cl::cat(SlicingCategory)
+	);
 
 static llvm::cl::list<string> Includes("I", llvm::cl::desc("Include path"),
 	llvm::cl::cat(ClangCategory));
@@ -61,6 +68,9 @@ static llvm::cl::opt<string> ResourceDir(
 	llvm::cl::cat(ClangCategory));
 
 static llvm::cl::opt<bool> RemoveFunctions("remove-functions", llvm::cl::desc("Removes unused functions from module before slicing."),
+	llvm::cl::cat(SlicingCategory));
+
+static llvm::cl::opt<bool> Heap("heap", llvm::cl::desc("Activate to handle programs with heap."),
 	llvm::cl::cat(SlicingCategory));
 
 void parseArgs(int argc, const char **argv) {
@@ -77,26 +87,40 @@ int main(int argc, const char **argv) {
 
 	CriterionPtr criterion;
 	CriterionPtr presentCriterion = shared_ptr<Criterion>(new PresentCriterion());
-	if (CriterionPresentFlag) {
-		if (presentCriterion->getInstructions(*program).size() == 0){
-			outs() << "ERROR: Criterion present flag set, but no criterion found! \n";
-			exit(1);
-		}
-		criterion = presentCriterion;
-	} else {
-		if (presentCriterion->getInstructions(*program).size() > 0){
-			outs() << "WARNING: Criterion present flag not set, but criterion found! Slice is for return value!\n";
-		}
-		criterion = shared_ptr<Criterion>(new ReturnValueCriterion());
+
+	switch (CriterionMode) {
+		case present:
+			if (presentCriterion->getInstructions(*program).size() == 0){
+				outs() << "ERROR: Criterion present flag set, but no criterion found! \n";
+				exit(1);
+			}
+			criterion = presentCriterion;
+			break;
+		case returnValue:
+			if (presentCriterion->getInstructions(*program).size() > 0){
+				outs() << "WARNING: Criterion present flag not set, but criterion found! Slice is for return value!\n";
+			}
+			criterion = shared_ptr<Criterion>(new ReturnValueCriterion());
+			break;
+		default:
+			if (presentCriterion->getInstructions(*program).size() == 0){
+				criterion = shared_ptr<Criterion>(new ReturnValueCriterion());
+			} else {
+				criterion = presentCriterion;
+			}
+		break;
 	}
 
+	if (Heap) {
+		SliceCandidateValidation::activateHeap();
+	}
 
 	SlicingMethodPtr method;
 	switch (SlicingMethodOption) {
 		case syntactic:
 		method = shared_ptr<SlicingMethod>(new SyntacticSlicing(program));
 		break;
-		case bruteforce:
+		case bf:
 		method = shared_ptr<SlicingMethod>(new BruteForce(program));
 		break;
 		case iaa:
@@ -104,6 +128,9 @@ int main(int argc, const char **argv) {
 		break;
 		case cgs:
 		method = shared_ptr<SlicingMethod>(new CGS(program));
+		break;
+		case id:
+		method = shared_ptr<SlicingMethod>(new IdSlicing(program));
 		break;
 	}
 

@@ -30,22 +30,37 @@ bool ReturnValueCriterion::isReturnValue() const {
 }
 
 std::set<llvm::Instruction*> ReturnValueCriterion::getInstructions(llvm::Module& module) const{
-	bool multipleFunctions = false;
 	set<Instruction*> instructions;
+	Function* criterionFunction = nullptr;
+	bool foundMain = false;
+	bool singleFunction = true;
+	bool firstFunction = true;
 	for (Function& function:module) {
 		if (!Util::isSpecialFunction(function)) {
-			assert(!multipleFunctions && "Can't use slicing after return value for programs with more than one function!");
-		multipleFunctions = true;
+			if (function.getName() == "main") {
+				foundMain = true;
+				criterionFunction = &function;
+			}
+			if (firstFunction) {
+				firstFunction = false;
+				criterionFunction = &function;
+			} else {
+				singleFunction = false;
+			}
+		}
+	}
 
-		for (Instruction& instruction: Util::getInstructions(function)) {
+	assert((singleFunction || foundMain) && "Can't use slicing after return value for programs with more than one function!");
+
+	if (criterionFunction) {
+		for (Instruction& instruction: Util::getInstructions(*criterionFunction)) {
 			if(isa<ReturnInst>(&instruction)) {
 				instructions.insert(&instruction);
 			}
 		}
 	}
-}
 
-return instructions;
+	return instructions;
 }
 
 PresentCriterion::PresentCriterion():Criterion(){}
