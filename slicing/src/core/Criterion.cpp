@@ -7,6 +7,8 @@
 #include "core/Util.h"
 #include "util/misc.h"
 
+#include "Helper.h"
+
 using namespace std;
 using namespace llvm;
 
@@ -50,6 +52,18 @@ std::set<llvm::Instruction*> ReturnValueCriterion::getInstructions(llvm::Module&
 		}
 	}
 
+	if (!singleFunction && !foundMain) {
+		logError("There are multiple functions, can't use slicing after return value.\n");
+		logWarning("Found the following methods:\n");
+		for (Function& function:module) {
+			if (!Util::isSpecialFunction(function)) {
+				logWarning(function.getName().str() + "\n");
+			}
+		}
+		logError("There are multiple functions, can't use slicing after return value.\n");
+		logError("Use __criterion to mark the slicing criterion, or define a main function.\n");
+		std::exit(1);
+	}
 	assert((singleFunction || foundMain) && "Can't use slicing after return value for programs with more than one function!");
 
 	if (criterionFunction) {
