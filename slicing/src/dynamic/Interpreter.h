@@ -15,10 +15,34 @@
 #include <unordered_set>
 #include <vector>
 
+class TraceEntry;
 class DynType;
 class DynInteger;
 class DynArray;
 class DynPointer;
+
+class DataSlot {
+	
+	public:
+	
+	DataSlot(llvm::Value const& creatingValue, DynType* pContent = nullptr) :
+		pContent(pContent), pLastModifyingValue(&creatingValue) {}
+	
+	llvm::raw_ostream& print(llvm::raw_ostream& out) const;
+	
+	DynType*  getContent(void) const;
+	DataSlot& setContent(DynType& content, llvm::Value const& modifyingValue);
+	
+	llvm::Value const* getLastModifyingValue(void) const;
+	
+	private:
+	
+	// The content won't be deleted in the destructor as these values are also
+	// stored in the execution trace
+	DynType* pContent;
+	
+	llvm::Value const* pLastModifyingValue;
+};
 
 class Interpreter {
 	
@@ -53,54 +77,79 @@ class Interpreter {
 	
 	DynType const& operator[](llvm::Value const& value) const;
 	
-	// There is special function for every instruction type
-	DynType* executeAllocaInst       (llvm::AllocaInst        const& inst);
-	DynType* executeBinaryOperator   (llvm::BinaryOperator    const& inst);
-	DynType* executeBranchInst       (llvm::BranchInst        const& inst);
-	DynType* executeCallInst         (llvm::CallInst          const& inst);
-	DynType* executeGetElementPtrInst(llvm::GetElementPtrInst const& inst);
-	DynType* executeICmpInst         (llvm::ICmpInst          const& inst);
-	DynType* executeLoadInst         (llvm::LoadInst          const& inst);
-	DynType* executePHINode          (llvm::PHINode           const& inst);
-	DynType* executeReturnInst       (llvm::ReturnInst        const& inst);
-	DynType* executeStoreInst        (llvm::StoreInst         const& inst);
-	
 	private:
 	
 	bool const _computeBranchDep;
 	
 	static unsigned int getValueBitWidth(llvm::Value const& value);
-	static bool         isArrayValue    (llvm::Value const& value);
-	static bool         isIntValue      (llvm::Value const& value);
-	static bool         isVoidValue     (llvm::Value const& value);
-	static bool         isPointerValue  (llvm::Value const& value);
 	
 	llvm::BasicBlock::const_iterator _instIt;
+	DataSlot                         _retValueSlot;
 	
 	llvm::BasicBlock  const* _pLastBB; // Current BB is stored via '_pNextInst'
 	llvm::Instruction const* _pRecentInst;
 	llvm::Instruction const* _pNextInst;
-	DynType           const* _pRetValue;
 	
-	std::unordered_map<llvm::Value const*, DynType const*>         _state;
-	std::list<std::pair<llvm::Instruction const*, DynType const*>> _trace;
-	std::unordered_map<llvm::Value const*, DynArray*>              _arrays;
+	std::unordered_map<llvm::Value const*, DataSlot*> _mappedState;
+	std::unordered_set<DataSlot*>                     _state;
+	std::list<TraceEntry const*>                      _trace;
+	std::unordered_map<llvm::Value const*, DynArray*> _arrays;
 	
-	DynType&          cloneValue    (llvm::Value const& value);
-	llvm::APInt       resolveInt    (llvm::Value const* pVal);
-	DynPointer const& resolvePointer(llvm::Value const* pVal);
+	llvm::APInt resolveInt           (llvm::Value const* pVal);
+	DataSlot*   resolvePointer       (llvm::Value const& value);
+	DataSlot&   resolvePointerNotNull(llvm::Value const& value);
 	
-	void moveToNextInstruction(void);
+	bool tryResolveInt    (llvm::Value const& value, llvm::APInt& result);
+	bool tryResolvePointer(llvm::Value const& value, DataSlot*&   result);
+	
+	void            moveToNextInstruction(void);
+	DataSlot const& updateState(llvm::Instruction const& inst, DynType& value);
+	void            addDependency(llvm::Value const& dependency);
+	
+	DataSlot const& updateState(
+		llvm::Instruction const& inst,
+		llvm::APInt       const& value);
+	DataSlot const& updateState(
+		llvm::Instruction const& inst,
+		bool              const  value);
+	DataSlot const& updateState(
+		llvm::Instruction const& inst,
+		DataSlot*         const  pPointedSlot);
+	
+	// There is special function for every instruction type
+	DataSlot const* executeAllocaInst       (llvm::AllocaInst        const& inst);
+	DataSlot const* executeBinaryOperator   (llvm::BinaryOperator    const& inst);
+	DataSlot const* executeBranchInst       (llvm::BranchInst        const& inst);
+	DataSlot const* executeCallInst         (llvm::CallInst          const& inst);
+	DataSlot const* executeGetElementPtrInst(llvm::GetElementPtrInst const& inst);
+	DataSlot const* executeICmpInst         (llvm::ICmpInst          const& inst);
+	DataSlot const* executeLoadInst         (llvm::LoadInst          const& inst);
+	DataSlot const* executePHINode          (llvm::PHINode           const& inst);
+	DataSlot const* executeReturnInst       (llvm::ReturnInst        const& inst);
+	DataSlot const* executeStoreInst        (llvm::StoreInst         const& inst);
+};
+
+class TraceEntry {
+	
+	public:
+	
+	// Not every instruction writes to a data slot, e.g. branch instructions
+	llvm::Instruction const&       inst;
+	DataSlot          const* const pSlot;
+	DynType           const* const pContent;
+	
+	TraceEntry(llvm::Instruction const& inst, DataSlot const* const pSlot);
+	
+	~TraceEntry(void);
 };
 
 class DynType {
 	
 	public:
 	
-	static DynType& voidValue;
-	
-	llvm::Type::TypeID const id;
-	DynType*           const pParent;
+	llvm::Type::TypeID const  id;
+	llvm::Value        const& parentValue;
+	DataSlot*          const  pSlot;
 	
 	virtual ~DynType(void);
 	
@@ -112,41 +161,60 @@ class DynType {
 	DynInteger& asInteger(void);
 	DynPointer& asPointer(void);
 	
-	bool isSpecial(void) const;
 	bool isArray  (void) const;
 	bool isInteger(void) const;
 	bool isPointer(void) const;
 	bool isVoid   (void) const;
 	
-	virtual DynType* clone(DynType* const pParent = nullptr) const;
 	virtual llvm::raw_ostream& print(llvm::raw_ostream& out) const;
 	
 	protected:
 	
-	DynType(llvm::Type::TypeID const id, DynType* const pParent) :
-		id(id), pParent(pParent) {}
+	DynType(
+		llvm::Type::TypeID const  id,
+		llvm::Value        const& creatingValue,
+		bool               const  createNewSlot,
+		DataSlot*          const  pExistingSlot);
 };
 
 class DynInteger : public DynType {
 	
 	public:
 	
-	static DynInteger& undefValue;
-	
 	llvm::APInt const& value;
 	
-	DynInteger(llvm::APInt const& value, DynType* const pParent = nullptr) :
-		DynType(llvm::Type::IntegerTyID, pParent),
-		value  (*new llvm::APInt(value)) {}
-	DynInteger(bool const value, DynType* const pParent = nullptr) :
-		DynType(llvm::Type::IntegerTyID, pParent),
-		value  (*new llvm::APInt(1, value ? 1 : 0)) {}
+	DynInteger(
+			llvm::Value const& creatingValue,
+			DataSlot*   const  pSlot = nullptr) :
+		DynType(llvm::Type::IntegerTyID, creatingValue, !pSlot, pSlot),
+		value  (*new llvm::APInt()),
+		undef  (true) {}
+	
+	DynInteger(
+			llvm::Value const& creatingValue,
+			llvm::APInt const& value,
+			DataSlot*   const  pSlot = nullptr) :
+		DynType(llvm::Type::IntegerTyID, creatingValue, !pSlot, pSlot),
+		value  (*new llvm::APInt(value)),
+		undef  (false) {}
+	
+	DynInteger(
+			llvm::Value const& creatingValue,
+			bool        const  value,
+			DataSlot*   const  pSlot = nullptr) :
+		DynType(llvm::Type::IntegerTyID, creatingValue, !pSlot, pSlot),
+		value  (*new llvm::APInt(1, value ? 1 : 0)),
+		undef  (false) {}
+	
 	virtual ~DynInteger(void);
 	
-	virtual DynType* clone(DynType* const pParent = nullptr) const override;
 	virtual llvm::raw_ostream& print(llvm::raw_ostream& out) const override;
 	
 	bool isUndef(void) const;
+	
+	private:
+	
+	bool const undef;
 };
 
 class DynArray : public DynType {
@@ -155,38 +223,40 @@ class DynArray : public DynType {
 	
 	unsigned int const size;
 	
-	DynArray(llvm::ArrayType const& type, DynType* const pParent = nullptr);
+	DynArray(
+		llvm::ArrayType         const& type,
+		llvm::Value             const& creatingValue,
+		std::unordered_set<DataSlot*>& slotSet);
 	virtual ~DynArray(void);
 	
 	DynType& getElement(unsigned int const index) const;
-	void     setElement(unsigned int const index,  DynType& element);
-	void     setElement(DynType const& oldElement, DynType& newElement);
+	void     setElement(unsigned int const index, DynType& element);
 	
-	virtual DynType* clone(DynType* const pParent = nullptr) const override;
 	virtual llvm::raw_ostream& print(llvm::raw_ostream& out) const override;
 	
 	private:
 	
-	DynType**                                        _array;
-	std::unordered_map<DynType const*, unsigned int> _elementToIndexMap;
+	DynType** _array;
 };
 
 class DynPointer : public DynType {
 	
 	public:
 	
-	static DynPointer& nullPtr;
-	
-	DynType& element;
+	DataSlot* const pPointedSlot;
 	
 	DynPointer(
-			DynType&       element,
-			DynType* const pParent = nullptr) :
-		DynType(llvm::Type::PointerTyID, pParent), element(element) {}
+			llvm::Value const& creatingValue,
+			DataSlot*   const  pPointedSlot = nullptr,
+			DataSlot*   const  pSlot        = nullptr) :
+		DynType     (llvm::Type::PointerTyID, creatingValue, !pSlot, pSlot),
+		pPointedSlot(pPointedSlot) {}
+	
 	virtual ~DynPointer(void) {}
 	
-	virtual DynType* clone(DynType* const pParent = nullptr) const override;
 	virtual llvm::raw_ostream& print(llvm::raw_ostream& out) const override;
 	
-	bool isNull(void) const;
+	bool     isNull           (void) const;
+	DynType* tryGetSlotContent(void) const;
+	DynType& getSlotContent   (void) const;
 };
