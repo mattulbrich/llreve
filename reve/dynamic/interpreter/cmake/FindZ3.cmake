@@ -1,3 +1,12 @@
+#
+# This file is part of
+#    llreve - Automatic regression verification for LLVM programs
+#
+# Copyright (C) 2016 Karlsruhe Institute of Technology
+#
+# The system is published under a BSD license.
+# See LICENSE (distributed with this file) for details.
+
 # Try to find the GMP librairies
 # GMP_FOUND - system has GMP lib
 # GMP_INCLUDE_DIR - the GMP include directory

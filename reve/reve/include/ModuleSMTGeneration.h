@@ -1,3 +1,13 @@
+/*
+ * This file is part of
+ *    llreve - Automatic regression verification for LLVM programs
+ *
+ * Copyright (C) 2016 Karlsruhe Institute of Technology
+ *
+ * The system is published under a BSD license.
+ * See LICENSE (distributed with this file) for details.
+ */
+
 #pragma once
 
 #include "Memory.h"
@@ -39,4 +49,5 @@ auto outInvariant(MonoPair<std::vector<smt::SortedVar>> funArgs,
     -> smt::SharedSMTRef;
 
 smt::SharedSMTRef initPredicate(std::shared_ptr<const smt::FunDef> inInv);
+smt::SharedSMTRef initPredicateComment(std::shared_ptr<const smt::FunDef> inInv);
 smt::SharedSMTRef initImplication(std::shared_ptr<const smt::FunDef> funDecl);
