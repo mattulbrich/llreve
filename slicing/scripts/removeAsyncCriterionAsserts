@@ -1,0 +1,4 @@
+#!/bin/bash
+perl -p -e "s/\((assert|check)/_END_OF_ASSERT\(\1/g" $1 |
+perl -0777 -pe "s/\(assert(.(?!_END_OF_ASSERT))*INV_REC___criterion__(1|2)_PRE(.*?)_END_OF_ASSERT//gs" |
+perl -p -e "s/_END_OF_ASSERT//g"
