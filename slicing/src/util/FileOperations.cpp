@@ -28,6 +28,8 @@
 #include "llvm/Support/CommandLine.h"
 
 #include "llvm/Transforms/Utils/Cloning.h"
+ #include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
+
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/Verifier.h"
 
@@ -74,6 +76,10 @@ shared_ptr<llvm::Module> getModuleFromSource(string fileName, string resourceDir
 	PM.add(new PromoteAssertSlicedPass());
 	PM.add(new FixNamesPass());
 	PM.add(new ReplaceUndefPass());
+
+	// Necessary to be able to map return mark between program and candidate later on:
+	PM.add(llvm::createUnifyFunctionExitNodesPass()); 
+
 	PM.run(*program);
 
 	bool hasError = llvm::verifyModule(*program, &errs());
