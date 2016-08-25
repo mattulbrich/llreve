@@ -11,6 +11,7 @@
 #include "SliceCandidateValidation.h"
 
 #include "core/SliceCandidate.h"
+#include "util/FileOperations.h"
 
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "preprocessing/StripExplicitAssignPass.h"
@@ -67,19 +68,18 @@ ValidationResult SliceCandidateValidation::validate(SliceCandidate* candidate, C
 		fileOpts.OutRelation = make_shared<smt::Primitive<string>>("true");
 	}
 
-	PreprocessOpts preprocessOpts(false,
-		false,
+	PreprocessOpts preprocessOpts(false, //showCFG
+		false, //showMarkedCFG
 		true //Infer Marks
 		);
 
 	auto candidateCopy = candidate->copy();
 	candidateCopy->computeMarks();
-	
 	llvm::legacy::PassManager PM;
 	PM.add(new StripExplicitAssignPass());
 	PM.run(*candidateCopy->getProgram());
 	PM.run(*candidateCopy->getCandidate());
-
+	//candidateCopy->computeMarks();
 
 	MonoPair<shared_ptr<Module>> modules(candidateCopy->getProgram(), candidateCopy->getCandidate());
 	auto preprocessedFuns = preprocessCandidate(candidateCopy, preprocessOpts);
@@ -116,7 +116,9 @@ SliceCandidateValidation::preprocessCandidate(SliceCandidatePtr candidate,
 	for (auto funPair : funs.get()) {
 		preprocessFunction(*funPair.first, "1", opts);
 		preprocessFunction(*funPair.second, "2", opts);
+	}
 
+	for (auto funPair : funs.get()) {
 		BidirBlockMarkMap* markedBlocks1 = candidate->getMarkedBlocksProgram();
 		assert(markedBlocks1 != nullptr);
 		AnalysisResults results1 = AnalysisResults(*markedBlocks1, findPaths(*markedBlocks1));

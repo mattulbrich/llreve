@@ -86,12 +86,20 @@ public:
 			addMark(++markCounter,loop->getHeader());
 		}
 
-		optimizeMark(entry, exit, fun);	
+		int diff;
+		do {
+			diff = optimizeMark(entry, exit, fun);	
+		} while (diff > 0);
+			
 		candidate->setMarkedBlocksProgram(std::move(blockMarkMap));
 		return false; // Did not modify CFG
 	}
 
-	virtual void optimizeMark(llvm::BasicBlock* entry, llvm::BasicBlock* exit, llvm::Function &fun) {
+	/**
+	 * Places a new mark to reduce the number of paths.
+	 * Returns the difference in the number of paths before and after the mark was inserted.
+	 */
+	virtual int optimizeMark(llvm::BasicBlock* entry, llvm::BasicBlock* exit, llvm::Function &fun) {
 		std::map<llvm::BasicBlock*, Info> infos;
 		
 		for (auto blockIt = llvm::po_begin(entry);blockIt != llvm::po_end(entry); ++blockIt) {
@@ -133,12 +141,13 @@ public:
 		}
 
 		
-		int maxDiff = 0;
+		int maxDiff = -1;
 		llvm::BasicBlock* maxBlock = nullptr;
 		for (llvm::BasicBlock& block:fun) {
 			Info& info = infos[&block];
 			int pathsNoMark = info.incomingPaths * info.outgoingPaths;
 			int pathsMark = info.incomingPaths + info.outgoingPaths;
+			std::cout << block.getName().str() << " noMark: " << pathsNoMark << " Mark: " << pathsMark << std::endl;
 			int diff = pathsNoMark - pathsMark;
 			if (maxDiff < diff) {
 				maxDiff = diff;
@@ -146,10 +155,14 @@ public:
 			}
 		}
 
-		assert(!hasMark(maxBlock));
-		addMark(++markCounter, maxBlock);
-
-		std::cout << maxDiff << std::endl;
+		if (maxDiff >= 0) {
+			assert(maxBlock && !hasMark(maxBlock));
+			addMark(++markCounter, maxBlock);
+			std::cout << "Inserted mark " << markCounter << " with maxDiff: " << maxDiff << " at " << maxBlock->getName().str() << std::endl;
+		}
+		
+		
+		return maxDiff;
 	}
 
 	// virtual void inverseMarkToMarkDFS(llvm::BasicBlock* start, std::function<void (DfsInfo& info)> lambda){
@@ -202,6 +215,7 @@ public:
 	}
 
 	virtual void addMark(int mark, llvm::BasicBlock* block){
+		assert(block);
 		blockMarkMap->BlockToMarksMap[block].insert(mark);
 		blockMarkMap->MarkToBlocksMap[mark].insert(block);
 	}
@@ -252,9 +266,16 @@ void SliceCandidate::computeMarks(){
 	PM.add(llvm::createLoopSimplifyPass());
 	PM.add(llvm::createUnifyFunctionExitNodesPass());	
 	PM.add(new HelperPass(this));
+
 	//PM.run(*this->getCandidate());
 	//this->markedBlocksCandidate = std::move(markedBlocksProgram);
 	PM.run(*this->getProgram());
+
+	// {
+	// 	llvm::legacy::PassManager PM;
+	// 	PM.add(llvm::createCFGSimplificationPass());	
+	// 	PM.run(*this->getProgram());
+	// }
 
 	std::map<int, std::set<llvm::BasicBlock *>> marksToBlocks;
 	auto& MarkToBlockMapProgram = this->markedBlocksProgram->MarkToBlocksMap;
@@ -262,6 +283,7 @@ void SliceCandidate::computeMarks(){
 		int mark = it->first;
 		std::set<llvm::BasicBlock*> candidateBlocks;
 		for (llvm::BasicBlock* programBlock:it->second) {
+			std::cout << "Mark " << mark << " at " << programBlock->getName().str() << std::endl;
 			if (llvm::BasicBlock* candidateBlock = llvm::dyn_cast<llvm::BasicBlock>(valueMap[programBlock])) {
 				candidateBlocks.insert(candidateBlock);
 			} else {
