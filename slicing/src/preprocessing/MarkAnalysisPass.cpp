@@ -50,10 +50,10 @@ bool MarkAnalysisPass::runOnModule(llvm::Module &module) {
 
 			addLoopMarks(function);
 
-			int diff;
+			int diff = -1;
 			do {
 				diff = optimizeMark(entry, exit, function);	
-			} while (diff > 10);
+			} while (diff > 0 && diff > markThreshold);
 		}
 	}
 		

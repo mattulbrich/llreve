@@ -110,6 +110,10 @@ static llvm::cl::opt<bool> InlineFunctions("inline-functions", llvm::cl::desc("I
 static llvm::cl::opt<bool> Heap("heap", llvm::cl::desc("Activate to handle programs with heap."),
 	llvm::cl::cat(SlicingCategory));
 
+static llvm::cl::opt<int> MarkInsertThreshold("mark-threshold", llvm::cl::desc("Magic Number. Marks will be inserted until the reduction in the number of paths falls below this threshold."),
+	cl::init(10), // Magic value, 10 seems to be a good default value.
+	llvm::cl::cat(SlicingCategory));
+
 void parseArgs(int argc, const char **argv) {
 	vector<llvm::cl::OptionCategory*> optionCategorys;
 	optionCategorys.push_back(&ClangCategory);
@@ -273,10 +277,12 @@ void performInlining(ModulePtr program, CriterionPtr criterion) {
 
 
 void performMarkAnalysis(ModulePtr program) {
+	int threshold = MarkInsertThreshold;
+
 	llvm::legacy::PassManager PM;
 	PM.add(llvm::createUnifyFunctionExitNodesPass()); 
 	PM.add(llvm::createLoopSimplifyPass());
-	PM.add(new MarkAnalysisPass());
+	PM.add(new MarkAnalysisPass(threshold));
 	PM.run(*program);
 }
 
