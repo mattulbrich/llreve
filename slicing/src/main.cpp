@@ -16,6 +16,7 @@
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Utils/Cloning.h"
 
 
 #include "util/FileOperations.h"
@@ -27,12 +28,22 @@
 #include "slicingMethods/impact_analysis_for_assignments/ImpactAnalysisForAssignments.h"
 #include "core/SliceCandidateValidation.h"
 
+#include "preprocessing/MarkAnalysisPass.h"
+#include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
 
 using namespace std;
 using namespace llvm;
 
 void store(string fileName, Module& module);
 void parseArgs(int argc, const char **argv);
+CriterionPtr configureCriterion(ModulePtr module);
+SlicingMethodPtr configureSlicingMethod(ModulePtr module);
+void configureSolver();
+void performRemoveFunctions(ModulePtr module, CriterionPtr criterion);
+void performInlining(ModulePtr module, CriterionPtr criterion);
+void performMarkAnalysis(ModulePtr program);
+
+Function* getSlicedFunction(ModulePtr module, CriterionPtr criterion);
 
 
 static llvm::cl::OptionCategory ClangCategory("Clang options",
@@ -68,6 +79,17 @@ static cl::opt<CriterionModes> CriterionMode(cl::desc("Chose crietion mode:"),
 	llvm::cl::cat(SlicingCategory)
 	);
 
+enum class SolverOptions{eld, z3, eld_client};
+static cl::opt<SolverOptions> SolverMode(cl::desc("Chose smt solver: (Make sure the choosen solver can be found in command line, i.e. set $PATH)"),
+	cl::values(
+		clEnumValN(SolverOptions::eld, "eld", "Eldarica using command 'eld'"),
+		clEnumValN(SolverOptions::eld_client, "eld-client", "Eldarica using command 'eld-client'"),
+		clEnumValN(SolverOptions::z3, "z3", "Z3 using command 'z3', requires eld-client as well!"),
+		clEnumValEnd),
+	cl::init(SolverOptions::eld_client),
+	llvm::cl::cat(SlicingCategory)
+	);
+
 static llvm::cl::list<string> Includes("I", llvm::cl::desc("Include path"),
 	llvm::cl::cat(ClangCategory));
 
@@ -77,7 +99,12 @@ static llvm::cl::opt<string> ResourceDir(
 		"e.g. /usr/local/lib/clang/3.8.0"),
 	llvm::cl::cat(ClangCategory));
 
-static llvm::cl::opt<bool> RemoveFunctions("remove-functions", llvm::cl::desc("Removes unused functions from module before slicing."),
+static llvm::cl::opt<bool> RemoveFunctions("remove-functions", llvm::cl::desc("Removes body of functions from module before slicing. The sliced function is excluded. See -D Option for excluding further functions."),
+	llvm::cl::cat(SlicingCategory));
+static llvm::cl::list<string> DontRemoveFunction("D", llvm::cl::desc("Functions, which should not be removed by remove functions"),
+	llvm::cl::cat(SlicingCategory));
+
+static llvm::cl::opt<bool> InlineFunctions("inline-functions", llvm::cl::desc("Inlines all functions into the sliced function."),
 	llvm::cl::cat(SlicingCategory));
 
 static llvm::cl::opt<bool> Heap("heap", llvm::cl::desc("Activate to handle programs with heap."),
@@ -93,8 +120,31 @@ void parseArgs(int argc, const char **argv) {
 
 int main(int argc, const char **argv) {
 	parseArgs(argc, argv);
+	configureSolver();
+
 	ModulePtr program = getModuleFromSource(FileName, ResourceDir, Includes);
 
+	CriterionPtr criterion = configureCriterion(program);
+	performRemoveFunctions(program, criterion);
+	performInlining(program, criterion);
+	performMarkAnalysis(program);
+
+	SlicingMethodPtr method = configureSlicingMethod(program);
+	ModulePtr slice = method->computeSlice(criterion);
+
+	if (!slice){
+		outs() << "An error occured. Could not produce slice. \n";
+	} else {
+		writeModuleToFile("program.llvm", *program);
+		writeModuleToFile("slice.llvm", *slice);
+		outs() << "See program.llvm and slice.llvm for the resulting LLVMIRs \n";
+	}
+
+	return 0;
+}
+
+
+CriterionPtr configureCriterion(ModulePtr program) {
 	CriterionPtr criterion;
 	CriterionPtr presentCriterion = shared_ptr<Criterion>(new PresentCriterion());
 
@@ -120,11 +170,10 @@ int main(int argc, const char **argv) {
 			}
 		break;
 	}
+	return criterion;
+}
 
-	if (Heap) {
-		SliceCandidateValidation::activateHeap();
-	}
-
+SlicingMethodPtr configureSlicingMethod(ModulePtr program) {
 	SlicingMethodPtr method;
 	switch (SlicingMethodOption) {
 		case syntactic:
@@ -143,35 +192,115 @@ int main(int argc, const char **argv) {
 		method = shared_ptr<SlicingMethod>(new IdSlicing(program));
 		break;
 	}
+	return method;
+}
 
-
+void performRemoveFunctions(ModulePtr program, CriterionPtr criterion) {
 	if (RemoveFunctions) {
-		set<Instruction*> criterionInstructions = criterion->getInstructions(*program);
-		assert(criterionInstructions.size() == 1 && "Todo: improve implementation to work with multiple criterions");
-		Instruction* instruction = *criterionInstructions.begin();
-		Function* fun = instruction->getParent()->getParent();
-		vector<Function*> removeFun;
-		for (Function& function: *program) {
-			if (!Util::isSpecialFunction(function) && &function != fun) {
-				removeFun.push_back(&function);
+		set<string> notToBeRemoved;
+		for (string functionName: DontRemoveFunction) {
+			notToBeRemoved.insert(functionName);
+			if (!program->getFunction(functionName)) {
+				cout << "WARNING: Did not find function, which should not be deleted (-D): " << functionName << endl;
 			}
 		}
-		for (Function* function:removeFun) {
-			Function* exFun = Function::Create(function->getFunctionType(), llvm::GlobalValue::LinkageTypes::ExternalLinkage, Twine(function->getName()), &*program);
-			function->replaceAllUsesWith(exFun);
-			function->eraseFromParent();
+
+		Function* slicedFunction = getSlicedFunction(program, criterion);
+
+		for (Function& function: *program) {
+			if (!Util::isSpecialFunction(function) 
+					&& &function != slicedFunction
+					&& notToBeRemoved.find(function.getName()) == notToBeRemoved.end()) {
+
+				function.deleteBody();
+			}
 		}
 	}
+}
 
-	ModulePtr slice = method->computeSlice(criterion);
+void performInlining(ModulePtr program, CriterionPtr criterion) {
+	if (InlineFunctions) {
+		Function* slicedFunction = getSlicedFunction(program, criterion);
+		writeModuleToFile("program.pre_inlining.llvm", *program);
 
-	if (!slice){
-		outs() << "An error occured. Could not produce slice. \n";
-	} else {
-		writeModuleToFile("program.llvm", *program);
-		writeModuleToFile("slice.llvm", *slice);
-		outs() << "See program.llvm and slice.llvm for the resulting LLVMIRs \n";
+		bool runInlining = true;
+		while (runInlining) {
+			runInlining = false;
+
+			std::vector<llvm::CallInst *> toBeInlined;
+			for (auto &bb : *slicedFunction) {
+				for (auto &instr : bb) {
+					if (auto callInst = llvm::dyn_cast<llvm::CallInst>(&instr)) {
+						auto fun = callInst->getCalledFunction();
+						if (!fun->isDeclaration()) {
+							runInlining = true;
+							toBeInlined.push_back(callInst);
+						}
+					}
+				}
+			}
+
+
+			for (llvm::CallInst* instr: toBeInlined) {
+				llvm::Function* function = instr->getCalledFunction();
+				llvm::InlineFunctionInfo InlineInfo;
+				if (!llvm::InlineFunction(instr, InlineInfo)){
+					std::cout << "ERROR: Could not inline function " << function->getName().str() << std::endl;
+					exit(1);
+				} else {
+					std::cout << "INFO: inlined " << function->getName().str() << std::endl;
+				}
+			}		
+		}
+
+		// Erase all inlined Functions
+		vector<Function*> toBeDeleted;
+		for (Function& function: *program) {
+			if (!Util::isSpecialFunction(function) 
+					&& &function != slicedFunction
+					&& !function.isDeclaration()) {
+				toBeDeleted.push_back(&function);
+			}
+		}
+
+		for (Function* function: toBeDeleted) {
+			function->eraseFromParent();
+		}
+
+		writeModuleToFile("program.post_inlining.llvm", *program);
+	}
+}
+
+
+void performMarkAnalysis(ModulePtr program) {
+	llvm::legacy::PassManager PM;
+	PM.add(llvm::createUnifyFunctionExitNodesPass()); 
+	PM.add(llvm::createLoopSimplifyPass());
+	PM.add(new MarkAnalysisPass());
+	PM.run(*program);
+}
+
+Function* getSlicedFunction(ModulePtr program, CriterionPtr criterion) {
+	set<Instruction*> criterionInstructions = criterion->getInstructions(*program);
+	assert(criterionInstructions.size() == 1 && "Todo: improve implementation to work with multiple criterions");
+	Instruction* instruction = *criterionInstructions.begin();
+	return instruction->getParent()->getParent();
+}
+
+void configureSolver(){
+	if (Heap) {
+		SliceCandidateValidation::activateHeap();
 	}
 
-	return 0;
+	switch (SolverMode){
+		case SolverOptions::eld:
+			SmtSolver::setSolverEld();
+			break;
+		case SolverOptions::z3:
+			SmtSolver::setSolverZ3();
+			break;
+		case SolverOptions::eld_client:
+			SmtSolver::setSolverEldClient();
+			break;
+	}
 }

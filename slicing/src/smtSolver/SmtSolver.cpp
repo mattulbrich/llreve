@@ -10,10 +10,22 @@
 
 #include "SmtSolver.h"
 #include "Eldarica.h"
+#include "Z3.h"
+
+std::unique_ptr<SmtSolver> SmtSolver::solver = nullptr;
+
+void SmtSolver::setSolverEld() {
+	solver = std::make_unique<Eldarica>("eld");
+}
+void SmtSolver::setSolverEldClient() {
+	solver = std::make_unique<Eldarica>("eld-client");
+}
+void SmtSolver::setSolverZ3() {
+	solver = std::make_unique<Z3>("z3", "eld-client");
+}
 
 SmtSolver& SmtSolver::getInstance() {
-	static Eldarica instance("eld");
-	return instance;
+	return *solver;
 }
 
 SmtSolver::~SmtSolver() = default;

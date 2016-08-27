@@ -56,7 +56,8 @@ ValidationResult SliceCandidateValidation::validate(SliceCandidate* candidate, C
 		heap, // Heap
 		false, false, false,
 		false, // No-Byte-Heap
-		false, false, false,
+		false, false, 
+		true, // muz, activate for z3
 		true, // PerfectSync
 		false, false, false, false,
 		!heap, // InitPredicate
@@ -170,7 +171,7 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 
 	PreprocessOpts preprocessOpts(false,
 		false,
-		true //Infer Marks
+		false //Infer Marks
 		);
 
 	shared_ptr<Module> programCopy(CloneModule(program));
