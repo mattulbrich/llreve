@@ -1,15 +1,6 @@
-/*
- * This file is part of
- *    llreve - Automatic regression verification for LLVM programs
- *
- * Copyright (C) 2016 Karlsruhe Institute of Technology
- *
- * The system is published under a BSD license.
- * See LICENSE (distributed with this file) for details.
- */
-
 #include "Interpreter.h"
 
+#include "core/Criterion.h"
 #include "core/Util.h"
 #include "preprocessing/ExplicitAssignPass.h"
 
@@ -20,16 +11,19 @@
 #include <iostream>
 
 #define EXECUTE_INST_1(INST_NAME) \
-	pChangedSlot = execute##INST_NAME(*dyn_cast<INST_NAME const>(_pNextInst));
+	pNewTraceEntry = &execute##INST_NAME(*dyn_cast<INST_NAME const>(_pNextInst));
 
 #define EXECUTE_INST_2(OP_CODE, INST_NAME) \
 	case Instruction::OP_CODE: EXECUTE_INST_1(INST_NAME) break;
 
 #define EXECUTE_BIN_OP(OP_CODE, OP) \
-	case Instruction::OP_CODE: return &updateState(inst, OP);
+	case Instruction::OP_CODE: return updateState(inst, new DynInteger(OP));
 
 #define EXECUTE_ICMP_INST(OP_CODE, OP_FUN) \
-	case CmpInst::OP_CODE: return &updateState(inst, op1.OP_FUN(op2));
+	case CmpInst::OP_CODE: return updateState(inst, new DynInteger(op1.OP_FUN(op2)));
+
+#define EXECUTE_CAST_INST_BIT_WIDTH(OP_CODE, OP_FUN) \
+	case CmpInst::OP_CODE: return updateState(inst, new DynInteger(value.OP_FUN(inst.getDestTy()->getIntegerBitWidth())));
 
 using namespace std;
 using namespace llvm;
@@ -39,14 +33,17 @@ static APInt undefValueAPInt;
 Interpreter::Interpreter(
 		Function  const& func,
 		InputType const& input,
+		Heap&            heap,
 		bool      const  branchDependencies) :
 	func             (func),
 	_computeBranchDep(branchDependencies),
+	_heap            (heap),
+	_ownerId         (heap.createOwner()),
 	_instIt          (func.getEntryBlock().begin()),
-	_retValueSlot    (func),
 	_pLastBB         (nullptr),
 	_pRecentInst     (nullptr),
-	_pNextInst       (&*_instIt) {
+	_pNextInst       (&*_instIt),
+	_pRetValue       (nullptr) {
 	
 	unsigned int curIndex = 0;
 	
@@ -63,7 +60,7 @@ Interpreter::Interpreter(
 		}
 		
 		// TODO: Possible memory leak
-		_mappedState[&i] = (new DynInteger(i, apValue))->pSlot;
+		_state[&i] = new DynInteger(apValue);
 	}
 	
 	// Initialize the instruction values with undefined values
@@ -73,7 +70,7 @@ Interpreter::Interpreter(
 			
 			case Type::IntegerTyID:
 			case Type::PointerTyID:
-				_mappedState[&i] = new DataSlot(i);
+				_state[&i] = nullptr;
 				break;
 			
 			case Type::VoidTyID:
@@ -83,13 +80,6 @@ Interpreter::Interpreter(
 				assert(false && "Unsupported instruction value type");
 				break;
 		}
-		
-		_arrays[&i] = nullptr;
-	}
-	
-	// Add all the mapped slots also to the general state
-	for(auto& i : _mappedState) {
-		_state.insert(i.second);
 	}
 }
 
@@ -100,16 +90,6 @@ Interpreter::~Interpreter(void) {
 	for(TraceEntry const* i : _trace) {
 		delete i;
 	}
-	
-	// Delete the arrays allocated on the heap
-	for(auto const& i : _arrays) {
-		delete i.second;
-	}
-	
-	// Free the pseudo heap
-	for(DataSlot const* i : _state) {
-		delete i;
-	}
 }
 
 void Interpreter::addDependency(
@@ -118,6 +98,39 @@ void Interpreter::addDependency(
 	// TODO: also consider dependencies on function arguments
 	if(Instruction const* pInst = dyn_cast<Instruction>(&dependency)) {
 		recentDataDependencies.insert(pInst);
+	}
+}
+
+Heap::AddressType Interpreter::computeArrayElementByteSize(
+		Type const& type) {
+	
+	assert(type.isArrayTy() && "Given type is no array");
+	
+	return computeByteSize(*dyn_cast<ArrayType>(&type)->getElementType());
+}
+
+Heap::AddressType Interpreter::computeByteSize(
+		Type const& type) {
+	
+	ArrayType const* pArrayType;
+	
+	switch(type.getTypeID()) {
+		
+		case Type::IntegerTyID:
+			return type.getIntegerBitWidth() / 8;
+		
+		case Type::ArrayTyID:
+			pArrayType = dyn_cast<ArrayType>(&type);
+			return
+				pArrayType->getNumElements() *
+				computeByteSize(*pArrayType->getElementType());
+		
+		case Type::PointerTyID:
+			return sizeof(Heap::AddressType);
+		
+		default:
+			assert(false && "Unsupported type");
+			return 0;
 	}
 }
 
@@ -139,7 +152,7 @@ bool Interpreter::executeNextInstruction(void) {
 	// Check whether the end has already been reached
 	if(!_pNextInst) return false;
 	
-	DataSlot const* pChangedSlot = nullptr;
+	TraceEntry const* pNewTraceEntry;
 	
 	// Reset the data dependencies, they will be filled during execution of the
 	// next instruction by calling 'resolveInt()'
@@ -148,6 +161,10 @@ bool Interpreter::executeNextInstruction(void) {
 	if(_pNextInst->isBinaryOp()) {
 		
 		EXECUTE_INST_1(BinaryOperator)
+		
+	} else if(_pNextInst->isCast()) {
+		
+		EXECUTE_INST_1(CastInst)
 		
 	} else {
 		
@@ -169,10 +186,17 @@ bool Interpreter::executeNextInstruction(void) {
 		}
 	}
 	
-	if(pChangedSlot) {
-		pChangedSlot->print(outs()) << "\n";
+	outs() << "> ";
+	if(pNewTraceEntry->pValue) {
+		pNewTraceEntry->pValue->print(outs()) << "\n";
+	} else if(_pRetValue) {
+		_pRetValue->print(outs()) << " [return]\n";
 	} else {
-		outs() << "<no change>\n";
+		outs() << "[no value]\n";
+	}
+	for(auto const& i : pNewTraceEntry->heapValues) {
+		outs() << "  " << Util::toHexString(i.first, 8) << ": " <<
+			Util::toHexString(static_cast<uint16_t>(i.second), 2) << "\n";
 	}
 	
 	// Include the branch instructions in the dependencies
@@ -191,12 +215,11 @@ bool Interpreter::executeNextInstruction(void) {
 	}
 	
 	// Update the execution trace
-	// (The state is implicitely updated by modifying the data slot)
-	_trace.push_back(new TraceEntry(*_pNextInst, pChangedSlot));
+	_trace.push_back(pNewTraceEntry);
 	
 	moveToNextInstruction();
 	
-	return pChangedSlot;
+	return pNewTraceEntry->pValue /*|| pNewTraceEntry*/;
 }
 
 Instruction const* Interpreter::getNextInstruction(void) const {
@@ -211,7 +234,7 @@ Instruction const* Interpreter::getRecentInstruction(void) const {
 
 DynType const* Interpreter::getReturnValue(void) const {
 	
-	return _retValueSlot.getContent();
+	return _pRetValue;
 }
 
 unsigned int Interpreter::getValueBitWidth(
@@ -241,54 +264,44 @@ void Interpreter::moveToNextInstruction(void) {
 }
 
 APInt Interpreter::resolveInt(
-		Value const* pVal) {
+		Value const& value) {
 	
 	APInt result;
 	
-	if(!tryResolveInt(*pVal, result)) {
+	if(!tryResolveInt(value, result)) {
 		assert(false && "Error while resolving integer value");
 	}
 	
 	return result;
 }
 
-DataSlot* Interpreter::resolvePointer(
+Heap::AddressType Interpreter::resolvePointer(
 		Value const& value) {
 	
-	DataSlot* pSlot;
+	Heap::AddressType address;
 	
-	if(!tryResolvePointer(value, pSlot)) {
+	if(!tryResolvePointer(value, address)) {
 		assert(false && "Error while resolving pointer value");
 	}
 	
-	return pSlot;
-}
-
-DataSlot& Interpreter::resolvePointerNotNull(
-		Value const& value) {
-	
-	DataSlot* const pSlot = resolvePointer(value);
-	
-	assert(pSlot && "Unexpected null pointer");
-	
-	return *pSlot;
+	return address;
 }
 
 bool Interpreter::tryResolveInt(
 		Value const& value,
 		APInt&       result) {
 	
-	if(_mappedState.find(&value) != _mappedState.end()) {
+	if(_state.find(&value) != _state.end()) {
 		
-		DynType* const pContent = _mappedState[&value]->getContent();
+		DynType const& dynValue = *_state[&value];
 		
-		if(!pContent->isInteger()) {
+		if(!dynValue.isInteger()) {
 			return false;
 		}
 		
 		addDependency(value);
 		
-		result = pContent->asInteger().value;
+		result = dynValue.asInteger().value;
 		
 	} else if(ConstantInt const* pConstInt = dyn_cast<ConstantInt>(&value)) {
 		
@@ -303,24 +316,24 @@ bool Interpreter::tryResolveInt(
 }
 
 bool Interpreter::tryResolvePointer(
-		Value const& value,
-		DataSlot*&   result) {
+		Value const&       value,
+		Heap::AddressType& result) {
 	
-	if(_mappedState.find(&value) != _mappedState.end()) {
+	if(_state.find(&value) != _state.end()) {
 		
-		DynType* const pContent = _mappedState[&value]->getContent();
+		DynType const& dynValue = *_state[&value];
 		
-		if(!pContent->isPointer()) {
+		if(!dynValue.isPointer()) {
 			return false;
 		}
 		
 		addDependency(value);
 		
-		result = pContent->asPointer().pPointedSlot;
+		result = dynValue.asPointer().heapLocation;
 		
 	} else if(isa<ConstantPointerNull>(&value)) {
 		
-		result = nullptr;
+		result = 0;
 	
 	} else {
 		
@@ -330,76 +343,46 @@ bool Interpreter::tryResolvePointer(
 	return true;
 }
 
-DataSlot const& Interpreter::updateState(
-		Instruction const& inst,
-		APInt       const& value) {
+TraceEntry const& Interpreter::updateState(
+		llvm::Instruction const& inst,
+		DynType const*           pValue) {
 	
-	DataSlot& slot = *_mappedState[&inst];
+	_state[&inst] = pValue;
 	
-	return slot.setContent(*new DynInteger(inst, value, &slot), inst);
+	return *new TraceEntry(inst, pValue, _heap);
 }
 
-DataSlot const& Interpreter::updateState(
-		Instruction const& inst,
-		bool        const  value) {
+TraceEntry const& Interpreter::updateState(
+		llvm::Instruction const& inst,
+		Heap::AddressType const  address,
+		Heap::AddressType const  length) {
 	
-	DataSlot& slot = *_mappedState[&inst];
-	
-	return slot.setContent(*new DynInteger(inst, value, &slot), inst);
-}
-
-DataSlot const& Interpreter::updateState(
-		Instruction const& inst,
-		DataSlot*   const  pPointedSlot) {
-	
-	return *(new DynPointer(inst, pPointedSlot, _mappedState[&inst]))->pSlot;
+	return *new TraceEntry(inst, nullptr, _heap, address, length);
 }
 
 DynType const& Interpreter::operator[](
 		Value const& value) const {
 	
 	try {
-		return *_mappedState.at(&value)->getContent();
+		return *_state.at(&value);
 	} catch(out_of_range e) {
 		assert(false);
-		return *new DynInteger(value);
+		return *new DynInteger();
 	}
 }
 
-DataSlot const* Interpreter::executeAllocaInst(
+TraceEntry const& Interpreter::executeAllocaInst(
 		AllocaInst const& inst) {
 	
 	assert(!inst.isArrayAllocation() && "Unsupported alloca operation");
 	
-	DynType* pAllocatedObject;
-	
-	switch(inst.getAllocatedType()->getTypeID()) {
-		
-		case Type::IntegerTyID:
-			pAllocatedObject = new DynInteger(inst);
-			_state.insert(pAllocatedObject->pSlot);
-			break;
-		
-		case Type::ArrayTyID:
-			assert(!_arrays[_pNextInst] && "Array has already been allocated");
-			pAllocatedObject = _arrays[_pNextInst] = new DynArray(
-				*dyn_cast<ArrayType>(inst.getAllocatedType()), inst, _state);
-			break;
-		
-		case Type::PointerTyID:
-			pAllocatedObject = new DynPointer(inst);
-			_state.insert(pAllocatedObject->pSlot);
-			break;
-		
-		default:
-			assert(false && "Unsupported alloca type");
-			break;
-	}
-	
-	return &updateState(inst, pAllocatedObject->pSlot);
+	return updateState(
+		inst,
+		new DynPointer(
+			_heap.alloc(_ownerId, computeByteSize(*inst.getAllocatedType()))));
 }
 
-DataSlot const* Interpreter::executeBinaryOperator(
+TraceEntry const& Interpreter::executeBinaryOperator(
 		BinaryOperator const& inst) {
 	
 	assert(
@@ -407,8 +390,8 @@ DataSlot const* Interpreter::executeBinaryOperator(
 		"Binary operators need exactly 2 operands");
 	
 	// Get the operands and the variable belonging to this instruction
-	APInt const op1 = resolveInt(inst.getOperand(0));
-	APInt const op2 = resolveInt(inst.getOperand(1));
+	APInt const op1 = resolveInt(*inst.getOperand(0));
+	APInt const op2 = resolveInt(*inst.getOperand(1));
 	
 	switch(_pNextInst->getOpcode()) {
 		
@@ -428,11 +411,11 @@ DataSlot const* Interpreter::executeBinaryOperator(
 		
 		default:
 			assert(false && "Unsupported binary operator");
-			return nullptr;
+			return UTIL_NULL_REF(TraceEntry const);
 	}
 }
 
-DataSlot const* Interpreter::executeBranchInst(
+TraceEntry const& Interpreter::executeBranchInst(
 		BranchInst const& inst) {
 	
 	unsigned int successorIndex;
@@ -445,24 +428,27 @@ DataSlot const* Interpreter::executeBranchInst(
 	} else {
 		
 		assert(inst.getNumSuccessors() == 2);
-		successorIndex = resolveInt(inst.getCondition()).getBoolValue() ? 0 : 1;
+		successorIndex =
+			resolveInt(*inst.getCondition()).getBoolValue() ? 0 : 1;
 	}
 	
 	// Move to the next basic block
 	_pLastBB = inst.getParent();
 	_instIt  = inst.getSuccessor(successorIndex)->begin();
 	
-	return nullptr;
+	return updateState(inst);
 }
 
-DataSlot const* Interpreter::executeCallInst(
+TraceEntry const& Interpreter::executeCallInst(
 		CallInst const& inst) {
 	
 	Function const* pCalledFunction = inst.getCalledFunction();
 	
 	assert(pCalledFunction != nullptr && "Called function not available");
 	
-	if(pCalledFunction->getName().str() == ExplicitAssignPass::FUNCTION_NAME) {
+	string const functionName = pCalledFunction->getName().str();
+	
+	if(functionName.find(ExplicitAssignPass::FUNCTION_NAME) == 0 || functionName.find(Criterion::FUNCTION_NAME) == 0) {
 		
 		assert(
 			inst.getNumArgOperands() == 1 &&
@@ -470,17 +456,17 @@ DataSlot const* Interpreter::executeCallInst(
 		
 		Value const& value = *inst.getArgOperand(0);
 		
-		APInt     intValue;
-		DataSlot* pSlot;
+		APInt             intValue;
+		Heap::AddressType address;
 		
 		if(tryResolveInt(value, intValue)) {
-			return &updateState(inst, intValue);
-		} else if(tryResolvePointer(value, pSlot)) {
+			return updateState(inst, new DynInteger(intValue));
+		} else if(tryResolvePointer(value, address)) {
 			assert(false && "TODO");
-			return nullptr;
+			return UTIL_NULL_REF(TraceEntry const);
 		} else {
 			assert(false && "Error during explicit assign function");
-			return nullptr;
+			return UTIL_NULL_REF(TraceEntry const);
 		}
 		
 	} else {
@@ -490,60 +476,99 @@ DataSlot const* Interpreter::executeCallInst(
 		// Collect arguments
 		// TODO: Signedness
 		for(unsigned int i = 0; i < args.size(); i++) {
-			args[i] = resolveInt(inst.getArgOperand(i)).getLimitedValue();
+			args[i] = resolveInt(*inst.getArgOperand(i)).getLimitedValue();
 		}
 		
-		Interpreter interpreter(*inst.getCalledFunction(), args);
+		Interpreter interpreter(*inst.getCalledFunction(), args, _heap);
 		
 		// Interprete the function
 		interpreter.execute();
 		
 		DynType const* const pFuncRetValue = interpreter.getReturnValue();
 		
-		if(pFuncRetValue) {
+		return pFuncRetValue ?
+			updateState(inst, pFuncRetValue) : UTIL_NULL_REF(TraceEntry const);
+	}
+}
+
+TraceEntry const& Interpreter::executeCastInst(
+		CastInst const& inst) {
+	
+	if(inst.isIntegerCast() || inst.getOpcode() == Instruction::IntToPtr) {
+		
+		APInt value = resolveInt(*inst.getOperand(0));
+		
+		switch(inst.getOpcode()) {
 			
-			switch(pFuncRetValue->id) {
-				case Type::IntegerTyID:
-					return &updateState(inst, pFuncRetValue->asInteger().value);
-				case Type::PointerTyID:
-					return &updateState(
-						inst, pFuncRetValue->asPointer().pPointedSlot);
-				default:
-					assert(false && "Unsupported return value type");
-					return nullptr;
-			}
+			EXECUTE_CAST_INST_BIT_WIDTH(Trunc, trunc)
+			EXECUTE_CAST_INST_BIT_WIDTH(ZExt, zext)
+			EXECUTE_CAST_INST_BIT_WIDTH(SExt, sext)
 			
-		} else {
+			case Instruction::IntToPtr:
+				return
+					updateState(inst, new DynPointer(value.getLimitedValue()));
 			
-			return nullptr;
+			default:
+				assert(false && "Unsupported integer cast");
+				return UTIL_NULL_REF(TraceEntry const);
+		}
+		
+	} else {
+		
+		Heap::AddressType address = resolvePointer(*inst.getOperand(0));
+		
+		switch(inst.getOpcode()) {
+			
+			case Instruction::PtrToInt:
+				return updateState(
+					inst,
+					new DynInteger(
+						APInt(inst.getType()->getIntegerBitWidth(), address)));
+			
+			case Instruction::BitCast:
+				return updateState(inst, new DynPointer(address));
+			
+			default:
+				assert(false && "Unsupported pointer cast");
+				return UTIL_NULL_REF(TraceEntry const);
 		}
 	}
 }
 
-DataSlot const* Interpreter::executeGetElementPtrInst(
+TraceEntry const& Interpreter::executeGetElementPtrInst(
 		GetElementPtrInst const& inst) {
 	
-	assert(
-		inst.getNumIndices() == 2 &&
-		inst.getSourceElementType()->isArrayTy() &&
-		"Unsupported use of GEP instruction");
+	Type const&             srcType = *inst.getSourceElementType();
+	User::const_op_iterator curOp   = inst.idx_begin();
+	Heap::AddressType       elementSize;
 	
-	User::const_op_iterator curOp = inst.idx_begin();
+	if(srcType.isArrayTy()) {
+		
+		assert(
+			inst.getNumIndices() == 2 &&
+			resolveInt(**curOp).getLimitedValue() == 0 &&
+			"Unsupported GEP instruction for arrays");
+		
+		++curOp;
+		
+		elementSize = computeArrayElementByteSize(srcType);
+		
+	} else {
+		
+		assert(
+			inst.getNumIndices() == 1 &&
+			"Unsupported GEP instruction for non-array types");
+		
+		elementSize = computeByteSize(srcType);
+	}
 	
-	assert(
-		resolveInt(*curOp).getLimitedValue() == 0 &&
-		"First GEP operand must be 0");
+	Heap::AddressType const offset = resolvePointer(*inst.getPointerOperand());
+	Heap::AddressType const index  = resolveInt(**curOp).getLimitedValue();
 	
-	++curOp;
-	
-	uint64_t const index = resolveInt(*curOp).getLimitedValue();
-	DynArray&      array =
-		resolvePointerNotNull(*inst.getPointerOperand()).getContent()->asArray();
-	
-	return &updateState(inst, array.getElement(index).pSlot);
+	return updateState(inst, new DynPointer(offset + index * elementSize));
 }
 
-DataSlot const* Interpreter::executeICmpInst(
+TraceEntry const& Interpreter::executeICmpInst(
 		ICmpInst const& inst) {
 	
 	assert(
@@ -551,8 +576,8 @@ DataSlot const* Interpreter::executeICmpInst(
 		"Compare instructions need exactly 2 operands");
 	
 	// Get the operands and the variable belonging to this instruction
-	APInt const op1 = resolveInt(inst.getOperand(0));
-	APInt const op2 = resolveInt(inst.getOperand(1));
+	APInt const op1 = resolveInt(*inst.getOperand(0));
+	APInt const op2 = resolveInt(*inst.getOperand(1));
 	
 	switch(inst.getPredicate()) {
 		
@@ -569,31 +594,45 @@ DataSlot const* Interpreter::executeICmpInst(
 		
 		default:
 			assert(false && "Unsupported compare operation");
-			return nullptr;
+			return UTIL_NULL_REF(TraceEntry const);
 	}
 }
 
-DataSlot const* Interpreter::executeLoadInst(
+TraceEntry const& Interpreter::executeLoadInst(
 		LoadInst const& inst) {
 	
-	DataSlot& slot = resolvePointerNotNull(*inst.getPointerOperand());
+	Heap::AddressType const  address  =
+		resolvePointer(*inst.getPointerOperand());
+	Type              const& type     = *inst.getType();
+	APInt             const  rawValue = _heap.readInt(
+		address,
+		static_cast<Heap::SizeType>(computeByteSize(type) * 8),
+		&recentDataDependencies);
 	
-	// Add precise heap data dependencies
-	addDependency(*slot.getLastModifyingValue());
-	
-	// TODO: Support othe types than integers
-	return &updateState(inst, slot.getContent()->asInteger().value);
+	switch(type.getTypeID()) {
+		
+		case Type::IntegerTyID:
+			return updateState(inst, new DynInteger(rawValue));
+		
+		case Type::PointerTyID:
+			return
+				updateState(inst, new DynPointer(rawValue.getLimitedValue()));
+		
+		default:
+			assert(false && "Unsupported load type");
+			return UTIL_NULL_REF(TraceEntry const);
+	}
 }
 
-DataSlot const* Interpreter::executePHINode(
+TraceEntry const& Interpreter::executePHINode(
 		PHINode const& inst) {
 	
-	return &updateState(
+	return updateState(
 		inst,
-		resolveInt(inst.getIncomingValueForBlock(_pLastBB)));
+		new DynInteger(resolveInt(*inst.getIncomingValueForBlock(_pLastBB))));
 }
 
-DataSlot const* Interpreter::executeReturnInst(
+TraceEntry const& Interpreter::executeReturnInst(
 		ReturnInst const& inst) {
 	
 	if(Value const* const pRetValue = inst.getReturnValue()) {
@@ -601,12 +640,11 @@ DataSlot const* Interpreter::executeReturnInst(
 		switch(pRetValue->getType()->getTypeID()) {
 			
 			case Type::IntegerTyID:
-				new DynInteger(inst, resolveInt(pRetValue), &_retValueSlot);
+				_pRetValue = new DynInteger(resolveInt(*pRetValue));
 				break;
 			
 			case Type::PointerTyID:
-				new DynPointer(
-					inst, resolvePointer(*pRetValue), &_retValueSlot);
+				_pRetValue = new DynPointer(resolvePointer(*pRetValue));
 				break;
 			
 			default:
@@ -614,86 +652,60 @@ DataSlot const* Interpreter::executeReturnInst(
 				break;
 		}
 		
-		return &_retValueSlot;
-		
 	} else {
 		
-		return nullptr;
+		_pRetValue = nullptr;
 	}
+	
+	return updateState(inst);
 }
 
-DataSlot const* Interpreter::executeStoreInst(
+TraceEntry const& Interpreter::executeStoreInst(
 		StoreInst const& inst) {
 	
-	DataSlot&    heapSlot = *_mappedState[inst.getPointerOperand()]->
-		getContent()->asPointer().pPointedSlot;
-	Value const& value    = *inst.getValueOperand();
+	Heap::AddressType const  address =
+		resolvePointer(*inst.getPointerOperand());
+	Value             const& value   = *inst.getValueOperand();
+	Type              const& type    = *value.getType();
 	
-	switch(value.getType()->getTypeID()) {
+	switch(type.getTypeID()) {
 		
 		case Type::IntegerTyID:
-			new DynInteger(inst, resolveInt(&value), &heapSlot);
-			break;
+			_heap.writeInt(address, resolveInt(value), inst);
+			return updateState(inst, address, type.getIntegerBitWidth() / 8);
 		
 		case Type::PointerTyID:
-			new DynPointer(inst, resolvePointer(value), &heapSlot);
-			break;
+			_heap.writeInt(
+				address,
+				APInt(sizeof(Heap::AddressType) * 8, resolvePointer(value)),
+				inst);
+			return updateState(inst, address, sizeof(Heap::AddressType));
 		
 		default:
 			assert(false && "Unsupported store instruction value type");
-			break;
+			return UTIL_NULL_REF(TraceEntry const);
 	}
-	
-	return &heapSlot;
 }
 
 TraceEntry::TraceEntry(
-		Instruction const&       inst,
-		DataSlot    const* const pSlot) :
-	inst    (inst),
-	pSlot   (pSlot),
-	pContent(pSlot ? pSlot->getContent() : nullptr) {
+		Instruction       const& inst,
+		DynType const*    const  pValue,
+		Heap              const& heap,
+		Heap::AddressType const  address,
+		Heap::AddressType const  length) :
+	inst  (inst),
+	pValue(pValue) {
 	
-	assert((!pSlot || pContent) && "Trace entry has slot without content");
+	for(Heap::AddressType i = 0; i < length; i++) {
+		heapValues.emplace(address + i, heap[address + i]);
+	}
 }
 
 TraceEntry::~TraceEntry(void) {
 	
-	if(pContent) {
-		delete pContent;
+	if(pValue) {
+		delete pValue;
 	}
-}
-	
-DynType::DynType(
-		Type::TypeID const  id,
-		Value        const& creatingValue,
-		bool         const  createNewSlot,
-		DataSlot*    const  pExistingSlot) :
-	id         (id),
-	parentValue(creatingValue),
-	pSlot      (createNewSlot ? new DataSlot(creatingValue) : pExistingSlot) {
-	
-	assert(!(createNewSlot && pExistingSlot));
-	
-	if(pSlot) {
-		pSlot->setContent(*this, creatingValue);
-	}
-}
-
-DynType::~DynType(void) {}
-
-DynArray const& DynType::asArray(void) const {
-	
-	assert(id == Type::ArrayTyID && "Invalid type conversion");
-	
-	return *static_cast<DynArray const*>(this);
-}
-
-DynArray& DynType::asArray(void) {
-	
-	assert(id == Type::ArrayTyID && "Invalid type conversion");
-	
-	return *static_cast<DynArray*>(this);
 }
 
 DynInteger const& DynType::asInteger(void) const {
@@ -724,11 +736,6 @@ DynPointer& DynType::asPointer(void) {
 	return *static_cast<DynPointer*>(this);
 }
 
-bool DynType::isArray(void) const {
-	
-	return id == Type::ArrayTyID;
-}
-
 bool DynType::isInteger(void) const {
 	
 	return id == Type::IntegerTyID;
@@ -750,182 +757,19 @@ raw_ostream& DynType::print(
 	return out;
 }
 
-DynInteger::~DynInteger(void) {
-	
-	delete &value;
-}
-
-bool DynInteger::isUndef(void) const {
-	
-	return undef;
-}
-
 raw_ostream& DynInteger::print(
 		raw_ostream& out) const {
 	
-	if(isUndef()) {
-		out << "u";
-	} else {
-		out << value;
-	}
-	
-	return out;
-}
-
-DynArray::DynArray(
-		ArrayType          const& type,
-		Value              const& creatingValue,
-		unordered_set<DataSlot*>& slotSet) :
-	DynType(Type::ArrayTyID, creatingValue, true, nullptr),
-	size   (static_cast<unsigned int>(type.getNumElements())) {
-	
-	Type const& elementType = *type.getElementType();
-	
-	slotSet.insert(pSlot);
-	
-	switch(elementType.getTypeID()) {
-		
-		case Type::IntegerTyID:
-			_array = reinterpret_cast<DynType**>(new DynInteger*[size]);
-			for(unsigned int i = 0; i < size; i++) {
-				_array[i] = new DynInteger(creatingValue);
-			}
-			break;
-		
-		case Type::ArrayTyID:
-			_array = reinterpret_cast<DynType**>(new DynArray*[size]);
-			for(unsigned int i = 0; i < size; i++) {
-				_array[i] = new DynArray(
-					*dyn_cast<ArrayType>(&elementType), creatingValue, slotSet);
-			}
-			break;
-		
-		case Type::PointerTyID:
-			_array = reinterpret_cast<DynType**>(new DynPointer*[size]);
-			for(unsigned int i = 0; i < size; i++) {
-				_array[i] = new DynPointer(creatingValue);
-			}
-			break;
-		
-		default:
-			assert(false && "Unsupported array element type");
-			break;
-	}
-	
-	if(elementType.getTypeID() != Type::ArrayTyID) {
-		for(unsigned int i = 0; i < size; i++) {
-			slotSet.insert(_array[i]->pSlot);
-		}
-	}
-}
-
-DynArray::~DynArray(void) {
-	
-	Util::deleteArrayDeep(_array, size);
-}
-
-DynType& DynArray::getElement(
-		unsigned int const index) const {
-	
-	assert(index >= 0 && index < size && "Index out of range");
-	
-	return *_array[index];
-}
-
-raw_ostream& DynArray::print(
-		raw_ostream& out) const {
-	
-	if(size > 0) {
-		
-		out << "[";
-		
-		for(unsigned int i = 0; i < size - 1; i++) {
-			_array[0]->print(out) << ",";
-		}
-		
-		_array[size - 1]->print(out) << "]";
-		
-	} else {
-		
-		out << "[]";
-	}
-	
-	return out;
-}
-
-void DynArray::setElement(
-		unsigned int const index,
-		DynType&           element) {
-	
-	assert(index >= 0 && index < size && "Index out of range");
-	
-	_array[index] = &element;
-}
-
-DynType& DynPointer::getSlotContent(void) const {
-	
-	DynType* const pContent = tryGetSlotContent();
-	
-	assert(pContent && "Pointed slot is empty");
-	
-	return *pContent;
+	return out << value;
 }
 
 bool DynPointer::isNull(void) const {
 	
-	return !pPointedSlot;
-}
-
-DynType* DynPointer::tryGetSlotContent(void) const {
-	
-	assert(!isNull() && "Null pointer cannot be dereferenced");
-	
-	return pPointedSlot->getContent();
+	return !heapLocation;
 }
 
 raw_ostream& DynPointer::print(
 		raw_ostream& out) const {
 	
-	if(isNull()) {
-		out << "nil";
-	} else {
-		out << "p->";
-		pPointedSlot->print(out);
-	}
-	
-	return out;
-}
-
-DynType* DataSlot::getContent(void) const {
-	
-	return pContent;
-}
-
-Value const* DataSlot::getLastModifyingValue(void) const {
-	
-	return pLastModifyingValue;
-}
-
-raw_ostream& DataSlot::print(
-		raw_ostream& out) const {
-	
-	out << "(";
-	
-	if(pContent) {
-		pContent->print(out);
-	}
-	
-	out << ")";
-	
-	return out;
-}
-
-DataSlot& DataSlot::setContent(
-		DynType&     content,
-		Value const& modifyingValue) {
-	
-	pContent            = &content;
-	pLastModifyingValue = &modifyingValue;
-	
-	return *this;
+	return out << "p->" << Util::toHexString(heapLocation, 8);
 }

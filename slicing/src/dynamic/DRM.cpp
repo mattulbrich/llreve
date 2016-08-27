@@ -1,13 +1,3 @@
-/*
- * This file is part of
- *    llreve - Automatic regression verification for LLVM programs
- *
- * Copyright (C) 2016 Karlsruhe Institute of Technology
- *
- * The system is published under a BSD license.
- * See LICENSE (distributed with this file) for details.
- */
-
 #include "DRM.h"
 
 #include "core/DependencyGraphPasses.h"
@@ -78,6 +68,7 @@ DRM::DRM(
 	_accumulator(_instCount, 0) {
 	
 	legacy::PassManager pm;
+	Heap                heap;
 	
 	// Array that holds the control dependency for each statement
 	Instruction const** const ctrlDependencies =
@@ -97,7 +88,7 @@ DRM::DRM(
 	pm.run(*const_cast<Module*>(linFunc.func.getParent()));
 	
 	// Initialize the interpreter with the counterexample
-	Interpreter interpreter(linFunc.func, cex);
+	Interpreter interpreter(linFunc.func, cex, heap);
 	
 	while(interpreter.getNextInstruction()) {
 		

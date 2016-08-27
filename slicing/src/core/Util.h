@@ -1,13 +1,3 @@
-/*
- * This file is part of
- *    llreve - Automatic regression verification for LLVM programs
- *
- * Copyright (C) 2016 Karlsruhe Institute of Technology
- *
- * The system is published under a BSD license.
- * See LICENSE (distributed with this file) for details.
- */
-
 // *** ADDED BY HEADER FIXUP ***
 #include <istream>
 #include <iterator>
@@ -22,9 +12,13 @@
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Value.h"
 
+#include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <type_traits>
 #include <unordered_set>
+
+#define UTIL_NULL_REF(t) *static_cast<t*>(nullptr);
 
 #define UTIL_REMOVE_POINTER(t)   typename std::remove_pointer<t>::type
 #define UTIL_REMOVE_REF(t)       typename std::remove_reference<t>::type
@@ -429,6 +423,18 @@ std::string& toString(
 std::string toString(
 	llvm::Value const& value,
 	bool const         isForDebug = false);
+
+template<class T> std::string toHexString(
+		T   const decimalValue,
+		int const digitCount = sizeof(T) * 2) {
+
+	std::stringstream stream;
+	
+	stream << "0x" << std::setfill('0') << std::setw(digitCount) << std::hex <<
+		decimalValue;
+	
+	return stream.str();
+}
 
 // Function for freeing the resources of an array including its elements
 
