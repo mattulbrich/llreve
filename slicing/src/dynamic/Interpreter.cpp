@@ -63,17 +63,29 @@ Interpreter::Interpreter(
 	// Initialize the argument values with the input passed as argument
 	for(Argument const& i : func.getArgumentList()) {
 		
-		int64_t const value = input[curIndex++];
-		APInt         apValue(
-			getValueBitWidth(i), static_cast<uint64_t>(abs(value)));
+		int64_t const  value = input[curIndex++];
+		Type    const& type  = *i.getType();
 		
-		// Correct signedness
-		if(value < 0) {
-			apValue = -apValue;
+		if(type.isIntegerTy()) {
+			
+			APInt apValue(
+				type.getIntegerBitWidth(), static_cast<uint64_t>(abs(value)));
+			
+			// Correct signedness
+			if(value < 0) {
+				apValue = -apValue;
+			}
+			
+			_state[&i] = new DynInteger(apValue);
+			
+		} else if(type.isPointerTy()) {
+			
+			_state[&i] = new DynPointer(static_cast<Heap::AddressType>(value));
+			
+		} else {
+			
+			assert(false && "Unsupported argument type");
 		}
-		
-		// TODO: Possible memory leak
-		_state[&i] = new DynInteger(apValue);
 	}
 	
 	// Initialize the instruction values with undefined values
@@ -115,6 +127,20 @@ void Interpreter::addDependency(
 	// TODO: also consider dependencies on function arguments
 	if(Instruction const* pInst = dyn_cast<Instruction>(&dependency)) {
 		recentDataDependencies.insert(pInst);
+	}
+}
+
+DynType const& Interpreter::cloneValue(
+		Value const& value) {
+	
+	switch(value.getType()->getTypeID()) {
+		case Type::IntegerTyID:
+			return *new DynInteger(resolveInt(value));
+		case Type::PointerTyID:
+			return *new DynPointer(resolvePointer(value));
+		default:
+			assert(false && "Type cannot be cloned");
+			return UTIL_NULL_REF(DynType const)
 	}
 }
 
@@ -258,14 +284,6 @@ Instruction const* Interpreter::getRecentInstruction(void) const {
 DynType const* Interpreter::getReturnValue(void) const {
 	
 	return _pRetValue;
-}
-
-unsigned int Interpreter::getValueBitWidth(
-		Value const& value) {
-	
-	assert(value.getType()->isIntegerTy());
-	
-	return value.getType()->getPrimitiveSizeInBits();
 }
 
 void Interpreter::moveToNextInstruction(void) {
@@ -476,31 +494,34 @@ TraceEntry const& Interpreter::executeCallInst(
 		
 		assert(
 			inst.getNumArgOperands() == 1 &&
-			"Special function 'identity' must take exactly 1 argument");
+			"Special function must take exactly 1 argument");
 		
-		Value const& value = *inst.getArgOperand(0);
-		
-		APInt             intValue;
-		Heap::AddressType address;
-		
-		if(tryResolveInt(value, intValue)) {
-			return updateState(inst, new DynInteger(intValue));
-		} else if(tryResolvePointer(value, address)) {
-			assert(false && "TODO");
-			return UTIL_NULL_REF(TraceEntry const);
-		} else {
-			assert(false && "Error during explicit assign function");
-			return UTIL_NULL_REF(TraceEntry const);
-		}
+		return updateState(inst, &cloneValue(*inst.getArgOperand(0)));
 		
 	} else {
 		
 		InputType args(inst.getNumArgOperands());
 		
 		// Collect arguments
-		// TODO: Signedness
 		for(unsigned int i = 0; i < args.size(); i++) {
-			args[i] = resolveInt(*inst.getArgOperand(i)).getLimitedValue();
+			
+			Value const& arg = *inst.getArgOperand(i);
+			
+			switch(arg.getType()->getTypeID()) {
+				
+				case Type::IntegerTyID:
+					// TODO: Signedness
+					args[i] = resolveInt(arg).getLimitedValue();
+					break;
+				
+				case Type::PointerTyID:
+					args[i] = resolvePointer(arg);
+					break;
+				
+				default:
+					assert(false && "Unsupported argument type");
+					break;
+			}
 		}
 		
 		Interpreter interpreter(
@@ -516,8 +537,8 @@ TraceEntry const& Interpreter::executeCallInst(
 		
 		DynType const* const pFuncRetValue = interpreter.getReturnValue();
 		
-		return pFuncRetValue ?
-			updateState(inst, pFuncRetValue) : UTIL_NULL_REF(TraceEntry const);
+		return updateState(
+			inst, pFuncRetValue ? &pFuncRetValue->clone() : nullptr);
 	}
 }
 
@@ -658,32 +679,15 @@ TraceEntry const& Interpreter::executePHINode(
 		PHINode const& inst) {
 	
 	return updateState(
-		inst,
-		new DynInteger(resolveInt(*inst.getIncomingValueForBlock(_pLastBB))));
+		inst, &cloneValue(*inst.getIncomingValueForBlock(_pLastBB)));
 }
 
 TraceEntry const& Interpreter::executeReturnInst(
 		ReturnInst const& inst) {
 	
 	if(Value const* const pRetValue = inst.getReturnValue()) {
-		
-		switch(pRetValue->getType()->getTypeID()) {
-			
-			case Type::IntegerTyID:
-				_pRetValue = new DynInteger(resolveInt(*pRetValue));
-				break;
-			
-			case Type::PointerTyID:
-				_pRetValue = new DynPointer(resolvePointer(*pRetValue));
-				break;
-			
-			default:
-				assert(false && "Unsupported return value type");
-				break;
-		}
-		
+		_pRetValue = &cloneValue(*pRetValue);
 	} else {
-		
 		_pRetValue = nullptr;
 	}
 	
@@ -781,16 +785,20 @@ bool DynType::isVoid(void) const {
 	return id == Type::VoidTyID;
 }
 
-raw_ostream& DynType::print(
-		raw_ostream& out) const {
+DynType& DynInteger::clone(void) const {
 	
-	return out;
+	return *new DynInteger(value);
 }
 
 raw_ostream& DynInteger::print(
 		raw_ostream& out) const {
 	
 	return out << value;
+}
+
+DynType& DynPointer::clone(void) const {
+	
+	return *new DynPointer(heapLocation);
 }
 
 bool DynPointer::isNull(void) const {

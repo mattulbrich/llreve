@@ -62,8 +62,6 @@ class Interpreter {
 	
 	bool const _computeBranchDep;
 	
-	static unsigned int getValueBitWidth(llvm::Value const& value);
-	
 	Heap&                            _heap;
 	Heap::OwnerType const            _ownerId;
 	bool            const            _tracePrinting;
@@ -87,6 +85,7 @@ class Interpreter {
 		llvm::raw_ostream* const  pOut,
 		std::string        const  printPrefix);
 	
+	DynType const&    cloneValue    (llvm::Value const& value);
 	llvm::APInt       resolveInt    (llvm::Value const& value);
 	Heap::AddressType resolvePointer(llvm::Value const& value);
 	
@@ -158,7 +157,8 @@ class DynType {
 	bool isPointer(void) const;
 	bool isVoid   (void) const;
 	
-	virtual llvm::raw_ostream& print(llvm::raw_ostream& out) const;
+	virtual DynType&           clone(void)                   const = 0;
+	virtual llvm::raw_ostream& print(llvm::raw_ostream& out) const = 0;
 	
 	protected:
 	
@@ -182,6 +182,7 @@ class DynInteger : public DynType {
 	
 	virtual ~DynInteger(void) {}
 	
+	virtual DynType&           clone(void)                   const override;
 	virtual llvm::raw_ostream& print(llvm::raw_ostream& out) const override;
 };
 
@@ -198,6 +199,7 @@ class DynPointer : public DynType {
 	
 	virtual ~DynPointer(void) {}
 	
+	virtual DynType&           clone(void)                   const override;
 	virtual llvm::raw_ostream& print(llvm::raw_ostream& out) const override;
 	
 	bool isNull(void) const;
