@@ -23,6 +23,8 @@
 #include "MarkAnalysis.h"
 
 #include <iostream>
+#include <set>
+#include <stack>
 
 class Info {
 public:
@@ -87,10 +89,30 @@ void MarkAnalysisPass::findMarks(llvm::Module &module) {
 
 void MarkAnalysisPass::addLoopMarks(llvm::Function &function) {
 	llvm::LoopInfo &loopInfo =
-	    getAnalysis<llvm::LoopInfoWrapperPass>(function).getLoopInfo();
-	for (auto loop : loopInfo) {
+		getAnalysis<llvm::LoopInfoWrapperPass>(function).getLoopInfo();
+	std::set<llvm::Loop*> allLoops;
+	std::stack<llvm::Loop*> worklist;
+
+	for (llvm::Loop* loop : loopInfo) {
+		worklist.push(loop);
+	}
+
+	while (!worklist.empty()) {
+		llvm::Loop* loop = worklist.top();
+		worklist.pop();
+		auto insertResult = allLoops.insert(loop);
+		bool newInserted = insertResult.second;
+		if (newInserted) {
+			for (llvm::Loop* innerLoop : *loop) {
+				worklist.push(innerLoop);
+			}			
+		}
+	}
+
+	for (llvm::Loop* loop: allLoops) {
 		llvm::BasicBlock* loopHeader = loop->getHeader();
-		addMark(loopHeader);
+		std::cout << "Loop Header:" << loopHeader->getName().str() << std::endl;
+		addMark(loopHeader);		
 	}
 }
 
