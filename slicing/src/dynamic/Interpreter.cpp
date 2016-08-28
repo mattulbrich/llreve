@@ -31,14 +31,27 @@ using namespace llvm;
 static APInt undefValueAPInt;
 
 Interpreter::Interpreter(
-		Function  const& func,
-		InputType const& input,
-		Heap&            heap,
-		bool      const  branchDependencies) :
+		Function     const& func,
+		InputType    const& input,
+		Heap&               heap,
+		bool         const  branchDependencies,
+		raw_ostream* const  pOut) :
+	Interpreter(func, input, heap, branchDependencies, pOut, "") {}
+
+Interpreter::Interpreter(
+		Function     const& func,
+		InputType    const& input,
+		Heap&               heap,
+		bool         const  branchDependencies,
+		raw_ostream* const  pOut,
+		string       const  printPrefix) :
 	func             (func),
 	_computeBranchDep(branchDependencies),
 	_heap            (heap),
 	_ownerId         (heap.createOwner()),
+	_tracePrinting   (pOut),
+	_printPrefix     (printPrefix),
+	_out             (_tracePrinting ? *pOut : outs()),
 	_instIt          (func.getEntryBlock().begin()),
 	_pLastBB         (nullptr),
 	_pRecentInst     (nullptr),
@@ -80,6 +93,10 @@ Interpreter::Interpreter(
 				assert(false && "Unsupported instruction value type");
 				break;
 		}
+	}
+	
+	if(_tracePrinting) {
+		_out << _printPrefix << func.getName().str() << ":\n";
 	}
 }
 
@@ -186,17 +203,23 @@ bool Interpreter::executeNextInstruction(void) {
 		}
 	}
 	
-	outs() << "> ";
-	if(pNewTraceEntry->pValue) {
-		pNewTraceEntry->pValue->print(outs()) << "\n";
-	} else if(_pRetValue) {
-		_pRetValue->print(outs()) << " [return]\n";
-	} else {
-		outs() << "[no value]\n";
-	}
-	for(auto const& i : pNewTraceEntry->heapValues) {
-		outs() << "  " << Util::toHexString(i.first, 8) << ": " <<
-			Util::toHexString(static_cast<uint16_t>(i.second), 2) << "\n";
+	if(_tracePrinting) {
+		
+		_out << _printPrefix << "> ";
+		
+		if(pNewTraceEntry->pValue) {
+			pNewTraceEntry->pValue->print(_out) << "\n";
+		} else if(_pRetValue) {
+			_pRetValue->print(_out) << " [return]\n";
+		} else {
+			_out << "[no value]\n";
+		}
+		
+		for(auto const& i : pNewTraceEntry->heapValues) {
+			_out << _printPrefix << "  " << Util::toHexString(i.first, 8) <<
+				": " << Util::toHexString(static_cast<uint16_t>(i.second), 2) <<
+				"\n";
+		}
 	}
 	
 	// Include the branch instructions in the dependencies
@@ -448,7 +471,8 @@ TraceEntry const& Interpreter::executeCallInst(
 	
 	string const functionName = pCalledFunction->getName().str();
 	
-	if(functionName.find(ExplicitAssignPass::FUNCTION_NAME) == 0 || functionName.find(Criterion::FUNCTION_NAME) == 0) {
+	if(functionName.find(ExplicitAssignPass::FUNCTION_NAME) == 0 ||
+		functionName.find(Criterion::FUNCTION_NAME) == 0) {
 		
 		assert(
 			inst.getNumArgOperands() == 1 &&
@@ -479,7 +503,13 @@ TraceEntry const& Interpreter::executeCallInst(
 			args[i] = resolveInt(*inst.getArgOperand(i)).getLimitedValue();
 		}
 		
-		Interpreter interpreter(*inst.getCalledFunction(), args, _heap);
+		Interpreter interpreter(
+			*inst.getCalledFunction(),
+			args,
+			_heap,
+			_computeBranchDep,
+			_tracePrinting ? &_out : nullptr,
+			_printPrefix + "  ");
 		
 		// Interprete the function
 		interpreter.execute();

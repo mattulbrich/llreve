@@ -34,10 +34,11 @@ class Interpreter {
 	std::unordered_set<llvm::Instruction const*> recentDataDependencies;
 	
 	Interpreter(
-		llvm::Function const& func,
-		InputType      const& input,
-		Heap&                 heap,
-		bool           const  branchDependencies = true);
+		llvm::Function     const& func,
+		InputType          const& input,
+		Heap&                     heap,
+		bool               const  branchDependencies = true,
+		llvm::raw_ostream* const  pOut               = nullptr);
 	~Interpreter(void);
 	
 	// Return value indicates whether the interpretation has termated before
@@ -65,6 +66,9 @@ class Interpreter {
 	
 	Heap&                            _heap;
 	Heap::OwnerType const            _ownerId;
+	bool            const            _tracePrinting;
+	std::string     const            _printPrefix;
+	llvm::raw_ostream&               _out;
 	llvm::BasicBlock::const_iterator _instIt;
 	
 	llvm::BasicBlock  const* _pLastBB; // Current BB is stored via '_pNextInst'
@@ -74,6 +78,14 @@ class Interpreter {
 	
 	std::unordered_map<llvm::Value const*, DynType const*> _state;
 	std::list<TraceEntry const*>                           _trace;
+	
+	Interpreter(
+		llvm::Function     const& func,
+		InputType          const& input,
+		Heap&                     heap,
+		bool               const  branchDependencies,
+		llvm::raw_ostream* const  pOut,
+		std::string        const  printPrefix);
 	
 	llvm::APInt       resolveInt    (llvm::Value const& value);
 	Heap::AddressType resolvePointer(llvm::Value const& value);

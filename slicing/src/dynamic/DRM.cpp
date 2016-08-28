@@ -88,7 +88,7 @@ DRM::DRM(
 	pm.run(*const_cast<Module*>(linFunc.func.getParent()));
 	
 	// Initialize the interpreter with the counterexample
-	Interpreter interpreter(linFunc.func, cex, heap);
+	Interpreter interpreter(linFunc.func, cex, heap, true, &outs());
 	
 	while(interpreter.getNextInstruction()) {
 		
