@@ -84,6 +84,7 @@ endmacro(find_sources)
 ### ============ Start of doing things ====================
 ### =======================================================
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/../bin)
 set_compiler_settings()
 load_llvm()
 load_libreve()
