@@ -18,7 +18,6 @@ std::string Z3Command::getCommandStr(std::string smtFilePath, std::string result
 	ss << " ; ";
 	ss << this->pathToZ3;
 	ss << " z3." << smtFilePath << " > " << resultFilePath;
-	std::cout << ss.str() << std::endl;
 	return ss.str();
 }
 
