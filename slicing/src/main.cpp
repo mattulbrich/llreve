@@ -31,6 +31,9 @@
 #include "preprocessing/MarkAnalysisPass.h"
 #include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
 
+#include "util/logging.h"
+INITIALIZE_EASYLOGGINGPP
+
 using namespace std;
 using namespace llvm;
 
@@ -124,6 +127,7 @@ void parseArgs(int argc, const char **argv) {
 
 int main(int argc, const char **argv) {
 	parseArgs(argc, argv);
+	Util::configureLogger();
 	configureSolver();
 
 	ModulePtr program = getModuleFromSource(FileName, ResourceDir, Includes);
@@ -136,8 +140,13 @@ int main(int argc, const char **argv) {
 	writeModuleToFile("program.pre_slicing.llvm", *program);
 
 	SlicingMethodPtr method = configureSlicingMethod(program);
-	ModulePtr slice = method->computeSlice(criterion);
 
+	ModulePtr slice;
+	{	
+		TIMED_SCOPE(timerBlk, "Slicing");
+		slice = method->computeSlice(criterion);		
+	}	
+	
 	if (!slice){
 		outs() << "An error occured. Could not produce slice. \n";
 	} else {
