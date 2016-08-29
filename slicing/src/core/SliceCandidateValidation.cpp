@@ -27,9 +27,14 @@ using namespace std;
 using smt::SharedSMTRef;
 
 bool SliceCandidateValidation::heap = false;
+bool SliceCandidateValidation::initPredicate = false;
 
 void SliceCandidateValidation::activateHeap(){
 	heap = true;
+}
+
+void SliceCandidateValidation::activateInitPredicate(){
+	initPredicate = true;
 }
 
 ValidationResult SliceCandidateValidation::validate(SliceCandidate* candidate, CEXType* pCEX){
@@ -60,7 +65,7 @@ ValidationResult SliceCandidateValidation::validate(SliceCandidate* candidate, C
 		true, // muz, activate for z3
 		true, // PerfectSync
 		false, false, false, false,
-		!heap, // InitPredicate
+		initPredicate, // InitPredicate
 		map<int, smt::SharedSMTRef>());
 
 	MonoPair<string> fileNames("","");
@@ -160,7 +165,7 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 		false, false, false,
 		true, // PerfectSync
 		false, false, false, false,
-		!heap, // InitPredicate
+		initPredicate, // InitPredicate
 		map<int, smt::SharedSMTRef>());
 
 	MonoPair<string> fileNames("","");
