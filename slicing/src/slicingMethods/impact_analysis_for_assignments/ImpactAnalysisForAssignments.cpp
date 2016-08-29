@@ -46,9 +46,11 @@ ModulePtr ImpactAnalysisForAssignments::computeSlice(CriterionPtr criterion){
 					ArrayRef<Value*> parameterRef(parameter);
 
 					ReplaceInstWithInst(instToReplace->getParent()->getInstList(), ii,
-						CallInst::Create(createEveryValueFunction(impactAbstraction), parameterRef));
+						CallInst::Create(createEveryValueFunction(impactAbstraction, instToReplace->getType()), parameterRef));
 
 					callsToReve_++;
+					std::cout << ".";
+					std::flush(std::cout);
 					ValidationResult result = SliceCandidateValidation::validate(&*slice, &*impactAbstraction, criterion);
 					if (result == ValidationResult::valid) {
 						SlicingPass::toBeSliced(instruction);
