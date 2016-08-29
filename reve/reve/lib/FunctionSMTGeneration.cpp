@@ -904,22 +904,20 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
         preVars.push_back(arg.name + "_old");
     }
 
-    if (vars.empty()) {
-        return clause;
-    }
 
     if (main && blockIndex == ENTRY_MARK) {
-        string opname =
-            SMTGenerationOpts::getInstance().InitPredicate ?
-            "INIT" : "IN_INV";
+        if (!vars.empty()) { // We dont need to imply in_inv => sth. if in_inv has no parameters
+            string opname =
+                SMTGenerationOpts::getInstance().InitPredicate ?
+                "INIT" : "IN_INV";
 
-        vector<string> args;
-        for (const auto &arg : freeVars) {
-            args.push_back(arg.name + "_old");
+            vector<string> args;
+            for (const auto &arg : freeVars) {
+                args.push_back(arg.name + "_old");
+            }
+
+            clause = makeBinOp("=>", makeOp(opname, args), clause);
         }
-
-        clause = makeBinOp("=>", makeOp(opname, args), clause);
-
     } else {
         InvariantAttr attr = main ? InvariantAttr::MAIN : InvariantAttr::PRE;
         preVars = fillUpArgs(preVars, freeVarsMap, memory, prog, attr);
@@ -934,6 +932,8 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
         return clause;
     }
 
+    // Add for all __everyValue to all clauses. 
+    // TODO: Improve, such that it is only added if used.
     vars.push_back(SortedVar("__everyValue", "Int"));
     return std::make_unique<Forall>(vars, clause);
 }
