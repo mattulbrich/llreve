@@ -12,7 +12,6 @@
 
 #include "llvm/IR/Module.h"
 #include "core/Criterion.h"
-#include "core/SliceCandidate.h"
 #include "smtSolver/SmtSolver.h"
 
 #include "MonoPair.h"
@@ -28,13 +27,10 @@ public:
 	static ValidationResult validate(llvm::Module* program, llvm::Module* candidate,
 		CriterionPtr criterion = Criterion::getReturnValueCriterion(),
 		CEXType* pCEX = nullptr);
-	static ValidationResult validate(SliceCandidate* candidate, CEXType* pCEX = nullptr);
 
 	static void activateHeap();
 	static void activateInitPredicate();
 private:
 	static bool heap;
 	static bool initPredicate;
-	static std::vector<MonoPair<PreprocessedFunction>> preprocessCandidate(SliceCandidatePtr candidate,
-                     PreprocessOpts opts);
 };
