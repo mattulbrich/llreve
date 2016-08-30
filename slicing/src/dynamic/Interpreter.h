@@ -145,7 +145,7 @@ class DynType {
 	
 	llvm::Type::TypeID const id;
 	
-	virtual ~DynType(void) {}
+	virtual ~DynType(void);
 	
 	DynInteger const& asInteger(void) const;
 	DynPointer const& asPointer(void) const;

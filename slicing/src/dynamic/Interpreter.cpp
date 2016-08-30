@@ -785,6 +785,8 @@ bool DynType::isVoid(void) const {
 	return id == Type::VoidTyID;
 }
 
+DynType::~DynType(void){};
+
 DynType& DynInteger::clone(void) const {
 	
 	return *new DynInteger(value);
