@@ -38,13 +38,14 @@
 
 #include "util/LambdaFunctionPass.h"
 
-
+#include "util/logging.h"
 
 using namespace std;
 using namespace llvm;
 using namespace clang;
 
 shared_ptr<llvm::Module> getModuleFromSource(string fileName, string resourceDir, vector<std::string> includes){
+	TIMED_SCOPE(timerBlk, "LoadModuleFromSource");
 	// The CodeGenAction does need an LLVMContext. If none is provided, than
 	// it will create its own AND delet it on destructor. This would render
 	// the produced module unusable. Therefore we need an LLVMContext, which

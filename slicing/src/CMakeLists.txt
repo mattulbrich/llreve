@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
-project(llvm-reve-slicing)
+project(llvm-reve-slicing VERSION 0.1)
 
 ### =======================================================
 ### ========== Macros for bedder readability ==============
@@ -90,6 +90,11 @@ load_llvm()
 load_libreve()
 find_sources()
 
+add_custom_target(version
+		COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/createVersion ${PROJECT_VERSION}
+		WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+	)
+
 # Pack all non executable sources into library to prevent
 # repeated building of source files.
 add_library(all_sources ${sources})
@@ -100,7 +105,8 @@ add_dependencies(all_sources librevebuild)
 
 add_executable(slicing main.cpp)
 add_executable(testing test.cpp ${test_sources})
-
+add_dependencies(slicing version)
+add_dependencies(testing version)
 
 # Find librarys for components
 # To get a list of all aviable components use 'llvm-config --components'

@@ -1,0 +1,2 @@
+#!/bin/bash
+git rev-parse HEAD | sed -e "s|\(.*\)|#define VERSION \"Version $1 Commit \1\"|" > version.h

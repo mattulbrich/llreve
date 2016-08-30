@@ -19,6 +19,7 @@
 #include "llvm/IR/Constants.h"
 
 #include "util/misc.h"
+#include "util/logging.h"
 
 #include "MarkAnalysis.h"
 
@@ -41,8 +42,10 @@ std::string MarkAnalysisPass::FUNCTION_NAME = "__mark";
 char MarkAnalysisPass::ID = 0;
 
 bool MarkAnalysisPass::runOnModule(llvm::Module &module) {
+	TIMED_SCOPE(timerBlk, "MarkAnalysis");
 	findMarks(module);
 
+	int markCount = 0;
 	for (llvm::Function& function: module) {
 		if (!function.isDeclaration() && !Util::isSpecialFunction(function)) {
 			llvm::BasicBlock* entry = &function.getEntryBlock();
@@ -53,11 +56,15 @@ bool MarkAnalysisPass::runOnModule(llvm::Module &module) {
 			addLoopMarks(function);
 
 			int diff = -1;
-			do {
-				diff = optimizeMark(entry, exit, function);	
-			} while (diff > 0 && diff > markThreshold);
+			{
+				do {
+					++markCount;
+					diff = optimizeMark(entry, exit, function);
+				} while (diff > 0 && diff > markThreshold);
+			}
 		}
 	}
+	Log(Info) << "MarkAnalysis added " << markCount << " additional non loop Marks.";
 		
 	return true; // changes llvm
 }
@@ -111,7 +118,6 @@ void MarkAnalysisPass::addLoopMarks(llvm::Function &function) {
 
 	for (llvm::Loop* loop: allLoops) {
 		llvm::BasicBlock* loopHeader = loop->getHeader();
-		std::cout << "Loop Header:" << loopHeader->getName().str() << std::endl;
 		addMark(loopHeader);		
 	}
 }

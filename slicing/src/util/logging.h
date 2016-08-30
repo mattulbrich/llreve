@@ -15,6 +15,7 @@
  * TIMED_FUNC(obj-name)
  * TIMED_SCOPE(obj-name, block-name)
  */
+#pragma once
 
 // Dont like writing uppercase a lot
 #define Trace TRACE
@@ -42,7 +43,8 @@
 #pragma clang diagnostic ignored "-Wdocumentation"
 #pragma clang diagnostic ignored "-Wmissing-noreturn"
 
-#define ELPP_FRESH_LOG_FILE //fresh log file
+#define ELPP_FRESH_LOG_FILE
+#define ELPP_NO_DEFAULT_LOG_FILE
 #include "easylogging++.h"
 
 #pragma clang diagnostic pop

@@ -20,6 +20,8 @@
 #include "ModuleSMTGeneration.h"
 #include "Serialize.h"
 
+#include "util/logging.h"
+
 using namespace llvm;
 using namespace std;
 
@@ -84,17 +86,24 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 	PM.run(*programCopy);
 	PM.run(*candiateCopy);
 
+	{
+		TIMED_SCOPE(timerBlk, "Reve");
+		MonoPair<shared_ptr<Module>> modules(programCopy, candiateCopy);
+		auto preprocessedFuns = preprocessFunctions(modules, preprocessOpts);
 
-	MonoPair<shared_ptr<Module>> modules(programCopy, candiateCopy);
-	auto preprocessedFuns = preprocessFunctions(modules, preprocessOpts);
+		vector<SharedSMTRef> smtExprs =
+		generateSMT(modules, preprocessedFuns, fileOpts);
 
-	vector<SharedSMTRef> smtExprs =
-	generateSMT(modules, preprocessedFuns, fileOpts);
+		SerializeOpts serializeOpts(outputFileName, false, false, false, true);
+		serializeSMT(smtExprs, SMTGenerationOpts::getInstance().MuZ, serializeOpts);
+	}
 
-	SerializeOpts serializeOpts(outputFileName, false, false, false, true);
-	serializeSMT(smtExprs, SMTGenerationOpts::getInstance().MuZ, serializeOpts);
-
-	SatResult satResult = SmtSolver::getInstance().checkSat(outputFileName, pCEX);
+	SatResult satResult;
+	{
+		TIMED_SCOPE(timerBlk, "SMTSolver");
+		satResult = SmtSolver::getInstance().checkSat(outputFileName, pCEX);
+	}
+	Log(Info) << "SMT Solver Result: " << satResult;
 	ValidationResult result;
 
 	switch (satResult) {

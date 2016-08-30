@@ -32,7 +32,8 @@
 #include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
 
 #include "util/logging.h"
-INITIALIZE_EASYLOGGINGPP
+
+#include "version.h"
 
 using namespace std;
 using namespace llvm;
@@ -123,11 +124,20 @@ void parseArgs(int argc, const char **argv) {
 	optionCategorys.push_back(&SlicingCategory);
 	llvm::cl::HideUnrelatedOptions(optionCategorys);
 	llvm::cl::ParseCommandLineOptions(argc, argv);
+
+	Log(Info) << "Slicing the program " << FileName;
+	std::stringstream ss;
+	for (int i = 0; i < argc; ++i) {
+		ss << argv[i] << " ";
+	}
+	Log(Info) << "The following command was used for execution: "<< ss.str();
 }
 
 int main(int argc, const char **argv) {
-	parseArgs(argc, argv);
 	Util::configureLogger();
+	TIMED_SCOPE(timerBlk, "main");
+	Log(Info) << VERSION;
+	parseArgs(argc, argv);
 	configureSolver();
 
 	ModulePtr program = getModuleFromSource(FileName, ResourceDir, Includes);
@@ -140,6 +150,7 @@ int main(int argc, const char **argv) {
 	writeModuleToFile("program.pre_slicing.llvm", *program);
 
 	SlicingMethodPtr method = configureSlicingMethod(program);
+
 
 	ModulePtr slice;
 	{	

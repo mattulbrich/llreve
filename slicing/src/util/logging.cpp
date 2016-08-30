@@ -9,7 +9,11 @@
  */
 
 #include "logging.h"
+INITIALIZE_EASYLOGGINGPP
+
 #include <assert.h>
+#include <vector>
+#include <string>
 
 void Util::configureLogger(){
 	el::Configurations conf;
@@ -24,7 +28,6 @@ void Util::configureLogger(){
 	conf.set(el::Level::Fatal, el::ConfigurationType::ToStandardOutput, "true");
 
 	el::Loggers::reconfigureLogger("default", conf);
-
 	conf.setGlobally(el::ConfigurationType::Format, "%level %datetime{%y-%M-%d %H:%m:%s}; %msg");
 	el::Loggers::reconfigureLogger("performance", conf);
 }

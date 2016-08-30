@@ -13,6 +13,7 @@
 #include <string>
 
 enum class SatResult {sat, unsat, unknown, timeout};
+std::ostream & operator<<(std::ostream & stream, const SatResult &satResult);
 
 typedef Interpreter::InputType CEXType;
 
