@@ -194,6 +194,7 @@ ModulePtr CGS::computeSlice(
 				printCounterexample(cex) << "\n";
 				break;
 			case CandidateNode::State::unknown: _out << "unknown\n"; break;
+			case CandidateNode::State::notchecked: assert(false); break;
 		}
 		
 		pCurCandidate =
