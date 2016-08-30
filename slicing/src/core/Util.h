@@ -27,6 +27,8 @@
 #define UTIL_CHILD_IT_FROM_IT(t) UTIL_IT_FROM_TYPE(UTIL_REF_TYPE_FROM_IT(t))
 #define UTIL_TYPE_FROM_IT(t)     UTIL_REMOVE_REF(UTIL_REF_TYPE_FROM_IT(t))
 
+#define UTIL_UNUSED(x) (void)(x);
+
 template <class TopLevelType>
 class NestedInputIterator :
 	public std::iterator<

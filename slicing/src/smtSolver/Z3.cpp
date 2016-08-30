@@ -1,5 +1,7 @@
 #include "Z3.h"
 
+#include "core/Util.h"
+
 #include <fstream>
 #include <sstream>
 #include <cassert>
@@ -22,7 +24,9 @@ std::string Z3Command::getCommandStr(std::string smtFilePath, std::string result
 }
 
 SatResult Z3::parseResult(std::string resultFile, CEXType* pCEX) {
-
+	
+	UTIL_UNUSED(pCEX)
+	
 	std::ifstream inputStream(resultFile);
 	std::string   input(
 		(std::istreambuf_iterator<char>(inputStream)),

@@ -511,11 +511,13 @@ TraceEntry const& Interpreter::executeCallInst(
 				
 				case Type::IntegerTyID:
 					// TODO: Signedness
-					args[i] = resolveInt(arg).getLimitedValue();
+					args[i] = static_cast<InputType::value_type>(
+						resolveInt(arg).getLimitedValue());
 					break;
 				
 				case Type::PointerTyID:
-					args[i] = resolvePointer(arg);
+					args[i] = static_cast<InputType::value_type>(
+						resolvePointer(arg));
 					break;
 				
 				default:
@@ -785,7 +787,7 @@ bool DynType::isVoid(void) const {
 	return id == Type::VoidTyID;
 }
 
-DynType::~DynType(void){};
+DynType::~DynType(void) {}
 
 DynType& DynInteger::clone(void) const {
 	
