@@ -3,6 +3,7 @@
 #include "core/Criterion.h"
 #include "core/Util.h"
 #include "preprocessing/ExplicitAssignPass.h"
+#include "preprocessing/MarkAnalysisPass.h"
 
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/User.h"
@@ -328,6 +329,27 @@ Heap::AddressType Interpreter::resolvePointer(
 	return address;
 }
 
+APInt Interpreter::resolveValue(
+		Value const& value) {
+	
+	APInt             intValue;
+	Heap::AddressType address;
+	
+	if(tryResolveInt(value, intValue)) {
+		
+		return intValue;
+		
+	} else if(tryResolvePointer(value, address)) {
+		
+		return APInt(sizeof(Heap::AddressType) * 8, address);
+		
+	} else {
+		
+		assert(false && "Error while resolving value");
+		return APInt();
+	}
+}
+
 bool Interpreter::tryResolveInt(
 		Value const& value,
 		APInt&       result) {
@@ -490,7 +512,8 @@ TraceEntry const& Interpreter::executeCallInst(
 	string const functionName = pCalledFunction->getName().str();
 	
 	if(functionName.find(ExplicitAssignPass::FUNCTION_NAME) == 0 ||
-		functionName.find(Criterion::FUNCTION_NAME) == 0) {
+		functionName.find(Criterion::FUNCTION_NAME) == 0 ||
+		functionName.find(MarkAnalysisPass::FUNCTION_NAME) == 0) {
 		
 		assert(
 			inst.getNumArgOperands() == 1 &&
@@ -629,8 +652,8 @@ TraceEntry const& Interpreter::executeICmpInst(
 		"Compare instructions need exactly 2 operands");
 	
 	// Get the operands and the variable belonging to this instruction
-	APInt const op1 = resolveInt(*inst.getOperand(0));
-	APInt const op2 = resolveInt(*inst.getOperand(1));
+	APInt const op1 = resolveValue(*inst.getOperand(0));
+	APInt const op2 = resolveValue(*inst.getOperand(1));
 	
 	switch(inst.getPredicate()) {
 		

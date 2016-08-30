@@ -85,7 +85,7 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 	PM.add(new StripExplicitAssignPass());
 	PM.run(*programCopy);
 	PM.run(*candiateCopy);
-
+	writeModuleToFile("candidate.llvm", *candiateCopy);
 	{
 		TIMED_SCOPE(timerBlk, "Reve");
 		MonoPair<shared_ptr<Module>> modules(programCopy, candiateCopy);
@@ -97,7 +97,7 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 		SerializeOpts serializeOpts(outputFileName, false, false, false, true);
 		serializeSMT(smtExprs, SMTGenerationOpts::getInstance().MuZ, serializeOpts);
 	}
-
+	
 	SatResult satResult;
 	{
 		TIMED_SCOPE(timerBlk, "SMTSolver");

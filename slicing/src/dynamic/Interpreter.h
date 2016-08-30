@@ -86,6 +86,7 @@ class Interpreter {
 		std::string        const  printPrefix);
 	
 	DynType const&    cloneValue    (llvm::Value const& value);
+	llvm::APInt       resolveValue  (llvm::Value const& value);
 	llvm::APInt       resolveInt    (llvm::Value const& value);
 	Heap::AddressType resolvePointer(llvm::Value const& value);
 	
