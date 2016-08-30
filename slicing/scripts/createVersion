@@ -1,2 +1,6 @@
 #!/bin/bash
-git rev-parse HEAD | sed -e "s|\(.*\)|#define VERSION \"Version $1 Commit \1\"|" > version.h
+git diff-index --quiet HEAD --
+if [ $? -ne 0 ]; then
+	notClean="! uncommited changes"
+fi
+git rev-parse HEAD | sed -e "s|\(.*\)|#define VERSION \"Version $1 Commit \1 $notClean\"|" > version.h
