@@ -11,6 +11,7 @@
 #include "core/DeleteVisitor.h"
 #include "core/Criterion.h"
 #include "preprocessing/AddVariableNamePass.h"
+#include "preprocessing/MarkAnalysisPass.h"
 #include "util/FileOperations.h"
 
 #include "llvm/IR/Instructions.h"
@@ -41,7 +42,8 @@ bool DeleteVisitor::visitTerminatorInst(TerminatorInst &instruction){
 
 bool DeleteVisitor::visitCallInst(CallInst &instruction){
 	if (instruction.getCalledFunction()
-		&& instruction.getCalledFunction()->getName() == Criterion::FUNCTION_NAME) {
+		&& (instruction.getCalledFunction()->getName() == Criterion::FUNCTION_NAME
+			|| instruction.getCalledFunction()->getName() == MarkAnalysisPass::FUNCTION_NAME)) {
 		return false;
 } else {
 		//TODD: avoid removing call instructions, that coudl modify
