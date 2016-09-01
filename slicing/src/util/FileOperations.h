@@ -16,3 +16,4 @@
 
 std::shared_ptr<llvm::Module> getModuleFromSource(std::string fileName, std::string resourceDir = "", std::vector<std::string> includes = {});
 void writeModuleToFile(std::string fileName, llvm::Module& module);
+void writeModuleToFileDbg(std::string fileName, llvm::Module& module);
