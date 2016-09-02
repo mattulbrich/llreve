@@ -190,7 +190,9 @@ int MarkAnalysisPass::optimizeMark(llvm::BasicBlock* entry, llvm::BasicBlock* ex
 }
 
 bool MarkAnalysisPass::hasMark(llvm::BasicBlock* block){
-	return this->marks.find(block) != this->marks.end();
+	bool result = this->marks.find(block) != this->marks.end();
+	result |= llvm::isa<llvm::UnreachableInst>(block->getTerminator());
+	return result;
 }
 
 void MarkAnalysisPass::addMark(llvm::BasicBlock* block){	

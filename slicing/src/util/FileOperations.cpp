@@ -15,6 +15,7 @@
 #include "preprocessing/ExplicitAssignPass.h"
 #include "preprocessing/FixNamesPass.h"
 #include "preprocessing/ReplaceUndefPass.h"
+#include "preprocessing/RemoveFunctionPointerPass.h"
  
 #include "core/Util.h"
 
@@ -76,10 +77,15 @@ shared_ptr<llvm::Module> getModuleFromSource(string fileName, string resourceDir
 	PM.add(llvm::createStripSymbolsPass(true));
 	PM.add(new PromoteAssertSlicedPass());
 	PM.add(new FixNamesPass());
+	PM.add(new RemoveFunctionPointerPass());
 	PM.add(new ReplaceUndefPass());
 	PM.run(*program);
 
 	bool hasError = llvm::verifyModule(*program, &errs());
+	if (hasError) {
+		writeModuleToFileDbg("program.post_preprocess.llvm", *program);
+	}
+
 	assert(!hasError && "Error during initial construction of module!");
 
 	for (Function& function: *program) {
