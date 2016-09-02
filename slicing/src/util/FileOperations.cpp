@@ -15,6 +15,7 @@
 #include "preprocessing/ExplicitAssignPass.h"
 #include "preprocessing/FixNamesPass.h"
 #include "preprocessing/ReplaceUndefPass.h"
+#include "preprocessing/RemoveFunctionPointerPass.h"
  
 #include "core/Util.h"
 
@@ -63,24 +64,28 @@ shared_ptr<llvm::Module> getModuleFromSource(string fileName, string resourceDir
 	compileToModules("", inputOpts, acts);
 	shared_ptr<llvm::Module> program = modules.first;
 
-	writeModuleToFile("program.original.llvm", *program);
+	writeModuleToFileDbg("program.original.llvm", *program);
 
 	llvm::legacy::PassManager PM;
 	PM.add(new ExplicitAssignPass());
 	PM.add(llvm::createPromoteMemoryToRegisterPass());
 	PM.add(new LambdaModulePass([](llvm::Module& module)->bool{
-			writeModuleToFile("program.post_promote_mem2reg.llvm", module);
+			writeModuleToFileDbg("program.post_promote_mem2reg.llvm", module);
 			return false;
 		}));
 	PM.add(new AddVariableNamePass());
 	PM.add(llvm::createStripSymbolsPass(true));
 	PM.add(new PromoteAssertSlicedPass());
 	PM.add(new FixNamesPass());
+	PM.add(new RemoveFunctionPointerPass());
 	PM.add(new ReplaceUndefPass());
-
 	PM.run(*program);
 
 	bool hasError = llvm::verifyModule(*program, &errs());
+	if (hasError) {
+		writeModuleToFileDbg("program.post_preprocess.llvm", *program);
+	}
+
 	assert(!hasError && "Error during initial construction of module!");
 
 	for (Function& function: *program) {
@@ -97,8 +102,14 @@ shared_ptr<llvm::Module> getModuleFromSource(string fileName, string resourceDir
 		}
 	}
 
-	writeModuleToFile("program.post_preprocessing.llvm", *program);
 	return program;
+}
+
+void writeModuleToFileDbg(string fileName, llvm::Module& module) {
+	static int number = 0;
+	std::stringstream ss;
+	ss << "dbg_" << ++number << "." << fileName;
+	writeModuleToFile(ss.str(), module);
 }
 
 void writeModuleToFile(string fileName, llvm::Module& module) {

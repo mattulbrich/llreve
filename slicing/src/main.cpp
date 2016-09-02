@@ -123,6 +123,11 @@ void parseArgs(int argc, const char **argv) {
 	optionCategorys.push_back(&ClangCategory);
 	optionCategorys.push_back(&SlicingCategory);
 	llvm::cl::HideUnrelatedOptions(optionCategorys);
+
+	if (argc == 1) {
+		llvm::cl::PrintHelpMessage(false,true);
+		exit(0);
+	}	
 	llvm::cl::ParseCommandLineOptions(argc, argv);
 
 	Log(Info) << "Slicing the program " << FileName;
@@ -147,7 +152,7 @@ int main(int argc, const char **argv) {
 	performInlining(program, criterion);
 	performMarkAnalysis(program);
 
-	writeModuleToFile("program.pre_slicing.llvm", *program);
+	writeModuleToFileDbg("program.pre_slicing.llvm", *program);
 
 	SlicingMethodPtr method = configureSlicingMethod(program);
 
@@ -223,6 +228,7 @@ SlicingMethodPtr configureSlicingMethod(ModulePtr program) {
 }
 
 void performRemoveFunctions(ModulePtr program, CriterionPtr criterion) {
+	writeModuleToFileDbg("program.pre_remove_functions.llvm",*program);
 	if (RemoveFunctions) {
 		set<string> notToBeRemoved;
 		for (string functionName: DontRemoveFunction) {
@@ -248,7 +254,7 @@ void performRemoveFunctions(ModulePtr program, CriterionPtr criterion) {
 void performInlining(ModulePtr program, CriterionPtr criterion) {
 	if (InlineFunctions) {
 		Function* slicedFunction = getSlicedFunction(program, criterion);
-		writeModuleToFile("program.pre_inlining.llvm", *program);
+		writeModuleToFileDbg("program.pre_inlining.llvm", *program);
 
 		bool runInlining = true;
 		while (runInlining) {
@@ -293,13 +299,12 @@ void performInlining(ModulePtr program, CriterionPtr criterion) {
 		for (Function* function: toBeDeleted) {
 			function->eraseFromParent();
 		}
-
-		writeModuleToFile("program.post_inlining.llvm", *program);
 	}
 }
 
 
 void performMarkAnalysis(ModulePtr program) {
+	writeModuleToFileDbg("program.pre_mark_analysis.llvm",*program);
 	int threshold = MarkInsertThreshold;
 
 	llvm::legacy::PassManager PM;

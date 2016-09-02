@@ -24,7 +24,14 @@ using namespace llvm;
 using namespace std;
 
 bool StripExplicitAssignPass::runOnModule(llvm::Module &module){
+	std::vector<Function*> toErase;
+
 	for (Function& function: module) {
+		if (function.getName().find(
+				ExplicitAssignPass::FUNCTION_NAME) == 0) {
+			toErase.push_back(&function);
+		}
+
 		for (BasicBlock& block: function) {
 
 			vector<Instruction*> toDelete;
@@ -32,8 +39,8 @@ bool StripExplicitAssignPass::runOnModule(llvm::Module &module){
 				Instruction& instruction = *it;
 				if (CallInst* call = dyn_cast<CallInst>(&instruction)) {
 					if (call->getCalledFunction()
-						&& call->getCalledFunction()->getName()
-							== ExplicitAssignPass::FUNCTION_NAME) {
+						&& (call->getCalledFunction()->getName().find(
+								ExplicitAssignPass::FUNCTION_NAME) == 0)) {
 						call->replaceAllUsesWith(call->getArgOperand(0));
 						toDelete.push_back(call);
 					}
@@ -44,6 +51,10 @@ bool StripExplicitAssignPass::runOnModule(llvm::Module &module){
 				instruction->eraseFromParent();
 			}
 		}
+	}
+
+	for (Function* function:toErase) {
+		function->eraseFromParent();
 	}
 
 	return true;
