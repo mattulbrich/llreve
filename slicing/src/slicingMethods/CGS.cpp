@@ -118,8 +118,8 @@ CandidateNode& CandidateGenerationEngine::generateCandidate(void) {
 CandidateNode& CandidateGenerationEngine::generateCandidate(
 		CEXType& cex) {
 	
-	auto        drmCreation = _drms.emplace(linFunc, cex);
-	APInt const dynSlice = drmCreation.first->computeSlice(_critInstructions);
+	auto  drmCreation = _drms.emplace(linFunc, cex);
+	APInt dynSlice    = drmCreation.first->computeSlice(_critInstructions);
 	
 	if(_pUnionSlice) {
 		_pUnionSlice = &getCandidateNode(_pUnionSlice->slice | dynSlice);
@@ -182,10 +182,12 @@ ModulePtr CGS::computeSlice(
 	CandidateGenerationEngine cge(module, criterion, linFunc);
 	CandidateNode*            pCurCandidate(&cge.generateCandidate());
 	
+	printSlice(pCurCandidate->slice) << "  ";
+	
 	while(pCurCandidate->validate(cex).getState() !=
 		CandidateNode::State::valid) {
 		
-		printSlice(pCurCandidate->slice) << "  ";
+		//printSlice(pCurCandidate->slice) << "  ";
 		
 		switch(pCurCandidate->getState()) {
 			case CandidateNode::State::valid: _out << "valid\n"; break;
@@ -201,53 +203,16 @@ ModulePtr CGS::computeSlice(
 			pCurCandidate->getState() == CandidateNode::State::invalid ?
 			&cge.generateCandidate(cex) :
 			&cge.generateCandidate();
+		
+		printSlice(pCurCandidate->slice) << "  ";
 	}
 	
 	cge.updateBestValidSlice(*pCurCandidate);
 	
-	_out << "Final Slice: ";
-	printSlice(pCurCandidate->slice) << "\n";
+	_out << "[final]\n";
+	//_out << "Final Slice: ";
+	//printSlice(pCurCandidate->slice) << "\n";
 	
-	/*
-	while(pCurCandidate->validate(cex).getState() !=
-		CandidateNode::State::valid) {
-		
-		performSDS = true;
-		pCurDRM    = nullptr;
-		
-		// Check whether a counterexample is available
-		if(pCurCandidate->getState() == CandidateNode::State::invalid) {
-			
-			auto cexCreation = _counterexamples.emplace(cex);
-			auto drmCreation = _drms.emplace(linFunc, *cexCreation.first);
-			
-			pCurDRM = &*drmCreation.first;
-			
-			// Check whether the counterexample and DRM are new
-			if(cexCreation.second && drmCreation.second) {
-				// Create the union slice
-				unionSlice    |= pCurDRM->computeSlice(critInstructions);
-				pCurCandidate  = &getCandidateNode(unionSlice);
-				performSDS     = false;
-			}
-		}
-		
-		if(performSDS) {
-			
-			// If a counterexample is available, try extending the candidate
-			// with the corresponding DRM
-			if(pCurDRM) {
-				
-				pCurCandidate = &pCurCandidate->createSuccessor(*pCurDRM);
-				
-			} else {
-				
-				
-			}
-			
-		}
-	}
-	*/
 	return pCurCandidate->getSlicedProgram();
 }
 

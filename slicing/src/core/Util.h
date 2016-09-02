@@ -438,6 +438,8 @@ template<class T> std::string toHexString(
 	return stream.str();
 }
 
+unsigned int getIntegerLength(int value, unsigned int const base = 10);
+
 // Function for freeing the resources of an array including its elements
 
 template <class ElementType> void deleteArrayDeep(

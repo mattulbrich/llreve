@@ -5,59 +5,11 @@
 
 #include "llvm/IR/Module.h"
 
+#include <iomanip>
+#include <sstream>
+
 using namespace std;
 using namespace llvm;
-
-LinearizedFunction::LinearizedFunction(
-		Function const& func) : func(func) {
-	
-	unsigned int index = 0;
-	
-	for(Instruction const& i : Util::getInstructions(func)) {
-		_mapInstToInt[&i] = index++;
-	}
-	
-	// 'index' is the number of instructions
-	_mapIntToInst = new Instruction const*[index];
-	
-	for(Instruction const& i : Util::getInstructions(func)) {
-		// use the previous generated mapping as the iteration may vary
-		// between different iterations
-		_mapIntToInst[_mapInstToInt[&i]] = &i;
-	}
-}
-
-LinearizedFunction::~LinearizedFunction(void) {
-	
-	delete [] _mapIntToInst;
-}
-
-unsigned int LinearizedFunction::getInstructionCount(void) const {
-	
-	return static_cast<unsigned int>(_mapInstToInt.size());
-}
-
-void LinearizedFunction::print(
-		raw_ostream& out) const {
-	
-	unsigned int const instCount = getInstructionCount();
-	
-	for(unsigned int i = 0; i < instCount; i++) {
-		out << i << "\t" << Util::toString((*this)[i]) << "\n";
-	}
-}
-
-Instruction const& LinearizedFunction::operator[](
-		unsigned int const index) const {
-	
-	return *_mapIntToInst[index];
-}
-
-unsigned int LinearizedFunction::operator[](
-		Instruction const& inst)  const {
-	
-	return _mapInstToInt.at(&inst);
-}
 
 DRM::DRM(
 		LinearizedFunction const& linFunc,

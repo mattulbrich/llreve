@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Heap.h"
+#include "LinearizedFunction.h"
 
 #include "llvm/ADT/APInt.h"
 #include "llvm/IR/BasicBlock.h"
@@ -29,7 +30,7 @@ class Interpreter {
 	
 	typedef std::vector<int64_t> InputType;
 	
-	llvm::Function const& func;
+	LinearizedFunction const linFunc;
 	
 	std::unordered_set<llvm::Instruction const*> recentDataDependencies;
 	

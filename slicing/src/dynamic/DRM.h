@@ -11,6 +11,7 @@
 #pragma once
 
 #include "Interpreter.h"
+#include "LinearizedFunction.h"
 #include "smtSolver/SmtSolver.h"
 
 #include "llvm/ADT/APInt.h"
@@ -22,27 +23,6 @@
 #include <list>
 #include <unordered_map>
 #include <vector>
-
-class LinearizedFunction {
-	
-	public:
-	
-	llvm::Function const& func;
-	
-	LinearizedFunction(llvm::Function const& func);
-	~LinearizedFunction(void);
-	
-	unsigned int getInstructionCount(void)          const;
-	void         print(llvm::raw_ostream& _ostream) const;
-	
-	llvm::Instruction const& operator[](unsigned int const       index) const;
-	unsigned int             operator[](llvm::Instruction const& inst)  const;
-	
-	private:
-	
-	std::unordered_map<llvm::Instruction const*, unsigned int> _mapInstToInt;
-	llvm::Instruction const**                                  _mapIntToInst;
-};
 
 class DRM {
 	
