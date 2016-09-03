@@ -11,6 +11,7 @@
 #include "SmtSolver.h"
 #include "Eldarica.h"
 #include "Z3.h"
+#include "FakeCounterexamples.h"
 
 #include <ostream>
 
@@ -43,6 +44,9 @@ void SmtSolver::setSolverEldClient() {
 }
 void SmtSolver::setSolverZ3() {
 	solver = std::make_unique<Z3>("z3", "eld-client");
+}
+void SmtSolver::setSolverCex1() {
+	solver = std::make_unique<FakeCounterexamples>(0);
 }
 
 SmtSolver& SmtSolver::getInstance() {

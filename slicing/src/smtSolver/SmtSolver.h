@@ -22,6 +22,7 @@ public:
 	static void setSolverEld();
 	static void setSolverEldClient();
 	static void setSolverZ3();
+	static void setSolverCex1();
 	static SmtSolver& getInstance();
 
 	//virtual bool isAvailable() = 0;

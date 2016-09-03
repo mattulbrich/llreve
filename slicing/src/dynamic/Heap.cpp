@@ -144,8 +144,11 @@ APInt Heap::readInt(
 		});
 	
 	if(pDataDepSet) {
+		
 		for(SizeType i = 0; i < byteCount; i++) {
-			pDataDepSet->insert(_memory[address + i].second);
+			if(Instruction const* const pDep = _memory[address + i].second) {
+				pDataDepSet->insert(pDep);
+			}
 		}
 	}
 	

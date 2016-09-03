@@ -83,12 +83,13 @@ static cl::opt<CriterionModes> CriterionMode(cl::desc("Chose crietion mode:"),
 	llvm::cl::cat(SlicingCategory)
 	);
 
-enum class SolverOptions{eld, z3, eld_client};
+enum class SolverOptions{eld, z3, eld_client, cex1};
 static cl::opt<SolverOptions> SolverMode(cl::desc("Chose smt solver: (Make sure the choosen solver can be found in command line, i.e. set $PATH)"),
 	cl::values(
 		clEnumValN(SolverOptions::eld, "eld", "Eldarica using command 'eld'"),
 		clEnumValN(SolverOptions::eld_client, "eld-client", "Eldarica using command 'eld-client'"),
 		clEnumValN(SolverOptions::z3, "z3", "Z3 using command 'z3', requires eld-client as well!"),
+		clEnumValN(SolverOptions::cex1, "cex1", "Manual counterexamples for benchmark 'count_occurences.c'"),
 		clEnumValEnd),
 	cl::init(SolverOptions::eld_client),
 	llvm::cl::cat(SlicingCategory)
@@ -335,6 +336,9 @@ void configureSolver(){
 			break;
 		case SolverOptions::eld_client:
 			SmtSolver::setSolverEldClient();
+			break;
+		case SolverOptions::cex1:
+			SmtSolver::setSolverCex1();
 			break;
 	}
 }
