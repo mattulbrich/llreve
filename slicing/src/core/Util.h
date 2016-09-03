@@ -12,8 +12,10 @@
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Value.h"
 
+#include <cassert>
 #include <iomanip>
 #include <iostream>
+#include <queue>
 #include <sstream>
 #include <type_traits>
 #include <unordered_set>
@@ -239,6 +241,62 @@ class LambdaIterator :
 	LambdaType _lambdaExpr;
 };
 
+template <class ElementType> class SingeltonQueue {
+	
+	public:
+		
+		SingeltonQueue(bool const remember = false) : _remember(remember) {}
+		
+		bool empty(void) const {
+			
+			return elementQueue.empty();
+		}
+		
+		ElementType pop(void) {
+			
+			assert(!empty() && "Cannot pop from an empty queue");
+			
+			ElementType value = elementQueue.front();
+			
+			elementQueue.pop();
+			elementSet  .erase(value);
+			
+			return value;
+		}
+	
+		bool push(ElementType element) {
+			
+			bool const inHistory = _remember ?
+				oldElements.find(element) != oldElements.end() : false;
+			
+			if(elementSet.find(element) == elementSet.end() && !inHistory) {
+				
+				elementQueue.push  (element);
+				elementSet  .insert(element);
+				oldElements .insert(element);
+				
+				return true;
+				
+			} else {
+				
+				return false;
+			}
+		}
+		
+		size_t size(void) const {
+			
+			return static_cast<size_t>(elementQueue.size());
+		}
+		
+	private:
+		
+		bool const _remember;
+		
+		std::queue        <ElementType> elementQueue;
+		std::unordered_set<ElementType> elementSet;
+		std::unordered_set<ElementType> oldElements;
+};
+
 template <class NodeType> class GenericNode {
 	
 	public:
@@ -252,9 +310,7 @@ template <class NodeType> class GenericNode {
 	
 	// Only available if the InnerType provides a default constructor
 	GenericNode(void) : innerNode() {}
-	
-	GenericNode(
-		NodeType innerNode) : innerNode(innerNode) {}
+	GenericNode(NodeType innerNode) : innerNode(innerNode) {}
 	
 	NodeType& operator*() {
 		

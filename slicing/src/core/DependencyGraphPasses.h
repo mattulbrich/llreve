@@ -18,7 +18,11 @@
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instruction.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/LegacyPassManager.h"
+
+#include <unordered_map>
+#include <unordered_set>
 
 // Computes the CDG for a function.
 // To make the pass work correctly, the SimplifyCFG pass must not be run before.
@@ -60,6 +64,10 @@ class DDGPass :
 	private:
 	
 	void computeDependencies(llvm::Instruction const& inst) const;
+	void getStoreInstructions(
+		llvm::BasicBlock  const&                    bb,
+		llvm::Instruction const&                    abortInst,
+		std::unordered_set<llvm::StoreInst const*>& result) const;
 };
 
 // Computes the CDG for a function.
