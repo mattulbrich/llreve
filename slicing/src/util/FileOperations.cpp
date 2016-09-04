@@ -45,6 +45,9 @@ using namespace std;
 using namespace llvm;
 using namespace clang;
 
+bool isUnsupportedInstruction(llvm::Instruction& instruction);
+
+
 shared_ptr<llvm::Module> getModuleFromSource(string fileName, string resourceDir, vector<std::string> includes){
 	TIMED_SCOPE(timerBlk, "LoadModuleFromSource");
 	// The CodeGenAction does need an LLVMContext. If none is provided, than
@@ -90,19 +93,37 @@ shared_ptr<llvm::Module> getModuleFromSource(string fileName, string resourceDir
 
 	for (Function& function: *program) {
 		for (Instruction& instruction : Util::getInstructions(function)) {
-			for (Use& use:instruction.operands()) {
-				if (isa<UndefValue>(use)){
-					writeModuleToFile("program.llvm", *program);
-					// Todo this is actually an input error and should be handled
-					// by exception.
-					logError("Found undefined Variable, make sure you define all Variables.");
-					abort();
-				}
+			if (isUnsupportedInstruction(instruction)) {
+				writeModuleToFile("program.llvm", *program);
+				Log(Fatal) << "Found unsupported Instruction.";
 			}
 		}
 	}
 
 	return program;
+}
+
+bool isUnsupportedInstruction(llvm::Instruction& instruction) {
+	for (Use& use:instruction.operands()) {
+		if (isa<UndefValue>(use)){
+			Log(Error) << "Found undefined Variable, make sure you define all Variables.";
+			return true;
+		}
+	}
+
+	if (auto* BinOp = llvm::dyn_cast<llvm::BinaryOperator>(&instruction)) {
+		if ((BinOp->getOpcode() == Instruction::Or ||
+			BinOp->getOpcode() == Instruction::And ||
+			BinOp->getOpcode() == Instruction::Xor)) {
+			if (!(BinOp->getOperand(0)->getType()->isIntegerTy(1) &&
+				BinOp->getOperand(1)->getType()->isIntegerTy(1))) {
+				Log(Error) << "Bitwise operators of bitwidth > 1 is not supported: " << BinOp->getName().str();
+				return true;
+			}
+		}
+	}
+
+	return false;
 }
 
 void writeModuleToFileDbg(string fileName, llvm::Module& module) {

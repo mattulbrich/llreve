@@ -1,7 +1,7 @@
 #!/bin/bash
 
 timeout 5 ./slicing -id -heap $1 -remove-functions -resource-dir=/usr/local/lib/clang/3.8.0 -I ~/pdf/realWorld/coreutils-8.25/lib -mark-threshold 5 > /dev/null 2> /dev/null
-if [ $? -eq 124 ] ; then
+if [ $? -eq 124 ] || [ $? -eq 0 ] ; then
 	echo "$1"
 fi
 
