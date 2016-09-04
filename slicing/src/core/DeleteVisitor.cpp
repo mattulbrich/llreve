@@ -32,7 +32,8 @@ bool DeleteVisitor::visitInstruction(llvm::Instruction &instruction){
 	handleNoUses(instruction)
 	|| handleHasPriviousDef(instruction, variable)
 	|| handleIsArgument(instruction, variable)
-	|| handleSinglePhiUse(instruction);
+	|| handleSinglePhiUse(instruction)
+	|| handleReplaceWithZero(instruction);
 	return erased;
 }
 
@@ -304,3 +305,14 @@ bool DeleteVisitor::handleIsArgument(llvm::Instruction& instruction, DIVariable*
 
 	return false;
 }
+
+bool DeleteVisitor::handleReplaceWithZero(llvm::Instruction& instruction){
+	if (this->replaceWithZero_) {
+		instruction.replaceAllUsesWith(Constant::getNullValue(instruction.getType()));
+		instruction.eraseFromParent();
+		return true;
+	} else {
+		return false;
+	}
+}
+

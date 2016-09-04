@@ -39,8 +39,16 @@ const std::string SlicingPass::TO_BE_SLICED = "to be sliced";
 const std::string SlicingPass::NOT_SLICED = "not sliced";
 const std::string SlicingPass::SLICE = "slice";
 
-SlicingPass::SlicingPass() : llvm::FunctionPass(ID) {
+bool SlicingPass::replaceWithZero = true;
+
+
+SlicingPass::SlicingPass() : SlicingPass::SlicingPass(SlicingPass::replaceWithZero) {
+
+}
+
+SlicingPass::SlicingPass(bool replaceWithZero) : llvm::FunctionPass(ID) {
 	this->hasUnSlicedInstructions_ = false;
+	this->replaceWithZero_ = replaceWithZero;
 }
 
 void SlicingPass::toBeSliced(llvm::Instruction& instruction) {
@@ -97,6 +105,7 @@ bool SlicingPass::runOnFunction(llvm::Function& function){
 	std::queue<llvm::Instruction*>* activeQueue = &instructionsToDelete;
 	std::queue<llvm::Instruction*>* secondQueue = &secondTry;
 
+	bool didChange = false;
 	bool changed = true;
 	while(changed) {
 		changed = false;
@@ -105,22 +114,24 @@ bool SlicingPass::runOnFunction(llvm::Function& function){
 			Instruction& instruction = *activeQueue->front();
 			activeQueue->pop();
 
-			DeleteVisitor visitor(this->domTree);
+			DeleteVisitor visitor(this->domTree, this->replaceWithZero_);
 			bool deleted = visitor.visit(instruction);
 
 			if (!deleted) {
 				secondQueue->push(&instruction);
 			} else {
 				changed = true;
+				didChange = true;
 			}
 		}
 
 		std::set<BasicBlock*> deletedBlocks;
 		for (BasicBlock& block:function){
-			DeleteVisitor visitor(this->domTree);
+			DeleteVisitor visitor(this->domTree, this->replaceWithZero_);
 			bool deleted = visitor.visit(block.getTerminator());
 			if (deleted) {
 				changed = true;
+				didChange = true;
 			}
 
 			if (block.empty() && &function.getEntryBlock() != &block) {
@@ -138,21 +149,18 @@ bool SlicingPass::runOnFunction(llvm::Function& function){
 		secondQueue = temp;
 	}
 
-	while (!activeQueue->empty()) {
-		Instruction& instruction = *activeQueue->front();
-		activeQueue->pop();
-	}
-
 	for(Instruction& instruction : Util::getInstructions(function)) {
 		if (isNotSliced(instruction)) {
 			this->hasUnSlicedInstructions_ = true;
 		}
 	}
 
+	this->didChange_ = didChange;
+
 	bool hasError = llvm::verifyFunction(function, &errs());
 	assert(!hasError && "Internal Error: Slicing pass produced slice candidate, which ist not a valid llvm program.");
 
-	return true;
+	return didChange;
 }
 
 void SlicingPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
@@ -161,4 +169,8 @@ void SlicingPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
 
 bool SlicingPass::hasUnSlicedInstructions(){
 	return this->hasUnSlicedInstructions_;
+}
+
+bool SlicingPass::hasSlicedInstructions(){
+	return this->didChange_;
 }

@@ -27,20 +27,34 @@ public:
 	static const std::string TO_BE_SLICED;
 	static const std::string NOT_SLICED;
 
+	static bool replaceWithZero;
+
 	static void toBeSliced(llvm::Instruction& instruction);
 	static void markNotSliced(llvm::Instruction& instruction);
 	static bool isToBeSliced(llvm::Instruction& instruction);
 	static bool isNotSliced(llvm::Instruction& instruction);
 
+	/**
+	 *	Will use static variable replaceWithZero to decide if
+	 *  instructions should be replaced with zero.
+	 */
 	SlicingPass();
+
+	/**
+	 * @arg replaceWithZero if instructions should be replaced with zero.
+	 */
+	SlicingPass(bool replaceWithZero);
 	virtual bool runOnFunction(llvm::Function &Fun) override;
 	virtual void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
 
 	bool hasUnSlicedInstructions();
+	bool hasSlicedInstructions();
 
 private:
 	llvm::DominatorTree* domTree;
 	bool hasUnSlicedInstructions_;
+	bool didChange_;
+	bool replaceWithZero_;
 
 };
 

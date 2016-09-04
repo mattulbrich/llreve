@@ -28,6 +28,7 @@
 #include "slicingMethods/impact_analysis_for_assignments/ImpactAnalysisForAssignments.h"
 #include "slicingMethods/SingleLineElimination.h"
 #include "core/SliceCandidateValidation.h"
+#include "core/SlicingPass.h"
 
 #include "preprocessing/MarkAnalysisPass.h"
 #include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
@@ -109,18 +110,24 @@ static llvm::cl::opt<string> ResourceDir(
 
 static llvm::cl::opt<bool> RemoveFunctions("remove-functions", llvm::cl::desc("Removes body of functions from module before slicing. The sliced function is excluded. See -D Option for excluding further functions."),
 	llvm::cl::cat(SlicingCategory));
-static llvm::cl::list<string> DontRemoveFunction("D", llvm::cl::desc("Functions, which should not be removed by remove functions"),
+static llvm::cl::list<string> PreserveFunction("P", llvm::cl::desc("Functions, which should not be removed by remove functions"),
 	llvm::cl::cat(SlicingCategory));
 
 static llvm::cl::opt<bool> InlineFunctions("inline-functions", llvm::cl::desc("Inlines all functions into the sliced function."),
 	llvm::cl::cat(SlicingCategory));
 
-static llvm::cl::opt<bool> Heap("heap", llvm::cl::desc("Activate to handle programs with heap."),
-	llvm::cl::cat(SlicingCategory));
-
 static llvm::cl::opt<int> MarkInsertThreshold("mark-threshold", llvm::cl::desc("Magic Number. Marks will be inserted until the reduction in the number of paths falls below this threshold."),
 	cl::init(10), // Magic value, 10 seems to be a good default value.
 	llvm::cl::cat(SlicingCategory));
+
+static llvm::cl::opt<bool> ForbidReplaceWithZero("z", llvm::cl::desc("Forbid replacement of instructions with zero."),
+	cl::init(false),
+	llvm::cl::cat(SlicingCategory));
+
+static llvm::cl::opt<bool> Heap("heap", llvm::cl::desc("Activate to handle programs with heap."),
+	cl::init(false),
+	llvm::cl::cat(SlicingCategory));
+
 
 void parseArgs(int argc, const char **argv) {
 	vector<llvm::cl::OptionCategory*> optionCategorys;
@@ -148,6 +155,7 @@ int main(int argc, const char **argv) {
 	Log(Info) << VERSION;
 	parseArgs(argc, argv);
 	configureSolver();
+	SlicingPass::replaceWithZero = !ForbidReplaceWithZero;
 
 	ModulePtr program = getModuleFromSource(FileName, ResourceDir, Includes);
 
@@ -246,7 +254,7 @@ void performRemoveFunctions(ModulePtr program, CriterionPtr criterion) {
 	writeModuleToFileDbg("program.pre_remove_functions.llvm",*program);
 	if (RemoveFunctions) {
 		set<string> notToBeRemoved;
-		for (string functionName: DontRemoveFunction) {
+		for (string functionName: PreserveFunction) {
 			notToBeRemoved.insert(functionName);
 			if (!program->getFunction(functionName)) {
 				cout << "WARNING: Did not find function, which should not be deleted (-D): " << functionName << endl;
