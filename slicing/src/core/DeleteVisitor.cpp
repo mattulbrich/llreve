@@ -44,7 +44,7 @@ bool DeleteVisitor::visitTerminatorInst(TerminatorInst &instruction){
 bool DeleteVisitor::visitCallInst(CallInst &instruction){
 	if (instruction.getCalledFunction()
 		&& (instruction.getCalledFunction()->getName() == Criterion::FUNCTION_NAME
-			|| instruction.getCalledFunction()->getName() == MarkAnalysisPass::FUNCTION_NAME)) {
+			|| MarkAnalysisPass::isMark(*instruction.getCalledFunction()))) {
 		return false;
 } else {
 		//TODD: avoid removing call instructions, that coudl modify

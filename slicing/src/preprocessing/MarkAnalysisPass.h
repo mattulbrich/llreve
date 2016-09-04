@@ -21,7 +21,9 @@
 class MarkAnalysisPass : public llvm::ModulePass {
 public:
 	static char ID;
-	static std::string FUNCTION_NAME;
+	static std::string MARK_NAME;
+	static std::string SPLITMARK_NAME;
+	static bool isMark(const llvm::Function& function);
 
 
 	MarkAnalysisPass() : llvm::ModulePass(ID) {
@@ -44,9 +46,12 @@ private:
 	virtual int optimizeMark(llvm::BasicBlock* entry, llvm::BasicBlock* exit, llvm::Function &fun);
 	virtual bool hasMark(llvm::BasicBlock* block);
 	virtual void findMarks(llvm::Module &module);
+	virtual void findMarks(llvm::Function& markFunction);
 	virtual void addLoopMarks(llvm::Function &function);
 
 	void addMark(int mark, llvm::BasicBlock* block);
 	void addMark(llvm::BasicBlock* block);	
+	static llvm::Function& getMarkFunction(llvm::Module& module, std::string functionName);
+	static llvm::Function& getSplitMarkFunction(llvm::Module& module);
 	static llvm::Function& getMarkFunction(llvm::Module& module);
 };

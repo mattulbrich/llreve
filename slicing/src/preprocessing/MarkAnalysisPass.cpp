@@ -38,7 +38,14 @@ public:
 	}
 };
 
-std::string MarkAnalysisPass::FUNCTION_NAME = "__mark";
+std::string MarkAnalysisPass::MARK_NAME = "__mark";
+std::string MarkAnalysisPass::SPLITMARK_NAME = "__splitmark";
+
+bool MarkAnalysisPass::isMark(const llvm::Function& function){
+	return (function.getName() == MarkAnalysisPass::MARK_NAME
+		|| function.getName() == MarkAnalysisPass::SPLITMARK_NAME);
+}
+
 char MarkAnalysisPass::ID = 0;
 
 bool MarkAnalysisPass::runOnModule(llvm::Module &module) {
@@ -80,8 +87,7 @@ void MarkAnalysisPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
 	AU.addRequired<llvm::LoopInfoWrapperPass>();
 }
 
-void MarkAnalysisPass::findMarks(llvm::Module &module) {
-	llvm::Function& markFunction = getMarkFunction(module);
+void MarkAnalysisPass::findMarks(llvm::Function& markFunction) {
 	for (auto user = markFunction.user_begin(); user != markFunction.user_end(); ++user) {
 		if (llvm::CallInst* callInst = llvm::dyn_cast<llvm::CallInst>(*user)) {
 			marks.insert(callInst->getParent());			
@@ -96,7 +102,12 @@ void MarkAnalysisPass::findMarks(llvm::Module &module) {
 				markCounter = markNumber;
 			}
 		}
-	}
+	}	
+}
+
+void MarkAnalysisPass::findMarks(llvm::Module &module) {
+	findMarks(getMarkFunction(module));
+	findMarks(getSplitMarkFunction(module));
 }
 
 void MarkAnalysisPass::addLoopMarks(llvm::Function &function) {
@@ -208,7 +219,7 @@ void MarkAnalysisPass::addMark(int markNumber, llvm::BasicBlock* block){
 	auto result = this->marks.insert(block);
 	bool existed = !result.second;
 	if (!existed) {
-		llvm::Function& markFunction = getMarkFunction(*block->getModule());
+		llvm::Function& markFunction = getSplitMarkFunction(*block->getModule());
 
 		auto intType = llvm::IntegerType::get(block->getContext(), 32);
 		auto markConstant = llvm::ConstantInt::getSigned(intType, markNumber);
@@ -222,7 +233,15 @@ void MarkAnalysisPass::addMark(int markNumber, llvm::BasicBlock* block){
 }
 
 llvm::Function& MarkAnalysisPass::getMarkFunction(llvm::Module& module){
-	llvm::Function* function = module.getFunction(llvm::StringRef(MarkAnalysisPass::FUNCTION_NAME));
+	return getMarkFunction(module, MarkAnalysisPass::MARK_NAME);
+}
+
+llvm::Function& MarkAnalysisPass::getSplitMarkFunction(llvm::Module& module){
+	return getMarkFunction(module, MarkAnalysisPass::SPLITMARK_NAME);
+}
+
+llvm::Function& MarkAnalysisPass::getMarkFunction(llvm::Module& module, std::string functionName){
+	llvm::Function* function = module.getFunction(llvm::StringRef(functionName));
 	if (!function) {
 		std::vector<llvm::Type*> parameter;
 		parameter.push_back(llvm::IntegerType::get(module.getContext(), 32));
@@ -232,7 +251,7 @@ llvm::Function& MarkAnalysisPass::getMarkFunction(llvm::Module& module){
 
 		function = llvm::Function::Create(functionType,
 			llvm::GlobalValue::LinkageTypes::ExternalLinkage,
-			llvm::Twine(MarkAnalysisPass::FUNCTION_NAME),
+			llvm::Twine(functionName),
 			&module);
 	}
 

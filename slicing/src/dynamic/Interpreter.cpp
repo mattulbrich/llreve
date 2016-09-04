@@ -522,7 +522,7 @@ TraceEntry const& Interpreter::executeCallInst(
 	string const functionName = pCalledFunction->getName().str();
 	
 	if(functionName.find(ExplicitAssignPass::FUNCTION_NAME) == 0 ||
-		functionName.find(MarkAnalysisPass::FUNCTION_NAME) == 0) {
+		MarkAnalysisPass::isMark(*pCalledFunction)) {
 		
 		assert(
 			inst.getNumArgOperands() == 1 &&
