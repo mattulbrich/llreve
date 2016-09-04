@@ -26,6 +26,7 @@
 #include "slicingMethods/SyntacticSlicing.h"
 #include "slicingMethods/IdSlice.h"
 #include "slicingMethods/impact_analysis_for_assignments/ImpactAnalysisForAssignments.h"
+#include "slicingMethods/SingleLineElimination.h"
 #include "core/SliceCandidateValidation.h"
 
 #include "preprocessing/MarkAnalysisPass.h"
@@ -60,14 +61,16 @@ static llvm::cl::opt<std::string> FileName(llvm::cl::Positional,
 	llvm::cl::desc("<input file>"),
 	llvm::cl::Required);
 
-enum SlicingMethodOptions{syntactic, bf, iaa, cgs, id};
+enum SlicingMethodOptions{syntactic, bf, iaa, cgs, id, sle};
 static cl::opt<SlicingMethodOptions> SlicingMethodOption(cl::desc("Choose slicing method:"),
 	cl::values(
 		clEnumVal(syntactic , "Classical syntactic slicing, folowd by verification of the slice."),
 		clEnumVal(bf, "Bruteforce all slicecandidates, returns smalest."),
 		clEnumVal(iaa, "Use impact analysis for assignments to find unneccesary statments."),
+		clEnumVal(sle, "Single Line Elimination, trys to remove instruction by instruction."),
 		clEnumVal(cgs, "Use counterexample guided slicing to find unneccesary instructions."),
 		clEnumVal(id, "Use the program it self as slice and verify validity."),
+
 		clEnumValEnd),
 	llvm::cl::cat(SlicingCategory),
 	llvm::cl::Required);
@@ -222,6 +225,9 @@ SlicingMethodPtr configureSlicingMethod(ModulePtr program) {
 		break;
 		case id:
 		method = shared_ptr<SlicingMethod>(new IdSlicing(program));
+		break;
+		case sle:
+		method = shared_ptr<SlicingMethod>(new SingleLineElimination(program));
 		break;
 	}
 	return method;

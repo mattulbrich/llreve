@@ -1,13 +1,9 @@
 #!/bin/bash
-
-if [ ! -f ../scripts/show ]; then
-    echo "Please make sure to run from build directory!"
-    exit 1
-fi
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 if [[ $# -eq 0 ]]; then
-	../scripts/prepare program.llvm
-	../scripts/prepare slice.llvm
+	$DIR/prepare program.llvm
+	$DIR/prepare slice.llvm
 	meld program.llvm slice.llvm
 else
 	name=${1%.}
@@ -25,7 +21,7 @@ else
 		exit 2
 	fi
 
-	../scripts/prepare $orig
-	../scripts/prepare $slice
+	DIR/prepare $orig
+	DIR/prepare $slice
 	meld $orig $slice
 fi
