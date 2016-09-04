@@ -15,7 +15,7 @@
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Constants.h"
 
-class PromoteAssertSlicedPass: public llvm::FunctionPass {
+class PromoteAssertSlicedPass: public llvm::ModulePass {
 
 public:
 	static char ID;
@@ -27,7 +27,7 @@ public:
 	PromoteAssertSlicedPass();
 
 	virtual ~PromoteAssertSlicedPass();
-	virtual bool runOnFunction(llvm::Function &Fun) override;
+	virtual bool runOnModule(llvm::Module &module) override;
 	virtual void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
 
 
