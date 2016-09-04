@@ -12,6 +12,8 @@
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
+#include "util/logging.h"
+
 #include <iostream>
 
 using namespace llvm;
@@ -30,62 +32,46 @@ ModulePtr ImpactAnalysisForAssignments::computeSlice(CriterionPtr criterion){
 	ModulePtr slice = CloneModule(&*program);
 	set<Instruction*> criterionInstructions = criterion->getInstructions(*slice);
 
-	for (Function& function:*slice) {
-		if (!Util::isSpecialFunction(function)) {
-			for(Instruction& instruction : Util::getInstructions(function)) {
-				Type* type = instruction.getType();
-				const bool isCriterion = criterionInstructions.find(&instruction) != criterionInstructions.end();
-				if (!isCriterion && !isa<PHINode>(instruction) && type->isIntegerTy() && type->getIntegerBitWidth() > 1) {
-					ValueToValueMapTy valueMap;
-					ModulePtr impactAbstraction = CloneModule(&*slice, valueMap);
+	bool changed = true;
+	while (changed) {
+		changed = false;
+		for (Function& function:*slice) {
+			if (!Util::isSpecialFunction(function)) {
+				for(Instruction& instruction : Util::getInstructions(function)) {
+					Type* type = instruction.getType();
+					const bool isCriterion = criterionInstructions.find(&instruction) != criterionInstructions.end();
+					if (!isCriterion && !isa<PHINode>(instruction) && type->isIntegerTy() && type->getIntegerBitWidth() > 1) {
+						ValueToValueMapTy valueMap;
+						ModulePtr impactAbstraction = CloneModule(&*slice, valueMap);
 
-					Instruction* instToReplace = cast<Instruction>(&*valueMap[&instruction]);
-					BasicBlock::iterator ii(instToReplace);
+						Instruction* instToReplace = cast<Instruction>(&*valueMap[&instruction]);
+						BasicBlock::iterator ii(instToReplace);
 
-					vector<Value*> parameter;
-					ArrayRef<Value*> parameterRef(parameter);
+						vector<Value*> parameter;
+						ArrayRef<Value*> parameterRef(parameter);
 
-					ReplaceInstWithInst(instToReplace->getParent()->getInstList(), ii,
-						CallInst::Create(createEveryValueFunction(impactAbstraction, instToReplace->getType()), parameterRef));
+						ReplaceInstWithInst(instToReplace->getParent()->getInstList(), ii,
+							CallInst::Create(createEveryValueFunction(impactAbstraction, instToReplace->getType()), parameterRef));
 
-					callsToReve_++;
-					std::cout << ".";
-					std::flush(std::cout);
-					ValidationResult result = SliceCandidateValidation::validate(&*slice, &*impactAbstraction, criterion);
-					if (result == ValidationResult::valid) {
-						SlicingPass::toBeSliced(instruction);
+						callsToReve_++;
+						std::cout << ".";
+						std::flush(std::cout);
+						ValidationResult result = SliceCandidateValidation::validate(&*slice, &*impactAbstraction, criterion);
+						if (result == ValidationResult::valid) {
+							SlicingPass::toBeSliced(instruction);
+							changed = true;
+						}
+
+						llvm::legacy::PassManager PM;
+						PM.add(new SlicingPass());
+						PM.run(*slice);
 					}
 				}
 			}
 		}
 	}
 
-	// for (Function& function:*slice) {
-	// 	for (BasicBlock& block:function){
-	// 		bool allToBeSliced = true;
-	// 		for (Instruction& instruction:block) {
-	// 			if (allToBeSliced && isa<TerminatorInst>(instruction)) {
-	// 				SlicingPass::toBeSliced(instruction);
-	// 			} else if (!SlicingPass::isToBeSliced(instruction)) {
-	// 				allToBeSliced = false;
-	// 				break;
-	// 			}
-	// 		}
-	// 	}
-	// }
-
-	llvm::legacy::PassManager PM;
-	PM.add(new SlicingPass());
-	PM.run(*slice);
-
 	std::cout << "Number of Reve calls: " << callsToReve_ << std::endl;
-
-	ValidationResult result = SliceCandidateValidation::validate(&*program, &*slice, criterion);
-	if (result != ValidationResult::valid) {
-		std::cout << "Error: Produced Slice is not Valid." << std::endl;
-	}
-	//assert(result == ValidationResult::valid);
-
 	return slice;
 }
 

@@ -22,34 +22,40 @@ ModulePtr SingleLineElimination::computeSlice(CriterionPtr criterion) {
 	ModulePtr slice = CloneModule(&*program);
 	set<Instruction*> criterionInstructions = criterion->getInstructions(*slice);
 
-	for (Function& function:*slice) {
-		if (!Util::isSpecialFunction(function)) {
-			for(Instruction& instruction : Util::getInstructions(function)) {
-				Type* type = instruction.getType();
-				const bool isCriterion = criterionInstructions.find(&instruction) != criterionInstructions.end();
-				if (!isCriterion && !isa<PHINode>(instruction) && type->isIntegerTy() && type->getIntegerBitWidth() > 1) {
-					ValueToValueMapTy valueMap;
-					ModulePtr impactAbstraction = CloneModule(&*slice, valueMap);
+	bool changed = true;
 
-					Instruction* instToReplace = cast<Instruction>(&*valueMap[&instruction]);
-					SlicingPass::toBeSliced(*instToReplace);
+	while (changed) {
+		changed = false;
 
-					llvm::legacy::PassManager PM;
-					PM.add(new SlicingPass());
-					PM.run(*impactAbstraction);
+		for (Function& function:*slice) {
+			if (!Util::isSpecialFunction(function)) {
+				for(Instruction& instruction : Util::getInstructions(function)) {
+					Type* type = instruction.getType();
+					const bool isCriterion = criterionInstructions.find(&instruction) != criterionInstructions.end();
+					if (!isCriterion && !isa<PHINode>(instruction) && type->isIntegerTy() && type->getIntegerBitWidth() > 1) {
+						ValueToValueMapTy valueMap;
+						ModulePtr impactAbstraction = CloneModule(&*slice, valueMap);
 
-					ValidationResult result = SliceCandidateValidation::validate(&*slice, &*impactAbstraction, criterion);
-					if (result == ValidationResult::valid) {
-						SlicingPass::toBeSliced(instruction);
+						Instruction* instToReplace = cast<Instruction>(&*valueMap[&instruction]);
+						SlicingPass::toBeSliced(*instToReplace);
+
+						llvm::legacy::PassManager PM;
+						PM.add(new SlicingPass());
+						PM.run(*impactAbstraction);
+
+						ValidationResult result = SliceCandidateValidation::validate(&*slice, &*impactAbstraction, criterion);
+						if (result == ValidationResult::valid) {
+							SlicingPass::toBeSliced(instruction);
+							slice = impactAbstraction;
+							changed = true;
+						}
 					}
 				}
 			}
 		}
 	}
 
-	llvm::legacy::PassManager PM;
-	PM.add(new SlicingPass());
-	PM.run(*slice);
+
 
 	return slice;
 }
