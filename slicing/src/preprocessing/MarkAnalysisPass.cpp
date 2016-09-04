@@ -57,10 +57,15 @@ bool MarkAnalysisPass::runOnModule(llvm::Module &module) {
 
 			int diff = -1;
 			{
-				do {
-					++markCount;
+				bool done = false;
+				while (!done) {
 					diff = optimizeMark(entry, exit, function);
-				} while (diff > 0 && diff > markThreshold);
+					if (diff >= markThreshold) {
+						++markCount;
+					} else {
+						done = true;
+					}
+				};
 			}
 		}
 	}
@@ -181,7 +186,7 @@ int MarkAnalysisPass::optimizeMark(llvm::BasicBlock* entry, llvm::BasicBlock* ex
 		}
 	}
 
-	if (maxDiff >= 0) {
+	if (maxDiff >= markThreshold) {
 		assert(maxBlock && !hasMark(maxBlock));
 		addMark(maxBlock);
 	}
