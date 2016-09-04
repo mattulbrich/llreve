@@ -168,8 +168,16 @@ int main(int argc, const char **argv) {
 	}	
 	
 	if (!slice){
-		outs() << "An error occured. Could not produce slice. \n";
+		Log(Error) << "An error occured. Could not produce slice. \n";
 	} else {
+		{
+			TIMED_SCOPE(timerBlk, "Final Verification");
+			ValidationResult result = SliceCandidateValidation::validate(&*program, &*slice, criterion);
+			if (result != ValidationResult::valid) {
+				Log(Error) << "Error: Produced Slice is not Valid.";
+			}
+		}
+
 		writeModuleToFile("program.llvm", *program);
 		writeModuleToFile("slice.llvm", *slice);
 		outs() << "See program.llvm and slice.llvm for the resulting LLVMIRs \n";
