@@ -19,8 +19,6 @@
 #include "llvm/Support/Casting.h"
 
 #include <iostream>
-#include <queue>
-#include <unordered_set>
 
 using namespace std;
 using namespace llvm;
@@ -124,12 +122,52 @@ void DDGPass::computeDependencies(
 			instNode.predecessors.insert(&(*this)[*pRefInst]);
 		}
 	}
+	
+	if(isa<LoadInst>(&inst)) {
+		
+		SingeltonQueue<BasicBlock const*> toCheck(true);
+		unordered_set<StoreInst const*>   heapDependencies;
+		
+		toCheck.push(inst.getParent());
+		
+		while(!toCheck.empty()) {
+			
+			BasicBlock const& curBB = *toCheck.pop();
+			
+			getStoreInstructions(curBB, inst, heapDependencies);
+			
+			for(BasicBlock const* i : predecessors(&curBB)) {
+				toCheck.push(i);
+			}
+		}
+		
+		for(StoreInst const* const i : heapDependencies) {
+			instNode.predecessors.insert(&(*this)[*i]);
+		}
+	}
 }
 
 void DDGPass::getAnalysisUsage(
 		AnalysisUsage &au) const {
 	
 	au.setPreservesAll();
+}
+
+void DDGPass::getStoreInstructions(
+		BasicBlock  const&               bb,
+		Instruction const&               abortInst,
+		unordered_set<StoreInst const*>& result) const {
+	
+	for(Instruction const& i : bb) {
+		
+		if(StoreInst const* pStoreInst = dyn_cast<StoreInst>(&i)) {
+			result.insert(pStoreInst);
+		}
+		
+		if(&i == &abortInst) {
+			break;
+		}
+	}
 }
 
 bool DDGPass::runOnFunction(

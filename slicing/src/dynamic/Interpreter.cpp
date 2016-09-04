@@ -46,7 +46,7 @@ Interpreter::Interpreter(
 		bool         const  branchDependencies,
 		raw_ostream* const  pOut,
 		string       const  printPrefix) :
-	func             (func),
+	linFunc          (func),
 	_computeBranchDep(branchDependencies),
 	_heap            (heap),
 	_ownerId         (heap.createOwner()),
@@ -60,6 +60,10 @@ Interpreter::Interpreter(
 	_pRetValue       (nullptr) {
 	
 	unsigned int curIndex = 0;
+	
+	if(_tracePrinting) {
+		_out << _printPrefix << linFunc.func.getName().str();
+	}
 	
 	// Initialize the argument values with the input passed as argument
 	for(Argument const& i : func.getArgumentList()) {
@@ -87,10 +91,19 @@ Interpreter::Interpreter(
 			
 			assert(false && "Unsupported argument type");
 		}
+		
+		if(_tracePrinting) {
+			_out << (curIndex == 1 ? "(" : ", ");
+			_state[&i]->print(_out);
+		}
+	}
+	
+	if(_tracePrinting) {
+		_out << ")\n";
 	}
 	
 	// Initialize the instruction values with undefined values
-	for(Instruction const& i : Util::getInstructions(func)) {
+	for(Instruction const& i : Util::getInstructions(linFunc.func)) {
 		
 		switch(i.getType()->getTypeID()) {
 			
@@ -106,10 +119,6 @@ Interpreter::Interpreter(
 				assert(false && "Unsupported instruction value type");
 				break;
 		}
-	}
-	
-	if(_tracePrinting) {
-		_out << _printPrefix << func.getName().str() << ":\n";
 	}
 }
 
@@ -232,7 +241,8 @@ bool Interpreter::executeNextInstruction(void) {
 	
 	if(_tracePrinting) {
 		
-		_out << _printPrefix << "> ";
+		_out << _printPrefix << " > [" <<
+			linFunc.indexToString(linFunc[*_pNextInst]) << "] ";
 		
 		if(pNewTraceEntry->pValue) {
 			pNewTraceEntry->pValue->print(_out) << "\n";
@@ -243,7 +253,7 @@ bool Interpreter::executeNextInstruction(void) {
 		}
 		
 		for(auto const& i : pNewTraceEntry->heapValues) {
-			_out << _printPrefix << "  " << Util::toHexString(i.first, 8) <<
+			_out << _printPrefix << "    " << Util::toHexString(i.first, 8) <<
 				": " << Util::toHexString(static_cast<uint16_t>(i.second), 2) <<
 				"\n";
 		}
@@ -512,7 +522,6 @@ TraceEntry const& Interpreter::executeCallInst(
 	string const functionName = pCalledFunction->getName().str();
 	
 	if(functionName.find(ExplicitAssignPass::FUNCTION_NAME) == 0 ||
-		functionName.find(Criterion::FUNCTION_NAME) == 0 ||
 		functionName.find(MarkAnalysisPass::FUNCTION_NAME) == 0) {
 		
 		assert(
@@ -520,6 +529,16 @@ TraceEntry const& Interpreter::executeCallInst(
 			"Special function must take exactly 1 argument");
 		
 		return updateState(inst, &cloneValue(*inst.getArgOperand(0)));
+		
+	} else if(functionName.find(Criterion::FUNCTION_NAME) == 0) {
+		
+		unsigned int const argCount = inst.getNumArgOperands();
+		
+		for(unsigned int i = 0; i < argCount; i++) {
+			addDependency(*inst.getArgOperand(i));
+		}
+		
+		return updateState(inst);
 		
 	} else {
 		
