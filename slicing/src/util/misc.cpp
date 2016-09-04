@@ -22,5 +22,5 @@ bool Util::isSpecialFunction(Function& function){
 			|| function.getName() == "__mark"
 			|| function.getName() == ImpactAnalysisForAssignments::EVERY_VALUE_FUNCTION_NAME
 			|| function.getName() == PromoteAssertSlicedPass::FUNCTION_NAME
-			|| function.getName() == ExplicitAssignPass::FUNCTION_NAME;
+			|| ExplicitAssignPass::isExplicitAssignFunction(function);
 }

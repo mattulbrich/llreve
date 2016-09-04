@@ -24,36 +24,34 @@ using namespace llvm;
 using namespace std;
 
 bool StripExplicitAssignPass::runOnModule(llvm::Module &module){
-	std::vector<Function*> toErase;
+	std::vector<Function*> functionsToErase;
 
 	for (Function& function: module) {
-		if (function.getName().find(
-				ExplicitAssignPass::FUNCTION_NAME) == 0) {
-			toErase.push_back(&function);
+		if (ExplicitAssignPass::isExplicitAssignFunction(function)) {
+			functionsToErase.push_back(&function);
 		}
 
 		for (BasicBlock& block: function) {
 
-			vector<Instruction*> toDelete;
+			vector<Instruction*> instructionsToErase;
 			for (auto it = block.begin(); it != block.end(); it++){
 				Instruction& instruction = *it;
 				if (CallInst* call = dyn_cast<CallInst>(&instruction)) {
 					if (call->getCalledFunction()
-						&& (call->getCalledFunction()->getName().find(
-								ExplicitAssignPass::FUNCTION_NAME) == 0)) {
+						&& ExplicitAssignPass::isExplicitAssignFunction(*call->getCalledFunction())) {
 						call->replaceAllUsesWith(call->getArgOperand(0));
-						toDelete.push_back(call);
+						instructionsToErase.push_back(call);
 					}
 				}
 			}
 
-			for (Instruction* instruction:toDelete) {
+			for (Instruction* instruction:instructionsToErase) {
 				instruction->eraseFromParent();
 			}
 		}
 	}
 
-	for (Function* function:toErase) {
+	for (Function* function:functionsToErase) {
 		function->eraseFromParent();
 	}
 

@@ -89,3 +89,8 @@ llvm::Function& ExplicitAssignPass::getID(llvm::Type& type, llvm::Module& module
 	return *function;
 }
 
+bool ExplicitAssignPass::isExplicitAssignFunction(llvm::Function &function) {
+	// The start of the function name is fixed. It may be prefixed with a number
+	// in case of multiple identity functions for different types.
+	return (function.getName().find(ExplicitAssignPass::FUNCTION_NAME) == 0);
+}
