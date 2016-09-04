@@ -31,6 +31,7 @@
 #include "core/SlicingPass.h"
 
 #include "preprocessing/MarkAnalysisPass.h"
+#include "preprocessing/StripExplicitAssignPass.h"
 #include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
 
 #include "util/logging.h"
@@ -48,6 +49,7 @@ void configureSolver();
 void performRemoveFunctions(ModulePtr module, CriterionPtr criterion);
 void performInlining(ModulePtr module, CriterionPtr criterion);
 void performMarkAnalysis(ModulePtr program);
+void performPostProcessing(ModulePtr program);
 
 Function* getSlicedFunction(ModulePtr module, CriterionPtr criterion);
 
@@ -124,6 +126,13 @@ static llvm::cl::opt<bool> ForbidReplaceWithZero("z", llvm::cl::desc("Forbid rep
 	cl::init(false),
 	llvm::cl::cat(SlicingCategory));
 
+static llvm::cl::opt<bool> PostProcessing("pp", llvm::cl::desc("Activate post processing."),
+	cl::init(false),
+	llvm::cl::cat(SlicingCategory));
+static llvm::cl::opt<bool> PostProcessingStripAssign("ps", llvm::cl::desc("Activate to remove assignment instructions in post processing."),
+	cl::init(false),
+	llvm::cl::cat(SlicingCategory));
+
 static llvm::cl::opt<bool> Heap("heap", llvm::cl::desc("Activate to handle programs with heap."),
 	cl::init(false),
 	llvm::cl::cat(SlicingCategory));
@@ -185,6 +194,9 @@ int main(int argc, const char **argv) {
 				Log(Error) << "Error: Produced Slice is not Valid.";
 			}
 		}
+
+		performPostProcessing(program);
+		performPostProcessing(slice);
 
 		writeModuleToFile("program.llvm", *program);
 		writeModuleToFile("slice.llvm", *slice);
@@ -362,5 +374,18 @@ void configureSolver(){
 		case SolverOptions::cex1:
 			SmtSolver::setSolverCex1();
 			break;
+	}
+}
+
+void performPostProcessing(ModulePtr program) {
+	if (PostProcessing) {
+		llvm::legacy::PassManager PM;
+		if (PostProcessingStripAssign) {
+			PM.add(new StripExplicitAssignPass());
+		}
+		PM.add(llvm::createSCCPPass()); // Constant propagation
+		PM.add(llvm::createCFGSimplificationPass());
+		PM.add(llvm::createDeadInstEliminationPass());
+		PM.run(*program);
 	}
 }
