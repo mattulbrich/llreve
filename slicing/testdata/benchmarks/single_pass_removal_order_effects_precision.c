@@ -6,19 +6,19 @@ int foo(){
 	int a = 0;
 
 	__assert_sliced(
-	k = 5;
+	k = 5
+	);
+	__assert_sliced(
+	a = 5
 	);
 	x = 5;
-	__assert_sliced(
-	a = 5;
-	);
 
 	if (a == 5) {
 		__assert_sliced(
-		x = 3;
+		x = 3
 		);
 		__assert_sliced(
-		x = k;
+		x = k
 		);
 	}
 
