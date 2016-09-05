@@ -10,6 +10,8 @@
 
 #include "misc.h"
 
+#include "core/Util.h"
+
 #include "preprocessing/PromoteAssertSlicedPass.h"
 #include "preprocessing/ExplicitAssignPass.h"
 #include "preprocessing/MarkAnalysisPass.h"
@@ -24,4 +26,21 @@ bool Util::isSpecialFunction(Function& function){
 			|| function.getName() == ImpactAnalysisForAssignments::EVERY_VALUE_FUNCTION_NAME
 			|| function.getName() == PromoteAssertSlicedPass::FUNCTION_NAME
 			|| ExplicitAssignPass::isExplicitAssignFunction(function);
+}
+
+int Util::countInstructions(Module& module) {
+	int count = 0;
+
+	for (Function& function:module) {
+		if (!Util::isSpecialFunction(function)) {
+			for (BasicBlock& block: function) {
+				for (Instruction& instruction:block) {
+					UTIL_UNUSED(instruction);
+					++count;
+				}
+			}
+		}
+	}
+
+	return count;
 }

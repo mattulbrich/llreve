@@ -198,6 +198,8 @@ int main(int argc, const char **argv) {
 		performPostProcessing(program);
 		performPostProcessing(slice);
 
+		Log(Info) << "Instructions in program: " << Util::countInstructions(*program);
+		Log(Info) << "Instructions in slice: " << Util::countInstructions(*slice);
 		writeModuleToFile("program.llvm", *program);
 		writeModuleToFile("slice.llvm", *slice);
 		outs() << "See program.llvm and slice.llvm for the resulting LLVMIRs \n";
