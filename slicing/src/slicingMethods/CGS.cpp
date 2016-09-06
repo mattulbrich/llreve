@@ -195,20 +195,24 @@ ModulePtr CGS::computeSlice(
 	Function&         func               =
 		*(*critInstructionSet.begin())->getParent()->getParent();
 	
-	LinearizedFunction linFunc         (func);
-	CEXType            cex             (func.getArgumentList().size());
+	LinearizedFunction linFunc(func);
+	CEXType            cex    (func.getArgumentList().size());
 	
 	linFunc.print(_out);
 	
 	CandidateGenerationEngine cge(module, criterion, linFunc);
 	CandidateNode*            pCurCandidate(&cge.generateCandidate());
 	
+	// Counterexamples are only necessary if there's at least one function
+	// parameter
+	if(!cex.empty()) {
+		SliceCandidateValidation::activateInitPredicate();
+	}
+	
 	printSlice(pCurCandidate->slice) << "  ";
 	
 	while(pCurCandidate->validate(cex).getState() !=
 		CandidateNode::State::valid) {
-		
-		//printSlice(pCurCandidate->slice) << "  ";
 		
 		switch(pCurCandidate->getState()) {
 			case CandidateNode::State::valid: _out << "valid\n"; break;

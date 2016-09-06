@@ -251,7 +251,6 @@ SlicingMethodPtr configureSlicingMethod(ModulePtr program) {
 		method = shared_ptr<SlicingMethod>(new ImpactAnalysisForAssignments(program));
 		break;
 		case cgs:
-		SliceCandidateValidation::activateInitPredicate();
 		method = shared_ptr<SlicingMethod>(new CGS(program));
 		break;
 		case id:

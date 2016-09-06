@@ -39,7 +39,7 @@ SatResult Eldarica::parseResult(std::string resultFile, CEXType* pCEX) {
 
 	if(regex_search(input, patternUnsat)) {
 
-		if(pCEX) {
+		if(pCEX && !pCEX->empty()) {
 
 			std::smatch result;
 			regex_search(input, result, patternInitPred);
