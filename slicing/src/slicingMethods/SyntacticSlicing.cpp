@@ -36,16 +36,5 @@ shared_ptr<Module> SyntacticSlicing::computeSlice(CriterionPtr criterion) {
 	PM.add(new SlicingPass());
 	PM.run(*sliceCandidate);
 
-	ValidationResult valid = SliceCandidateValidation::validate(&*program, &*sliceCandidate, criterion);
-	if (valid == ValidationResult::valid) {
-		result = sliceCandidate;
-		outs() << "The produced syntactic slice was verified by reve. :) \n";
-
-	} else if (valid == ValidationResult::valid){
-		outs() << "Ups! The produced syntactic slice is not valid! :/ \n";
-	} else {
-		outs() << "Could not verify the vlidity! :( \n";
-	}
-
 	return result;
 }
