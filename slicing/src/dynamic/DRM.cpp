@@ -2,6 +2,7 @@
 
 #include "core/DependencyGraphPasses.h"
 #include "core/Util.h"
+#include "util/CtrlDepExtractionPass.h"
 
 #include "llvm/IR/Module.h"
 
@@ -23,8 +24,7 @@ DRM::DRM(
 	Heap                heap;
 	
 	// Array that holds the control dependency for each statement
-	Instruction const** const ctrlDependencies =
-		new Instruction const*[_instCount];
+	CtrlDepExtractionPass::ResultType ctrlDependencies(_instCount);
 	
 	// Create arrays for storing all nodes and the recently used nodes
 	list<APInt const*>* const nodes       = new list<APInt const*>[_instCount];
@@ -34,10 +34,7 @@ DRM::DRM(
 	APInt reachability(_instCount, 0);
 	
 	// Compute the control dependencies and store them in 'ctrlDependencies'
-	pm.add(new PostDominatorTree());
-	pm.add(new CDGPass());
-	pm.add(new CtrlDepExtractionPass(linFunc, ctrlDependencies));
-	pm.run(*const_cast<Module*>(linFunc.func.getParent()));
+	CtrlDepExtractionPass::getCtrlDependencies(linFunc, ctrlDependencies);
 	
 	// Initialize the interpreter with the counterexample
 	Interpreter interpreter(linFunc.func, cex, heap, true, &outs());
@@ -95,7 +92,6 @@ DRM::DRM(
 	}
 	
 	// Free resources
-	delete [] ctrlDependencies;
 	delete [] nodes;
 	delete [] recentNodes;
 }
@@ -173,39 +169,4 @@ bool APIntCompare::operator()(
 		APInt const& rhs) const {
 	
 	return lhs.ult(rhs);
-}
-
-char CtrlDepExtractionPass::ID = 0;
-
-void CtrlDepExtractionPass::getAnalysisUsage(
-		AnalysisUsage &au) const {
-	
-	au.setPreservesAll();
-	au.addRequiredTransitive<CDGPass>();
-}
-
-bool CtrlDepExtractionPass::runOnFunction(
-		Function& func) {
-	
-	// Check whether this is the correct function
-	if(&func != &_linFunc.func) {
-		return false;
-	}
-	
-	CDGPass const& cdg = getAnalysis<CDGPass>();
-	
-	for(Instruction& i : Util::getInstructions(func)) {
-	
-		auto& predecessors = cdg[i].predecessors;
-		
-		if(predecessors.size() == 0) {
-			_dependencies[_linFunc[i]] = nullptr;
-		} else if(predecessors.size() == 1) {
-			_dependencies[_linFunc[i]] = (*predecessors.begin())->innerNode;
-		} else {
-			assert(false);
-		}
-	}
-	
-	return false;
 }

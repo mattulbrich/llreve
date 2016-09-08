@@ -3,6 +3,7 @@
 #include "core/SliceCandidateValidation.h"
 #include "core/SlicingPass.h"
 #include "core/Util.h"
+#include "util/CtrlDepExtractionPass.h"
 #include "util/misc.h"
 
 #include "llvm/Transforms/Utils/Cloning.h"
@@ -85,11 +86,31 @@ CandidateGenerationEngine::CandidateGenerationEngine(
 	_pUnionSlice     (nullptr),
 	_pBestValidSlice (nullptr) {
 	
-	APInt fullSlice(_instCount, 0);
+	APInt                     fullSlice(_instCount, 0);
+	queue<Instruction const*> critInstAccumulator;
 	
-	// Mark all instructions that must be in the slice by default
+	CtrlDepExtractionPass::ResultType const ctrlDependencies =
+		CtrlDepExtractionPass::getCtrlDependencies(linFunc);
+	
+	// Fill the accumulator with the criterion instructions itself
 	for(Instruction* i : pCriterion->getInstructions(*const_cast<Function*>(&linFunc.func)->getParent())) {
-		_critInstructions.setBit(linFunc[*i]);
+		critInstAccumulator.push(i);
+	}
+	
+	// Add the control dependency closure to the accumulator
+	while(!critInstAccumulator.empty()) {
+		
+		unsigned int const  instIndex = linFunc[*critInstAccumulator.front()];
+		Instruction  const* pCtrlDep  = ctrlDependencies[instIndex];
+		
+		critInstAccumulator.pop();
+		
+		if(!_critInstructions[instIndex]) {
+			_critInstructions.setBit(instIndex);
+			if(pCtrlDep) {
+				critInstAccumulator.push(pCtrlDep);
+			}
+		}
 	}
 	
 	fullSlice.setAllBits();
@@ -174,20 +195,24 @@ ModulePtr CGS::computeSlice(
 	Function&         func               =
 		*(*critInstructionSet.begin())->getParent()->getParent();
 	
-	LinearizedFunction linFunc         (func);
-	CEXType            cex             (func.getArgumentList().size());
+	LinearizedFunction linFunc(func);
+	CEXType            cex    (func.getArgumentList().size());
 	
 	linFunc.print(_out);
 	
 	CandidateGenerationEngine cge(module, criterion, linFunc);
 	CandidateNode*            pCurCandidate(&cge.generateCandidate());
 	
+	// Counterexamples are only necessary if there's at least one function
+	// parameter
+	if(!cex.empty()) {
+		SliceCandidateValidation::activateInitPredicate();
+	}
+	
 	printSlice(pCurCandidate->slice) << "  ";
 	
 	while(pCurCandidate->validate(cex).getState() !=
 		CandidateNode::State::valid) {
-		
-		//printSlice(pCurCandidate->slice) << "  ";
 		
 		switch(pCurCandidate->getState()) {
 			case CandidateNode::State::valid: _out << "valid\n"; break;

@@ -17,12 +17,9 @@
 #include "llvm/ADT/APInt.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instruction.h"
-#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include <list>
-#include <unordered_map>
-#include <vector>
 
 class DRM {
 	
@@ -66,26 +63,4 @@ class APIntCompare {
 	public:
 	
 	bool operator() (llvm::APInt const& lhs, llvm::APInt const& rhs) const;
-};
-
-class CtrlDepExtractionPass : public llvm::FunctionPass {
-	
-	public:
-	
-	static char ID;
-	
-	CtrlDepExtractionPass(
-			LinearizedFunction const& linFunc,
-			llvm::Instruction  const* dependencies[]) :
-		llvm::FunctionPass(ID),
-		_linFunc          (linFunc),
-		_dependencies     (dependencies) {}
-	
-	virtual void getAnalysisUsage(llvm::AnalysisUsage &au) const override;
-	virtual bool runOnFunction   (llvm::Function      &func)     override;
-	
-	private:
-	
-	LinearizedFunction        const& _linFunc;
-	llvm::Instruction const** const  _dependencies;
 };
