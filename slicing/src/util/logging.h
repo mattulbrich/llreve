@@ -45,6 +45,7 @@
 
 #define ELPP_FRESH_LOG_FILE
 #define ELPP_NO_DEFAULT_LOG_FILE
+#define ELPP_DISABLE_DEFAULT_CRASH_HANDLING
 #include "easylogging++.h"
 
 #pragma clang diagnostic pop
