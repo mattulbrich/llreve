@@ -89,7 +89,10 @@ shared_ptr<llvm::Module> getModuleFromSource(string fileName, string resourceDir
 				if ((BinOp->getOpcode() == Instruction::Or ||
 					BinOp->getOpcode() == Instruction::And ||
 					BinOp->getOpcode() == Instruction::Xor)) {
-						bitop.push_back(BinOp);
+					if (!(BinOp->getOperand(0)->getType()->isIntegerTy(1) &&
+						BinOp->getOperand(1)->getType()->isIntegerTy(1))) {
+							bitop.push_back(BinOp);
+						}
 					}
 				}
 			}
