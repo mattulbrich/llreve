@@ -48,7 +48,7 @@ std::set<llvm::Instruction*> ReturnValueCriterion::getInstructions(llvm::Module&
 	bool singleFunction = true;
 	bool firstFunction = true;
 	for (Function& function:module) {
-		if (!Util::isSpecialFunction(function)) {
+		if (!Util::isSpecialFunction(function) && !function.isDeclaration()) {
 			if (function.getName() == "main") {
 				foundMain = true;
 				criterionFunction = &function;
@@ -66,7 +66,7 @@ std::set<llvm::Instruction*> ReturnValueCriterion::getInstructions(llvm::Module&
 		logError("There are multiple functions, can't use slicing after return value.\n");
 		logWarning("Found the following methods:\n");
 		for (Function& function:module) {
-			if (!Util::isSpecialFunction(function)) {
+			if (!Util::isSpecialFunction(function) && !function.isDeclaration()) {
 				logWarning(function.getName().str() + "\n");
 			}
 		}
