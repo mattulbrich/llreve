@@ -81,6 +81,42 @@ shared_ptr<llvm::Module> getModuleFromSource(string fileName, string resourceDir
 	PM.add(new PromoteAssertSlicedPass());
 	PM.add(new FixNamesPass());
 	PM.add(new RemoveFunctionPointerPass());
+	PM.add(new LambdaFunctionPass([](llvm::Function& function)->bool{
+		vector<Instruction*> bitop;
+		for (auto& bb:function) {
+			for (Instruction& instruction:bb) {
+				if (auto* BinOp = llvm::dyn_cast<llvm::BinaryOperator>(&instruction)) {
+				if ((BinOp->getOpcode() == Instruction::Or ||
+					BinOp->getOpcode() == Instruction::And ||
+					BinOp->getOpcode() == Instruction::Xor)) {
+						bitop.push_back(BinOp);
+					}
+				}
+			}
+		}
+		for (Instruction* instruction:bitop) {
+			vector<llvm::Type*> parameterTypes;
+			vector<Value*> parameter;
+
+			for (unsigned i = 0; i < instruction->getNumOperands(); ++i) {
+				Value* value = instruction->getOperand(i);
+				parameterTypes.push_back(value->getType());
+				parameter.push_back(value);
+			}
+			
+			ArrayRef<llvm::Type*> parameterTypeRef(parameterTypes);
+			llvm::FunctionType* functionType = llvm::FunctionType::get(instruction->getType(), parameterTypeRef, false);			
+			llvm::Function* bitOpFunction = Function::Create(functionType,
+				llvm::GlobalValue::LinkageTypes::ExternalLinkage,
+				Twine("BitOp"),
+				function.getParent());
+			ArrayRef<llvm::Value*> parameterRef(parameter);
+			CallInst* call = CallInst::Create(bitOpFunction, parameterRef, "", instruction);
+			instruction->replaceAllUsesWith(call);
+			instruction->eraseFromParent();
+		}
+		return true;
+	}));
 	PM.add(new ReplaceUndefPass());
 	PM.run(*program);
 
