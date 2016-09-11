@@ -22,8 +22,6 @@ using namespace std;
 using namespace llvm;
 
 shared_ptr<Module> SyntacticSlicing::computeSlice(CriterionPtr criterion) {
-	ModulePtr result = shared_ptr<Module>(nullptr);
-
 	ModulePtr program = getProgram();
 	ModulePtr sliceCandidate = CloneModule(&*program);
 
@@ -36,5 +34,5 @@ shared_ptr<Module> SyntacticSlicing::computeSlice(CriterionPtr criterion) {
 	PM.add(new SlicingPass());
 	PM.run(*sliceCandidate);
 
-	return result;
+	return sliceCandidate;
 }

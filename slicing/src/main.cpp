@@ -125,11 +125,16 @@ static llvm::cl::opt<int> MarkInsertThreshold("mark-threshold", llvm::cl::desc("
 static llvm::cl::opt<bool> ForbidReplaceWithZero("z", llvm::cl::desc("Forbid replacement of instructions with zero."),
 	cl::init(false),
 	llvm::cl::cat(SlicingCategory));
-
+static llvm::cl::opt<bool> FinalVerification("fv", llvm::cl::desc("Activate final verification."),
+	cl::init(false),
+	llvm::cl::cat(SlicingCategory));
 static llvm::cl::opt<bool> PostProcessing("pp", llvm::cl::desc("Activate post processing."),
 	cl::init(false),
 	llvm::cl::cat(SlicingCategory));
 static llvm::cl::opt<bool> PostProcessingStripAssign("ps", llvm::cl::desc("Activate to remove assignment instructions in post processing."),
+	cl::init(false),
+	llvm::cl::cat(SlicingCategory));
+static llvm::cl::opt<bool> PostProcessingSyntactiSlicing("pss", llvm::cl::desc("Activate to run syntactic slicing to remove empty loops, left over as marks effect precision."),
 	cl::init(false),
 	llvm::cl::cat(SlicingCategory));
 
@@ -195,13 +200,20 @@ int main(int argc, const char **argv) {
 		writeModuleToFile("program.llvm", *program);
 		writeModuleToFile("slice.llvm", *slice);
 
-		{
+		if (FinalVerification){
 			TIMED_SCOPE(timerBlk, "Final Verification");
 			ValidationResult result = SliceCandidateValidation::validate(&*program, &*slice, criterion);
 			if (result != ValidationResult::valid) {
 				Log(Error) << "Error: Produced Slice is not Valid.";
 				exit(1);
 			}
+		}
+
+		if (PostProcessingSyntactiSlicing) {
+			SlicingMethodPtr syntactic = shared_ptr<SlicingMethod>(new SyntacticSlicing(slice));
+			ModulePtr sslice = syntactic->computeSlice(criterion);
+			performPostProcessing(sslice);
+			writeModuleToFile("slice.llvm", *sslice);
 		}
 
 		outs() << "See program.llvm and slice.llvm for the resulting LLVMIRs \n";
