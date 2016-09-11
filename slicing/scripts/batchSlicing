@@ -3,16 +3,22 @@
 # and stores the resulting log files in an extra folder
 
 while read -r line; do
-	../scritps/clear
+	#skip empty lines
+	[ -z "$line" ] && continue
+	../scripts/clear
 	cmd=${line#*\ }
 	name=${line%% *}
 	mkdir -p "logs/$name"
 	logDir=$(mktemp -dp logs/ "$name/XXX")
+	echo "$cmd"
 	eval $cmd > "$logDir/out"
+	if [ $? -ne 0 ]; then
+		echo "Error during execution!"
+	fi
 	cp log $logDir
 	ln -sf "$(pwd)/$logDir/log" "$(pwd)/logs/$name/log"
 	cp program.llvm $logDir
 	cp slice.llvm $logDir
 done < $1
 
-shutdown
+#shutdown
