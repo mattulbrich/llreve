@@ -5,7 +5,9 @@
 LLVM and Clang 3.8.0 are required, other version probably won't work,
 so make sure you have the right one.
 
-## Ubuntu 14.04
+## Ubuntu 
+
+The following applies to Ubuntu 14.04
 
 ### Compile llvm/clang against libc++
 
@@ -54,6 +56,14 @@ should work™. Make sure that you see the following line when running cmake
 ```
 Using LLVMConfig.cmake in: /usr/local/share/llvm/cmake
 ```
+### Update for Ubuntu 16.04
+
+Apart from the obvious change in the file names above (16 instead of 14), the following package is required:
+```
+sudo apt-get install libstdc++-5-dev
+```
+Ubuntu 16.04 *has* packages for llvm 3.8 but they are buggy (the Cmake data is inconsisten)
+and cannot be used to compile things with them.
 
 ## OpenSuse 13.2
 
