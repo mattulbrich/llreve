@@ -49,6 +49,8 @@ class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
             defs = std::vector<
                 std::pair<std::string, std::shared_ptr<const SMTExpr>>>())
         const;
+    virtual std::vector<std::shared_ptr<const SMTExpr>>
+    splitConjunctions() const;
     virtual std::shared_ptr<const SMTExpr> mergeImplications(
         std::vector<std::shared_ptr<const SMTExpr>> conditions) const;
     virtual std::shared_ptr<const SMTExpr> instantiateArrays() const;
@@ -90,6 +92,7 @@ class Assert : public SMTExpr {
     SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) const override;
+    std::vector<SharedSMTRef> splitConjunctions() const override;
     SharedSMTRef instantiateArrays() const override;
     void toZ3(z3::context &cxt, z3::solver &solver,
               std::map<std::string, z3::expr> &nameMap,
@@ -151,6 +154,7 @@ class Forall : public SMTExpr {
     SharedSMTRef instantiateArrays() const override;
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) const override;
+    std::vector<SharedSMTRef> splitConjunctions() const override;
     SharedSMTRef renameDefineFuns(std::string suffix) const override;
 };
 
@@ -184,6 +188,7 @@ class Let : public SMTExpr {
     compressLets(std::vector<Assignment> passedDefs) const override;
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) const override;
+    std::vector<SharedSMTRef> splitConjunctions() const override;
     SharedSMTRef instantiateArrays() const override;
     z3::expr toZ3Expr(
         z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
@@ -232,6 +237,7 @@ class Op : public SMTExpr {
     SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) const override;
+    std::vector<SharedSMTRef> splitConjunctions() const override;
     SharedSMTRef instantiateArrays() const override;
     SharedSMTRef renameDefineFuns(std::string suffix) const override;
     z3::expr toZ3Expr(

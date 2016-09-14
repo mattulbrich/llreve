@@ -31,7 +31,12 @@ void serializeSMT(std::vector<smt::SharedSMTRef> smtExprs, bool muZ,
     int i = 0;
     for (const auto &smt : smtExprs) {
         if (muZ) {
-            outFile << *smt->compressLets()->mergeImplications({})->toSExpr();
+            const auto smts = smt->splitConjunctions();
+            for (const auto &splitSmt : smts) {
+                outFile << *splitSmt->compressLets()
+                                ->mergeImplications({})
+                                ->toSExpr();
+            }
         } else {
             smt::SharedSMTRef out = opts.Pretty ? smt->compressLets() : smt;
             if (opts.MergeImplications) {

@@ -294,15 +294,35 @@ SMTExpr::mergeImplications(std::vector<SharedSMTRef> conditions) const {
     }
 }
 
+vector<SharedSMTRef> SMTExpr::splitConjunctions() const {
+    return {shared_from_this()};
+}
+
 SharedSMTRef
 Assert::mergeImplications(std::vector<SharedSMTRef> conditions) const {
     assert(conditions.empty());
     return make_shared<Assert>(expr->mergeImplications(conditions));
 }
 
+vector<SharedSMTRef> Assert::splitConjunctions() const {
+    vector<SharedSMTRef> smtExprs = expr->splitConjunctions();
+    for (auto &expr : smtExprs) {
+        expr = make_shared<Assert>(std::move(expr));
+    }
+    return smtExprs;
+}
+
 SharedSMTRef
 Let::mergeImplications(std::vector<SharedSMTRef> conditions) const {
     return make_shared<Let>(defs, expr->mergeImplications(conditions));
+}
+
+vector<SharedSMTRef> Let::splitConjunctions() const {
+    vector<SharedSMTRef> smtExprs = expr->splitConjunctions();
+    for (auto &expr : smtExprs) {
+        expr = make_shared<Let>(defs, std::move(expr));
+    }
+    return smtExprs;
 }
 
 SharedSMTRef Op::mergeImplications(std::vector<SharedSMTRef> conditions) const {
@@ -316,9 +336,37 @@ SharedSMTRef Op::mergeImplications(std::vector<SharedSMTRef> conditions) const {
     }
 }
 
+vector<SharedSMTRef> Op::splitConjunctions() const {
+    if (opName == "=>") {
+        assert(args.size() == 2);
+        vector<SharedSMTRef> smtExprs = args.at(1)->splitConjunctions();
+        for (auto &expr : smtExprs) {
+            expr = makeBinOp("=>", args.at(0), std::move(expr));
+        }
+        return smtExprs;
+    } else if (opName == "and") {
+        vector<SharedSMTRef> smtExprs;
+        for (const auto &expr : args) {
+            vector<SharedSMTRef> exprs = expr->splitConjunctions();
+            smtExprs.insert(smtExprs.end(), exprs.begin(), exprs.end());
+        }
+        return smtExprs;
+    } else {
+        return {shared_from_this()};
+    }
+}
+
 SharedSMTRef
 Forall::mergeImplications(std::vector<SharedSMTRef> conditions) const {
     return std::make_shared<Forall>(vars, expr->mergeImplications(conditions));
+}
+
+vector<SharedSMTRef> Forall::splitConjunctions() const {
+    vector<SharedSMTRef> smtExprs = expr->splitConjunctions();
+    for (auto &expr : smtExprs) {
+        expr = make_shared<Forall>(vars, std::move(expr));
+    }
+    return smtExprs;
 }
 
 SharedSMTRef SMTExpr::instantiateArrays() const { return shared_from_this(); }
