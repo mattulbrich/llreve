@@ -56,6 +56,7 @@ the function. Each jump is modeled as a possibly recursive call.
  */
 auto functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
                        std::vector<smt::SharedSMTRef> &declarations,
+                       std::vector<smt::SortedVar> &variableDeclarations,
                        Memory memory) -> std::vector<smt::SharedSMTRef>;
 
 /// Create the mutual assertions for slicing.
@@ -72,8 +73,10 @@ need to contain the output parameters. While it’s not necessary to use this
 encoding it seems to perform better in some cases.
  */
 auto mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
-                   std::vector<smt::SharedSMTRef> &declarations, bool onlyRec,
-                   Memory memory) -> std::vector<smt::SharedSMTRef>;
+                   std::vector<smt::SharedSMTRef> &declarations,
+                   std::vector<smt::SortedVar> &variableDeclarations,
+                   bool onlyRec, Memory memory)
+    -> std::vector<smt::SharedSMTRef>;
 
 /// Get all combinations of paths that have the same start and end mark.
 /**
@@ -206,5 +209,6 @@ auto addMemory(std::vector<smt::SharedSMTRef> &implArgs, Memory memory)
 /**
 This is used when MuZFlag is enabled
  */
-auto declareVariables(smt::FreeVarsMap freeVarsMap)
-    -> std::vector<smt::SharedSMTRef>;
+auto declareVariables(smt::FreeVarsMap freeVarsMap,
+                      std::vector<smt::SortedVar> &variableDeclarations)
+    -> void;

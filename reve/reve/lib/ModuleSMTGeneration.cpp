@@ -33,6 +33,7 @@ using smt::Query;
 using smt::SetLogic;
 using smt::SharedSMTRef;
 using smt::SortedVar;
+using smt::VarDecl;
 using smt::makeBinOp;
 using smt::makeUnaryOp;
 using smt::stringExpr;
@@ -42,6 +43,7 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
             vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
             FileOptions fileOpts) {
     std::vector<SharedSMTRef> declarations;
+    std::vector<SortedVar> variableDeclarations;
 
     if (SMTGenerationOpts::getInstance().MuZ) {
         vector<string> args;
@@ -86,13 +88,14 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
             smtExprs.push_back(outInvariant(
                 functionArgs(*funPair.first.fun, *funPair.second.fun),
                 fileOpts.OutRelation, mem, funPair.first.fun->getReturnType()));
-            if(smtOpts.InitPredicate) {
+            if (smtOpts.InitPredicate) {
                 smtExprs.push_back(initPredicate(inInv));
                 smtExprs.push_back(initPredicateComment(inInv));
                 assertions.push_back(initImplication(inInv));
             }
-            auto newSmtExprs = mainAssertion(funPair, declarations,
-                                             smtOpts.OnlyRecursive, mem);
+            auto newSmtExprs =
+                mainAssertion(funPair, declarations, variableDeclarations,
+                              smtOpts.OnlyRecursive, mem);
             assertions.insert(assertions.end(), newSmtExprs.begin(),
                               newSmtExprs.end());
         }
@@ -107,14 +110,21 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
                 assertions.insert(assertions.end(), newSmtExprs.begin(),
                                   newSmtExprs.end());
             } else {
-                auto newSmtExprs =
-                    functionAssertion(funPair, declarations, mem);
+                auto newSmtExprs = functionAssertion(funPair, declarations,
+                                                     variableDeclarations, mem);
                 assertions.insert(assertions.end(), newSmtExprs.begin(),
                                   newSmtExprs.end());
             }
         }
     }
     smtExprs.insert(smtExprs.end(), declarations.begin(), declarations.end());
+    set<string> declaredVariables;
+    for (const auto &var : variableDeclarations) {
+        if (declaredVariables.find(var.name) == declaredVariables.end()) {
+            declaredVariables.insert(var.name);
+            smtExprs.push_back(make_shared<VarDecl>(var.name, var.type));
+        }
+    }
     smtExprs.insert(smtExprs.end(), assertions.begin(), assertions.end());
     if (SMTGenerationOpts::getInstance().MuZ) {
         smtExprs.push_back(make_shared<Query>("END_QUERY"));
@@ -395,9 +405,10 @@ vector<SharedSMTRef> stringConstants(const llvm::Module &mod, string memory) {
 }
 
 shared_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
-                         SharedSMTRef body, Memory memory,
-                         const llvm::Module &mod1, const llvm::Module &mod2,
-                         bool strings, bool additionalIn) {
+                               SharedSMTRef body, Memory memory,
+                               const llvm::Module &mod1,
+                               const llvm::Module &mod2, bool strings,
+                               bool additionalIn) {
 
     vector<SharedSMTRef> args;
     const auto funArgsPair =
@@ -507,19 +518,18 @@ SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
 SharedSMTRef initPredicate(shared_ptr<const FunDef> inInv) {
 
     vector<string> funArgs;
-    for(auto var : inInv->args) {
+    for (auto var : inInv->args) {
         funArgs.push_back(var.type);
     }
 
     return make_shared<smt::FunDecl>("INIT", funArgs, "Bool");
-
 }
 
 SharedSMTRef initPredicateComment(shared_ptr<const FunDef> inInv) {
 
     std::stringstream comment;
     comment << "; INIT-ARGS";
-    for(auto var : inInv->args) {
+    for (auto var : inInv->args) {
         comment << " " << var.name;
     }
 
@@ -531,13 +541,14 @@ SharedSMTRef initImplication(shared_ptr<const FunDef> funDecl) {
     vector<SharedSMTRef> ininv_args;
     vector<SharedSMTRef> init_args;
     vector<SortedVar> quantified_vars;
- 
-    for(auto var : funDecl->args) {
+
+    for (auto var : funDecl->args) {
         ininv_args.push_back(stringExpr(var.name));
-        if(var.type == "(Array Int Int)") {
+        if (var.type == "(Array Int Int)") {
             string newvar = "$i_" + std::to_string(quantified_vars.size());
             quantified_vars.push_back(SortedVar(newvar, "Int"));
-            init_args.push_back(makeBinOp("select", stringExpr(var.name), stringExpr(newvar)));
+            init_args.push_back(
+                makeBinOp("select", stringExpr(var.name), stringExpr(newvar)));
             init_args.push_back(stringExpr(newvar));
         } else {
             init_args.push_back(stringExpr(var.name));
@@ -547,7 +558,7 @@ SharedSMTRef initImplication(shared_ptr<const FunDef> funDecl) {
     SharedSMTRef inAppl = std::make_shared<Op>("IN_INV", ininv_args);
     SharedSMTRef initAppl = std::make_shared<Op>("INIT", init_args);
 
-    if(!quantified_vars.empty()) {
+    if (!quantified_vars.empty()) {
         initAppl = std::make_shared<smt::Forall>(quantified_vars, initAppl);
     }
     SharedSMTRef clause = makeBinOp("=>", inAppl, initAppl);
@@ -555,4 +566,3 @@ SharedSMTRef initImplication(shared_ptr<const FunDef> funDecl) {
 
     return make_shared<smt::Assert>(forall);
 }
-    

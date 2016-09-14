@@ -48,7 +48,8 @@ using std::vector;
 
 vector<SharedSMTRef>
 functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
-                  vector<SharedSMTRef> &declarations, Memory memory) {
+                  vector<SharedSMTRef> &declarations,
+                  vector<SortedVar> &variableDeclarations, Memory memory) {
     const MonoPair<PathMap> pathMaps = preprocessedFuns.map<PathMap>(
         [](PreprocessedFunction fun) { return fun.results.paths; });
     checkPathMaps(pathMaps.first, pathMaps.second);
@@ -61,6 +62,9 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     const vector<smt::SortedVar> funArgs = concat(funArgsPair);
     const smt::FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, memory);
+    if (SMTGenerationOpts::getInstance().MuZ) {
+        declareVariables(freeVarsMap, variableDeclarations);
+    }
     vector<SharedSMTRef> smtExprs;
     vector<SharedSMTRef> pathExprs;
 
@@ -225,7 +229,9 @@ vector<SharedSMTRef> slicingAssertion(MonoPair<PreprocessedFunction> funPair) {
 // the assertions since it is never called
 vector<SharedSMTRef>
 mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
-              vector<SharedSMTRef> &declarations, bool onlyRec, Memory memory) {
+              vector<SharedSMTRef> &declarations,
+              vector<SortedVar> &variableDeclarations, bool onlyRec,
+              Memory memory) {
     const MonoPair<PathMap> pathMaps = preprocessedFuns.map<PathMap>(
         [](PreprocessedFunction fun) { return fun.results.paths; });
     checkPathMaps(pathMaps.first, pathMaps.second);
@@ -241,9 +247,7 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
         freeVars(pathMaps.first, pathMaps.second, funArgs, memory);
     if (SMTGenerationOpts::getInstance().MuZ ||
         SMTGenerationOpts::getInstance().Invert) {
-        const vector<SharedSMTRef> variables = declareVariables(freeVarsMap);
-        declarations.insert(declarations.end(), variables.begin(),
-                            variables.end());
+        declareVariables(freeVarsMap, variableDeclarations);
     }
     vector<SharedSMTRef> smtExprs;
 
@@ -861,8 +865,7 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
 
     if (main && blockIndex == ENTRY_MARK) {
         string opname =
-            SMTGenerationOpts::getInstance().InitPredicate ?
-            "INIT" : "IN_INV";
+            SMTGenerationOpts::getInstance().InitPredicate ? "INIT" : "IN_INV";
 
         vector<string> args;
         for (const auto &arg : freeVars) {
@@ -1337,7 +1340,8 @@ auto addMemory(vector<SharedSMTRef> &implArgs, Memory memory)
     };
 }
 
-vector<SharedSMTRef> declareVariables(smt::FreeVarsMap freeVarsMap) {
+void declareVariables(smt::FreeVarsMap freeVarsMap,
+                      std::vector<SortedVar> &variableDeclarations) {
     set<SortedVar> uniqueVars;
     for (auto it : freeVarsMap) {
         for (const auto &var : it.second) {
@@ -1346,12 +1350,11 @@ vector<SharedSMTRef> declareVariables(smt::FreeVarsMap freeVarsMap) {
     }
     vector<SharedSMTRef> variables;
     for (const auto &var : uniqueVars) {
-        variables.push_back(make_shared<VarDecl>(var.name + "_old", var.type));
+        variableDeclarations.push_back({var.name + "_old", var.type});
     }
     if (SMTGenerationOpts::getInstance().Invert) {
-        variables.push_back(make_shared<VarDecl>("INV_INDEX", "Int"));
+        variableDeclarations.push_back({"INV_INDEX", "Int"});
     }
-    return variables;
 }
 
 auto dropTypesFreeVars(smt::FreeVarsMap map)
