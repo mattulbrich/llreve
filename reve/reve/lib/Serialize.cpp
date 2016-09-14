@@ -36,6 +36,7 @@ void serializeSMT(std::vector<smt::SharedSMTRef> smtExprs, bool muZ,
                 outFile << *splitSmt->compressLets()
                                 ->mergeImplications({})
                                 ->toSExpr();
+                outFile << "\n";
             }
         } else {
             smt::SharedSMTRef out = opts.Pretty ? smt->compressLets() : smt;
@@ -49,8 +50,8 @@ void serializeSMT(std::vector<smt::SharedSMTRef> smtExprs, bool muZ,
                 out = out->renameDefineFuns("__" + std::to_string(i));
             }
             out->toSExpr()->serialize(outFile, 0, opts.Pretty);
+            outFile << "\n";
         }
-        outFile << "\n";
         ++i;
     }
 
