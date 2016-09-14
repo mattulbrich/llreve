@@ -99,8 +99,9 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     }
 
     const map<int, map<int, vector<std::function<SharedSMTRef(SharedSMTRef)>>>>
-        synchronizedPaths = getSynchronizedPaths(
-            pathMaps.first, pathMaps.second, freeVarsMap, memory);
+        synchronizedPaths =
+            getSynchronizedPaths(pathMaps.first, pathMaps.second,
+                                 variableDeclarations, freeVarsMap, memory);
     const vector<SharedSMTRef> recDecls = recDeclarations(
         pathMaps.first, funName, freeVarsMap, memory, returnType);
     declarations.insert(declarations.end(), recDecls.begin(), recDecls.end());
@@ -123,20 +124,24 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     // these are needed for calls that can’t be matched with the same call in
     // the other program
     nonmutualPaths(pathMaps.first, pathExprs, freeVarsMap, Program::First,
-                   funName, declarations, memory, returnType);
+                   funName, declarations, variableDeclarations, memory,
+                   returnType);
     nonmutualPaths(pathMaps.second, pathExprs, freeVarsMap, Program::Second,
-                   funName, declarations, memory, returnType);
+                   funName, declarations, variableDeclarations, memory,
+                   returnType);
 
-    const vector<SharedSMTRef> forbiddenPaths = getForbiddenPaths(
-        pathMaps, marked, freeVarsMap, funName, false, memory);
+    const vector<SharedSMTRef> forbiddenPaths =
+        getForbiddenPaths(pathMaps, marked, variableDeclarations, freeVarsMap,
+                          funName, false, memory);
     pathExprs.insert(pathExprs.end(), forbiddenPaths.begin(),
                      forbiddenPaths.end());
 
     if (!SMTGenerationOpts::getInstance().PerfectSync) {
         const map<int,
                   map<int, vector<std::function<SharedSMTRef(SharedSMTRef)>>>>
-            offByNPaths = getOffByNPaths(pathMaps.first, pathMaps.second,
-                                         freeVarsMap, funName, false, memory);
+            offByNPaths =
+                getOffByNPaths(pathMaps.first, pathMaps.second, freeVarsMap,
+                               variableDeclarations, funName, false, memory);
         for (const auto &it : offByNPaths) {
             const int startIndex = it.first;
             for (const auto &it2 : it.second) {
@@ -267,18 +272,21 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     }
 
     map<int, map<int, vector<std::function<SharedSMTRef(SharedSMTRef)>>>>
-        synchronizedPaths = getSynchronizedPaths(
-            pathMaps.first, pathMaps.second, freeVarsMap, memory);
+        synchronizedPaths =
+            getSynchronizedPaths(pathMaps.first, pathMaps.second,
+                                 variableDeclarations, freeVarsMap, memory);
     const vector<SharedSMTRef> mainDecls =
         mainDeclarations(pathMaps.first, funName, freeVarsMap);
     declarations.insert(declarations.end(), mainDecls.begin(), mainDecls.end());
     const vector<SharedSMTRef> forbiddenPaths =
-        getForbiddenPaths(pathMaps, marked, freeVarsMap, funName, true, memory);
+        getForbiddenPaths(pathMaps, marked, variableDeclarations, freeVarsMap,
+                          funName, true, memory);
     if (!SMTGenerationOpts::getInstance().PerfectSync) {
         const map<int,
                   map<int, vector<std::function<SharedSMTRef(SharedSMTRef)>>>>
-            offByNPaths = getOffByNPaths(pathMaps.first, pathMaps.second,
-                                         freeVarsMap, funName, true, memory);
+            offByNPaths =
+                getOffByNPaths(pathMaps.first, pathMaps.second, freeVarsMap,
+                               variableDeclarations, funName, true, memory);
         synchronizedPaths = mergePathFuns(synchronizedPaths, offByNPaths);
     }
     auto transposedPaths = transpose(synchronizedPaths);
@@ -352,6 +360,7 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
 
 map<int, map<int, vector<function<SharedSMTRef(SharedSMTRef)>>>>
 getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
+                     vector<SortedVar> &variableDeclarations,
                      smt::FreeVarsMap freeVarsMap, Memory memory) {
     map<int, map<int, vector<function<SharedSMTRef(SharedSMTRef)>>>> pathFuns;
     for (const auto &pathMapIt : pathMap1) {
@@ -374,8 +383,10 @@ getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
                                             endIndex == EXIT_MARK, memory);
                                     });
                         pathFuns[startIndex][endIndex].push_back(
-                            [=](SharedSMTRef end) {
-                                return interleaveAssignments(end, defs, memory);
+                            [&variableDeclarations, defs,
+                             memory](SharedSMTRef end) {
+                                return interleaveAssignments(
+                                    end, defs, variableDeclarations, memory);
                             });
                     }
                 }
@@ -431,6 +442,7 @@ vector<SharedSMTRef> recDeclarations(PathMap pathMap, string funName,
 
 vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
                                        MonoPair<BidirBlockMarkMap> marked,
+                                       vector<SortedVar> &variableDeclarations,
                                        smt::FreeVarsMap freeVarsMap,
                                        string funName, bool main,
                                        Memory memory) {
@@ -473,7 +485,8 @@ vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
                                 // extern functions are not matched
                                 const auto smt = interleaveAssignments(
                                     stringExpr("false"),
-                                    makeMonoPair(smt1, smt2), memory);
+                                    makeMonoPair(smt1, smt2),
+                                    variableDeclarations, memory);
                                 pathExprs.push_back(
                                     make_shared<Assert>(forallStartingAt(
                                         smt, freeVarsMap.at(startIndex),
@@ -491,7 +504,8 @@ vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
 
 void nonmutualPaths(PathMap pathMap, vector<SharedSMTRef> &pathExprs,
                     smt::FreeVarsMap freeVarsMap, Program prog, string funName,
-                    vector<SharedSMTRef> &declarations, Memory memory,
+                    vector<SharedSMTRef> &declarations,
+                    vector<SortedVar> &variableDeclarations, Memory memory,
                     const llvm::Type *returnType) {
     const int progIndex = programIndex(prog);
     for (const auto &pathMapIt : pathMap) {
@@ -516,7 +530,8 @@ void nonmutualPaths(PathMap pathMap, vector<SharedSMTRef> &pathExprs,
                     assignmentsOnPath(path, prog, freeVarsMap.at(startIndex),
                                       endIndex == EXIT_MARK, memory);
                 pathExprs.push_back(make_shared<Assert>(forallStartingAt(
-                    nonmutualSMT(std::move(endInvariant1), defs, prog, memory),
+                    nonmutualSMT(std::move(endInvariant1), defs,
+                                 variableDeclarations, prog, memory),
                     filterVars(progIndex, freeVarsMap.at(startIndex)),
                     startIndex, asSelection(prog), funName, false, freeVarsMap,
                     memory)));
@@ -527,21 +542,24 @@ void nonmutualPaths(PathMap pathMap, vector<SharedSMTRef> &pathExprs,
 
 map<int, map<int, vector<function<SharedSMTRef(SharedSMTRef)>>>>
 getOffByNPaths(PathMap pathMap1, PathMap pathMap2, smt::FreeVarsMap freeVarsMap,
-               string funName, bool main, Memory memory) {
+               vector<SortedVar> &variableDeclarations, string funName,
+               bool main, Memory memory) {
     map<int, map<int, vector<function<SharedSMTRef(SharedSMTRef)>>>> pathFuns;
     vector<SharedSMTRef> paths;
-    const auto firstPaths = offByNPathsOneDir(
-        pathMap1, pathMap2, freeVarsMap, Program::First, funName, main, memory);
+    const auto firstPaths =
+        offByNPathsOneDir(pathMap1, pathMap2, freeVarsMap, variableDeclarations,
+                          Program::First, funName, main, memory);
     const auto secondPaths =
-        offByNPathsOneDir(pathMap2, pathMap1, freeVarsMap, Program::Second,
-                          funName, main, memory);
+        offByNPathsOneDir(pathMap2, pathMap1, freeVarsMap, variableDeclarations,
+                          Program::Second, funName, main, memory);
     return mergePathFuns(firstPaths, secondPaths);
 }
 
 map<int, map<int, vector<function<SharedSMTRef(SharedSMTRef)>>>>
 offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
-                  smt::FreeVarsMap freeVarsMap, Program prog, string funName,
-                  bool main, Memory memory) {
+                  smt::FreeVarsMap freeVarsMap,
+                  vector<SortedVar> &variableDeclarations, Program prog,
+                  string funName, bool main, Memory memory) {
     const int progIndex = programIndex(prog);
     map<int, map<int, vector<function<SharedSMTRef(SharedSMTRef)>>>> pathFuns;
     for (const auto &pathMapIt : pathMap) {
@@ -585,13 +603,16 @@ offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
                     }
                     SharedSMTRef dontLoopInvariant = getDontLoopInvariant(
                         std::move(endInvariant), startIndex, otherPathMap,
-                        freeVarsMap, swapProgram(prog), memory);
+                        freeVarsMap, variableDeclarations, swapProgram(prog),
+                        memory);
                     const auto defs =
                         assignmentsOnPath(path, prog, freeVarsMap.at(endIndex),
                                           endIndex == EXIT_MARK, memory);
                     pathFuns[startIndex][startIndex].push_back(
-                        [=](SharedSMTRef /*unused*/) {
-                            return nonmutualSMT(dontLoopInvariant, defs, prog,
+                        [&variableDeclarations, defs, prog, memory,
+                         dontLoopInvariant](SharedSMTRef /*unused*/) {
+                            return nonmutualSMT(dontLoopInvariant, defs,
+                                                variableDeclarations, prog,
                                                 memory);
                         });
                 }
@@ -659,7 +680,8 @@ SharedSMTRef addAssignments(const SharedSMTRef end,
 
 SharedSMTRef interleaveAssignments(
     SharedSMTRef endClause,
-    MonoPair<vector<AssignmentCallBlock>> AssignmentCallBlocks, Memory memory) {
+    MonoPair<vector<AssignmentCallBlock>> AssignmentCallBlocks,
+    vector<SortedVar> &variableDeclarations, Memory memory) {
     SharedSMTRef clause = endClause;
     const auto splitAssignments =
         AssignmentCallBlocks.map<SplitAssignments>(splitAssignmentsFromCalls);
@@ -687,15 +709,16 @@ SharedSMTRef interleaveAssignments(
         switch (step) {
         case InterleaveStep::StepFirst:
             clause = addAssignments(clause, *assignmentIt1);
-            clause = nonmutualRecursiveForall(clause, *callIt1, Program::First,
-                                              memory);
+            clause = nonmutualRecursiveForall(
+                clause, *callIt1, variableDeclarations, Program::First, memory);
             ++callIt1;
             ++assignmentIt1;
             break;
         case InterleaveStep::StepSecond:
             clause = addAssignments(clause, *assignmentIt2);
-            clause = nonmutualRecursiveForall(clause, *callIt2, Program::Second,
-                                              memory);
+            clause =
+                nonmutualRecursiveForall(clause, *callIt2, variableDeclarations,
+                                         Program::Second, memory);
             ++callIt2;
             ++assignmentIt2;
             break;
@@ -703,8 +726,9 @@ SharedSMTRef interleaveAssignments(
             assert(callIt1->callName == callIt2->callName);
             clause = addAssignments(clause, *assignmentIt2);
             clause = addAssignments(clause, *assignmentIt1);
-            clause = mutualRecursiveForall(
-                clause, makeMonoPair(*callIt1, *callIt2), memory);
+            clause =
+                mutualRecursiveForall(clause, makeMonoPair(*callIt1, *callIt2),
+                                      variableDeclarations, memory);
             ++callIt1;
             ++callIt2;
             ++assignmentIt1;
@@ -730,7 +754,8 @@ SharedSMTRef interleaveAssignments(
 
 SharedSMTRef nonmutualSMT(SharedSMTRef endClause,
                           vector<AssignmentCallBlock> assignmentCallBlocks,
-                          Program prog, Memory memory) {
+                          vector<SortedVar> &variableDeclarations, Program prog,
+                          Memory memory) {
     SharedSMTRef clause = endClause;
     const auto splitAssignments =
         splitAssignmentsFromCalls(assignmentCallBlocks);
@@ -743,7 +768,8 @@ SharedSMTRef nonmutualSMT(SharedSMTRef endClause,
         if (first) {
             first = false;
         } else {
-            clause = nonmutualRecursiveForall(clause, *callIt, prog, memory);
+            clause = nonmutualRecursiveForall(
+                clause, *callIt, variableDeclarations, prog, memory);
             ++callIt;
         }
         clause = addAssignments(clause, assgnsVec);
@@ -755,6 +781,7 @@ SharedSMTRef nonmutualSMT(SharedSMTRef endClause,
 // Functions to generate various foralls
 
 SMTRef mutualRecursiveForall(SharedSMTRef clause, MonoPair<CallInfo> callPair,
+                             vector<SortedVar> &variableDeclarations,
                              Memory memory) {
     const uint32_t varArgs =
         static_cast<uint32_t>(callPair.first.args.size()) -
@@ -789,7 +816,12 @@ SMTRef mutualRecursiveForall(SharedSMTRef clause, MonoPair<CallInfo> callPair,
         // TODO we need to add the stack somewhere here
     }
     SMTRef result = makeBinOp("=>", std::move(postInvariant), clause);
-    result = std::make_unique<Forall>(args, std::move(result));
+    if (SMTGenerationOpts::getInstance().MuZ) {
+        variableDeclarations.insert(variableDeclarations.end(), args.begin(),
+                                    args.end());
+    } else {
+        result = std::make_unique<Forall>(args, std::move(result));
+    }
     if (callPair.first.externFun) {
         return result;
     }
@@ -801,6 +833,7 @@ SMTRef mutualRecursiveForall(SharedSMTRef clause, MonoPair<CallInfo> callPair,
 }
 
 SMTRef nonmutualRecursiveForall(SharedSMTRef clause, CallInfo call,
+                                vector<SortedVar> &variableDeclarations,
                                 Program prog, Memory memory) {
     vector<SortedVar> forallArgs;
     vector<SharedSMTRef> implArgs;
@@ -831,7 +864,12 @@ SMTRef nonmutualRecursiveForall(SharedSMTRef clause, CallInfo call,
         // TODO We need to add the stack somewhere here
     }
     SMTRef result = makeBinOp("=>", endInvariant, clause);
-    result = std::make_unique<Forall>(forallArgs, std::move(result));
+    if (SMTGenerationOpts::getInstance().MuZ) {
+        variableDeclarations.insert(variableDeclarations.end(),
+                                    forallArgs.begin(), forallArgs.end());
+    } else {
+        result = std::make_unique<Forall>(forallArgs, std::move(result));
+    }
     if (call.externFun) {
         return result;
     }
@@ -1299,8 +1337,9 @@ bool mapSubset(PathMap map1, PathMap map2) {
 }
 
 SMTRef getDontLoopInvariant(SMTRef endClause, int startIndex, PathMap pathMap,
-                            smt::FreeVarsMap freeVars, Program prog,
-                            Memory memory) {
+                            smt::FreeVarsMap freeVars,
+                            vector<SortedVar> &variableDeclarations,
+                            Program prog, Memory memory) {
     SMTRef clause = std::move(endClause);
     vector<Path> dontLoopPaths;
     for (auto pathMapIt : pathMap.at(startIndex)) {
@@ -1314,7 +1353,8 @@ SMTRef getDontLoopInvariant(SMTRef endClause, int startIndex, PathMap pathMap,
     for (auto path : dontLoopPaths) {
         auto defs = assignmentsOnPath(path, prog, freeVars.at(startIndex),
                                       false, memory);
-        auto smt = nonmutualSMT(stringExpr("false"), defs, prog, memory);
+        auto smt = nonmutualSMT(stringExpr("false"), defs, variableDeclarations,
+                                prog, memory);
         dontLoopExprs.push_back(smt);
     }
     if (!dontLoopExprs.empty()) {
