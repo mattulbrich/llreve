@@ -194,12 +194,11 @@ SMTRef BooleanCondition::toSmt() const {
     if (True) {
         return result;
     }
-    return makeUnaryOp("not", std::move(result));
+    return makeOp("not", std::move(result));
 }
 
 SMTRef SwitchCondition::toSmt() const {
-    return makeBinOp("=", instrNameOrVal(Cond, Cond->getType()),
-                     apIntToSMT(Val));
+    return makeOp("=", instrNameOrVal(Cond, Cond->getType()), apIntToSMT(Val));
 }
 
 SMTRef SwitchDefault::toSmt() const {

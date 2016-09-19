@@ -110,11 +110,11 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<SortedVar> InputArgs,
             usingArgs = fillUpArgs(usingArgs, freeVarsMap, memory, SMTFor,
                                    InvariantAttr::NONE);
             Clause =
-                makeBinOp("=>", makeOp(invariantName(EndIndex, SMTFor, FunName),
-                                       usingArgs),
-                          std::move(Clause));
+                makeOp("=>", makeOp(invariantName(EndIndex, SMTFor, FunName),
+                                    usingArgs),
+                       std::move(Clause));
             if (SMTFor == ProgramSelection::Both) {
-                Clause = makeBinOp("and", std::move(PreInv), std::move(Clause));
+                Clause = makeOp("and", std::move(PreInv), std::move(Clause));
             }
         }
         Clause = std::make_unique<Forall>(ForallArgs, std::move(Clause));

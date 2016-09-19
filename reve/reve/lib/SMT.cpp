@@ -289,8 +289,8 @@ SMTExpr::mergeImplications(std::vector<SharedSMTRef> conditions) const {
     if (conditions.empty()) {
         return shared_from_this();
     } else {
-        return makeBinOp("=>", make_shared<Op>("and", conditions),
-                         shared_from_this());
+        return makeOp("=>", make_shared<Op>("and", conditions),
+                      shared_from_this());
     }
 }
 
@@ -331,8 +331,8 @@ SharedSMTRef Op::mergeImplications(std::vector<SharedSMTRef> conditions) const {
         conditions.push_back(args.at(0));
         return args.at(1)->mergeImplications(conditions);
     } else {
-        return makeBinOp("=>", make_shared<Op>("and", conditions),
-                         shared_from_this());
+        return makeOp("=>", make_shared<Op>("and", conditions),
+                      shared_from_this());
     }
 }
 
@@ -341,7 +341,7 @@ vector<SharedSMTRef> Op::splitConjunctions() const {
         assert(args.size() == 2);
         vector<SharedSMTRef> smtExprs = args.at(1)->splitConjunctions();
         for (auto &expr : smtExprs) {
-            expr = makeBinOp("=>", args.at(0), std::move(expr));
+            expr = makeOp("=>", args.at(0), std::move(expr));
         }
         return smtExprs;
     } else if (opName == "and") {
@@ -392,8 +392,7 @@ SharedSMTRef Op::instantiateArrays() const {
                 if (instantiate) {
                     string index = "i" + array->index + array->suffix;
                     newArgs.push_back(stringExpr(index));
-                    newArgs.push_back(
-                        makeBinOp("select", arg, stringExpr(index)));
+                    newArgs.push_back(makeOp("select", arg, stringExpr(index)));
                     indices.push_back(
                         SortedVar(index, getSMTType("(_ BitVec 64)")));
                 } else {
@@ -408,9 +407,8 @@ SharedSMTRef Op::instantiateArrays() const {
         std::vector<SortedVar> indices = {
             SortedVar("i", getSMTType("(_ BitVec 64)"))};
         return make_shared<Forall>(
-            indices,
-            makeBinOp("=", makeBinOp("select", args.at(0), stringExpr("i")),
-                      makeBinOp("select", args.at(1), stringExpr("i"))));
+            indices, makeOp("=", makeOp("select", args.at(0), "i"),
+                            makeOp("select", args.at(1), "i")));
     } else {
         std::vector<SharedSMTRef> newArgs;
         for (const auto &arg : args) {
@@ -470,33 +468,8 @@ SharedSMTRef nestLets(SharedSMTRef clause, std::vector<Assignment> defs) {
     return lets;
 }
 
-std::unique_ptr<Op> makeBinOp(std::string opName, std::string arg1,
-                              std::string arg2) {
-    std::vector<SharedSMTRef> args;
-    args.push_back(stringExpr(arg1));
-    args.push_back(stringExpr(arg2));
-    return std::make_unique<Op>(opName, args);
-}
-
-std::unique_ptr<Op> makeBinOp(std::string opName, SharedSMTRef arg1,
-                              SharedSMTRef arg2) {
-    std::vector<SharedSMTRef> args;
-    args.push_back(arg1);
-    args.push_back(arg2);
-    return std::make_unique<Op>(opName, args);
-}
-
-std::unique_ptr<Op> makeUnaryOp(std::string opName, std::string arg) {
-    std::vector<SharedSMTRef> args;
-    args.push_back(stringExpr(arg));
-    return std::make_unique<Op>(opName, args);
-}
-
-std::unique_ptr<Op> makeUnaryOp(std::string opName, SharedSMTRef arg) {
-    std::vector<SharedSMTRef> args;
-    args.push_back(arg);
-    return std::make_unique<Op>(opName, args);
-}
+SharedSMTRef makeSMTRef(SharedSMTRef arg) { return arg; }
+SharedSMTRef makeSMTRef(std::string arg) { return stringExpr(arg); }
 
 unique_ptr<const Primitive<std::string>> stringExpr(std::string name) {
     return std::make_unique<Primitive<std::string>>(name);

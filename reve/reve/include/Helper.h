@@ -98,7 +98,7 @@ template <typename T> std::unique_ptr<const smt::SMTExpr> resolveGEP(T &gep) {
         const auto size = typeSize(indexedType, mod->getDataLayout());
         auto smtIx = instrNameOrVal(*ix, (*ix)->getType());
         if (SMTGenerationOpts::getInstance().BitVect) {
-            smtIx = smt::makeUnaryOp(
+            smtIx = smt::makeOp(
                 "(_ sign_extend " +
                     std::to_string(64 -
                                    (*ix)->getType()->getIntegerBitWidth()) +
@@ -109,14 +109,14 @@ template <typename T> std::unique_ptr<const smt::SMTExpr> resolveGEP(T &gep) {
             args.push_back(std::move(smtIx));
         } else {
             if (SMTGenerationOpts::getInstance().BitVect) {
-                args.push_back(smt::makeBinOp(
+                args.push_back(smt::makeOp(
                     "bvmul",
                     smt::stringExpr("(_ bv" + std::to_string(size) + " 64)"),
                     std::move(smtIx)));
             } else {
                 args.push_back(
-                    smt::makeBinOp("*", smt::stringExpr(std::to_string(size)),
-                                   std::move(smtIx)));
+                    smt::makeOp("*", smt::stringExpr(std::to_string(size)),
+                                std::move(smtIx)));
             }
         }
     }

@@ -33,7 +33,6 @@ using smt::SMTRef;
 using smt::SharedSMTRef;
 using smt::SortedVar;
 using smt::VarDecl;
-using smt::makeBinOp;
 using smt::makeOp;
 using smt::stringExpr;
 using std::function;
@@ -196,7 +195,7 @@ vector<SharedSMTRef> slicingAssertion(MonoPair<PreprocessedFunction> funPair) {
     vector<SharedSMTRef> equalArgs;
     for (auto argPair : makeZip(funArgs1, funArgs2)) {
         equalArgs.push_back(
-            makeBinOp("=", argPair.first.name, argPair.second.name));
+            makeOp("=", argPair.first.name, argPair.second.name));
     }
 
     SharedSMTRef allEqual = make_shared<Op>("and", equalArgs);
@@ -304,8 +303,8 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
                 mainInvariant(endIndex, freeVarsMap.at(endIndex), funName);
             if (SMTGenerationOpts::getInstance().MuZ && endIndex == EXIT_MARK) {
                 endInvariant =
-                    makeBinOp("=>", makeUnaryOp("not", std::move(endInvariant)),
-                              stringExpr("END_QUERY"));
+                    makeOp("=>", makeOp("not", std::move(endInvariant)),
+                           stringExpr("END_QUERY"));
             }
             for (auto pathFun : it2.second) {
                 pathsStartingHere.push_back(pathFun(endInvariant));
@@ -336,10 +335,10 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
                     path, freeVarsMap.at(startIndex), startIndex,
                     ProgramSelection::Both, funName, true, freeVarsMap, memory);
                 if (SMTGenerationOpts::getInstance().Invert) {
-                    negations.push_back(makeBinOp(
+                    negations.push_back(makeOp(
                         "and",
-                        makeBinOp("=", "INV_INDEX", std::to_string(startIndex)),
-                        makeUnaryOp("not", clause)));
+                        makeOp("=", "INV_INDEX", std::to_string(startIndex)),
+                        makeOp("not", clause)));
                 } else {
                     smtExprs.push_back(make_shared<Assert>(clause));
                 }
@@ -672,7 +671,7 @@ SharedSMTRef addAssignments(const SharedSMTRef end,
     for (auto assgns : makeReverse(assignments)) {
         clause = nestLets(clause, assgns.definitions);
         if (assgns.condition) {
-            clause = makeBinOp("=>", assgns.condition, clause);
+            clause = makeOp("=>", assgns.condition, clause);
         }
     }
     return clause;
@@ -815,7 +814,7 @@ SMTRef mutualRecursiveForall(SharedSMTRef clause, MonoPair<CallInfo> callPair,
     if (memory & STACK_MASK) {
         // TODO we need to add the stack somewhere here
     }
-    SMTRef result = makeBinOp("=>", std::move(postInvariant), clause);
+    SMTRef result = makeOp("=>", std::move(postInvariant), clause);
     if (SMTGenerationOpts::getInstance().MuZ) {
         variableDeclarations.insert(variableDeclarations.end(), args.begin(),
                                     args.end());
@@ -829,7 +828,7 @@ SMTRef mutualRecursiveForall(SharedSMTRef clause, MonoPair<CallInfo> callPair,
         invariantName(ENTRY_MARK, ProgramSelection::Both,
                       callPair.first.callName, InvariantAttr::PRE),
         preArgs);
-    return makeBinOp("and", std::move(preInv), std::move(result));
+    return makeOp("and", std::move(preInv), std::move(result));
 }
 
 SMTRef nonmutualRecursiveForall(SharedSMTRef clause, CallInfo call,
@@ -863,7 +862,7 @@ SMTRef nonmutualRecursiveForall(SharedSMTRef clause, CallInfo call,
     if (memory & STACK_MASK) {
         // TODO We need to add the stack somewhere here
     }
-    SMTRef result = makeBinOp("=>", endInvariant, clause);
+    SMTRef result = makeOp("=>", endInvariant, clause);
     if (SMTGenerationOpts::getInstance().MuZ) {
         variableDeclarations.insert(variableDeclarations.end(),
                                     forallArgs.begin(), forallArgs.end());
@@ -878,9 +877,9 @@ SMTRef nonmutualRecursiveForall(SharedSMTRef clause, CallInfo call,
                                       call.callName, InvariantAttr::PRE),
                         preArgs);
     if (memory & STACK_MASK) {
-        return makeBinOp("and", preInv, std::move(result));
+        return makeOp("and", preInv, std::move(result));
     } else {
-        return makeBinOp("and", preInv, std::move(result));
+        return makeOp("and", preInv, std::move(result));
     }
 }
 
@@ -910,14 +909,14 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
             args.push_back(arg.name + "_old");
         }
 
-        clause = makeBinOp("=>", makeOp(opname, args), clause);
+        clause = makeOp("=>", makeOp(opname, args), clause);
 
     } else {
         InvariantAttr attr = main ? InvariantAttr::MAIN : InvariantAttr::PRE;
         preVars = fillUpArgs(preVars, freeVarsMap, memory, prog, attr);
         SMTRef preInv =
             makeOp(invariantName(blockIndex, prog, funName, attr), preVars);
-        clause = makeBinOp("=>", std::move(preInv), clause);
+        clause = makeOp("=>", std::move(preInv), clause);
     }
 
     if (SMTGenerationOpts::getInstance().MuZ ||
@@ -946,8 +945,7 @@ SharedSMTRef makeFunArgsEqual(SharedSMTRef clause, SharedSMTRef preClause,
 
     auto inInv = makeOp("IN_INV", args);
 
-    return makeBinOp("=>", std::move(inInv),
-                     makeBinOp("and", clause, preClause));
+    return makeOp("=>", std::move(inInv), makeOp("and", clause, preClause));
 }
 
 /// Create an assertion to require that if the recursive invariant holds and the
@@ -1009,7 +1007,7 @@ SharedSMTRef equalInputsEqualOutputs(
     if (memory & HEAP_MASK) {
         outArgs.push_back("HEAP$2_res");
     }
-    const SharedSMTRef equalResults = makeBinOp(
+    const SharedSMTRef equalResults = makeOp(
         "=>", makeOp(invariantName(ENTRY_MARK, ProgramSelection::Both, funName),
                      args),
         makeOp("OUT_INV", outArgs));
@@ -1359,7 +1357,7 @@ SMTRef getDontLoopInvariant(SMTRef endClause, int startIndex, PathMap pathMap,
     }
     if (!dontLoopExprs.empty()) {
         auto andExpr = make_shared<Op>("and", dontLoopExprs);
-        clause = makeBinOp("=>", andExpr, std::move(clause));
+        clause = makeOp("=>", andExpr, std::move(clause));
     }
     return clause;
 }

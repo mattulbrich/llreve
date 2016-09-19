@@ -32,25 +32,24 @@ SMTRef instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) {
         }
         if (apInt.isNegative()) {
             if (SMTGenerationOpts::getInstance().BitVect) {
-                return smt::makeUnaryOp(
+                return smt::makeOp(
                     "bvneg",
-                    smt::makeBinOp(
+                    smt::makeOp(
                         "_",
                         "bv" + apInt.toString(10, true).substr(1, string::npos),
                         std::to_string(ty->getIntegerBitWidth())));
             } else {
-                return makeUnaryOp(
-                    "-", stringExpr(
-                             apInt.toString(10, true).substr(1, string::npos)));
+                return makeOp("-", stringExpr(apInt.toString(10, true).substr(
+                                       1, string::npos)));
             }
         } else {
             if (SMTGenerationOpts::getInstance().BitVect) {
                 if (ty->isVoidTy()) {
-                    return smt::makeBinOp("_", "bv" + apInt.toString(10, true),
-                                          std::to_string(apInt.getBitWidth()));
+                    return smt::makeOp("_", "bv" + apInt.toString(10, true),
+                                       std::to_string(apInt.getBitWidth()));
                 }
-                return smt::makeBinOp("_", "bv" + apInt.toString(10, true),
-                                      std::to_string(ty->getIntegerBitWidth()));
+                return smt::makeOp("_", "bv" + apInt.toString(10, true),
+                                   std::to_string(ty->getIntegerBitWidth()));
             } else {
                 return stringExpr(apInt.toString(10, true));
             }
@@ -58,7 +57,7 @@ SMTRef instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) {
     }
     if (llvm::isa<llvm::ConstantPointerNull>(val)) {
         if (SMTGenerationOpts::getInstance().BitVect) {
-            return smt::makeBinOp("_", "bv0", "64");
+            return smt::makeOp("_", "bv0", "64");
         } else {
             return stringExpr("0");
         }

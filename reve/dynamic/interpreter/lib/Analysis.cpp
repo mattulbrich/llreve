@@ -55,7 +55,7 @@ using std::multiset;
 using smt::FunDef;
 using smt::SharedSMTRef;
 using smt::Op;
-using smt::makeBinOp;
+using smt::makeOp;
 using smt::SortedVar;
 
 using namespace std::placeholders;
@@ -213,7 +213,7 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                 args.push_back(SortedVar("HEAP$1", "(Array Int Int)"));
                 if (InstantiateStorage) {
                     stringArgs.push_back(smt::stringExpr("i1"));
-                    stringArgs.push_back(makeBinOp("select", "HEAP$1", "i1"));
+                    stringArgs.push_back(makeOp("select", "HEAP$1", "i1"));
                 } else {
                     stringArgs.push_back(smt::stringExpr("HEAP$1"));
                 }
@@ -231,7 +231,7 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                 args.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
                 if (InstantiateStorage) {
                     stringArgs.push_back(smt::stringExpr("i2"));
-                    stringArgs.push_back(makeBinOp("select", "HEAP$2", "i2"));
+                    stringArgs.push_back(makeOp("select", "HEAP$2", "i2"));
                 } else {
                     stringArgs.push_back(smt::stringExpr("HEAP$2"));
                 }
@@ -248,7 +248,7 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                 candidate = make_shared<smt::Forall>(indices, candidate);
                 invariant = make_shared<smt::Forall>(indices, invariant);
             }
-            SharedSMTRef impl = makeBinOp("=>", invariant, candidate);
+            SharedSMTRef impl = makeOp("=>", invariant, candidate);
             SharedSMTRef forall = make_shared<smt::Forall>(args, impl);
             clauses.push_back(invariantIt.second);
             clauses.push_back(make_shared<smt::Assert>(forall));
@@ -969,17 +969,16 @@ SharedSMTRef makeEquation(const vector<mpz_class> &eq,
             if (eq.at(i) == 1) {
                 left.push_back(polynomialTerms.at(i));
             } else {
-                left.push_back(makeBinOp(mulName,
-                                         intToSMT(eq.at(i).get_str(), 32),
-                                         polynomialTerms.at(i)));
+                left.push_back(makeOp(mulName, intToSMT(eq.at(i).get_str(), 32),
+                                      polynomialTerms.at(i)));
             }
         } else if (eq.at(i) < 0) {
             mpz_class inv = -eq.at(i);
             if (inv == 1) {
                 right.push_back(polynomialTerms.at(i));
             } else {
-                right.push_back(makeBinOp(mulName, intToSMT(inv.get_str(), 32),
-                                          polynomialTerms.at(i)));
+                right.push_back(makeOp(mulName, intToSMT(inv.get_str(), 32),
+                                       polynomialTerms.at(i)));
             }
         }
     }
@@ -1013,7 +1012,7 @@ SharedSMTRef makeEquation(const vector<mpz_class> &eq,
             rightSide = make_shared<Op>("+", right);
         }
     }
-    return makeBinOp("=", leftSide, rightSide);
+    return makeOp("=", leftSide, rightSide);
 }
 
 SharedSMTRef makeInvariantDefinition(const vector<vector<mpz_class>> &solution,
@@ -1044,11 +1043,11 @@ makeBoundsDefinitions(const map<string, Bound<Optional<VarIntVal>>> &bounds) {
     vector<SharedSMTRef> constraints;
     for (auto mapIt : bounds) {
         if (mapIt.second.lower.hasValue()) {
-            constraints.push_back(makeBinOp(
+            constraints.push_back(makeOp(
                 "<=", mapIt.second.lower.getValue().get_str(), mapIt.first));
         }
         if (mapIt.second.upper.hasValue()) {
-            constraints.push_back(smt::makeBinOp(
+            constraints.push_back(smt::makeOp(
                 "<=", mapIt.first, mapIt.second.upper.getValue().get_str()));
         }
     }
@@ -1126,7 +1125,7 @@ makeInvariantDefinitions(const PolynomialSolutions &solutions,
                 exitClauses.push_back(invariant);
                 // if (bounds.find(mark) != bounds.end()) {
                 //     invariant =
-                //         makeBinOp("and", invariant,
+                //         makeOp("and", invariant,
                 //                   makeBoundsDefinitions(bounds.at(mark)));
                 // }
             }

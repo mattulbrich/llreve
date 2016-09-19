@@ -270,14 +270,12 @@ template <typename T> struct BinaryHeapPattern : public HeapPattern<T> {
         smt::SMTRef secondArg = args.second->toSMT();
         switch (op) {
         case BinaryBooleanOp::And:
-            return smt::makeBinOp("and", std::move(firstArg),
-                                  std::move(secondArg));
+            return smt::makeOp("and", std::move(firstArg),
+                               std::move(secondArg));
         case BinaryBooleanOp::Or:
-            return smt::makeBinOp("or", std::move(firstArg),
-                                  std::move(secondArg));
+            return smt::makeOp("or", std::move(firstArg), std::move(secondArg));
         case BinaryBooleanOp::Impl:
-            return smt::makeBinOp("=>", std::move(firstArg),
-                                  std::move(secondArg));
+            return smt::makeOp("=>", std::move(firstArg), std::move(secondArg));
         }
     }
 };
@@ -333,7 +331,7 @@ template <typename T> struct UnaryHeapPattern : public HeapPattern<T> {
         smt::SMTRef smtArg = arg->toSMT();
         switch (op) {
         case UnaryBooleanOp::Neg:
-            return smt::makeUnaryOp("not", std::move(smtArg));
+            return smt::makeOp("not", std::move(smtArg));
         }
     }
 };
@@ -383,12 +381,12 @@ template <typename T> struct HeapEqual : public HeapPattern<T> {
             std::vector<smt::SortedVar> args = {
                 smt::SortedVar("heapIndex", "Int")};
             smt::SharedSMTRef expr =
-                makeBinOp("=", smt::makeBinOp("select", "HEAP$1", "heapIndex"),
-                          smt::makeBinOp("select", "HEAP$2", "heapIndex"));
+                makeOp("=", smt::makeOp("select", "HEAP$1", "heapIndex"),
+                       smt::makeOp("select", "HEAP$2", "heapIndex"));
 
             return std::make_unique<smt::Forall>(args, expr);
         } else {
-            return smt::makeBinOp("=", "HEAP$1", "HEAP$2");
+            return smt::makeOp("=", "HEAP$1", "HEAP$2");
         }
     }
     bool equalTo(const HeapPattern<T> &other) const override {
@@ -595,7 +593,7 @@ template <typename T> struct HeapAccess : public HeapExpr<T> {
         smt::SharedSMTRef heapName = smt::stringExpr(
             programIndex == ProgramIndex::First ? "HEAP$1" : "HEAP$2");
         smt::SharedSMTRef ref = atVal->toSMT();
-        return makeBinOp("select", heapName, ref);
+        return makeOp("select", heapName, ref);
     }
 };
 
@@ -806,7 +804,7 @@ template <typename T> struct BinaryIntExpr : public HeapExpr<T> {
             opName = "-";
             break;
         }
-        return makeBinOp(opName, std::move(firstArg), std::move(secondArg));
+        return makeOp(opName, std::move(firstArg), std::move(secondArg));
     }
 };
 
@@ -963,11 +961,11 @@ template <typename T> struct RangeProp : public HeapPattern<T> {
             smt::stringExpr("boundVar_" + std::to_string(index));
         smt::SharedSMTRef arg1 = bounds.first->toSMT();
         smt::SharedSMTRef arg2 = bounds.second->toSMT();
-        smt::SharedSMTRef rangeConstraint = makeBinOp(
-            "and", makeBinOp("<=", arg1, var), makeBinOp("<=", var, arg2));
+        smt::SharedSMTRef rangeConstraint =
+            makeOp("and", makeOp("<=", arg1, var), makeOp("<=", var, arg2));
         smt::SharedSMTRef patRef = pat->toSMT();
         return std::make_unique<smt::Forall>(
-            args, makeBinOp("=>", rangeConstraint, patRef));
+            args, makeOp("=>", rangeConstraint, patRef));
     }
 };
 
@@ -1084,7 +1082,7 @@ template <typename T> struct HeapExprProp : public HeapPattern<T> {
             opName = ">";
             break;
         }
-        return makeBinOp(opName, args.first->toSMT(), args.second->toSMT());
+        return makeOp(opName, args.first->toSMT(), args.second->toSMT());
     }
 };
 

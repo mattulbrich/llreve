@@ -34,8 +34,7 @@ using smt::SetLogic;
 using smt::SharedSMTRef;
 using smt::SortedVar;
 using smt::VarDecl;
-using smt::makeBinOp;
-using smt::makeUnaryOp;
+using smt::makeOp;
 using smt::stringExpr;
 
 vector<SharedSMTRef>
@@ -176,11 +175,11 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                         args.push_back(SortedVar("HEAP$1_res", arrayType()));
                         args.push_back(SortedVar("HEAP$2_res", arrayType()));
                     }
-                    SharedSMTRef body = makeBinOp("=", "res1", "res2");
+                    SharedSMTRef body = makeOp("=", "res1", "res2");
                     if (mem & HEAP_MASK) {
                         SharedSMTRef heapOutEqual =
-                            makeBinOp("=", "HEAP$1_res", "HEAP$2_res");
-                        body = makeBinOp("and", body, heapOutEqual);
+                            makeOp("=", "HEAP$1_res", "HEAP$2_res");
+                        body = makeOp("and", body, heapOutEqual);
                     }
                     std::vector<SharedSMTRef> equalOut;
                     auto range = funCondMap.equal_range(fun1.getName());
@@ -195,17 +194,17 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                     for (auto it1 = funArgs1.begin(), it2 = funArgs2.begin();
                          it1 != funArgs1.end() && it2 != funArgs2.end();
                          ++it1) {
-                        equal.push_back(makeBinOp("=", it1->name, it2->name));
+                        equal.push_back(makeOp("=", it1->name, it2->name));
                         ++it2;
                     }
                     if (mem & HEAP_MASK) {
                         std::vector<SortedVar> forallArgs = {
                             SortedVar("i", "Int")};
                         SharedSMTRef heapInEqual =
-                            makeBinOp("=", "HEAP$1", "HEAP$2");
+                            makeOp("=", "HEAP$1", "HEAP$2");
                         equal.push_back(heapInEqual);
                     }
-                    body = makeBinOp("=>", make_shared<Op>("and", equal), body);
+                    body = makeOp("=>", make_shared<Op>("and", equal), body);
                     SharedSMTRef mainInv =
                         make_shared<FunDef>(funName, args, "Bool", body);
                     declarations.push_back(mainInv);
@@ -330,7 +329,7 @@ vector<SharedSMTRef> globalDeclarationsForMod(int globalPointer,
             std::vector<SortedVar> empty;
             auto constDef1 = make_shared<FunDef>(
                 globalName + "$" + std::to_string(program), empty, "Int",
-                makeUnaryOp("-", std::to_string(globalPointer)));
+                makeOp("-", std::to_string(globalPointer)));
             declarations.push_back(constDef1);
         }
     }
@@ -356,12 +355,12 @@ std::vector<SharedSMTRef> globalDeclarations(llvm::Module &mod1,
                     typeSize(global1.getType(), mod1.getDataLayout());
             }
             std::vector<SortedVar> empty;
-            auto constDef1 = make_shared<FunDef>(
-                globalName + "$1", empty, "Int",
-                makeUnaryOp("-", std::to_string(globalPointer)));
-            auto constDef2 = make_shared<FunDef>(
-                globalName + "$2", empty, "Int",
-                makeUnaryOp("-", std::to_string(globalPointer)));
+            auto constDef1 =
+                make_shared<FunDef>(globalName + "$1", empty, "Int",
+                                    makeOp("-", std::to_string(globalPointer)));
+            auto constDef2 =
+                make_shared<FunDef>(globalName + "$2", empty, "Int",
+                                    makeOp("-", std::to_string(globalPointer)));
             declarations.push_back(constDef1);
             declarations.push_back(constDef2);
         }
@@ -388,12 +387,10 @@ vector<SharedSMTRef> stringConstants(const llvm::Module &mod, string memory) {
             if (const auto arr = llvm::dyn_cast<llvm::ConstantDataArray>(
                     global.getInitializer())) {
                 for (unsigned int i = 0; i < arr->getNumElements(); ++i) {
-                    stringConstant.push_back(makeBinOp(
-                        "=",
-                        stringExpr(std::to_string(arr->getElementAsInteger(i))),
-                        makeBinOp(
-                            "select", stringExpr(memory),
-                            makeBinOp("+", globalName, std::to_string(i)))));
+                    stringConstant.push_back(makeOp(
+                        "=", std::to_string(arr->getElementAsInteger(i)),
+                        makeOp("select", memory,
+                               makeOp("+", globalName, std::to_string(i)))));
                 }
             }
         }
@@ -454,7 +451,7 @@ shared_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
     }
 
     for (auto argPair : makeZip(Args1, Args2)) {
-        args.push_back(makeBinOp("=", argPair.first, argPair.second));
+        args.push_back(makeOp("=", argPair.first, argPair.second));
     }
     if (additionalIn) {
         args.push_back(body);
@@ -506,9 +503,9 @@ SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
         funArgs.push_back(SortedVar("HEAP$2", arrayType()));
     }
     if (body == nullptr) {
-        body = makeBinOp("=", "result$1", "result$2");
+        body = makeOp("=", "result$1", "result$2");
         if (memory & HEAP_MASK) {
-            body = makeBinOp("and", body, makeBinOp("=", "HEAP$1", "HEAP$2"));
+            body = makeOp("and", body, makeOp("=", "HEAP$1", "HEAP$2"));
         }
     }
 
@@ -547,8 +544,7 @@ SharedSMTRef initImplication(shared_ptr<const FunDef> funDecl) {
         if (var.type == "(Array Int Int)") {
             string newvar = "$i_" + std::to_string(quantified_vars.size());
             quantified_vars.push_back(SortedVar(newvar, "Int"));
-            init_args.push_back(
-                makeBinOp("select", stringExpr(var.name), stringExpr(newvar)));
+            init_args.push_back(makeOp("select", var.name, newvar));
             init_args.push_back(stringExpr(newvar));
         } else {
             init_args.push_back(stringExpr(var.name));
@@ -561,7 +557,7 @@ SharedSMTRef initImplication(shared_ptr<const FunDef> funDecl) {
     if (!quantified_vars.empty()) {
         initAppl = std::make_shared<smt::Forall>(quantified_vars, initAppl);
     }
-    SharedSMTRef clause = makeBinOp("=>", inAppl, initAppl);
+    SharedSMTRef clause = makeOp("=>", inAppl, initAppl);
     auto forall = std::make_shared<smt::Forall>(funDecl->args, clause);
 
     return make_shared<smt::Assert>(forall);

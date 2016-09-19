@@ -252,14 +252,19 @@ class Query : public SMTExpr {
     SExprRef toSExpr() const override;
 };
 
-auto makeBinOp(std::string opName, std::string arg1, std::string arg2)
-    -> std::unique_ptr<Op>;
-auto makeBinOp(std::string opName, SharedSMTRef arg1, SharedSMTRef arg2)
-    -> std::unique_ptr<Op>;
-auto makeUnaryOp(std::string opName, std::string arg) -> std::unique_ptr<Op>;
-auto makeUnaryOp(std::string opName, SharedSMTRef arg) -> std::unique_ptr<Op>;
 auto stringExpr(std::string name)
     -> std::unique_ptr<const Primitive<std::string>>;
+
+auto makeSMTRef(SharedSMTRef arg) -> SharedSMTRef;
+auto makeSMTRef(std::string arg) -> SharedSMTRef;
+// auto makeSMTRef(SharedSMTRef arg) -> SharedSMTRef { return arg; }
+// auto makeSMTRef(std::string arg) -> SharedSMTRef { return stringExpr(arg); }
+template <typename... Args>
+auto makeOp(std::string opName, Args... args) -> std::unique_ptr<Op> {
+    std::vector<SharedSMTRef> args_ = {makeSMTRef(std::move(args))...};
+    return std::make_unique<Op>(opName, args_);
+}
+
 auto makeOp(std::string opName, std::vector<std::string> args)
     -> std::unique_ptr<const Op>;
 
@@ -277,6 +282,7 @@ class FunDecl : public SMTExpr {
 };
 
 class FunDef : public SMTExpr {
+
   public:
     FunDef(std::string funName, std::vector<SortedVar> args,
            std::string outType, SharedSMTRef body)
@@ -295,6 +301,7 @@ class FunDef : public SMTExpr {
 };
 
 class Comment : public SMTExpr {
+
   public:
     Comment(std::string val) : val(std::move(val)) {}
     std::string val;
@@ -302,6 +309,7 @@ class Comment : public SMTExpr {
 };
 
 class VarDecl : public SMTExpr {
+
   public:
     VarDecl(std::string varName, std::string type)
         : varName(std::move(varName)), type(std::move(type)) {}
