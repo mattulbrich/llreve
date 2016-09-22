@@ -6,9 +6,8 @@
 *~
 /reve/reve/.idea/
 /reve/ubuntu/
-!/reve/ubuntu/Vagrantfile
 .vagrant
-/reve/opensuse/reve
+/reve/vagrant/reve
 /reve/reve.pdf
 /reve/reve.tex
 __pycache__/

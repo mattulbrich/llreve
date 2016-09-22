@@ -1,5 +1,4 @@
 cmake_minimum_required(VERSION 3.0)
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/../dynamic/interpreter/cmake/")
 project(llvm-reve)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_COMPILER "clang++")
@@ -11,7 +10,7 @@ set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
 
 find_package(LLVM 3.8 REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
-find_package(Z3)
+find_package (Threads REQUIRED)
 
 exec_program(llvm-config ARGS --cxxflags OUTPUT_VARIABLE LLVM_CXXFLAGS)
 separate_arguments(LLVM_CXXFLAGS)
@@ -73,7 +72,8 @@ target_link_libraries(libreve
   clangEdit
   clangLex
   ${llvm_libs}
-  ${Z3_LIBRARIES}
+  z3
+  ${CMAKE_THREAD_LIBS_INIT}
   )
 target_link_libraries(reve
   libreve
