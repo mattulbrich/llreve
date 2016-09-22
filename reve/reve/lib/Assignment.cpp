@@ -376,7 +376,7 @@ string predicateName(llvm::CmpInst::Predicate pred) {
 }
 
 /// A function that is abblied to the arguments of a predicate
-std::function<SMTRef(SMTRef)> predicateFun(const llvm::CmpInst::CmpInst &cmp) {
+std::function<SMTRef(SMTRef)> predicateFun(const llvm::CmpInst &cmp) {
     if (!SMTGenerationOpts::getInstance().BitVect && cmp.isUnsigned() &&
         !SMTGenerationOpts::getInstance().EverythingSigned) {
         return [](SMTRef everythingSigned) {
