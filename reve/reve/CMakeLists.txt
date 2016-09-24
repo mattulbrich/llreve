@@ -31,7 +31,8 @@ endif ()
 
 message(STATUS "use libcxx: ${REVE_USE_LIBCXX}")
 
-include_directories(${LLVM_INCLUDE_DIRS} include)
+find_path(Z3_INCLUDE_DIRS NAMES z3++.h)
+include_directories(${LLVM_INCLUDE_DIRS} ${Z3_INCLUDE_DIRS} include)
 add_definitions(${LLVM_DEFINITIONS})
 
 file(GLOB sources lib/*.cpp)
