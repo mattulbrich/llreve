@@ -1,12 +1,26 @@
 FROM alpine:3.4
 MAINTAINER Moritz Kiefer <moritz.kiefer@purelyfunctional.org>
-RUN apk add --no-cache cmake make git python binutils llvm-dev llvm-static llvm clang clang-dev gcc g++ zlib-dev
-RUN apk add --no-cache ca-certificates wget
+RUN apk add --no-cache \
+    binutils \
+    ca-certificates \
+    clang \
+    clang-dev \
+    cmake \
+    g++ \
+    gcc \
+    git \
+    llvm \
+    llvm-dev \
+    llvm-static \
+    make \
+    python \
+    wget \
+    zlib-dev
 RUN update-ca-certificates
 ENV Z3_REV 8cf356224e08c872c6656eb7d2cf2c3422c6a2b2
-RUN wget https://github.com/Z3Prover/z3/archive/${Z3_REV}.zip -O z3.zip
-RUN unzip z3.zip -d /root
-RUN mv /root/z3-${Z3_REV} /root/z3
+RUN wget https://github.com/Z3Prover/z3/archive/${Z3_REV}.zip -O z3.zip && \
+    unzip z3.zip -d /root && \
+    mv /root/z3-${Z3_REV} /root/z3
 WORKDIR /root/z3
 RUN python contrib/cmake/bootstrap.py create
 RUN mkdir -p build
