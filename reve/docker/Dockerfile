@@ -7,6 +7,6 @@ RUN python contrib/cmake/bootstrap.py create
 RUN mkdir -p build
 WORKDIR /root/z3/build
 RUN cmake -DUSE_OPENMP=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DBUILD_LIBZ3_SHARED=OFF ..
-RUN make -j4
+RUN make
 RUN make install
 WORKDIR /root
