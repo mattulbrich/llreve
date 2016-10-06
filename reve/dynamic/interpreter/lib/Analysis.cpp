@@ -35,8 +35,6 @@
 
 #include "llvm/IR/Verifier.h"
 
-#include "popen_noshell.h"
-
 using llvm::Module;
 using llvm::Optional;
 
