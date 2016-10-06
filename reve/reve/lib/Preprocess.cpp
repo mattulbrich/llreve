@@ -10,7 +10,6 @@
 
 #include "Preprocess.h"
 
-#include "AnnotStackPass.h"
 #include "CFGPrinter.h"
 #include "Helper.h"
 #include "InferMarks.h"
@@ -126,7 +125,6 @@ AnalysisResults preprocessFunction(llvm::Function &fun, string prefix,
     if (opts.ShowCFG) {
         fpm->add(new CFGViewerPass()); // show cfg
     }
-    fpm->add(new AnnotStackPass()); // annotate load/store of stack variables
     fpm->add(llvm::createVerifierPass());
     // FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
     fpm->doInitialization();
