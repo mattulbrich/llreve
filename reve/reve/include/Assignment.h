@@ -64,7 +64,7 @@ auto blockAssignments(const llvm::BasicBlock &bb,
                       Program prog, Memory heap) -> std::vector<DefOrCallInfo>;
 auto instrAssignment(const llvm::Instruction &instr,
                      const llvm::BasicBlock *prevBb, Program prog)
-    -> std::unique_ptr<const smt::Assignment>;
+    -> std::vector<std::shared_ptr<const smt::Assignment>>;
 auto predicateName(const llvm::CmpInst::Predicate pred) -> std::string;
 auto predicateFun(const llvm::CmpInst &pred)
     -> std::function<smt::SMTRef(smt::SMTRef)>;
@@ -76,4 +76,3 @@ auto memcpyIntrinsic(const llvm::CallInst *callInst, Program prog)
 auto toCallInfo(std::string assignedTo, Program prog,
                 const llvm::CallInst &callInst) -> std::shared_ptr<CallInfo>;
 auto isPtrDiff(const llvm::Instruction &instr) -> bool;
-auto isStackOp(const llvm::Instruction &inst) -> bool;

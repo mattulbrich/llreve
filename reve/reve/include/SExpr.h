@@ -84,9 +84,9 @@ const std::set<std::string> Apply<T>::forceIndentOps = {"assert", "and",
                                                         "rule"};
 template <typename T>
 const std::set<std::string> Apply<T>::atomicOps = {
-    "+",     "-",     "*",        "<=",     "<",     ">",   ">=",
-    "=",     "not",   "distinct", "select", "ite",   "div", "_",
-    "bvadd", "bvsub", "bvmul",    "store",  "select"};
+    "+",     "-",     "*",        "<=",     "<",      ">",      ">=",
+    "=",     "not",   "distinct", "select", "ite",    "div",    "_",
+    "bvadd", "bvsub", "bvmul",    "store",  "store_", "select", "select_"};
 
 template <typename T> class List : public SExpr<T> {
   public:

@@ -21,6 +21,8 @@
 auto generateSMT(MonoPair<std::shared_ptr<llvm::Module>> modules,
                  std::vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
                  FileOptions fileOpts) -> std::vector<smt::SharedSMTRef>;
+auto select_Declaration() -> smt::SMTRef;
+auto store_Declaration() -> smt::SMTRef;
 auto externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                         std::vector<smt::SharedSMTRef> &declarations,
                         uint8_t mem,
@@ -43,11 +45,12 @@ auto stringConstants(const llvm::Module &mod, std::string heap)
 auto inInvariant(MonoPair<const llvm::Function *> funs, smt::SharedSMTRef body,
                  Memory memory, const llvm::Module &mod1,
                  const llvm::Module &mod2, bool strings, bool inInvariant)
-  -> std::shared_ptr<smt::FunDef>;
+    -> std::shared_ptr<smt::FunDef>;
 auto outInvariant(MonoPair<std::vector<smt::SortedVar>> funArgs,
                   smt::SharedSMTRef body, Memory memory, const llvm::Type *type)
     -> smt::SharedSMTRef;
 
 smt::SharedSMTRef initPredicate(std::shared_ptr<const smt::FunDef> inInv);
-smt::SharedSMTRef initPredicateComment(std::shared_ptr<const smt::FunDef> inInv);
+smt::SharedSMTRef
+initPredicateComment(std::shared_ptr<const smt::FunDef> inInv);
 smt::SharedSMTRef initImplication(std::shared_ptr<const smt::FunDef> funDecl);

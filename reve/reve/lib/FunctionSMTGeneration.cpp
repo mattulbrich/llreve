@@ -58,7 +58,8 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     const string funName = preprocessedFuns.first.fun->getName();
     const MonoPair<vector<smt::SortedVar>> funArgsPair =
         functionArgs(*preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
-    const vector<smt::SortedVar> funArgs = concat(funArgsPair);
+    const vector<smt::SortedVar> funArgs = functionArgsFreeVars(
+        *preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
     const smt::FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, memory);
     if (SMTGenerationOpts::getInstance().MuZ) {
@@ -245,7 +246,8 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     const string funName = preprocessedFuns.first.fun->getName();
     const MonoPair<vector<smt::SortedVar>> funArgsPair =
         functionArgs(*preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
-    const vector<smt::SortedVar> funArgs = concat(funArgsPair);
+    const vector<smt::SortedVar> funArgs = functionArgsFreeVars(
+        *preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
 
     const smt::FreeVarsMap freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgs, memory);
@@ -1028,21 +1030,21 @@ SharedSMTRef equalInputsEqualOutputs(
 
 /// Collect the free variables for the entry block of the PathMap
 /// A variable is free if we use it but didn't create it
-std::pair<set<smt::SortedVar>, map<int, set<smt::SortedVar>>>
+std::pair<set<FreeVar>, map<int, set<FreeVar>>>
 freeVarsForBlock(map<int, Paths> pathMap) {
-    set<smt::SortedVar> freeVars;
-    map<int, set<smt::SortedVar>> constructedIntersection;
+    set<FreeVar> freeVars;
+    map<int, set<FreeVar>> constructedIntersection;
     for (const auto &paths : pathMap) {
         for (const auto &path : paths.second) {
             const llvm::BasicBlock *prev = path.Start;
-            set<smt::SortedVar> constructed;
+            set<FreeVar> constructed;
 
             // the first block is special since we can't resolve phi
             // nodes here
             for (auto &instr : *path.Start) {
-                constructed.insert(llvmValToSortedVar(&instr));
+                constructed.insert(llvmValToFreeVar(&instr));
                 if (llvm::isa<llvm::PHINode>(instr)) {
-                    freeVars.insert(llvmValToSortedVar(&instr));
+                    freeVars.insert(llvmValToFreeVar(&instr));
                     continue;
                 }
                 if (const auto callInst =
@@ -1051,19 +1053,19 @@ freeVarsForBlock(map<int, Paths> pathMap) {
                          i++) {
                         const auto arg = callInst->getArgOperand(i);
                         if (!arg->getName().empty() &&
-                            constructed.find(llvmValToSortedVar(arg)) ==
+                            constructed.find(llvmValToFreeVar(arg)) ==
                                 constructed.end()) {
-                            freeVars.insert(llvmValToSortedVar(arg));
+                            freeVars.insert(llvmValToFreeVar(arg));
                         }
                     }
                     continue;
                 }
                 for (const auto op : instr.operand_values()) {
-                    if (constructed.find(llvmValToSortedVar(op)) ==
+                    if (constructed.find(llvmValToFreeVar(op)) ==
                             constructed.end() &&
                         !op->getName().empty() &&
                         !llvm::isa<llvm::BasicBlock>(op)) {
-                        freeVars.insert(llvmValToSortedVar(op));
+                        freeVars.insert(llvmValToFreeVar(op));
                     }
                 }
             }
@@ -1071,16 +1073,16 @@ freeVarsForBlock(map<int, Paths> pathMap) {
             // now deal with the rest
             for (const auto &edge : path.Edges) {
                 for (auto &instr : *edge.Block) {
-                    constructed.insert(llvmValToSortedVar(&instr));
+                    constructed.insert(llvmValToFreeVar(&instr));
                     if (const auto phiInst =
                             llvm::dyn_cast<llvm::PHINode>(&instr)) {
                         const auto incoming =
                             phiInst->getIncomingValueForBlock(prev);
-                        if (constructed.find(llvmValToSortedVar(incoming)) ==
+                        if (constructed.find(llvmValToFreeVar(incoming)) ==
                                 constructed.end() &&
                             !incoming->getName().empty() &&
                             !llvm::isa<llvm::BasicBlock>(incoming)) {
-                            freeVars.insert(llvmValToSortedVar(incoming));
+                            freeVars.insert(llvmValToFreeVar(incoming));
                         }
                         continue;
                     }
@@ -1090,26 +1092,26 @@ freeVarsForBlock(map<int, Paths> pathMap) {
                              i < callInst->getNumArgOperands(); i++) {
                             const auto arg = callInst->getArgOperand(i);
                             if (!arg->getName().empty() &&
-                                constructed.find(llvmValToSortedVar(arg)) ==
+                                constructed.find(llvmValToFreeVar(arg)) ==
                                     constructed.end()) {
-                                freeVars.insert(llvmValToSortedVar(arg));
+                                freeVars.insert(llvmValToFreeVar(arg));
                             }
                         }
                         continue;
                     }
                     for (const auto op : instr.operand_values()) {
-                        if (constructed.find(llvmValToSortedVar(op)) ==
+                        if (constructed.find(llvmValToFreeVar(op)) ==
                                 constructed.end() &&
                             !op->getName().empty() &&
                             !llvm::isa<llvm::BasicBlock>(op)) {
-                            freeVars.insert(llvmValToSortedVar(op));
+                            freeVars.insert(llvmValToFreeVar(op));
                         }
                     }
                 }
                 prev = edge.Block;
             }
 
-            set<SortedVar> newConstructedIntersection;
+            set<FreeVar> newConstructedIntersection;
             if (constructedIntersection.find(paths.first) ==
                 constructedIntersection.end()) {
                 constructedIntersection.insert(
@@ -1142,7 +1144,14 @@ smt::FreeVarsMap freeVars(PathMap map1, PathMap map2,
         for (auto var : freeVars2.first) {
             freeVars1.first.insert(var);
         }
-        freeVarsMap.insert(make_pair(index, freeVars1.first));
+        set<SortedVar> freeVars;
+        for (const auto var : freeVars1.first) {
+            freeVars.insert(var.var);
+            if (var.type->isPointerTy()) {
+                freeVars.insert({var.var.name + "_OnStack", "Bool"});
+            }
+        }
+        freeVarsMap.insert(make_pair(index, freeVars));
 
         // constructed variables
         for (auto mapIt : freeVars2.second) {
@@ -1151,7 +1160,19 @@ smt::FreeVarsMap freeVars(PathMap map1, PathMap map2,
             }
         }
 
-        constructed.insert(make_pair(index, freeVars1.second));
+        map<int, set<SortedVar>> constructedVarsMap;
+        for (const auto &it : freeVars1.second) {
+            set<SortedVar> constructedVars;
+            for (const auto var : it.second) {
+                constructedVars.insert(var.var);
+                if (var.type->isPointerTy()) {
+                    constructedVars.insert({var.var.name + "_OnStack", "Bool"});
+                }
+            }
+            constructedVarsMap.insert({it.first, constructedVars});
+        }
+
+        constructed.insert(make_pair(index, constructedVarsMap));
     }
 
     freeVarsMap[EXIT_MARK] = set<smt::SortedVar>();
@@ -1184,12 +1205,13 @@ smt::FreeVarsMap freeVars(PathMap map1, PathMap map2,
 
     const auto addMemoryArrays = [memory](vector<smt::SortedVar> vars,
                                           int index) -> vector<smt::SortedVar> {
-        string stringIndex = std::to_string(index);
         if (memory & HEAP_MASK) {
-            vars.push_back(SortedVar("HEAP$" + stringIndex, arrayType()));
+            vars.push_back(SortedVar(heapName(index), arrayType()));
         }
         if (memory & STACK_MASK) {
-            vars.push_back(SortedVar("STACK$" + stringIndex, arrayType()));
+            vars.push_back(
+                SortedVar(stackPointerName(index), stackPointerType()));
+            vars.push_back(SortedVar(stackName(index), arrayType()));
         }
         return vars;
     };
@@ -1223,13 +1245,29 @@ MonoPair<vector<smt::SortedVar>> functionArgs(const llvm::Function &fun1,
                                               const llvm::Function &fun2) {
     vector<smt::SortedVar> args1;
     for (auto &arg : fun1.args()) {
-        args1.push_back(llvmValToSortedVar(&arg));
+        auto sVar = llvmValToSortedVar(&arg);
+        args1.push_back(sVar);
+        if (SMTGenerationOpts::getInstance().Stack &&
+            arg.getType()->isPointerTy()) {
+            args1.push_back({sVar.name + "_OnStack", "Bool"});
+        }
     }
     vector<smt::SortedVar> args2;
     for (auto &arg : fun2.args()) {
-        args2.push_back(llvmValToSortedVar(&arg));
+        auto sVar = llvmValToSortedVar(&arg);
+        args2.push_back(sVar);
+        if (SMTGenerationOpts::getInstance().Stack &&
+            arg.getType()->isPointerTy()) {
+            args2.push_back({sVar.name + "_OnStack", "Bool"});
+        }
     }
     return makeMonoPair(args1, args2);
+}
+
+auto functionArgsFreeVars(const llvm::Function &fun1,
+                          const llvm::Function &fun2)
+    -> std::vector<smt::SortedVar> {
+    return concat(functionArgs(fun1, fun2));
 }
 
 /// Swap the program index
@@ -1406,4 +1444,8 @@ auto dropTypesFreeVars(smt::FreeVarsMap map)
         result.insert(std::make_pair(it.first, vars));
     }
     return result;
+}
+
+FreeVar llvmValToFreeVar(const llvm::Value *val) {
+    return {llvmValToSortedVar(val), val->getType()};
 }

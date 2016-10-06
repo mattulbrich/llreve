@@ -70,6 +70,8 @@ auto logWarningData_(Str message, A &el, const char *file, int line) -> void {
     llvm::errs() << "\n";
 }
 
+auto instrLocation(const llvm::Value *val)
+    -> std::unique_ptr<const smt::SMTExpr>;
 auto instrNameOrVal(const llvm::Value *val, const llvm::Type *ty)
     -> std::unique_ptr<const smt::SMTExpr>;
 auto typeSize(llvm::Type *ty, const llvm::DataLayout &layout) -> int;
@@ -175,5 +177,10 @@ auto argSort(std::string arg) -> std::string;
 auto llvmTypeToSMTSort(const llvm::Type *type) -> std::string;
 auto llvmValToSortedVar(const llvm::Value *val) -> smt::SortedVar;
 auto arrayType() -> std::string;
+auto stackPointerType() -> std::string;
 auto toSMTSortedVar(smt::SortedVar var) -> smt::SortedVar;
 bool varBelongsTo(std::string varName, int program);
+
+auto heapName(int progIndex) -> std::string;
+auto stackName(int progIndex) -> std::string;
+auto stackPointerName(int progIndex) -> std::string;

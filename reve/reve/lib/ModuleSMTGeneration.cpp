@@ -19,6 +19,7 @@
 #include "llvm/IR/Constants.h"
 
 using std::make_shared;
+using std::make_unique;
 using std::shared_ptr;
 using std::string;
 using std::vector;
@@ -32,6 +33,7 @@ using smt::Op;
 using smt::Query;
 using smt::SetLogic;
 using smt::SharedSMTRef;
+using smt::SMTRef;
 using smt::SortedVar;
 using smt::VarDecl;
 using smt::makeOp;
@@ -212,6 +214,10 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
             }
         }
     }
+    if (SMTGenerationOpts::getInstance().Stack) {
+        declarations.push_back(select_Declaration());
+        declarations.push_back(store_Declaration());
+    }
     for (auto &fun1 : mod1) {
         if (fun1.isDeclaration() && !fun1.isIntrinsic() &&
             fun1.getName() != "__mark" && fun1.getName() != "__splitmark") {
@@ -226,6 +232,29 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
             declarations.insert(declarations.end(), decls.begin(), decls.end());
         }
     }
+}
+
+SMTRef select_Declaration() {
+    SharedSMTRef body =
+        makeOp("ite", "onStack", makeOp("select", "stack", "pointer"),
+               makeOp("select", "heap", "pointer"));
+    vector<SortedVar> args = {{"heap", arrayType()},
+                              {"stack", arrayType()},
+                              {"pointer", "Int"},
+                              {"onStack", "Bool"}};
+    return make_unique<FunDef>("select_", std::move(args), "Int", body);
+}
+
+SMTRef store_Declaration() {
+    SharedSMTRef body =
+        makeOp("ite", "onStack", makeOp("store", "stack", "pointer", "val"),
+               makeOp("store", "heap", "pointer", "val"));
+    vector<SortedVar> args = {{"heap", arrayType()},
+                              {"stack", arrayType()},
+                              {"pointer", "Int"},
+                              {"onStack", "Bool"},
+                              {"val", "Int"}};
+    return make_unique<FunDef>("store_", std::move(args), arrayType(), body);
 }
 
 std::set<uint32_t> getVarArgs(llvm::Function &fun) {
@@ -413,14 +442,14 @@ shared_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
             .indexedMap<vector<smt::SortedVar>>(
                 [memory](vector<smt::SortedVar> args,
                          int index) -> vector<smt::SortedVar> {
-                    string indexString = std::to_string(index);
                     if (memory & HEAP_MASK) {
-                        args.push_back(
-                            SortedVar("HEAP$" + indexString, arrayType()));
+                        args.push_back(SortedVar(heapName(index), arrayType()));
                     }
                     if (memory & STACK_MASK) {
+                        args.push_back(SortedVar(stackPointerName(index),
+                                                 stackPointerType()));
                         args.push_back(
-                            SortedVar("STACK$" + indexString, arrayType()));
+                            SortedVar(stackName(index), arrayType()));
                     }
                     return args;
                 });
@@ -436,19 +465,11 @@ shared_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
     assert(Args1.size() == Args2.size());
 
     vector<SortedVar> funArgs;
-    if (SMTGenerationOpts::getInstance().BitVect) {
-        funArgs = concat(std::move(funArgsPair));
-    } else {
-        funArgsPair.forEach([&funArgs](const auto &args) {
-            for (const auto &var : args) {
-                if (var.type != "(Array Int Int)") {
-                    funArgs.push_back(SortedVar(var.name, "Int"));
-                } else {
-                    funArgs.push_back(var);
-                }
-            }
-        });
-    }
+    funArgsPair.forEach([&funArgs](const auto &args) {
+        for (const auto &var : args) {
+            funArgs.push_back({var.name, getSMTType(var.type)});
+        }
+    });
 
     for (auto argPair : makeZip(Args1, Args2)) {
         args.push_back(makeOp("=", argPair.first, argPair.second));
@@ -463,10 +484,10 @@ shared_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
         // Add values of static arrays, strings and similar things
         vector<SharedSMTRef> smtArgs = {body};
         makeMonoPair(&mod1, &mod2)
-            .indexedMap<vector<SharedSMTRef>>([&args](const llvm::Module *mod,
-                                                      int index) {
-                return stringConstants(*mod, "HEAP$" + std::to_string(index));
-            })
+            .indexedMap<vector<SharedSMTRef>>(
+                [&args](const llvm::Module *mod, int index) {
+                    return stringConstants(*mod, heapName(index));
+                })
             .forEach([&smtArgs](vector<SharedSMTRef> constants) {
                 if (!constants.empty()) {
                     smtArgs.push_back(make_shared<Op>("and", constants));

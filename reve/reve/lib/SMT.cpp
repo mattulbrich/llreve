@@ -732,6 +732,8 @@ std::string getSMTType(std::string arg) {
     } else {
         if (isArray(arg)) {
             return "(Array Int Int)";
+        } else if (arg == "Bool") {
+            return "Bool";
         } else {
             return "Int";
         }

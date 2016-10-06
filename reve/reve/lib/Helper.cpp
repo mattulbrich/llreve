@@ -22,6 +22,13 @@ using smt::stringExpr;
 using std::unique_ptr;
 using std::string;
 
+SMTRef instrLocation(const llvm::Value *val) {
+    if (!val->getName().empty()) {
+        return stringExpr(string(val->getName()) + "_OnStack");
+    }
+    return stringExpr("UnknownLocation");
+}
+
 /// Get the name of the instruction or a string representation of the value if
 /// it's a constant
 SMTRef instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) {
@@ -176,6 +183,20 @@ std::string arrayType() {
                : "(Array Int Int)";
 }
 
+std::string stackPointerType() { return "Int"; }
+
 smt::SortedVar toSMTSortedVar(smt::SortedVar var) {
     return smt::SortedVar(var.name, getSMTType(var.type));
+}
+
+std::string heapName(int progIndex) {
+    return "HEAP$" + std::to_string(progIndex);
+}
+
+std::string stackName(int progIndex) {
+    return "STACK$" + std::to_string(progIndex);
+}
+
+std::string stackPointerName(int progIndex) {
+    return "SP$" + std::to_string(progIndex);
 }

@@ -131,7 +131,7 @@ SMTRef mainInvariant(int EndIndex, vector<SortedVar> FreeVars, string FunName) {
         vector<string> Args = {"result$1", "result$2"};
         for (const auto &arg : args) {
             // No stack in output
-            if (arg.compare(0, 5, "STACK")) {
+            if (arg.compare(0, 5, "STACK") && arg.compare(0, 2, "SP")) {
                 Args.push_back(arg);
             }
         }
