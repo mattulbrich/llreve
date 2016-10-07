@@ -580,14 +580,21 @@ std::shared_ptr<CallInfo> toCallInfo(string assignedTo, Program prog,
         assignedTo = "res" + std::to_string(programIndex(prog));
     }
     uint32_t i = 0;
+    unsigned suppliedArgs = 0;
     const auto &funTy = *callInst.getFunctionType();
     const llvm::Function &fun = *callInst.getCalledFunction();
     for (auto &arg : callInst.arg_operands()) {
         args.push_back(instrNameOrVal(arg, funTy.getParamType(i)));
+        ++suppliedArgs;
+        if (SMTGenerationOpts::getInstance().Stack &&
+            arg->getType()->isPointerTy()) {
+            args.push_back(instrLocation(arg));
+        }
         ++i;
     }
+    unsigned varargs = suppliedArgs - funTy.getNumParams();
     return make_shared<CallInfo>(assignedTo, fun.getName(), args,
-                                 fun.isDeclaration(), fun);
+                                 fun.isDeclaration(), varargs, fun);
 }
 
 bool isPtrDiff(const llvm::Instruction &instr) {

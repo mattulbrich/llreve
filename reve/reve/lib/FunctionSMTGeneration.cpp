@@ -784,9 +784,7 @@ SharedSMTRef nonmutualSMT(SharedSMTRef endClause,
 SMTRef mutualRecursiveForall(SharedSMTRef clause, MonoPair<CallInfo> callPair,
                              vector<SortedVar> &variableDeclarations,
                              Memory memory) {
-    const uint32_t varArgs =
-        static_cast<uint32_t>(callPair.first.args.size()) -
-        callPair.first.fun.getFunctionType()->getNumParams();
+    const uint32_t varArgs = callPair.first.varArgs;
     vector<SortedVar> args;
     args.push_back(
         SortedVar(callPair.first.assignedTo,
@@ -842,8 +840,7 @@ SMTRef nonmutualRecursiveForall(SharedSMTRef clause, CallInfo call,
     const int progIndex = programIndex(prog);
     const string programS = std::to_string(progIndex);
 
-    const uint32_t varArgs = static_cast<uint32_t>(call.args.size()) -
-                             call.fun.getFunctionType()->getNumParams();
+    const uint32_t varArgs = call.varArgs;
     forallArgs.push_back(SortedVar(call.assignedTo, "Int"));
     if (memory & HEAP_MASK) {
         forallArgs.push_back(
@@ -1403,15 +1400,15 @@ SMTRef getDontLoopInvariant(SMTRef endClause, int startIndex, PathMap pathMap,
 auto addMemory(vector<SharedSMTRef> &implArgs, Memory memory)
     -> function<void(CallInfo call, int index)> {
     return [&implArgs, memory](CallInfo call, int index) {
-        string indexString = std::to_string(index);
         for (auto arg : call.args) {
             implArgs.push_back(arg);
         }
         if (memory & HEAP_MASK) {
-            implArgs.push_back(stringExpr("HEAP$" + indexString));
+            implArgs.push_back(stringExpr(heapName(index)));
         }
         if (memory & STACK_MASK) {
-            implArgs.push_back(stringExpr("STACK$" + indexString));
+            implArgs.push_back(stringExpr(stackPointerName(index)));
+            implArgs.push_back(stringExpr(stackName(index)));
         }
     };
 }

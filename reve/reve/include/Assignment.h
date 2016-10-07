@@ -24,12 +24,13 @@ struct CallInfo {
     std::string callName;
     std::vector<smt::SharedSMTRef> args;
     bool externFun;
+    unsigned varArgs;
     const llvm::Function &fun;
     CallInfo(std::string assignedTo, std::string callName,
              std::vector<smt::SharedSMTRef> args, bool externFun,
-             const llvm::Function &fun)
+             unsigned varArgs, const llvm::Function &fun)
         : assignedTo(assignedTo), callName(callName), args(args),
-          externFun(externFun), fun(fun) {}
+          externFun(externFun), varArgs(varArgs), fun(fun) {}
     bool operator==(const CallInfo &other) const {
         bool result = callName == other.callName;
         if (!externFun) {
