@@ -167,10 +167,18 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
         return {makeAssignment(cmpInst->getName(), std::move(cmp))};
     }
     if (const auto phiInst = llvm::dyn_cast<llvm::PHINode>(&Instr)) {
-        const auto Val = phiInst->getIncomingValueForBlock(prevBb);
-        assert(Val);
-        return {makeAssignment(phiInst->getName(),
-                               instrNameOrVal(Val, Val->getType()))};
+        const auto val = phiInst->getIncomingValueForBlock(prevBb);
+        assert(val);
+        auto assgn = makeAssignment(phiInst->getName(),
+                                    instrNameOrVal(val, val->getType()));
+        if (SMTGenerationOpts::getInstance().Stack &&
+            phiInst->getType()->isPointerTy()) {
+            auto locAssgn = makeAssignment(
+                string(phiInst->getName()) + "_OnStack", instrLocation(val));
+            return {std::move(assgn), std::move(locAssgn)};
+        } else {
+            return {std::move(assgn)};
+        }
     }
     if (const auto selectInst = llvm::dyn_cast<llvm::SelectInst>(&Instr)) {
         const auto cond = selectInst->getCondition();
@@ -182,7 +190,8 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             instrNameOrVal(falseVal, falseVal->getType())};
         auto assgn = makeAssignment(selectInst->getName(),
                                     std::make_shared<class Op>("ite", args));
-        if (trueVal->getType()->isPointerTy()) {
+        if (SMTGenerationOpts::getInstance().Stack &&
+            trueVal->getType()->isPointerTy()) {
             assert(falseVal->getType()->isPointerTy());
             auto location =
                 makeOp("ite", instrNameOrVal(cond, cond->getType()),
@@ -201,8 +210,16 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
     }
     if (const auto getElementPtrInst =
             llvm::dyn_cast<llvm::GetElementPtrInst>(&Instr)) {
-        return {makeAssignment(getElementPtrInst->getName(),
-                               resolveGEP(*getElementPtrInst))};
+        auto assgn = makeAssignment(getElementPtrInst->getName(),
+                                    resolveGEP(*getElementPtrInst));
+        if (SMTGenerationOpts::getInstance().Stack) {
+            return {std::move(assgn),
+                    makeAssignment(
+                        string(getElementPtrInst->getName()) + "_OnStack",
+                        instrLocation(getElementPtrInst->getPointerOperand()))};
+        } else {
+            return {std::move(assgn)};
+        }
     }
     if (const auto loadInst = llvm::dyn_cast<llvm::LoadInst>(&Instr)) {
         SharedSMTRef pointer = instrNameOrVal(
