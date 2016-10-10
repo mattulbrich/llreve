@@ -58,18 +58,13 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
         smtExprs.push_back(std::make_shared<SetLogic>("HORN"));
     }
 
-    Memory mem = 0;
-    if (SMTGenerationOpts::getInstance().Heap ||
-        doesAccessMemory(*modules.first) || doesAccessMemory(*modules.second)) {
-        mem |= HEAP_MASK;
-    }
-    if (SMTGenerationOpts::getInstance().Stack) {
-        mem |= STACK_MASK;
+    if (doesAccessMemory(*modules.first) || doesAccessMemory(*modules.second)) {
+        SMTGenerationOpts::getInstance().Heap = true;
     }
 
     SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
 
-    externDeclarations(*modules.first, *modules.second, declarations, mem,
+    externDeclarations(*modules.first, *modules.second, declarations,
                        fileOpts.FunctionConditions);
     if (smtOpts.MainFunction == "" && !preprocessedFuns.empty()) {
         smtOpts.MainFunction = preprocessedFuns.at(0).first.fun->getName();
@@ -83,12 +78,12 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
         if (funPair.first.fun->getName() == smtOpts.MainFunction) {
             auto inInv = inInvariant(
                 makeMonoPair(funPair.first.fun, funPair.second.fun),
-                fileOpts.InRelation, mem, *modules.first, *modules.second,
+                fileOpts.InRelation, *modules.first, *modules.second,
                 smtOpts.GlobalConstants, fileOpts.AdditionalInRelation);
             smtExprs.push_back(inInv);
             smtExprs.push_back(outInvariant(
                 functionArgs(*funPair.first.fun, *funPair.second.fun),
-                fileOpts.OutRelation, mem, funPair.first.fun->getReturnType()));
+                fileOpts.OutRelation, funPair.first.fun->getReturnType()));
             if (smtOpts.InitPredicate) {
                 smtExprs.push_back(initPredicate(inInv));
                 smtExprs.push_back(initPredicateComment(inInv));
@@ -96,7 +91,7 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
             }
             auto newSmtExprs =
                 mainAssertion(funPair, declarations, variableDeclarations,
-                              smtOpts.OnlyRecursive, mem);
+                              smtOpts.OnlyRecursive);
             assertions.insert(assertions.end(), newSmtExprs.begin(),
                               newSmtExprs.end());
         }
@@ -112,7 +107,7 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
                                   newSmtExprs.end());
             } else {
                 auto newSmtExprs = functionAssertion(funPair, declarations,
-                                                     variableDeclarations, mem);
+                                                     variableDeclarations);
                 assertions.insert(assertions.end(), newSmtExprs.begin(),
                                   newSmtExprs.end());
             }
@@ -137,7 +132,7 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
 }
 
 void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
-                        std::vector<SharedSMTRef> &declarations, Memory mem,
+                        std::vector<SharedSMTRef> &declarations,
                         std::multimap<string, string> funCondMap) {
     for (auto &fun1 : mod1) {
         if (fun1.isDeclaration() && !fun1.isIntrinsic()) {
@@ -157,14 +152,14 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                     for (auto arg : funArgs1) {
                         args.push_back(arg);
                     }
-                    if (mem & HEAP_MASK) {
+                    if (SMTGenerationOpts::getInstance().Heap) {
                         args.push_back(SortedVar("HEAP$1", arrayType()));
                     }
                     auto funArgs2 = funArgs(fun2, "arg2_", argNum);
                     for (auto arg : funArgs2) {
                         args.push_back(arg);
                     }
-                    if (mem) {
+                    if (SMTGenerationOpts::getInstance().Heap) {
                         args.push_back(SortedVar("HEAP$2", arrayType()));
                     }
                     std::string funName = invariantName(
@@ -173,12 +168,12 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                     // TODO Use the correct return types
                     args.push_back(SortedVar("res1", "Int"));
                     args.push_back(SortedVar("res2", "Int"));
-                    if (mem & HEAP_MASK) {
+                    if (SMTGenerationOpts::getInstance().Heap) {
                         args.push_back(SortedVar("HEAP$1_res", arrayType()));
                         args.push_back(SortedVar("HEAP$2_res", arrayType()));
                     }
                     SharedSMTRef body = makeOp("=", "res1", "res2");
-                    if (mem & HEAP_MASK) {
+                    if (SMTGenerationOpts::getInstance().Heap) {
                         SharedSMTRef heapOutEqual =
                             makeOp("=", "HEAP$1_res", "HEAP$2_res");
                         body = makeOp("and", body, heapOutEqual);
@@ -199,7 +194,7 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                         equal.push_back(makeOp("=", it1->name, it2->name));
                         ++it2;
                     }
-                    if (mem & HEAP_MASK) {
+                    if (SMTGenerationOpts::getInstance().Heap) {
                         std::vector<SortedVar> forallArgs = {
                             SortedVar("i", "Int")};
                         SharedSMTRef heapInEqual =
@@ -221,14 +216,14 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
     for (auto &fun1 : mod1) {
         if (fun1.isDeclaration() && !fun1.isIntrinsic() &&
             fun1.getName() != "__mark" && fun1.getName() != "__splitmark") {
-            auto decls = externFunDecl(fun1, 1, mem);
+            auto decls = externFunDecl(fun1, 1);
             declarations.insert(declarations.end(), decls.begin(), decls.end());
         }
     }
     for (auto &fun2 : mod2) {
         if (fun2.isDeclaration() && !fun2.isIntrinsic() &&
             fun2.getName() != "__mark" && fun2.getName() != "__splitmark") {
-            auto decls = externFunDecl(fun2, 2, mem);
+            auto decls = externFunDecl(fun2, 2);
             declarations.insert(declarations.end(), decls.begin(), decls.end());
         }
     }
@@ -286,17 +281,18 @@ std::vector<SortedVar> funArgs(llvm::Function &fun, std::string prefix,
     return args;
 }
 
-std::vector<SharedSMTRef> externFunDecl(llvm::Function &fun, int program,
-                                        Memory mem) {
+std::vector<SharedSMTRef> externFunDecl(llvm::Function &fun, int program) {
     std::vector<SharedSMTRef> decls;
     set<uint32_t> varArgs = getVarArgs(fun);
     for (auto argNum : varArgs) {
         std::vector<SortedVar> args = funArgs(fun, "arg_", argNum);
-        if (mem) {
+        if (SMTGenerationOpts::getInstance().Heap) {
             args.push_back(SortedVar("HEAP", "(Array Int Int)"));
         }
         args.push_back(SortedVar("res", "Int"));
-        args.push_back(SortedVar("HEAP_res", "(Array Int Int)"));
+        if (SMTGenerationOpts::getInstance().Heap) {
+            args.push_back(SortedVar("HEAP_res", "(Array Int Int)"));
+        }
         std::string funName =
             invariantName(ENTRY_MARK, program == 1 ? ProgramSelection::First
                                                    : ProgramSelection::Second,
@@ -416,10 +412,10 @@ vector<SharedSMTRef> stringConstants(const llvm::Module &mod, string memory) {
             if (const auto arr = llvm::dyn_cast<llvm::ConstantDataArray>(
                     global.getInitializer())) {
                 for (unsigned int i = 0; i < arr->getNumElements(); ++i) {
-                    stringConstant.push_back(makeOp(
-                        "=", std::to_string(arr->getElementAsInteger(i)),
-                        makeOp("select", memory,
-                               makeOp("+", globalName, std::to_string(i)))));
+                    stringConstant.push_back(
+                        makeOp("=", std::to_string(arr->getElementAsInteger(i)),
+                               makeOp("select", makeOp("+", globalName,
+                                                       std::to_string(i)))));
                 }
             }
         }
@@ -431,8 +427,7 @@ vector<SharedSMTRef> stringConstants(const llvm::Module &mod, string memory) {
 }
 
 shared_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
-                               SharedSMTRef body, Memory memory,
-                               const llvm::Module &mod1,
+                               SharedSMTRef body, const llvm::Module &mod1,
                                const llvm::Module &mod2, bool strings,
                                bool additionalIn) {
 
@@ -440,12 +435,12 @@ shared_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
     const auto funArgsPair =
         functionArgs(*funs.first, *funs.second)
             .indexedMap<vector<smt::SortedVar>>(
-                [memory](vector<smt::SortedVar> args,
-                         int index) -> vector<smt::SortedVar> {
-                    if (memory & HEAP_MASK) {
+                [](vector<smt::SortedVar> args,
+                   int index) -> vector<smt::SortedVar> {
+                    if (SMTGenerationOpts::getInstance().Heap) {
                         args.push_back(SortedVar(heapName(index), arrayType()));
                     }
-                    if (memory & STACK_MASK) {
+                    if (SMTGenerationOpts::getInstance().Stack) {
                         args.push_back(SortedVar(stackPointerName(index),
                                                  stackPointerType()));
                         args.push_back(
@@ -500,8 +495,7 @@ shared_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
 }
 
 SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
-                          SharedSMTRef body, Memory memory,
-                          const llvm::Type *returnType) {
+                          SharedSMTRef body, const llvm::Type *returnType) {
     vector<SortedVar> funArgs = {
         toSMTSortedVar(SortedVar("result$1", llvmTypeToSMTSort(returnType))),
         toSMTSortedVar(SortedVar("result$2", llvmTypeToSMTSort(returnType)))};
@@ -512,7 +506,7 @@ SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
             funArgs.push_back(toSMTSortedVar(arg));
         }
     }
-    if (memory & HEAP_MASK) {
+    if (SMTGenerationOpts::getInstance().Heap) {
         funArgs.push_back(SortedVar("HEAP$1", arrayType()));
     }
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
@@ -520,12 +514,12 @@ SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
             funArgs.push_back(toSMTSortedVar(arg));
         }
     }
-    if (memory & HEAP_MASK) {
+    if (SMTGenerationOpts::getInstance().Heap) {
         funArgs.push_back(SortedVar("HEAP$2", arrayType()));
     }
     if (body == nullptr) {
         body = makeOp("=", "result$1", "result$2");
-        if (memory & HEAP_MASK) {
+        if (SMTGenerationOpts::getInstance().Heap) {
             body = makeOp("and", body, makeOp("=", "HEAP$1", "HEAP$2"));
         }
     }

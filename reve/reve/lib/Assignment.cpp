@@ -36,8 +36,7 @@ using std::string;
 /// Convert a basic block to a list of assignments
 vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
                                        const llvm::BasicBlock *prevBb,
-                                       bool onlyPhis, Program prog,
-                                       Memory heap) {
+                                       bool onlyPhis, Program prog) {
     const int progIndex = programIndex(prog);
     vector<DefOrCallInfo> definitions;
     assert(BB.size() >= 1); // There should be at least a terminator instruction
@@ -65,7 +64,7 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
                     definitions.insert(definitions.end(), defs.begin(),
                                        defs.end());
                 } else {
-                    if (heap & HEAP_MASK) {
+                    if (SMTGenerationOpts::getInstance().Heap) {
                         definitions.push_back(DefOrCallInfo(
                             shared_ptr<const Assignment>(makeAssignment(
                                 heapName(progIndex),
@@ -73,7 +72,7 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
                     }
                     definitions.push_back(DefOrCallInfo(
                         toCallInfo(CallInst->getName(), prog, *CallInst)));
-                    if (heap & HEAP_MASK) {
+                    if (SMTGenerationOpts::getInstance().Heap) {
                         definitions.push_back(DefOrCallInfo(makeAssignment(
                             heapName(progIndex),
                             stringExpr(heapName(progIndex) + "_res"))));
@@ -97,7 +96,7 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
         }
         definitions.push_back(DefOrCallInfo(
             makeAssignment("result$" + std::to_string(progIndex), retName)));
-        if (heap & HEAP_MASK) {
+        if (SMTGenerationOpts::getInstance().Heap) {
             definitions.push_back(
                 DefOrCallInfo(makeAssignment(heapName(progIndex) + "_res",
                                              stringExpr(heapName(progIndex)))));

@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include "Memory.h"
 #include "Program.h"
+#include "SMT.h"
 
 #include "llvm/IR/Instructions.h"
 
@@ -62,7 +62,7 @@ struct DefOrCallInfo {
 
 auto blockAssignments(const llvm::BasicBlock &bb,
                       const llvm::BasicBlock *prevBb, bool onlyPhis,
-                      Program prog, Memory heap) -> std::vector<DefOrCallInfo>;
+                      Program prog) -> std::vector<DefOrCallInfo>;
 auto instrAssignment(const llvm::Instruction &instr,
                      const llvm::BasicBlock *prevBb, Program prog)
     -> std::vector<std::shared_ptr<const smt::Assignment>>;
