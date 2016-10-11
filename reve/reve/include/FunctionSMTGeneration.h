@@ -85,11 +85,27 @@ auto mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
           at the end mark.
  */
 using ReturnInvariantGenerator = std::function<smt::SMTRef(int, int)>;
+struct MarkPair {
+    int startMark;
+    int endMark;
+};
+
+inline bool operator==(const MarkPair &lhs, const MarkPair &rhs) {
+    return lhs.startMark == rhs.startMark && lhs.endMark == rhs.endMark;
+}
+
+inline bool operator<(const MarkPair &lhs, const MarkPair &rhs) {
+    if (lhs.startMark == rhs.startMark) {
+        return lhs.endMark < rhs.startMark;
+    }
+    return lhs.startMark < rhs.startMark;
+}
+
 auto getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
                           std::vector<smt::SortedVar> &variableDeclarations,
                           smt::FreeVarsMap freeVarsMap,
                           ReturnInvariantGenerator generateReturnInvariant)
-    -> std::map<int, std::map<int, std::vector<smt::SharedSMTRef>>>;
+    -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
 /// Declarations for the main function.
 auto mainDeclarations(PathMap pathMap, std::string funName,
                       smt::FreeVarsMap freeVarsMap)
@@ -121,12 +137,12 @@ auto getOffByNPaths(PathMap pathMap1, PathMap pathMap2,
                     smt::FreeVarsMap freeVarsMap,
                     std::vector<smt::SortedVar> &variableDeclarations,
                     std::string funName, bool main)
-    -> std::map<int, std::map<int, std::vector<smt::SharedSMTRef>>>;
+    -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
 auto offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
                        smt::FreeVarsMap freeVarsMap,
                        std::vector<smt::SortedVar> &variableDeclarations,
                        Program prog, std::string funName, bool main)
-    -> std::map<int, std::map<int, std::vector<smt::SharedSMTRef>>>;
+    -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
 
 /* -------------------------------------------------------------------------- */
 // Functions for generating SMT for a single/mutual path

@@ -154,20 +154,15 @@ auto transpose(std::map<KeyA, std::map<KeyB, Val>> map)
     return mapResult;
 }
 
-template <typename T>
-auto mergeVectorMaps(std::map<int, std::map<int, std::vector<T>>> a,
-                     std::map<int, std::map<int, std::vector<T>>> b)
-    -> std::map<int, std::map<int, std::vector<T>>> {
-    auto merge = [](
-        std::map<int, std::vector<T>> mapA,
-        std::map<int, std::vector<T>> mapB) -> std::map<int, std::vector<T>> {
-        return unionWith<int, std::vector<T>>(
-            mapA, mapB, [](std::vector<T> a, std::vector<T> b) {
-                a.insert(a.end(), b.begin(), b.end());
-                return a;
-            });
-    };
-    return unionWith<int, std::map<int, std::vector<T>>>(a, b, merge);
+template <typename K, typename V>
+auto mergeVectorMaps(std::map<K, std::vector<V>> a,
+                     std::map<K, std::vector<V>> b)
+    -> std::map<K, std::vector<V>> {
+    return unionWith<K, std::vector<V>>(
+        a, b, [](std::vector<V> a, std::vector<V> b) {
+            a.insert(a.end(), b.begin(), b.end());
+            return a;
+        });
 }
 
 auto filterVars(int program, std::vector<smt::SortedVar> vars)
