@@ -111,11 +111,6 @@ static llvm::cl::opt<bool> EverythingSignedFlag(
     "signed", llvm::cl::desc("Treat all operations as signed operatons"),
     llvm::cl::cat(ReveCategory));
 
-static llvm::cl::opt<bool> SingleInvariantFlag(
-    "single-invariant",
-    llvm::cl::desc("Use a single invariant indexed by the mark"),
-    llvm::cl::cat(ReveCategory));
-
 static llvm::cl::opt<bool>
     MuZFlag("muz", llvm::cl::desc("Create smt intended for conversion to muz"),
             llvm::cl::cat(ReveCategory));
@@ -164,10 +159,9 @@ int main(int argc, const char **argv) {
                                   InferMarksFlag);
     SMTGenerationOpts::initialize(
         MainFunctionFlag, HeapFlag, StackFlag, GlobalConstantsFlag,
-        OnlyRecursiveFlag, NoByteHeapFlag, EverythingSignedFlag,
-        SingleInvariantFlag, MuZFlag, PerfectSyncFlag, NestFlag,
-        PassInputThroughFlag, BitVectFlag, InvertFlag, InitPredFlag,
-        DisableAutoCouplingFlag, {},
+        OnlyRecursiveFlag, NoByteHeapFlag, EverythingSignedFlag, MuZFlag,
+        PerfectSyncFlag, NestFlag, PassInputThroughFlag, BitVectFlag,
+        InvertFlag, InitPredFlag, DisableAutoCouplingFlag, {},
         parseFunctionPairFlags(AssumeEquivalentFlags),
         parseFunctionPairFlags(CoupleFunctionsFlag));
     InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,

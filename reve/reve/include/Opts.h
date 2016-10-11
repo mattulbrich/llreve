@@ -41,10 +41,9 @@ class SMTGenerationOpts {
     // Convenience method to make sure you don’t forget to set parameters
     static void initialize(std::string mainFunction, bool heap, bool stack,
                            bool globalConstants, bool onlyRecursive,
-                           bool noByteHeap, bool everythingSigned,
-                           bool singleInvariant, bool muZ, bool perfectSync,
-                           bool nest, bool passInputThrough, bool bitvect,
-                           bool invert, bool initPredicate,
+                           bool noByteHeap, bool everythingSigned, bool muZ,
+                           bool perfectSync, bool nest, bool passInputThrough,
+                           bool bitvect, bool invert, bool initPredicate,
                            bool disableAutoCoupling,
                            std::map<int, smt::SharedSMTRef> invariants,
                            std::set<MonoPair<std::string>> assumeEquivalent,
@@ -56,7 +55,6 @@ class SMTGenerationOpts {
     bool OnlyRecursive;
     bool NoByteHeap;
     bool EverythingSigned;
-    bool SingleInvariant;
     bool MuZ;
     bool PerfectSync;
     bool Nest;

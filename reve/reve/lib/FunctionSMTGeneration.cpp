@@ -74,34 +74,20 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
 
     };
     const llvm::Type *returnType = preprocessedFuns.first.fun->getReturnType();
-    if (!SMTGenerationOpts::getInstance().SingleInvariant) {
-        MonoPair<SMTRef> invariants =
-            invariantDeclaration(ENTRY_MARK, freeVarsMap.at(ENTRY_MARK),
-                                 ProgramSelection::Both, funName, returnType);
-        MonoPair<SMTRef> invariants1 = invariantDeclaration(
-            ENTRY_MARK, filterVars(1, freeVarsMap.at(ENTRY_MARK)),
-            ProgramSelection::First, preprocessedFuns.first.fun->getName(),
-            returnType);
-        MonoPair<SMTRef> invariants2 = invariantDeclaration(
-            ENTRY_MARK, filterVars(2, freeVarsMap.at(ENTRY_MARK)),
-            ProgramSelection::Second, preprocessedFuns.second.fun->getName(),
-            returnType);
-        std::move(invariants).forEach(addInvariant);
-        std::move(invariants1).forEach(addInvariant);
-        std::move(invariants2).forEach(addInvariant);
-    } else {
-        MonoPair<SMTRef> invariants = singleInvariantDeclaration(
-            freeVarsMap, ProgramSelection::Both, funName);
-        MonoPair<SMTRef> invariants1 =
-            singleInvariantDeclaration(freeVarsMap, ProgramSelection::First,
-                                       preprocessedFuns.first.fun->getName());
-        MonoPair<SMTRef> invariants2 =
-            singleInvariantDeclaration(freeVarsMap, ProgramSelection::Second,
-                                       preprocessedFuns.second.fun->getName());
-        std::move(invariants).forEach(addInvariant);
-        std::move(invariants1).forEach(addInvariant);
-        std::move(invariants2).forEach(addInvariant);
-    }
+    MonoPair<SMTRef> invariants =
+        invariantDeclaration(ENTRY_MARK, freeVarsMap.at(ENTRY_MARK),
+                             ProgramSelection::Both, funName, returnType);
+    MonoPair<SMTRef> invariants1 = invariantDeclaration(
+        ENTRY_MARK, filterVars(1, freeVarsMap.at(ENTRY_MARK)),
+        ProgramSelection::First, preprocessedFuns.first.fun->getName(),
+        returnType);
+    MonoPair<SMTRef> invariants2 = invariantDeclaration(
+        ENTRY_MARK, filterVars(2, freeVarsMap.at(ENTRY_MARK)),
+        ProgramSelection::Second, preprocessedFuns.second.fun->getName(),
+        returnType);
+    std::move(invariants).forEach(addInvariant);
+    std::move(invariants1).forEach(addInvariant);
+    std::move(invariants2).forEach(addInvariant);
 
     const map<int, map<int, vector<std::function<SharedSMTRef(SharedSMTRef)>>>>
         synchronizedPaths = getSynchronizedPaths(
@@ -269,11 +255,6 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
         return smtExprs;
     }
 
-    if (SMTGenerationOpts::getInstance().SingleInvariant) {
-        declarations.push_back(
-            singleMainInvariant(freeVarsMap, ProgramSelection::Both));
-    }
-
     map<int, map<int, vector<std::function<SharedSMTRef(SharedSMTRef)>>>>
         synchronizedPaths = getSynchronizedPaths(
             pathMaps.first, pathMaps.second, variableDeclarations, freeVarsMap);
@@ -402,8 +383,7 @@ vector<SharedSMTRef> mainDeclarations(PathMap pathMap, string funName,
     vector<SharedSMTRef> declarations;
     for (const auto &pathMapIt : pathMap) {
         const int startIndex = pathMapIt.first;
-        if (startIndex != ENTRY_MARK &&
-            !SMTGenerationOpts::getInstance().SingleInvariant) {
+        if (startIndex != ENTRY_MARK) {
             // ignore entry node
             if (SMTGenerationOpts::getInstance().Invariants.find(startIndex) ==
                 SMTGenerationOpts::getInstance().Invariants.end()) {
@@ -426,8 +406,7 @@ vector<SharedSMTRef> recDeclarations(PathMap pathMap, string funName,
     vector<SharedSMTRef> declarations;
     for (const auto &pathMapIt : pathMap) {
         const int startIndex = pathMapIt.first;
-        if (startIndex != ENTRY_MARK &&
-            !SMTGenerationOpts::getInstance().SingleInvariant) {
+        if (startIndex != ENTRY_MARK) {
             // ignore entry node
             MonoPair<SharedSMTRef> invariants = invariantDeclaration(
                 startIndex, freeVarsMap.at(startIndex), ProgramSelection::Both,
@@ -508,8 +487,7 @@ void nonmutualPaths(PathMap pathMap, vector<SharedSMTRef> &pathExprs,
     const int progIndex = programIndex(prog);
     for (const auto &pathMapIt : pathMap) {
         const int startIndex = pathMapIt.first;
-        if (startIndex != ENTRY_MARK &&
-            !SMTGenerationOpts::getInstance().SingleInvariant) {
+        if (startIndex != ENTRY_MARK) {
             MonoPair<SMTRef> invariants = invariantDeclaration(
                 startIndex, filterVars(progIndex, freeVarsMap.at(startIndex)),
                 asSelection(prog), funName, returnType);
@@ -894,7 +872,6 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
 
     } else {
         InvariantAttr attr = main ? InvariantAttr::MAIN : InvariantAttr::PRE;
-        preVars = fillUpArgs(preVars, freeVarsMap, prog, attr);
         SMTRef preInv =
             makeOp(invariantName(blockIndex, prog, funName, attr), preVars);
         clause = makeOp("=>", std::move(preInv), clause);
@@ -957,8 +934,6 @@ SharedSMTRef equalInputsEqualOutputs(vector<smt::SortedVar> funArgs,
         args.push_back("HEAP$1_res");
         args.push_back("HEAP$2_res");
     }
-    args = fillUpArgs(args, freeVarsMap, ProgramSelection::Both,
-                      InvariantAttr::NONE);
     vector<string> outArgs = {"result$1", "result$2"};
     vector<string> sortedFunArgs1;
     vector<string> sortedFunArgs2;
@@ -994,8 +969,6 @@ SharedSMTRef equalInputsEqualOutputs(vector<smt::SortedVar> funArgs,
         "=>", makeOp(invariantName(ENTRY_MARK, ProgramSelection::Both, funName),
                      args),
         makeOp("OUT_INV", outArgs));
-    preInvArgs = fillUpArgs(preInvArgs, freeVarsMap, ProgramSelection::Both,
-                            InvariantAttr::PRE);
     SMTRef preInv = makeOp(invariantName(ENTRY_MARK, ProgramSelection::Both,
                                          funName, InvariantAttr::PRE),
                            preInvArgs);
