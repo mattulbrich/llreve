@@ -29,8 +29,8 @@ llvm::cl::OptionCategory ReveCategory("Reve options",
 void SMTGenerationOpts::initialize(
     std::string mainFunction, bool heap, bool stack, bool globalConstants,
     bool onlyRecursive, bool noByteHeap, bool everythingSigned, bool muZ,
-    bool perfectSync, bool nest, bool passInputThrough, bool bitVect,
-    bool invert, bool initPredicate, bool disableAutoCoupling,
+    bool perfectSync, bool passInputThrough, bool bitVect, bool invert,
+    bool initPredicate, bool disableAutoCoupling,
     map<int, SharedSMTRef> invariants, set<MonoPair<string>> assumeEquivalent,
     set<MonoPair<string>> coupledFunctions) {
     SMTGenerationOpts &i = getInstance();
@@ -43,7 +43,6 @@ void SMTGenerationOpts::initialize(
     i.EverythingSigned = everythingSigned;
     i.MuZ = muZ;
     i.PerfectSync = perfectSync;
-    i.Nest = nest;
     i.PassInputThrough = passInputThrough;
     i.BitVect = bitVect;
     i.InitPredicate = initPredicate;

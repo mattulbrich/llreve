@@ -42,7 +42,7 @@ class SMTGenerationOpts {
     static void initialize(std::string mainFunction, bool heap, bool stack,
                            bool globalConstants, bool onlyRecursive,
                            bool noByteHeap, bool everythingSigned, bool muZ,
-                           bool perfectSync, bool nest, bool passInputThrough,
+                           bool perfectSync, bool passInputThrough,
                            bool bitvect, bool invert, bool initPredicate,
                            bool disableAutoCoupling,
                            std::map<int, smt::SharedSMTRef> invariants,
@@ -57,7 +57,6 @@ class SMTGenerationOpts {
     bool EverythingSigned;
     bool MuZ;
     bool PerfectSync;
-    bool Nest;
     bool PassInputThrough;
     bool BitVect;
     bool Invert;

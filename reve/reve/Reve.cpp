@@ -120,17 +120,13 @@ static llvm::cl::opt<bool> PerfectSyncFlag(
     llvm::cl::desc("Perfect synchronization, don’t allow off by n loops"),
     llvm::cl::cat(ReveCategory));
 
-static llvm::cl::opt<bool>
-    NestFlag("nest",
-             llvm::cl::desc("Nest clauses, this can sometimes help eldarica"),
-             llvm::cl::cat(ReveCategory));
-
 static llvm::cl::opt<bool> PassInputThroughFlag(
     "pass-input-through",
     llvm::cl::desc("Pass the input arguments through the "
                    "complete program. This makes it possible "
                    "to use them in custom postconditions"),
     llvm::cl::cat(ReveCategory));
+
 static llvm::cl::opt<bool>
     BitVectFlag("bitvect",
                 llvm::cl::desc("Use bitvects instead of unbounded ints"),
@@ -160,8 +156,8 @@ int main(int argc, const char **argv) {
     SMTGenerationOpts::initialize(
         MainFunctionFlag, HeapFlag, StackFlag, GlobalConstantsFlag,
         OnlyRecursiveFlag, NoByteHeapFlag, EverythingSignedFlag, MuZFlag,
-        PerfectSyncFlag, NestFlag, PassInputThroughFlag, BitVectFlag,
-        InvertFlag, InitPredFlag, DisableAutoCouplingFlag, {},
+        PerfectSyncFlag, PassInputThroughFlag, BitVectFlag, InvertFlag,
+        InitPredFlag, DisableAutoCouplingFlag, {},
         parseFunctionPairFlags(AssumeEquivalentFlags),
         parseFunctionPairFlags(CoupleFunctionsFlag));
     InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,

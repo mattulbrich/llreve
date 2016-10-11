@@ -155,8 +155,8 @@ auto transpose(std::map<KeyA, std::map<KeyB, Val>> map)
 }
 
 template <typename T>
-auto mergePathFuns(std::map<int, std::map<int, std::vector<T>>> a,
-                   std::map<int, std::map<int, std::vector<T>>> b)
+auto mergeVectorMaps(std::map<int, std::map<int, std::vector<T>>> a,
+                     std::map<int, std::map<int, std::vector<T>>> b)
     -> std::map<int, std::map<int, std::vector<T>>> {
     auto merge = [](
         std::map<int, std::vector<T>> mapA,

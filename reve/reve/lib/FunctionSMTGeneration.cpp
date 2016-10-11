@@ -49,20 +49,18 @@ vector<SharedSMTRef>
 functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
                   vector<SharedSMTRef> &declarations,
                   vector<SortedVar> &variableDeclarations) {
-    const MonoPair<PathMap> pathMaps = preprocessedFuns.map<PathMap>(
+    const auto pathMaps = preprocessedFuns.map<PathMap>(
         [](PreprocessedFunction fun) { return fun.results.paths; });
     checkPathMaps(pathMaps.first, pathMaps.second);
-    const MonoPair<BidirBlockMarkMap> marked =
-        preprocessedFuns.map<BidirBlockMarkMap>(
-            [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
+    const auto marked = preprocessedFuns.map<BidirBlockMarkMap>(
+        [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
     const string funName = preprocessedFuns.first.fun->getName().str() + "^" +
                            preprocessedFuns.second.fun->getName().str();
-    const MonoPair<vector<smt::SortedVar>> funArgsPair =
+    const auto funArgsPair =
         functionArgs(*preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
-    const vector<smt::SortedVar> funArgs = functionArgsFreeVars(
-        *preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
-    const smt::FreeVarsMap freeVarsMap =
-        freeVars(pathMaps.first, pathMaps.second, funArgs);
+    const auto funArgs = functionArgsFreeVars(*preprocessedFuns.first.fun,
+                                              *preprocessedFuns.second.fun);
+    const auto freeVarsMap = freeVars(pathMaps.first, pathMaps.second, funArgs);
     if (SMTGenerationOpts::getInstance().MuZ) {
         declareVariables(freeVarsMap, variableDeclarations);
     }
@@ -89,12 +87,19 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     std::move(invariants1).forEach(addInvariant);
     std::move(invariants2).forEach(addInvariant);
 
-    const map<int, map<int, vector<std::function<SharedSMTRef(SharedSMTRef)>>>>
-        synchronizedPaths = getSynchronizedPaths(
-            pathMaps.first, pathMaps.second, variableDeclarations, freeVarsMap);
     const vector<SharedSMTRef> recDecls =
         recDeclarations(pathMaps.first, funName, freeVarsMap, returnType);
     declarations.insert(declarations.end(), recDecls.begin(), recDecls.end());
+
+    const map<int, map<int, vector<SharedSMTRef>>> synchronizedPaths =
+        getSynchronizedPaths(
+            pathMaps.first, pathMaps.second, variableDeclarations, freeVarsMap,
+            [&freeVarsMap, funName](int startIndex, int endIndex) {
+                return invariant(startIndex, endIndex,
+                                 freeVarsMap.at(startIndex),
+                                 freeVarsMap.at(endIndex),
+                                 ProgramSelection::Both, funName, freeVarsMap);
+            });
     for (const auto &it : synchronizedPaths) {
         const int startIndex = it.first;
         for (const auto &it2 : it.second) {
@@ -103,11 +108,10 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
                 invariant(startIndex, endIndex, freeVarsMap.at(startIndex),
                           freeVarsMap.at(endIndex), ProgramSelection::Both,
                           funName, freeVarsMap);
-            for (const auto &pathFun : it2.second) {
+            for (const auto &clause : it2.second) {
                 pathExprs.push_back(make_shared<Assert>(forallStartingAt(
-                    pathFun(endInvariant), freeVarsMap.at(startIndex),
-                    startIndex, ProgramSelection::Both, funName, false,
-                    freeVarsMap)));
+                    clause, freeVarsMap.at(startIndex), startIndex,
+                    ProgramSelection::Both, funName, false, freeVarsMap)));
             }
         }
     }
@@ -120,25 +124,22 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
                    preprocessedFuns.second.fun->getName(), declarations,
                    variableDeclarations, returnType);
 
-    const vector<SharedSMTRef> forbiddenPaths = getForbiddenPaths(
+    const auto forbiddenPaths = getForbiddenPaths(
         pathMaps, marked, variableDeclarations, freeVarsMap, funName, false);
     pathExprs.insert(pathExprs.end(), forbiddenPaths.begin(),
                      forbiddenPaths.end());
 
     if (!SMTGenerationOpts::getInstance().PerfectSync) {
-        const map<int,
-                  map<int, vector<std::function<SharedSMTRef(SharedSMTRef)>>>>
-            offByNPaths =
-                getOffByNPaths(pathMaps.first, pathMaps.second, freeVarsMap,
-                               variableDeclarations, funName, false);
+        const map<int, map<int, vector<SharedSMTRef>>> offByNPaths =
+            getOffByNPaths(pathMaps.first, pathMaps.second, freeVarsMap,
+                           variableDeclarations, funName, false);
         for (const auto &it : offByNPaths) {
             const int startIndex = it.first;
             for (const auto &it2 : it.second) {
-                for (const auto &pathFun : it2.second) {
+                for (const auto &clause : it2.second) {
                     pathExprs.push_back(make_shared<Assert>(forallStartingAt(
-                        pathFun(nullptr), freeVarsMap.at(startIndex),
-                        startIndex, ProgramSelection::Both, funName, false,
-                        freeVarsMap)));
+                        clause, freeVarsMap.at(startIndex), startIndex,
+                        ProgramSelection::Both, funName, false, freeVarsMap)));
                 }
             }
         }
@@ -225,20 +226,18 @@ vector<SharedSMTRef>
 mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
               vector<SharedSMTRef> &declarations,
               vector<SortedVar> &variableDeclarations, bool onlyRec) {
-    const MonoPair<PathMap> pathMaps = preprocessedFuns.map<PathMap>(
+    const auto pathMaps = preprocessedFuns.map<PathMap>(
         [](PreprocessedFunction fun) { return fun.results.paths; });
     checkPathMaps(pathMaps.first, pathMaps.second);
-    const MonoPair<BidirBlockMarkMap> marked =
-        preprocessedFuns.map<BidirBlockMarkMap>(
-            [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
+    const auto marked = preprocessedFuns.map<BidirBlockMarkMap>(
+        [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
     const string funName = preprocessedFuns.first.fun->getName();
-    const MonoPair<vector<smt::SortedVar>> funArgsPair =
+    const auto funArgsPair =
         functionArgs(*preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
-    const vector<smt::SortedVar> funArgs = functionArgsFreeVars(
-        *preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
+    const auto funArgs = functionArgsFreeVars(*preprocessedFuns.first.fun,
+                                              *preprocessedFuns.second.fun);
 
-    const smt::FreeVarsMap freeVarsMap =
-        freeVars(pathMaps.first, pathMaps.second, funArgs);
+    const auto freeVarsMap = freeVars(pathMaps.first, pathMaps.second, funArgs);
     if (SMTGenerationOpts::getInstance().MuZ ||
         SMTGenerationOpts::getInstance().Invert) {
         declareVariables(freeVarsMap, variableDeclarations);
@@ -255,76 +254,51 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
         return smtExprs;
     }
 
-    map<int, map<int, vector<std::function<SharedSMTRef(SharedSMTRef)>>>>
-        synchronizedPaths = getSynchronizedPaths(
-            pathMaps.first, pathMaps.second, variableDeclarations, freeVarsMap);
-    const vector<SharedSMTRef> mainDecls =
+    map<int, map<int, vector<SharedSMTRef>>> synchronizedPaths =
+        getSynchronizedPaths(
+            pathMaps.first, pathMaps.second, variableDeclarations, freeVarsMap,
+            [&freeVarsMap, funName](int startIndex, int endIndex) {
+                SMTRef endInvariant =
+                    mainInvariant(endIndex, freeVarsMap.at(endIndex), funName);
+                if (SMTGenerationOpts::getInstance().MuZ &&
+                    endIndex == EXIT_MARK) {
+                    endInvariant =
+                        makeOp("=>", makeOp("not", std::move(endInvariant)),
+                               stringExpr("END_QUERY"));
+                }
+                return endInvariant;
+            });
+    const auto mainDecls =
         mainDeclarations(pathMaps.first, funName, freeVarsMap);
     declarations.insert(declarations.end(), mainDecls.begin(), mainDecls.end());
-    const vector<SharedSMTRef> forbiddenPaths = getForbiddenPaths(
+    const auto forbiddenPaths = getForbiddenPaths(
         pathMaps, marked, variableDeclarations, freeVarsMap, funName, true);
     if (!SMTGenerationOpts::getInstance().PerfectSync) {
-        const map<int,
-                  map<int, vector<std::function<SharedSMTRef(SharedSMTRef)>>>>
-            offByNPaths =
-                getOffByNPaths(pathMaps.first, pathMaps.second, freeVarsMap,
-                               variableDeclarations, funName, true);
-        synchronizedPaths = mergePathFuns(synchronizedPaths, offByNPaths);
+        const map<int, map<int, vector<SharedSMTRef>>> offByNPaths =
+            getOffByNPaths(pathMaps.first, pathMaps.second, freeVarsMap,
+                           variableDeclarations, funName, true);
+        synchronizedPaths = mergeVectorMaps(synchronizedPaths, offByNPaths);
     }
-    auto transposedPaths = transpose(synchronizedPaths);
-    // remove cycles
-    for (auto &it : transposedPaths) {
-        it.second.erase(it.first);
-    }
+
     vector<SharedSMTRef> negations;
     for (const auto &it : synchronizedPaths) {
         const int startIndex = it.first;
         vector<SharedSMTRef> pathsStartingHere;
         for (auto it2 : it.second) {
-            const int endIndex = it2.first;
-            SharedSMTRef endInvariant =
-                mainInvariant(endIndex, freeVarsMap.at(endIndex), funName);
-            if (SMTGenerationOpts::getInstance().MuZ && endIndex == EXIT_MARK) {
-                endInvariant =
-                    makeOp("=>", makeOp("not", std::move(endInvariant)),
-                           stringExpr("END_QUERY"));
-            }
-            for (auto pathFun : it2.second) {
-                pathsStartingHere.push_back(pathFun(endInvariant));
+            for (auto &clause : it2.second) {
+                pathsStartingHere.push_back(clause);
             }
         }
-        if (SMTGenerationOpts::getInstance().Nest) {
-            auto clause = forallStartingAt(
-                make_shared<Op>("and", pathsStartingHere),
-                freeVarsMap.at(startIndex), startIndex, ProgramSelection::Both,
-                funName, true, freeVarsMap);
-            if ((transposedPaths.find(startIndex) != transposedPaths.end())) {
-                if (transposedPaths.at(startIndex).size() == 1) {
-                    auto it = transposedPaths.at(startIndex).begin();
-                    const int comingFrom = it->first;
-                    if (it->second.size() == 1) {
-                        const auto nestFun = it->second.at(0);
-                        clause = forallStartingAt(
-                            nestFun(clause), freeVarsMap.at(comingFrom),
-                            comingFrom, ProgramSelection::Both, funName, true,
-                            freeVarsMap);
-                    }
-                }
-            }
-            smtExprs.push_back(make_shared<Assert>(clause));
-        } else {
-            for (auto path : pathsStartingHere) {
-                auto clause = forallStartingAt(
-                    path, freeVarsMap.at(startIndex), startIndex,
-                    ProgramSelection::Both, funName, true, freeVarsMap);
-                if (SMTGenerationOpts::getInstance().Invert) {
-                    negations.push_back(makeOp(
-                        "and",
-                        makeOp("=", "INV_INDEX", std::to_string(startIndex)),
-                        makeOp("not", clause)));
-                } else {
-                    smtExprs.push_back(make_shared<Assert>(clause));
-                }
+        for (auto path : pathsStartingHere) {
+            auto clause = forallStartingAt(path, freeVarsMap.at(startIndex),
+                                           startIndex, ProgramSelection::Both,
+                                           funName, true, freeVarsMap);
+            if (SMTGenerationOpts::getInstance().Invert) {
+                negations.push_back(makeOp(
+                    "and", makeOp("=", "INV_INDEX", std::to_string(startIndex)),
+                    makeOp("not", clause)));
+            } else {
+                smtExprs.push_back(make_shared<Assert>(clause));
             }
         }
     }
@@ -340,11 +314,12 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
 /* -------------------------------------------------------------------------- */
 // Generate SMT for all paths
 
-map<int, map<int, vector<function<SharedSMTRef(SharedSMTRef)>>>>
+map<int, map<int, vector<SharedSMTRef>>>
 getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
                      vector<SortedVar> &variableDeclarations,
-                     smt::FreeVarsMap freeVarsMap) {
-    map<int, map<int, vector<function<SharedSMTRef(SharedSMTRef)>>>> pathFuns;
+                     smt::FreeVarsMap freeVarsMap,
+                     ReturnInvariantGenerator generateReturnInvariant) {
+    map<int, map<int, vector<SharedSMTRef>>> clauses;
     for (const auto &pathMapIt : pathMap1) {
         const int startIndex = pathMapIt.first;
         for (const auto &innerPathMapIt : pathMapIt.second) {
@@ -364,18 +339,17 @@ getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
                                             freeVarsMap.at(startIndex),
                                             endIndex == EXIT_MARK);
                                     });
-                        pathFuns[startIndex][endIndex].push_back(
-                            [&variableDeclarations, defs](SharedSMTRef end) {
-                                return interleaveAssignments(
-                                    end, defs, variableDeclarations);
-                            });
+                        clauses[startIndex][endIndex].push_back(
+                            interleaveAssignments(
+                                generateReturnInvariant(startIndex, endIndex),
+                                defs, variableDeclarations));
                     }
                 }
             }
         }
     }
 
-    return pathFuns;
+    return clauses;
 }
 
 vector<SharedSMTRef> mainDeclarations(PathMap pathMap, string funName,
@@ -516,11 +490,10 @@ void nonmutualPaths(PathMap pathMap, vector<SharedSMTRef> &pathExprs,
     }
 }
 
-map<int, map<int, vector<function<SharedSMTRef(SharedSMTRef)>>>>
+map<int, map<int, vector<SharedSMTRef>>>
 getOffByNPaths(PathMap pathMap1, PathMap pathMap2, smt::FreeVarsMap freeVarsMap,
                vector<SortedVar> &variableDeclarations, string funName,
                bool main) {
-    map<int, map<int, vector<function<SharedSMTRef(SharedSMTRef)>>>> pathFuns;
     vector<SharedSMTRef> paths;
     const auto firstPaths =
         offByNPathsOneDir(pathMap1, pathMap2, freeVarsMap, variableDeclarations,
@@ -528,16 +501,16 @@ getOffByNPaths(PathMap pathMap1, PathMap pathMap2, smt::FreeVarsMap freeVarsMap,
     const auto secondPaths =
         offByNPathsOneDir(pathMap2, pathMap1, freeVarsMap, variableDeclarations,
                           Program::Second, funName, main);
-    return mergePathFuns(firstPaths, secondPaths);
+    return mergeVectorMaps(firstPaths, secondPaths);
 }
 
-map<int, map<int, vector<function<SharedSMTRef(SharedSMTRef)>>>>
+map<int, map<int, vector<SharedSMTRef>>>
 offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
                   smt::FreeVarsMap freeVarsMap,
                   vector<SortedVar> &variableDeclarations, Program prog,
                   string funName, bool main) {
     const int progIndex = programIndex(prog);
-    map<int, map<int, vector<function<SharedSMTRef(SharedSMTRef)>>>> pathFuns;
+    map<int, map<int, vector<SharedSMTRef>>> clauses;
     for (const auto &pathMapIt : pathMap) {
         const int startIndex = pathMapIt.first;
         for (const auto &innerPathMapIt : pathMapIt.second) {
@@ -582,17 +555,13 @@ offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
                     const auto defs =
                         assignmentsOnPath(path, prog, freeVarsMap.at(endIndex),
                                           endIndex == EXIT_MARK);
-                    pathFuns[startIndex][startIndex].push_back(
-                        [&variableDeclarations, defs, prog,
-                         dontLoopInvariant](SharedSMTRef /*unused*/) {
-                            return nonmutualSMT(dontLoopInvariant, defs,
-                                                variableDeclarations, prog);
-                        });
+                    clauses[startIndex][startIndex].push_back(nonmutualSMT(
+                        dontLoopInvariant, defs, variableDeclarations, prog));
                 }
             }
         }
     }
-    return pathFuns;
+    return clauses;
 }
 
 /* -------------------------------------------------------------------------- */
