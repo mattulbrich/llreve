@@ -55,7 +55,8 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     const MonoPair<BidirBlockMarkMap> marked =
         preprocessedFuns.map<BidirBlockMarkMap>(
             [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
-    const string funName = preprocessedFuns.first.fun->getName();
+    const string funName = preprocessedFuns.first.fun->getName().str() + "^" +
+                           preprocessedFuns.second.fun->getName().str();
     const MonoPair<vector<smt::SortedVar>> funArgsPair =
         functionArgs(*preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
     const vector<smt::SortedVar> funArgs = functionArgsFreeVars(
@@ -79,20 +80,24 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
                                  ProgramSelection::Both, funName, returnType);
         MonoPair<SMTRef> invariants1 = invariantDeclaration(
             ENTRY_MARK, filterVars(1, freeVarsMap.at(ENTRY_MARK)),
-            ProgramSelection::First, funName, returnType);
+            ProgramSelection::First, preprocessedFuns.first.fun->getName(),
+            returnType);
         MonoPair<SMTRef> invariants2 = invariantDeclaration(
             ENTRY_MARK, filterVars(2, freeVarsMap.at(ENTRY_MARK)),
-            ProgramSelection::Second, funName, returnType);
+            ProgramSelection::Second, preprocessedFuns.second.fun->getName(),
+            returnType);
         std::move(invariants).forEach(addInvariant);
         std::move(invariants1).forEach(addInvariant);
         std::move(invariants2).forEach(addInvariant);
     } else {
         MonoPair<SMTRef> invariants = singleInvariantDeclaration(
             freeVarsMap, ProgramSelection::Both, funName);
-        MonoPair<SMTRef> invariants1 = singleInvariantDeclaration(
-            freeVarsMap, ProgramSelection::First, funName);
-        MonoPair<SMTRef> invariants2 = singleInvariantDeclaration(
-            freeVarsMap, ProgramSelection::Second, funName);
+        MonoPair<SMTRef> invariants1 =
+            singleInvariantDeclaration(freeVarsMap, ProgramSelection::First,
+                                       preprocessedFuns.first.fun->getName());
+        MonoPair<SMTRef> invariants2 =
+            singleInvariantDeclaration(freeVarsMap, ProgramSelection::Second,
+                                       preprocessedFuns.second.fun->getName());
         std::move(invariants).forEach(addInvariant);
         std::move(invariants1).forEach(addInvariant);
         std::move(invariants2).forEach(addInvariant);
@@ -123,9 +128,11 @@ functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     // these are needed for calls that can’t be matched with the same call in
     // the other program
     nonmutualPaths(pathMaps.first, pathExprs, freeVarsMap, Program::First,
-                   funName, declarations, variableDeclarations, returnType);
+                   preprocessedFuns.first.fun->getName(), declarations,
+                   variableDeclarations, returnType);
     nonmutualPaths(pathMaps.second, pathExprs, freeVarsMap, Program::Second,
-                   funName, declarations, variableDeclarations, returnType);
+                   preprocessedFuns.second.fun->getName(), declarations,
+                   variableDeclarations, returnType);
 
     const vector<SharedSMTRef> forbiddenPaths = getForbiddenPaths(
         pathMaps, marked, variableDeclarations, freeVarsMap, funName, false);
@@ -709,7 +716,7 @@ SharedSMTRef interleaveAssignments(
             ++assignmentIt2;
             break;
         case InterleaveStep::StepBoth:
-            assert(callIt1->callName == callIt2->callName);
+            assert(coupledCalls(*callIt1, *callIt2));
             clause = addAssignments(clause, *assignmentIt2);
             clause = addAssignments(clause, *assignmentIt1);
             clause = mutualRecursiveForall(
@@ -792,7 +799,8 @@ SMTRef mutualRecursiveForall(SharedSMTRef clause, MonoPair<CallInfo> callPair,
     }
     SMTRef postInvariant = std::make_unique<Op>(
         invariantName(ENTRY_MARK, ProgramSelection::Both,
-                      callPair.first.callName, InvariantAttr::NONE, varArgs),
+                      callPair.first.callName + "^" + callPair.second.callName,
+                      InvariantAttr::NONE, varArgs),
         implArgs, !callPair.first.externFun);
     SMTRef result = makeOp("=>", std::move(postInvariant), clause);
     if (SMTGenerationOpts::getInstance().MuZ) {
@@ -806,7 +814,8 @@ SMTRef mutualRecursiveForall(SharedSMTRef clause, MonoPair<CallInfo> callPair,
     }
     SMTRef preInv = std::make_unique<Op>(
         invariantName(ENTRY_MARK, ProgramSelection::Both,
-                      callPair.first.callName, InvariantAttr::PRE),
+                      callPair.first.callName + "^" + callPair.second.callName,
+                      InvariantAttr::PRE),
         preArgs);
     return makeOp("and", std::move(preInv), std::move(result));
 }
@@ -1280,6 +1289,7 @@ splitAssignmentsFromCalls(vector<AssignmentCallBlock> assignmentCallBlocks) {
 
 vector<InterleaveStep> matchFunCalls(vector<CallInfo> callInfos1,
                                      vector<CallInfo> callInfos2) {
+    // This is just a basic edit distance algorithm
     vector<vector<size_t>> table(callInfos1.size() + 1,
                                  vector<size_t>(callInfos2.size() + 1, 0));
     for (uint32_t i = 0; i <= callInfos1.size(); ++i) {
@@ -1290,7 +1300,7 @@ vector<InterleaveStep> matchFunCalls(vector<CallInfo> callInfos1,
     }
     for (uint32_t i = 1; i <= callInfos1.size(); ++i) {
         for (uint32_t j = 1; j <= callInfos2.size(); ++j) {
-            if (callInfos1[i - 1] == callInfos2[j - 1]) {
+            if (coupledCalls(callInfos1[i - 1], callInfos2[j - 1])) {
                 table[i][j] = table[i - 1][j - 1];
             } else {
                 table[i][j] =
@@ -1301,7 +1311,7 @@ vector<InterleaveStep> matchFunCalls(vector<CallInfo> callInfos1,
     vector<InterleaveStep> interleaveSteps;
     uint64_t i = callInfos1.size(), j = callInfos2.size();
     while (i > 0 && j > 0) {
-        if (callInfos1[i - 1] == callInfos2[j - 1]) {
+        if (coupledCalls(callInfos1[i - 1], callInfos2[j - 1])) {
             interleaveSteps.push_back(InterleaveStep::StepBoth);
             --i;
             --j;

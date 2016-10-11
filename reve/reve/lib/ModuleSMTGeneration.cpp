@@ -131,84 +131,111 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
     return smtExprs;
 }
 
+static SMTRef equalOutputs(std::string functionName,
+                           std::multimap<string, string> funCondMap) {
+    SMTRef body = makeOp("=", "res1", "res2");
+    if (SMTGenerationOpts::getInstance().Heap) {
+        SharedSMTRef heapOutEqual = makeOp("=", "HEAP$1_res", "HEAP$2_res");
+        body = makeOp("and", std::move(body), heapOutEqual);
+    }
+
+    std::vector<SharedSMTRef> equalOut;
+    // TODO remove dependency on a single name
+    auto range = funCondMap.equal_range(functionName);
+    for (auto i = range.first; i != range.second; ++i) {
+        equalOut.push_back(stringExpr(i->second));
+    }
+    if (!equalOut.empty()) {
+        equalOut.push_back(std::move(body));
+        body = make_unique<Op>("and", equalOut);
+    }
+    return body;
+}
+
+static SMTRef equalInputs(llvm::Function &fun1, llvm::Function &fun2,
+                          unsigned numberOfArguments) {
+    std::vector<SharedSMTRef> equal;
+    auto funArgs1 = funArgs(fun1, "arg1_", numberOfArguments);
+    auto funArgs2 = funArgs(fun2, "arg2_", numberOfArguments);
+
+    for (auto it1 = funArgs1.begin(), it2 = funArgs2.begin();
+         it1 != funArgs1.end() && it2 != funArgs2.end(); ++it1) {
+        equal.push_back(makeOp("=", it1->name, it2->name));
+        ++it2;
+    }
+    if (SMTGenerationOpts::getInstance().Heap) {
+        std::vector<SortedVar> forallArgs = {SortedVar("i", "Int")};
+        SharedSMTRef heapInEqual = makeOp("=", "HEAP$1", "HEAP$2");
+        equal.push_back(heapInEqual);
+    }
+    return make_unique<Op>("and", equal);
+}
+
+static std::vector<SortedVar> externDeclArgs(llvm::Function &fun1,
+                                             llvm::Function &fun2,
+                                             unsigned numberOfArguments) {
+    std::vector<SortedVar> args;
+    auto funArgs1 = funArgs(fun1, "arg1_", numberOfArguments);
+    for (auto arg : funArgs1) {
+        args.push_back(arg);
+    }
+    if (SMTGenerationOpts::getInstance().Heap) {
+        args.push_back(SortedVar("HEAP$1", arrayType()));
+    }
+    auto funArgs2 = funArgs(fun2, "arg2_", numberOfArguments);
+    for (auto arg : funArgs2) {
+        args.push_back(arg);
+    }
+    if (SMTGenerationOpts::getInstance().Heap) {
+        args.push_back(SortedVar("HEAP$2", arrayType()));
+    }
+    args.push_back(SortedVar("res1", "Int"));
+    args.push_back(SortedVar("res2", "Int"));
+    if (SMTGenerationOpts::getInstance().Heap) {
+        args.push_back(SortedVar("HEAP$1_res", arrayType()));
+        args.push_back(SortedVar("HEAP$2_res", arrayType()));
+    }
+    return args;
+}
+
 void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                         std::vector<SharedSMTRef> &declarations,
                         std::multimap<string, string> funCondMap) {
-    for (auto &fun1 : mod1) {
-        if (fun1.isDeclaration() && !fun1.isIntrinsic()) {
-            auto fun2P = mod2.getFunction(fun1.getName());
-            if (fun2P && fun1.getName() != "__mark" &&
-                fun1.getName() != "__splitmark") {
-                llvm::Function &fun2 = *fun2P;
-                // Calculate the number of varargs used in function calls
-                set<uint32_t> varArgs = getVarArgs(fun1);
-                set<uint32_t> varArgs2 = getVarArgs(fun2);
-                for (auto el : varArgs2) {
-                    varArgs.insert(el);
-                }
-                for (auto argNum : varArgs) {
-                    std::vector<SortedVar> args;
-                    auto funArgs1 = funArgs(fun1, "arg1_", argNum);
-                    for (auto arg : funArgs1) {
-                        args.push_back(arg);
-                    }
-                    if (SMTGenerationOpts::getInstance().Heap) {
-                        args.push_back(SortedVar("HEAP$1", arrayType()));
-                    }
-                    auto funArgs2 = funArgs(fun2, "arg2_", argNum);
-                    for (auto arg : funArgs2) {
-                        args.push_back(arg);
-                    }
-                    if (SMTGenerationOpts::getInstance().Heap) {
-                        args.push_back(SortedVar("HEAP$2", arrayType()));
-                    }
-                    std::string funName = invariantName(
-                        ENTRY_MARK, ProgramSelection::Both,
-                        fun1.getName().str(), InvariantAttr::NONE, argNum);
-                    // TODO Use the correct return types
-                    args.push_back(SortedVar("res1", "Int"));
-                    args.push_back(SortedVar("res2", "Int"));
-                    if (SMTGenerationOpts::getInstance().Heap) {
-                        args.push_back(SortedVar("HEAP$1_res", arrayType()));
-                        args.push_back(SortedVar("HEAP$2_res", arrayType()));
-                    }
-                    SharedSMTRef body = makeOp("=", "res1", "res2");
-                    if (SMTGenerationOpts::getInstance().Heap) {
-                        SharedSMTRef heapOutEqual =
-                            makeOp("=", "HEAP$1_res", "HEAP$2_res");
-                        body = makeOp("and", body, heapOutEqual);
-                    }
-                    std::vector<SharedSMTRef> equalOut;
-                    auto range = funCondMap.equal_range(fun1.getName());
-                    for (auto i = range.first; i != range.second; ++i) {
-                        equalOut.push_back(stringExpr(i->second));
-                    }
-                    if (!equalOut.empty()) {
-                        equalOut.push_back(body);
-                        body = make_shared<Op>("and", equalOut);
-                    }
-                    std::vector<SharedSMTRef> equal;
-                    for (auto it1 = funArgs1.begin(), it2 = funArgs2.begin();
-                         it1 != funArgs1.end() && it2 != funArgs2.end();
-                         ++it1) {
-                        equal.push_back(makeOp("=", it1->name, it2->name));
-                        ++it2;
-                    }
-                    if (SMTGenerationOpts::getInstance().Heap) {
-                        std::vector<SortedVar> forallArgs = {
-                            SortedVar("i", "Int")};
-                        SharedSMTRef heapInEqual =
-                            makeOp("=", "HEAP$1", "HEAP$2");
-                        equal.push_back(heapInEqual);
-                    }
-                    body = makeOp("=>", make_shared<Op>("and", equal), body);
-                    SharedSMTRef mainInv =
-                        make_shared<FunDef>(funName, args, "Bool", body);
-                    declarations.push_back(mainInv);
+    if (SMTGenerationOpts::getInstance().DisableAutoCoupling) {
+        for (const auto &functionPair :
+             SMTGenerationOpts::getInstance().CoupledFunctions) {
+            auto fun1 = mod1.getFunction(functionPair.first);
+            if (fun1 == nullptr) {
+                logError("Couldn’t find function '" + functionPair.first +
+                         "' in first module\n");
+                exit(1);
+            }
+            auto fun2 = mod2.getFunction(functionPair.second);
+            if (fun2 == nullptr) {
+                logError("Couldn’t find function '" + functionPair.second +
+                         "' in second module\n");
+            }
+            if (fun1->isDeclaration() && fun2->isDeclaration()) {
+                auto decls = mutualExternDecls(*fun1, *fun2, funCondMap);
+                declarations.insert(declarations.end(), decls.begin(),
+                                    decls.end());
+            }
+        }
+    } else {
+        for (auto &fun1 : mod1) {
+            if (fun1.isDeclaration() && !fun1.isIntrinsic()) {
+                auto fun2P = mod2.getFunction(fun1.getName());
+                if (fun2P && fun1.getName() != "__mark" &&
+                    fun1.getName() != "__splitmark") {
+                    // Calculate the number of varargs used in function calls
+                    auto decls = mutualExternDecls(fun1, *fun2P, funCondMap);
+                    declarations.insert(declarations.end(), decls.begin(),
+                                        decls.end());
                 }
             }
         }
     }
+    // TODO Move that to a more sensible place
     if (SMTGenerationOpts::getInstance().Stack) {
         declarations.push_back(select_Declaration());
         declarations.push_back(store_Declaration());
@@ -216,14 +243,14 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
     for (auto &fun1 : mod1) {
         if (fun1.isDeclaration() && !fun1.isIntrinsic() &&
             fun1.getName() != "__mark" && fun1.getName() != "__splitmark") {
-            auto decls = externFunDecl(fun1, 1);
+            auto decls = externFunDecl(fun1, Program::First);
             declarations.insert(declarations.end(), decls.begin(), decls.end());
         }
     }
     for (auto &fun2 : mod2) {
         if (fun2.isDeclaration() && !fun2.isIntrinsic() &&
             fun2.getName() != "__mark" && fun2.getName() != "__splitmark") {
-            auto decls = externFunDecl(fun2, 2);
+            auto decls = externFunDecl(fun2, Program::Second);
             declarations.insert(declarations.end(), decls.begin(), decls.end());
         }
     }
@@ -252,7 +279,7 @@ SMTRef store_Declaration() {
     return make_unique<FunDef>("store_", std::move(args), arrayType(), body);
 }
 
-std::set<uint32_t> getVarArgs(llvm::Function &fun) {
+std::set<uint32_t> getVarArgs(const llvm::Function &fun) {
     std::set<uint32_t> varArgs;
     for (auto User : fun.users()) {
         if (const auto callInst = llvm::dyn_cast<llvm::CallInst>(User)) {
@@ -281,7 +308,34 @@ std::vector<SortedVar> funArgs(llvm::Function &fun, std::string prefix,
     return args;
 }
 
-std::vector<SharedSMTRef> externFunDecl(llvm::Function &fun, int program) {
+std::vector<SharedSMTRef>
+mutualExternDecls(llvm::Function &fun1, llvm::Function &fun2,
+                  std::multimap<string, string> funCondMap) {
+    vector<SharedSMTRef> declarations;
+    set<uint32_t> varArgs = getVarArgs(fun1);
+    set<uint32_t> varArgs2 = getVarArgs(fun2);
+    for (auto el : varArgs2) {
+        varArgs.insert(el);
+    }
+    for (const auto argNum : varArgs) {
+        vector<SortedVar> args = externDeclArgs(fun1, fun2, argNum);
+        std::string funName =
+            invariantName(ENTRY_MARK, ProgramSelection::Both,
+                          fun1.getName().str() + "^" + fun2.getName().str(),
+                          InvariantAttr::NONE, argNum);
+
+        SMTRef eqOutputs = equalOutputs(fun1.getName(), funCondMap);
+        SMTRef eqInputs = equalInputs(fun1, fun2, argNum);
+        SMTRef body = makeOp("=>", std::move(eqInputs), std::move(eqOutputs));
+
+        SharedSMTRef mainInv =
+            make_shared<FunDef>(funName, args, "Bool", std::move(body));
+        declarations.push_back(std::move(mainInv));
+    }
+    return declarations;
+}
+
+std::vector<SharedSMTRef> externFunDecl(llvm::Function &fun, Program program) {
     std::vector<SharedSMTRef> decls;
     set<uint32_t> varArgs = getVarArgs(fun);
     for (auto argNum : varArgs) {
@@ -294,9 +348,8 @@ std::vector<SharedSMTRef> externFunDecl(llvm::Function &fun, int program) {
             args.push_back(SortedVar("HEAP_res", "(Array Int Int)"));
         }
         std::string funName =
-            invariantName(ENTRY_MARK, program == 1 ? ProgramSelection::First
-                                                   : ProgramSelection::Second,
-                          fun.getName().str(), InvariantAttr::NONE, argNum);
+            invariantName(ENTRY_MARK, asSelection(program), fun.getName().str(),
+                          InvariantAttr::NONE, argNum);
         SharedSMTRef body = stringExpr("true");
         decls.push_back(make_shared<FunDef>(funName, args, "Bool", body));
     }

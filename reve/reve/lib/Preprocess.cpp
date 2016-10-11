@@ -72,18 +72,46 @@ zipFunctions(llvm::Module &mod1, llvm::Module &mod2) {
     if (size1 != size2) {
         logWarning("Number of functions is not equal\n");
     }
-    for (auto &Fun1 : mod1) {
-        if (Fun1.isDeclaration()) {
-            continue;
+    if (SMTGenerationOpts::getInstance().DisableAutoCoupling) {
+        for (const auto functionPair :
+             SMTGenerationOpts::getInstance().CoupledFunctions) {
+            llvm::Function *fun1 = mod1.getFunction(functionPair.first);
+            if (fun1 == nullptr) {
+                logError("Could not find function '" + functionPair.first +
+                         "' in first module\n");
+                exit(1);
+            }
+            llvm::Function *fun2 = mod2.getFunction(functionPair.second);
+            if (fun2 == nullptr) {
+                logError("Could not find function '" + functionPair.second +
+                         "' in second module\n");
+                exit(1);
+            }
+            if (fun1->isDeclaration() != fun2->isDeclaration()) {
+                logError("Function '" + functionPair.first +
+                         "' and function '" + functionPair.second +
+                         "' need to be either both declarations or both "
+                         "definitions\n");
+                exit(1);
+            }
+            if (!fun1->isDeclaration()) {
+                funs.push_back({fun1, fun2});
+            }
         }
-        llvm::Function *fun2 = mod2.getFunction(Fun1.getName());
-        if (!fun2) {
-            logWarning("No corresponding function for " + Fun1.getName() +
-                       "\n");
-            continue;
+    } else {
+        for (auto &Fun1 : mod1) {
+            if (Fun1.isDeclaration()) {
+                continue;
+            }
+            llvm::Function *fun2 = mod2.getFunction(Fun1.getName());
+            if (!fun2) {
+                logWarning("No corresponding function for " + Fun1.getName() +
+                           "\n");
+                continue;
+            }
+            llvm::Function *fun1 = &Fun1;
+            funs.push_back(makeMonoPair(fun1, fun2));
         }
-        llvm::Function *fun1 = &Fun1;
-        funs.push_back(makeMonoPair(fun1, fun2));
     }
     return ErrorOr<std::vector<MonoPair<llvm::Function *>>>(funs);
 }

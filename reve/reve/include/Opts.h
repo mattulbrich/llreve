@@ -44,9 +44,11 @@ class SMTGenerationOpts {
                            bool noByteHeap, bool everythingSigned,
                            bool singleInvariant, bool muZ, bool perfectSync,
                            bool nest, bool passInputThrough, bool bitvect,
-                           bool invert,
-                           bool initPredicate,
-                           std::map<int, smt::SharedSMTRef> invariants);
+                           bool invert, bool initPredicate,
+                           bool disableAutoCoupling,
+                           std::map<int, smt::SharedSMTRef> invariants,
+                           std::set<MonoPair<std::string>> assumeEquivalent,
+                           std::set<MonoPair<std::string>> coupleFunctions);
     std::string MainFunction;
     bool Heap;
     bool Stack;
@@ -62,9 +64,12 @@ class SMTGenerationOpts {
     bool BitVect;
     bool Invert;
     bool InitPredicate;
+    bool DisableAutoCoupling;
     // If an invariant is not in the map a declaration is added and it’s up to
     // the SMT solver to find it
     std::map<int, smt::SharedSMTRef> Invariants;
+    std::set<MonoPair<std::string>> AssumeEquivalent;
+    std::set<MonoPair<std::string>> CoupledFunctions;
 
   private:
     SMTGenerationOpts() {}
@@ -139,3 +144,5 @@ auto searchFunctionConditions(MonoPair<std::string> fileNames)
     -> std::multimap<std::string, std::string>;
 auto searchFunctionConditionsInFile(std::string file)
     -> std::multimap<std::string, std::string>;
+auto parseFunctionPairFlags(llvm::cl::list<std::string> &functionPairFlag)
+    -> std::set<MonoPair<std::string>>;

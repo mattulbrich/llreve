@@ -621,3 +621,24 @@ bool isPtrDiff(const llvm::Instruction &instr) {
     }
     return false;
 }
+
+auto coupledCalls(const CallInfo &call1, const CallInfo &call2) -> bool {
+    const auto &coupledFunctions =
+        SMTGenerationOpts::getInstance().CoupledFunctions;
+    bool coupledNames = false;
+    if (SMTGenerationOpts::getInstance().DisableAutoCoupling) {
+        coupledNames =
+            coupledFunctions.find({call1.callName, call2.callName}) !=
+                coupledFunctions.end() ||
+            coupledFunctions.find({call2.callName, call1.callName}) !=
+                coupledFunctions.end();
+    } else {
+        coupledNames = call1.callName == call2.callName;
+    }
+    if (!call1.externFun) {
+        return coupledNames;
+    }
+    return coupledNames &&
+           call1.fun.getFunctionType()->getNumParams() ==
+               call2.fun.getFunctionType()->getNumParams();
+}

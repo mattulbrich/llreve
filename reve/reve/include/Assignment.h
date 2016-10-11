@@ -31,20 +31,9 @@ struct CallInfo {
              unsigned varArgs, const llvm::Function &fun)
         : assignedTo(assignedTo), callName(callName), args(args),
           externFun(externFun), varArgs(varArgs), fun(fun) {}
-    bool operator==(const CallInfo &other) const {
-        bool result = callName == other.callName;
-        if (!externFun) {
-            return result;
-        } else {
-            // We don’t have a useful abstraction for extern functions which
-            // don’t have the same number of arguments so we only want to couple
-            // those that have one
-            return result &&
-                   fun.getFunctionType()->getNumParams() ==
-                       other.fun.getFunctionType()->getNumParams();
-        }
-    }
 };
+
+auto coupledCalls(const CallInfo &call1, const CallInfo &call2) -> bool;
 
 enum class DefOrCallInfoTag { Call, Def };
 

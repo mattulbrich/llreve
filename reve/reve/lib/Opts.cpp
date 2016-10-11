@@ -9,6 +9,7 @@
  */
 
 #include "Opts.h"
+#include "Helper.h"
 
 #include "llvm/Support/CommandLine.h"
 
@@ -16,6 +17,7 @@
 #include <regex>
 
 using std::map;
+using std::set;
 using std::string;
 using std::vector;
 using smt::stringExpr;
@@ -24,14 +26,14 @@ using smt::SharedSMTRef;
 llvm::cl::OptionCategory ReveCategory("Reve options",
                                       "Options for controlling reve.");
 
-void SMTGenerationOpts::initialize(std::string mainFunction, bool heap,
-                                   bool stack, bool globalConstants,
-                                   bool onlyRecursive, bool noByteHeap,
-                                   bool everythingSigned, bool singleInvariant,
-                                   bool muZ, bool perfectSync, bool nest,
-                                   bool passInputThrough, bool bitVect, bool invert,
-                                   bool initPredicate,
-                                   map<int, SharedSMTRef> invariants) {
+void SMTGenerationOpts::initialize(
+    std::string mainFunction, bool heap, bool stack, bool globalConstants,
+    bool onlyRecursive, bool noByteHeap, bool everythingSigned,
+    bool singleInvariant, bool muZ, bool perfectSync, bool nest,
+    bool passInputThrough, bool bitVect, bool invert, bool initPredicate,
+    bool disableAutoCoupling, map<int, SharedSMTRef> invariants,
+    set<MonoPair<string>> assumeEquivalent,
+    set<MonoPair<string>> coupledFunctions) {
     SMTGenerationOpts &i = getInstance();
     i.MainFunction = mainFunction;
     i.Heap = heap;
@@ -47,8 +49,11 @@ void SMTGenerationOpts::initialize(std::string mainFunction, bool heap,
     i.PassInputThrough = passInputThrough;
     i.BitVect = bitVect;
     i.InitPredicate = initPredicate;
+    i.DisableAutoCoupling = disableAutoCoupling;
     i.Invariants = invariants;
     i.Invert = invert;
+    i.AssumeEquivalent = assumeEquivalent;
+    i.CoupledFunctions = coupledFunctions;
 }
 
 void parseCommandLineArguments(int argc, const char **argv) {
@@ -197,4 +202,18 @@ FileOptions getFileOptions(MonoPair<string> fileNames) {
     auto relationPair = searchCustomRelations(fileNames, additionalIn);
     return FileOptions(funConds, relationPair.first, relationPair.second,
                        additionalIn);
+}
+
+set<MonoPair<string>>
+parseFunctionPairFlags(llvm::cl::list<string> &functionPairFlags) {
+    set<MonoPair<string>> functionPairs;
+    for (const auto &flag : functionPairFlags) {
+        const auto &splitted = split(flag, ',');
+        if (splitted.size() != 2) {
+            logError("Could not parse '" + flag + "' as a function pair\n");
+            exit(1);
+        }
+        functionPairs.insert({splitted.at(0), splitted.at(1)});
+    }
+    return functionPairs;
 }

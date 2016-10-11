@@ -41,6 +41,15 @@ using std::vector;
 // Input flags
 static llvm::cl::list<string> IncludesFlag("I", llvm::cl::desc("Include path"),
                                            llvm::cl::cat(ReveCategory));
+static llvm::cl::list<string> AssumeEquivalentFlags(
+    "assume-equivalent",
+    llvm::cl::desc("Pair of function names separated by ',' that are assumed "
+                   "to be equivalent"),
+    llvm::cl::cat(ReveCategory));
+static llvm::cl::list<string> CoupleFunctionsFlag(
+    "couple-functions",
+    llvm::cl::desc("Pair of function names separated by ',' that are coupled"),
+    llvm::cl::cat(ReveCategory));
 static llvm::cl::opt<string> ResourceDirFlag(
     "resource-dir",
     llvm::cl::desc("Directory containing the clang resource files, "
@@ -139,9 +148,15 @@ static llvm::cl::opt<bool>
     InvertFlag("invert", llvm::cl::desc("Check for satisfiabilty of negation"),
                llvm::cl::cat(ReveCategory));
 
+static llvm::cl::opt<bool> DisableAutoCouplingFlag(
+    "disable-auto-coupling",
+    llvm::cl::desc("Disable automatic coupling based on function names"),
+    llvm::cl::cat(ReveCategory));
+
 static llvm::cl::opt<bool>
-    InitPredFlag("init-pred", llvm::cl::desc("Introduce the toplevel predicate INIT"),
-               llvm::cl::cat(ReveCategory));
+    InitPredFlag("init-pred",
+                 llvm::cl::desc("Introduce the toplevel predicate INIT"),
+                 llvm::cl::cat(ReveCategory));
 int main(int argc, const char **argv) {
     parseCommandLineArguments(argc, argv);
 
@@ -151,7 +166,10 @@ int main(int argc, const char **argv) {
         MainFunctionFlag, HeapFlag, StackFlag, GlobalConstantsFlag,
         OnlyRecursiveFlag, NoByteHeapFlag, EverythingSignedFlag,
         SingleInvariantFlag, MuZFlag, PerfectSyncFlag, NestFlag,
-        PassInputThroughFlag, BitVectFlag, InvertFlag, InitPredFlag, {});
+        PassInputThroughFlag, BitVectFlag, InvertFlag, InitPredFlag,
+        DisableAutoCouplingFlag, {},
+        parseFunctionPairFlags(AssumeEquivalentFlags),
+        parseFunctionPairFlags(CoupleFunctionsFlag));
     InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,
                         FileName2Flag);
     FileOptions fileOpts = getFileOptions(inputOpts.FileNames);
