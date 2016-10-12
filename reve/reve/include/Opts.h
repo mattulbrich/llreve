@@ -14,6 +14,7 @@
 #include "SMT.h"
 
 #include "llvm/Support/CommandLine.h"
+#include "llvm/IR/Function.h"
 
 #include <map>
 
@@ -45,6 +46,7 @@ class SMTGenerationOpts {
                            bool perfectSync, bool passInputThrough,
                            bool bitvect, bool invert, bool initPredicate,
                            bool disableAutoCoupling,
+                           bool disableAutoAbstraction,
                            std::map<int, smt::SharedSMTRef> invariants,
                            std::set<MonoPair<std::string>> assumeEquivalent,
                            std::set<MonoPair<std::string>> coupleFunctions);
@@ -62,6 +64,7 @@ class SMTGenerationOpts {
     bool Invert;
     bool InitPredicate;
     bool DisableAutoCoupling;
+    bool DisableAutoAbstraction;
     // If an invariant is not in the map a declaration is added and it’s up to
     // the SMT solver to find it
     std::map<int, smt::SharedSMTRef> Invariants;
@@ -143,3 +146,4 @@ auto searchFunctionConditionsInFile(std::string file)
     -> std::multimap<std::string, std::string>;
 auto parseFunctionPairFlags(llvm::cl::list<std::string> &functionPairFlag)
     -> std::set<MonoPair<std::string>>;
+auto isPartOfEquivalence(const llvm::Function &f) -> bool;

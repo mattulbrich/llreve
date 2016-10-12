@@ -138,12 +138,15 @@ static llvm::cl::opt<bool>
 static llvm::cl::opt<bool>
     InvertFlag("invert", llvm::cl::desc("Check for satisfiabilty of negation"),
                llvm::cl::cat(ReveCategory));
-
 static llvm::cl::opt<bool> DisableAutoCouplingFlag(
     "disable-auto-coupling",
     llvm::cl::desc("Disable automatic coupling based on function names"),
     llvm::cl::cat(ReveCategory));
-
+static llvm::cl::opt<bool> DisableAutoAbstraction(
+    "disable-auto-abstraction",
+    llvm::cl::desc("Disable automatic abstraction of coupled extern functions "
+                   "as equivalent"),
+    llvm::cl::cat(ReveCategory));
 static llvm::cl::opt<bool>
     InitPredFlag("init-pred",
                  llvm::cl::desc("Introduce the toplevel predicate INIT"),
@@ -157,7 +160,7 @@ int main(int argc, const char **argv) {
         MainFunctionFlag, HeapFlag, StackFlag, GlobalConstantsFlag,
         OnlyRecursiveFlag, NoByteHeapFlag, EverythingSignedFlag, MuZFlag,
         PerfectSyncFlag, PassInputThroughFlag, BitVectFlag, InvertFlag,
-        InitPredFlag, DisableAutoCouplingFlag, {},
+        InitPredFlag, DisableAutoCouplingFlag, DisableAutoAbstraction, {},
         parseFunctionPairFlags(AssumeEquivalentFlags),
         parseFunctionPairFlags(CoupleFunctionsFlag));
     InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,

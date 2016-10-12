@@ -95,7 +95,17 @@ zipFunctions(llvm::Module &mod1, llvm::Module &mod2) {
                 exit(1);
             }
             if (!fun1->isDeclaration()) {
-                funs.push_back({fun1, fun2});
+                const auto assumeEquivalent =
+                    SMTGenerationOpts::getInstance().AssumeEquivalent;
+                if (!SMTGenerationOpts::getInstance().DisableAutoAbstraction ||
+                    (assumeEquivalent.find(
+                         {fun1->getName(), fun2->getName()}) ==
+                         assumeEquivalent.end() &&
+                     assumeEquivalent.find(
+                         {fun1->getName(), fun2->getName()}) ==
+                         assumeEquivalent.end())) {
+                    funs.push_back({fun1, fun2});
+                }
             }
         }
     } else {
@@ -110,7 +120,15 @@ zipFunctions(llvm::Module &mod1, llvm::Module &mod2) {
                 continue;
             }
             llvm::Function *fun1 = &Fun1;
-            funs.push_back(makeMonoPair(fun1, fun2));
+            const auto assumeEquivalent =
+                SMTGenerationOpts::getInstance().AssumeEquivalent;
+            if (!SMTGenerationOpts::getInstance().DisableAutoAbstraction ||
+                (assumeEquivalent.find({fun1->getName(), fun2->getName()}) ==
+                     assumeEquivalent.end() &&
+                 assumeEquivalent.find({fun1->getName(), fun2->getName()}) ==
+                     assumeEquivalent.end())) {
+                funs.push_back(makeMonoPair(fun1, fun2));
+            }
         }
     }
     return ErrorOr<std::vector<MonoPair<llvm::Function *>>>(funs);

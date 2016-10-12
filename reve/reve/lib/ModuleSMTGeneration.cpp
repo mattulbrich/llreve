@@ -201,6 +201,7 @@ static std::vector<SortedVar> externDeclArgs(llvm::Function &fun1,
 void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                         std::vector<SharedSMTRef> &declarations,
                         std::multimap<string, string> funCondMap) {
+    // TODO Move outside
     if (SMTGenerationOpts::getInstance().DisableAutoCoupling) {
         for (const auto &functionPair :
              SMTGenerationOpts::getInstance().CoupledFunctions) {
@@ -215,10 +216,31 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                 logError("Couldn’t find function '" + functionPair.second +
                          "' in second module\n");
             }
-            if (fun1->isDeclaration() && fun2->isDeclaration()) {
-                auto decls = mutualExternDecls(*fun1, *fun2, funCondMap);
-                declarations.insert(declarations.end(), decls.begin(),
-                                    decls.end());
+            if (SMTGenerationOpts::getInstance().DisableAutoAbstraction) {
+                const auto assumeEquivalent =
+                    SMTGenerationOpts::getInstance().AssumeEquivalent;
+                if (assumeEquivalent.find({fun1->getName(), fun2->getName()}) !=
+                        assumeEquivalent.end() ||
+                    assumeEquivalent.find({fun1->getName(), fun2->getName()}) !=
+                        assumeEquivalent.end()) {
+                    auto decls =
+                        equivalentExternDecls(*fun1, *fun2, funCondMap);
+                    declarations.insert(declarations.end(), decls.begin(),
+                                        decls.end());
+                } else {
+                    if (fun1->isDeclaration() && fun2->isDeclaration()) {
+                        auto decls = notEquivalentExternDecls(*fun1, *fun2);
+                        declarations.insert(declarations.end(), decls.begin(),
+                                            decls.end());
+                    }
+                }
+            } else {
+                if (fun1->isDeclaration() && fun2->isDeclaration()) {
+                    auto decls =
+                        equivalentExternDecls(*fun1, *fun2, funCondMap);
+                    declarations.insert(declarations.end(), decls.begin(),
+                                        decls.end());
+                }
             }
         }
     } else {
@@ -228,7 +250,8 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                 if (fun2P && fun1.getName() != "__mark" &&
                     fun1.getName() != "__splitmark") {
                     // Calculate the number of varargs used in function calls
-                    auto decls = mutualExternDecls(fun1, *fun2P, funCondMap);
+                    auto decls =
+                        equivalentExternDecls(fun1, *fun2P, funCondMap);
                     declarations.insert(declarations.end(), decls.begin(),
                                         decls.end());
                 }
@@ -241,15 +264,17 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
         declarations.push_back(store_Declaration());
     }
     for (auto &fun1 : mod1) {
-        if (fun1.isDeclaration() && !fun1.isIntrinsic() &&
-            fun1.getName() != "__mark" && fun1.getName() != "__splitmark") {
+        if ((fun1.isDeclaration() && !fun1.isIntrinsic() &&
+             fun1.getName() != "__mark" && fun1.getName() != "__splitmark") ||
+            isPartOfEquivalence(fun1)) {
             auto decls = externFunDecl(fun1, Program::First);
             declarations.insert(declarations.end(), decls.begin(), decls.end());
         }
     }
     for (auto &fun2 : mod2) {
-        if (fun2.isDeclaration() && !fun2.isIntrinsic() &&
-            fun2.getName() != "__mark" && fun2.getName() != "__splitmark") {
+        if ((fun2.isDeclaration() && !fun2.isIntrinsic() &&
+             fun2.getName() != "__mark" && fun2.getName() != "__splitmark") ||
+            isPartOfEquivalence(fun2)) {
             auto decls = externFunDecl(fun2, Program::Second);
             declarations.insert(declarations.end(), decls.begin(), decls.end());
         }
@@ -298,7 +323,12 @@ std::vector<SortedVar> funArgs(llvm::Function &fun, std::string prefix,
     int argIndex = 0;
     for (auto &arg : fun.getArgumentList()) {
         if (arg.getName().empty()) {
-            arg.setName(prefix + std::to_string(argIndex++));
+            arg.setName(prefix + "$" + std::to_string(argIndex++));
+        }
+        // Functions that are abstracted but have source code available will
+        // have names but no postfixes
+        if (arg.getName().find('$') == string::npos) {
+            arg.setName(prefix + "$" + arg.getName());
         }
         args.push_back(SortedVar(arg.getName(), "Int"));
     }
@@ -309,8 +339,8 @@ std::vector<SortedVar> funArgs(llvm::Function &fun, std::string prefix,
 }
 
 std::vector<SharedSMTRef>
-mutualExternDecls(llvm::Function &fun1, llvm::Function &fun2,
-                  std::multimap<string, string> funCondMap) {
+equivalentExternDecls(llvm::Function &fun1, llvm::Function &fun2,
+                      std::multimap<string, string> funCondMap) {
     vector<SharedSMTRef> declarations;
     set<uint32_t> varArgs = getVarArgs(fun1);
     set<uint32_t> varArgs2 = getVarArgs(fun2);
@@ -330,6 +360,27 @@ mutualExternDecls(llvm::Function &fun1, llvm::Function &fun2,
 
         SharedSMTRef mainInv =
             make_shared<FunDef>(funName, args, "Bool", std::move(body));
+        declarations.push_back(std::move(mainInv));
+    }
+    return declarations;
+}
+
+std::vector<SharedSMTRef> notEquivalentExternDecls(llvm::Function &fun1,
+                                                   llvm::Function &fun2) {
+    vector<SharedSMTRef> declarations;
+    set<uint32_t> varArgs = getVarArgs(fun1);
+    set<uint32_t> varArgs2 = getVarArgs(fun2);
+    for (auto el : varArgs2) {
+        varArgs.insert(el);
+    }
+    for (const auto argNum : varArgs) {
+        vector<SortedVar> args = externDeclArgs(fun1, fun2, argNum);
+        std::string funName =
+            invariantName(ENTRY_MARK, ProgramSelection::Both,
+                          fun1.getName().str() + "^" + fun2.getName().str(),
+                          InvariantAttr::NONE, argNum);
+        SharedSMTRef mainInv =
+            make_shared<FunDef>(funName, args, "Bool", smt::stringExpr("true"));
         declarations.push_back(std::move(mainInv));
     }
     return declarations;

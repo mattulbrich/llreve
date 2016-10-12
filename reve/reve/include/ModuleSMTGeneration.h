@@ -32,8 +32,10 @@ auto funArgs(llvm::Function &fun, std::string prefix, uint32_t varArgs)
 auto getVarArgs(const llvm::Function &fun) -> std::set<uint32_t>;
 auto externFunDecl(llvm::Function &fun, Program program)
     -> std::vector<smt::SharedSMTRef>;
-auto mutualExternDecls(llvm::Function &fun1, llvm::Function &fun2,
-                       std::multimap<std::string, std::string> funCondMap)
+auto equivalentExternDecls(llvm::Function &fun1, llvm::Function &fun2,
+                           std::multimap<std::string, std::string> funCondMap)
+    -> std::vector<smt::SharedSMTRef>;
+auto notEquivalentExternDecls(llvm::Function &fun1, llvm::Function &fun2)
     -> std::vector<smt::SharedSMTRef>;
 auto doesNotRecurse(llvm::Function &fun) -> bool;
 auto globalDeclarations(llvm::Module &mod1, llvm::Module &mod2)

@@ -30,7 +30,7 @@ void SMTGenerationOpts::initialize(
     std::string mainFunction, bool heap, bool stack, bool globalConstants,
     bool onlyRecursive, bool noByteHeap, bool everythingSigned, bool muZ,
     bool perfectSync, bool passInputThrough, bool bitVect, bool invert,
-    bool initPredicate, bool disableAutoCoupling,
+    bool initPredicate, bool disableAutoCoupling, bool disableAutoAbstraction,
     map<int, SharedSMTRef> invariants, set<MonoPair<string>> assumeEquivalent,
     set<MonoPair<string>> coupledFunctions) {
     SMTGenerationOpts &i = getInstance();
@@ -47,6 +47,7 @@ void SMTGenerationOpts::initialize(
     i.BitVect = bitVect;
     i.InitPredicate = initPredicate;
     i.DisableAutoCoupling = disableAutoCoupling;
+    i.DisableAutoAbstraction = disableAutoAbstraction;
     i.Invariants = invariants;
     i.Invert = invert;
     i.AssumeEquivalent = assumeEquivalent;
@@ -213,4 +214,15 @@ parseFunctionPairFlags(llvm::cl::list<string> &functionPairFlags) {
         functionPairs.insert({splitted.at(0), splitted.at(1)});
     }
     return functionPairs;
+}
+
+bool isPartOfEquivalence(const llvm::Function &f) {
+    for (const auto &functionPair :
+         SMTGenerationOpts::getInstance().AssumeEquivalent) {
+        if (functionPair.first == f.getName() ||
+            functionPair.second == f.getName()) {
+            return true;
+        }
+    }
+    return false;
 }
