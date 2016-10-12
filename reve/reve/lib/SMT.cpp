@@ -21,6 +21,7 @@ bool isArray(std::string type) {
 }
 
 namespace smt {
+using std::map;
 using std::make_shared;
 using std::shared_ptr;
 using std::unique_ptr;
@@ -146,25 +147,25 @@ SExprRef Comment::toSExpr() const {
 }
 
 SExprRef VarDecl::toSExpr() const {
-    std::vector<SExprRef> args;
-    args.push_back(stringExpr(varName)->toSExpr());
-    args.push_back(stringExpr(type)->toSExpr());
+    vector<SExprRef> args;
+    args.push_back(stringExpr(var.name)->toSExpr());
+    args.push_back(stringExpr(var.type)->toSExpr());
     return std::make_unique<Apply<std::string>>("declare-var", std::move(args));
 }
 
 void VarDecl::toZ3(z3::context &cxt, z3::solver & /* unused */,
                    std::map<std::string, z3::expr> &nameMap,
                    std::map<std::string, Z3DefineFun> & /* unused */) const {
-    if (type == "Int") {
-        z3::expr c = cxt.int_const(varName.c_str());
-        auto it = nameMap.insert({varName, c});
+    if (var.type == "Int") {
+        z3::expr c = cxt.int_const(var.name.c_str());
+        auto it = nameMap.insert({var.name, c});
         if (!it.second) {
             it.first->second = c;
         }
-    } else if (type == "(Array Int Int)") {
+    } else if (var.type == "(Array Int Int)") {
         z3::sort intArraySort = cxt.array_sort(cxt.int_sort(), cxt.int_sort());
-        z3::expr c = cxt.constant(varName.c_str(), intArraySort);
-        auto it = nameMap.insert({varName, c});
+        z3::expr c = cxt.constant(var.name.c_str(), intArraySort);
+        auto it = nameMap.insert({var.name, c});
         if (!it.second) {
             it.first->second = c;
         }
@@ -284,6 +285,10 @@ SharedSMTRef Primitive<T>::compressLets(std::vector<Assignment> defs) const {
     return nestLets(make_shared<Primitive<T>>(val), defs);
 }
 
+SharedSMTRef SMTExpr::renameAssignments(map<string, int> variableMap) const {
+    return shared_from_this();
+}
+
 SharedSMTRef
 SMTExpr::mergeImplications(std::vector<SharedSMTRef> conditions) const {
     if (conditions.empty()) {
@@ -296,6 +301,11 @@ SMTExpr::mergeImplications(std::vector<SharedSMTRef> conditions) const {
 
 vector<SharedSMTRef> SMTExpr::splitConjunctions() const {
     return {shared_from_this()};
+}
+
+SharedSMTRef Assert::renameAssignments(map<string, int> variableMap) const {
+    assert(variableMap.empty());
+    return make_shared<Assert>(expr->renameAssignments(variableMap));
 }
 
 SharedSMTRef
@@ -312,6 +322,17 @@ vector<SharedSMTRef> Assert::splitConjunctions() const {
     return smtExprs;
 }
 
+SharedSMTRef Let::renameAssignments(map<string, int> variableMap) const {
+    vector<Assignment> newDefs;
+    auto newVariableMap = variableMap;
+    for (auto assgn : defs) {
+        int newIndex = ++newVariableMap[assgn.first];
+        newDefs.push_back({assgn.first + "_" + std::to_string(newIndex),
+                           assgn.second->renameAssignments(variableMap)});
+    }
+    return make_shared<Let>(newDefs, expr->renameAssignments(newVariableMap));
+}
+
 SharedSMTRef
 Let::mergeImplications(std::vector<SharedSMTRef> conditions) const {
     return make_shared<Let>(defs, expr->mergeImplications(conditions));
@@ -323,6 +344,14 @@ vector<SharedSMTRef> Let::splitConjunctions() const {
         expr = make_shared<Let>(defs, std::move(expr));
     }
     return smtExprs;
+}
+
+SharedSMTRef Op::renameAssignments(map<string, int> variableMap) const {
+    vector<SharedSMTRef> newArgs;
+    for (const auto &arg : this->args) {
+        newArgs.push_back(arg->renameAssignments(variableMap));
+    }
+    return make_shared<Op>(opName, newArgs, instantiate);
 }
 
 SharedSMTRef Op::mergeImplications(std::vector<SharedSMTRef> conditions) const {
@@ -354,6 +383,17 @@ vector<SharedSMTRef> Op::splitConjunctions() const {
     } else {
         return {shared_from_this()};
     }
+}
+
+SharedSMTRef Forall::renameAssignments(map<string, int> variableMap) const {
+    vector<SortedVar> newVars;
+    for (const auto &var : this->vars) {
+        variableMap[var.name]++;
+        newVars.push_back(
+            SortedVar(var.name + "_" + std::to_string(variableMap.at(var.name)),
+                      var.type));
+    }
+    return make_shared<Forall>(newVars, expr->renameAssignments(variableMap));
 }
 
 SharedSMTRef
@@ -708,6 +748,21 @@ SharedSMTRef Op::renameDefineFuns(string suffix) const {
 }
 
 template <>
+SharedSMTRef
+Primitive<string>::renameAssignments(map<string, int> variableMap) const {
+    if (val == "false" || val == "true" || val.at(0) == '(' ||
+        std::isdigit(val.at(0))) {
+        return shared_from_this();
+    } else {
+        string name = val;
+        if (variableMap.find(val) != variableMap.end()) {
+            name += "_" + std::to_string(variableMap.at(val));
+        }
+        return make_shared<Primitive>(name);
+    }
+}
+
+template <>
 SharedSMTRef Primitive<string>::renameDefineFuns(string suffix) const {
     if (val == "false" || val == "true" || val.at(0) == '(' ||
         std::isdigit(val.at(0))) {
@@ -723,6 +778,29 @@ SharedSMTRef Forall::renameDefineFuns(std::string suffix) const {
         newArgs.push_back(SortedVar(arg.name + suffix, arg.type));
     }
     return make_shared<Forall>(newArgs, expr->renameDefineFuns(suffix));
+}
+
+SharedSMTRef SMTExpr::removeForalls(set<SortedVar> &introducedVariables) const {
+    return shared_from_this();
+}
+SharedSMTRef Assert::removeForalls(set<SortedVar> &introducedVariables) const {
+    return make_shared<Assert>(expr->removeForalls(introducedVariables));
+}
+SharedSMTRef Forall::removeForalls(set<SortedVar> &introducedVariables) const {
+    for (const auto &var : vars) {
+        introducedVariables.insert(var);
+    }
+    return expr->removeForalls(introducedVariables);
+}
+SharedSMTRef Op::removeForalls(set<SortedVar> &introducedVariables) const {
+    vector<SharedSMTRef> newArgs;
+    for (const auto &arg : args) {
+        newArgs.push_back(arg->removeForalls(introducedVariables));
+    }
+    return make_shared<Op>(opName, newArgs, instantiate);
+}
+SharedSMTRef Let::removeForalls(set<SortedVar> &introducedVariables) const {
+    return make_shared<Let>(defs, expr->removeForalls(introducedVariables));
 }
 }
 

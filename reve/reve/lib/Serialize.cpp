@@ -13,8 +13,13 @@
 #include <fstream>
 #include <iostream>
 
-void serializeSMT(std::vector<smt::SharedSMTRef> smtExprs, bool muZ,
-                  SerializeOpts opts) {
+using smt::SharedSMTRef;
+using smt::SortedVar;
+using smt::VarDecl;
+using std::vector;
+using std::set;
+
+void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
     // write to file or to stdout
     std::streambuf *buf;
     std::ofstream ofStream;
@@ -29,17 +34,31 @@ void serializeSMT(std::vector<smt::SharedSMTRef> smtExprs, bool muZ,
     std::ostream outFile(buf);
 
     int i = 0;
-    for (const auto &smt : smtExprs) {
-        if (muZ) {
-            const auto smts = smt->splitConjunctions();
-            for (const auto &splitSmt : smts) {
-                outFile << *splitSmt->compressLets()
-                                ->mergeImplications({})
-                                ->toSExpr();
-                outFile << "\n";
+    if (muZ) {
+        set<SortedVar> introducedVariables;
+        vector<SharedSMTRef> preparedSMTExprs;
+        for (const auto &smt : smtExprs) {
+            const auto splitSMTs = smt->splitConjunctions();
+            for (const auto &splitSMT : splitSMTs) {
+                preparedSMTExprs.push_back(
+                    splitSMT->compressLets()
+                        ->renameAssignments({})
+                        ->removeForalls(introducedVariables)
+                        ->mergeImplications({}));
             }
-        } else {
-            smt::SharedSMTRef out = opts.Pretty ? smt->compressLets() : smt;
+        }
+        for (const auto &var : introducedVariables) {
+            outFile << *VarDecl(var).toSExpr();
+            outFile << "\n";
+        }
+        for (const auto &smt : preparedSMTExprs) {
+            outFile << *smt->toSExpr();
+            outFile << "\n";
+        }
+    } else {
+        for (const auto &smt : smtExprs) {
+            smt::SharedSMTRef out =
+                opts.Pretty ? smt->compressLets()->renameAssignments({}) : smt;
             if (opts.MergeImplications) {
                 out = out->mergeImplications({});
             }
@@ -51,8 +70,8 @@ void serializeSMT(std::vector<smt::SharedSMTRef> smtExprs, bool muZ,
             }
             out->toSExpr()->serialize(outFile, 0, opts.Pretty);
             outFile << "\n";
+            ++i;
         }
-        ++i;
     }
 
     if (!opts.OutputFileName.empty()) {

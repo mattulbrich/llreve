@@ -55,8 +55,7 @@ This creates complete assertions containing the input and output parameters of
 the function. Each jump is modeled as a possibly recursive call.
  */
 auto functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
-                       std::vector<smt::SharedSMTRef> &declarations,
-                       std::vector<smt::SortedVar> &variableDeclarations)
+                       std::vector<smt::SharedSMTRef> &declarations)
     -> std::vector<smt::SharedSMTRef>;
 
 /// Create the mutual assertions for slicing.
@@ -73,9 +72,8 @@ need to contain the output parameters. While it’s not necessary to use this
 encoding it seems to perform better in some cases.
  */
 auto mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
-                   std::vector<smt::SharedSMTRef> &declarations,
-                   std::vector<smt::SortedVar> &variableDeclarations,
-                   bool onlyRec) -> std::vector<smt::SharedSMTRef>;
+                   std::vector<smt::SharedSMTRef> &declarations, bool onlyRec)
+    -> std::vector<smt::SharedSMTRef>;
 
 /// Get all combinations of paths that have the same start and end mark.
 /**
@@ -102,7 +100,6 @@ inline bool operator<(const MarkPair &lhs, const MarkPair &rhs) {
 }
 
 auto getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
-                          std::vector<smt::SortedVar> &variableDeclarations,
                           smt::FreeVarsMap freeVarsMap,
                           ReturnInvariantGenerator generateReturnInvariant)
     -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
@@ -123,7 +120,6 @@ other is still allowed to loop at its block.
  */
 auto getForbiddenPaths(MonoPair<PathMap> pathMaps,
                        MonoPair<BidirBlockMarkMap> marked,
-                       std::vector<smt::SortedVar> &variableDeclarations,
                        smt::FreeVarsMap freeVarsMap, std::string funName,
                        bool main) -> std::vector<smt::SharedSMTRef>;
 /// Get the assertions for a single program
@@ -131,17 +127,14 @@ auto nonmutualPaths(PathMap pathMap, std::vector<smt::SharedSMTRef> &pathExprs,
                     smt::FreeVarsMap freeVarsMap, Program prog,
                     std::string funName,
                     std::vector<smt::SharedSMTRef> &declarations,
-                    std::vector<smt::SortedVar> &variableDeclarations,
                     const llvm::Type *type) -> void;
 auto getOffByNPaths(PathMap pathMap1, PathMap pathMap2,
-                    smt::FreeVarsMap freeVarsMap,
-                    std::vector<smt::SortedVar> &variableDeclarations,
-                    std::string funName, bool main)
+                    smt::FreeVarsMap freeVarsMap, std::string funName,
+                    bool main)
     -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
 auto offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
-                       smt::FreeVarsMap freeVarsMap,
-                       std::vector<smt::SortedVar> &variableDeclarations,
-                       Program prog, std::string funName, bool main)
+                       smt::FreeVarsMap freeVarsMap, Program prog,
+                       std::string funName, bool main)
     -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
 
 /* -------------------------------------------------------------------------- */
@@ -152,22 +145,18 @@ auto assignmentsOnPath(Path path, Program prog,
     -> std::vector<AssignmentCallBlock>;
 auto interleaveAssignments(
     smt::SharedSMTRef endClause,
-    MonoPair<std::vector<AssignmentCallBlock>> assignments,
-    std::vector<smt::SortedVar> &variableDeclarations) -> smt::SharedSMTRef;
+    MonoPair<std::vector<AssignmentCallBlock>> assignments)
+    -> smt::SharedSMTRef;
 auto nonmutualSMT(smt::SharedSMTRef endClause,
-                  std::vector<AssignmentCallBlock> assignments,
-                  std::vector<smt::SortedVar> &variableDeclarations,
-                  Program prog) -> smt::SharedSMTRef;
+                  std::vector<AssignmentCallBlock> assignments, Program prog)
+    -> smt::SharedSMTRef;
 
 /* -------------------------------------------------------------------------- */
 // Functions to generate various foralls
 
 auto mutualRecursiveForall(smt::SharedSMTRef clause,
-                           MonoPair<CallInfo> callPair,
-                           std::vector<smt::SortedVar> &variableDeclarations)
-    -> smt::SMTRef;
+                           MonoPair<CallInfo> callPair) -> smt::SMTRef;
 auto nonmutualRecursiveForall(smt::SharedSMTRef clause, CallInfo call,
-                              std::vector<smt::SortedVar> &variableDeclarations,
                               Program prog) -> smt::SMTRef;
 auto forallStartingAt(smt::SharedSMTRef clause,
                       std::vector<smt::SortedVar> freeVars, int blockIndex,
@@ -248,17 +237,9 @@ auto checkPathMaps(PathMap map1, PathMap map2) -> void;
 auto mapSubset(PathMap map1, PathMap map2) -> bool;
 auto getDontLoopInvariant(smt::SMTRef endClause, int startIndex,
                           PathMap pathMap, smt::FreeVarsMap freeVarsMap,
-                          std::vector<smt::SortedVar> &variableDeclarations,
                           Program prog) -> smt::SMTRef;
 auto addAssignments(const smt::SharedSMTRef end,
                     std::vector<AssignmentBlock> assignments)
     -> smt::SharedSMTRef;
 auto addMemory(std::vector<smt::SharedSMTRef> &implArgs)
     -> std::function<void(CallInfo call, int index)>;
-/// Declare required variables globally
-/**
-This is used when MuZFlag is enabled
- */
-auto declareVariables(smt::FreeVarsMap freeVarsMap,
-                      std::vector<smt::SortedVar> &variableDeclarations)
-    -> void;

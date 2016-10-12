@@ -90,8 +90,7 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
                 assertions.push_back(initImplication(inInv));
             }
             auto newSmtExprs =
-                mainAssertion(funPair, declarations, variableDeclarations,
-                              smtOpts.OnlyRecursive);
+                mainAssertion(funPair, declarations, smtOpts.OnlyRecursive);
             assertions.insert(assertions.end(), newSmtExprs.begin(),
                               newSmtExprs.end());
         }
@@ -106,21 +105,13 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
                 assertions.insert(assertions.end(), newSmtExprs.begin(),
                                   newSmtExprs.end());
             } else {
-                auto newSmtExprs = functionAssertion(funPair, declarations,
-                                                     variableDeclarations);
+                auto newSmtExprs = functionAssertion(funPair, declarations);
                 assertions.insert(assertions.end(), newSmtExprs.begin(),
                                   newSmtExprs.end());
             }
         }
     }
     smtExprs.insert(smtExprs.end(), declarations.begin(), declarations.end());
-    set<string> declaredVariables;
-    for (const auto &var : variableDeclarations) {
-        if (declaredVariables.find(var.name) == declaredVariables.end()) {
-            declaredVariables.insert(var.name);
-            smtExprs.push_back(make_shared<VarDecl>(var.name, var.type));
-        }
-    }
     smtExprs.insert(smtExprs.end(), assertions.begin(), assertions.end());
     if (SMTGenerationOpts::getInstance().MuZ) {
         smtExprs.push_back(make_shared<Query>("END_QUERY"));

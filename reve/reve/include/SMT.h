@@ -24,6 +24,9 @@
 
 namespace smt {
 
+// forward declare
+class SortedVar;
+
 using SExpr = const sexpr::SExpr<std::string>;
 using SExprRef = std::unique_ptr<SExpr>;
 
@@ -51,10 +54,18 @@ class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
         const;
     virtual std::vector<std::shared_ptr<const SMTExpr>>
     splitConjunctions() const;
+    // Rename assignments to unique names. This allows moving things around as
+    // done by mergeImplications.
+    virtual std::shared_ptr<const SMTExpr>
+    renameAssignments(std::map<std::string, int> variableMap) const;
     virtual std::shared_ptr<const SMTExpr> mergeImplications(
         std::vector<std::shared_ptr<const SMTExpr>> conditions) const;
     virtual std::shared_ptr<const SMTExpr> instantiateArrays() const;
     virtual std::unique_ptr<const HeapInfo> heapInfo() const;
+    // This removes foralls and declares them as global variables. This is
+    // needed for the z3 muz format.
+    virtual std::shared_ptr<const SMTExpr>
+    removeForalls(std::set<SortedVar> &introducedVariables) const;
     virtual ~SMTExpr() = default;
     SMTExpr(const SMTExpr & /*unused*/) = default;
     SMTExpr &operator=(SMTExpr &) = delete;
@@ -89,7 +100,11 @@ class Assert : public SMTExpr {
     SharedSMTRef expr;
     SExprRef toSExpr() const override;
     std::set<std::string> uses() const override;
+    SharedSMTRef
+    removeForalls(std::set<SortedVar> &introducedVariables) const override;
     SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
+    SharedSMTRef
+    renameAssignments(std::map<std::string, int> variableMap) const override;
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) const override;
     std::vector<SharedSMTRef> splitConjunctions() const override;
@@ -150,8 +165,12 @@ class Forall : public SMTExpr {
     std::vector<SortedVar> vars;
     SharedSMTRef expr;
     std::set<std::string> uses() const override;
+    SharedSMTRef
+    removeForalls(std::set<SortedVar> &introducedVariables) const override;
     SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
     SharedSMTRef instantiateArrays() const override;
+    SharedSMTRef
+    renameAssignments(std::map<std::string, int> variableMap) const override;
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) const override;
     std::vector<SharedSMTRef> splitConjunctions() const override;
@@ -178,14 +197,18 @@ class GetModel : public SMTExpr {
 
 class Let : public SMTExpr {
   public:
-    SExprRef toSExpr() const override;
     std::vector<Assignment> defs;
     SharedSMTRef expr;
     Let(std::vector<Assignment> defs, SharedSMTRef expr)
         : defs(std::move(defs)), expr(std::move(expr)) {}
+    SExprRef toSExpr() const override;
+    SharedSMTRef
+    removeForalls(std::set<SortedVar> &introducedVariables) const override;
     std::set<std::string> uses() const override;
     SharedSMTRef
     compressLets(std::vector<Assignment> passedDefs) const override;
+    SharedSMTRef
+    renameAssignments(std::map<std::string, int> variableMap) const override;
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) const override;
     std::vector<SharedSMTRef> splitConjunctions() const override;
@@ -209,12 +232,17 @@ template <typename T> class Primitive : public SMTExpr {
     std::unique_ptr<const HeapInfo> heapInfo() const override {
         return nullptr;
     }
+    SharedSMTRef
+    renameAssignments(std::map<std::string, int> variableMap) const override;
     SharedSMTRef renameDefineFuns(std::string suffix) const override;
     z3::expr toZ3Expr(
         z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
         const std::map<std::string, Z3DefineFun> &defineFunMap) const override;
 };
 
+template <>
+SharedSMTRef Primitive<std::string>::renameAssignments(
+    std::map<std::string, int> variableMap) const;
 template <>
 SharedSMTRef Primitive<std::string>::renameDefineFuns(std::string suffix) const;
 template <>
@@ -233,8 +261,12 @@ class Op : public SMTExpr {
     std::vector<SharedSMTRef> args;
     bool instantiate;
     SExprRef toSExpr() const override;
+    SharedSMTRef
+    removeForalls(std::set<SortedVar> &introducedVariables) const override;
     std::set<std::string> uses() const override;
     SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
+    SharedSMTRef
+    renameAssignments(std::map<std::string, int> variableMap) const override;
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) const override;
     std::vector<SharedSMTRef> splitConjunctions() const override;
@@ -309,12 +341,9 @@ class Comment : public SMTExpr {
 };
 
 class VarDecl : public SMTExpr {
-
   public:
-    VarDecl(std::string varName, std::string type)
-        : varName(std::move(varName)), type(std::move(type)) {}
-    std::string varName;
-    std::string type;
+    VarDecl(SortedVar var) : var(std::move(var)) {}
+    SortedVar var;
     SExprRef toSExpr() const override;
     void toZ3(z3::context &cxt, z3::solver &solver,
               std::map<std::string, z3::expr> &nameMap,
