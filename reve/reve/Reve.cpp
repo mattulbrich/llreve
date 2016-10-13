@@ -156,13 +156,6 @@ int main(int argc, const char **argv) {
 
     PreprocessOpts preprocessOpts(ShowCFGFlag, ShowMarkedCFGFlag,
                                   InferMarksFlag);
-    SMTGenerationOpts::initialize(
-        MainFunctionFlag, HeapFlag, StackFlag, GlobalConstantsFlag,
-        OnlyRecursiveFlag, NoByteHeapFlag, EverythingSignedFlag, MuZFlag,
-        PerfectSyncFlag, PassInputThroughFlag, BitVectFlag, InvertFlag,
-        InitPredFlag, DisableAutoCouplingFlag, DisableAutoAbstraction, {},
-        parseFunctionPairFlags(AssumeEquivalentFlags),
-        parseFunctionPairFlags(CoupleFunctionsFlag));
     InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,
                         FileName2Flag);
     FileOptions fileOpts = getFileOptions(inputOpts.FileNames);
@@ -174,6 +167,16 @@ int main(int argc, const char **argv) {
                      make_shared<clang::EmitLLVMOnlyAction>());
     MonoPair<shared_ptr<llvm::Module>> modules =
         compileToModules(argv[0], inputOpts, acts);
+
+    SMTGenerationOpts::initialize(
+        MainFunctionFlag, HeapFlag, StackFlag, GlobalConstantsFlag,
+        OnlyRecursiveFlag, NoByteHeapFlag, EverythingSignedFlag, MuZFlag,
+        PerfectSyncFlag, PassInputThroughFlag, BitVectFlag, InvertFlag,
+        InitPredFlag, DisableAutoAbstraction, {},
+        addConstToFunctionPairSet(lookupFunctionNamePairs(
+            modules, parseFunctionPairFlags(AssumeEquivalentFlags))),
+        getCoupledFunctions(modules, DisableAutoCouplingFlag,
+                            parseFunctionPairFlags(CoupleFunctionsFlag)));
 
     llvm::legacy::PassManager PM;
     PM.add(llvm::createStripSymbolsPass(true));

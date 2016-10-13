@@ -193,59 +193,25 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                         std::vector<SharedSMTRef> &declarations,
                         std::multimap<string, string> funCondMap) {
     // TODO Move outside
-    if (SMTGenerationOpts::getInstance().DisableAutoCoupling) {
-        for (const auto &functionPair :
-             SMTGenerationOpts::getInstance().CoupledFunctions) {
-            auto fun1 = mod1.getFunction(functionPair.first);
-            if (fun1 == nullptr) {
-                logError("Couldn’t find function '" + functionPair.first +
-                         "' in first module\n");
-                exit(1);
-            }
-            auto fun2 = mod2.getFunction(functionPair.second);
-            if (fun2 == nullptr) {
-                logError("Couldn’t find function '" + functionPair.second +
-                         "' in second module\n");
-            }
+    for (const auto &functionPair :
+         SMTGenerationOpts::getInstance().CoupledFunctions) {
+        if (hasMutualFixedAbstraction(functionPair)) {
             if (SMTGenerationOpts::getInstance().DisableAutoAbstraction) {
                 const auto assumeEquivalent =
                     SMTGenerationOpts::getInstance().AssumeEquivalent;
-                if (assumeEquivalent.find({fun1->getName(), fun2->getName()}) !=
-                        assumeEquivalent.end() ||
-                    assumeEquivalent.find({fun1->getName(), fun2->getName()}) !=
-                        assumeEquivalent.end()) {
-                    auto decls =
-                        equivalentExternDecls(*fun1, *fun2, funCondMap);
+                if (assumeEquivalent.find(functionPair) !=
+                    assumeEquivalent.end()) {
+                } else {
+                    auto decls = notEquivalentExternDecls(*functionPair.first,
+                                                          *functionPair.second);
                     declarations.insert(declarations.end(), decls.begin(),
                                         decls.end());
-                } else {
-                    if (fun1->isDeclaration() && fun2->isDeclaration()) {
-                        auto decls = notEquivalentExternDecls(*fun1, *fun2);
-                        declarations.insert(declarations.end(), decls.begin(),
-                                            decls.end());
-                    }
                 }
             } else {
-                if (fun1->isDeclaration() && fun2->isDeclaration()) {
-                    auto decls =
-                        equivalentExternDecls(*fun1, *fun2, funCondMap);
-                    declarations.insert(declarations.end(), decls.begin(),
-                                        decls.end());
-                }
-            }
-        }
-    } else {
-        for (auto &fun1 : mod1) {
-            if (fun1.isDeclaration() && !fun1.isIntrinsic()) {
-                auto fun2P = mod2.getFunction(fun1.getName());
-                if (fun2P && fun1.getName() != "__mark" &&
-                    fun1.getName() != "__splitmark") {
-                    // Calculate the number of varargs used in function calls
-                    auto decls =
-                        equivalentExternDecls(fun1, *fun2P, funCondMap);
-                    declarations.insert(declarations.end(), decls.begin(),
-                                        decls.end());
-                }
+                auto decls = equivalentExternDecls(
+                    *functionPair.first, *functionPair.second, funCondMap);
+                declarations.insert(declarations.end(), decls.begin(),
+                                    decls.end());
             }
         }
     }
@@ -255,17 +221,13 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
         declarations.push_back(store_Declaration());
     }
     for (auto &fun1 : mod1) {
-        if ((fun1.isDeclaration() && !fun1.isIntrinsic() &&
-             fun1.getName() != "__mark" && fun1.getName() != "__splitmark") ||
-            isPartOfEquivalence(fun1)) {
+        if (hasFixedAbstraction(fun1) && !isLlreveIntrinsic(fun1)) {
             auto decls = externFunDecl(fun1, Program::First);
             declarations.insert(declarations.end(), decls.begin(), decls.end());
         }
     }
     for (auto &fun2 : mod2) {
-        if ((fun2.isDeclaration() && !fun2.isIntrinsic() &&
-             fun2.getName() != "__mark" && fun2.getName() != "__splitmark") ||
-            isPartOfEquivalence(fun2)) {
+        if (hasFixedAbstraction(fun2) && !isLlreveIntrinsic(fun2)) {
             auto decls = externFunDecl(fun2, Program::Second);
             declarations.insert(declarations.end(), decls.begin(), decls.end());
         }
@@ -398,7 +360,8 @@ std::vector<SharedSMTRef> externFunDecl(llvm::Function &fun, Program program) {
     return decls;
 }
 
-// this does not actually check if the function recurses but the next version of
+// this does not actually check if the function recurses but the next
+// version of
 // llvm provides a function for that and I’m too lazy to implement it myself
 bool doesNotRecurse(llvm::Function &fun) {
     for (auto &bb : fun) {
@@ -436,7 +399,8 @@ vector<SharedSMTRef> globalDeclarationsForMod(int globalPointer,
     for (auto &global1 : mod.globals()) {
         std::string globalName = global1.getName();
         if (!modOther.getNamedGlobal(globalName)) {
-            // we want the size of string constants not the size of the pointer
+            // we want the size of string constants not the size of the
+            // pointer
             // pointing to them
             if (const auto pointerTy =
                     llvm::dyn_cast<llvm::PointerType>(global1.getType())) {
@@ -464,7 +428,8 @@ std::vector<SharedSMTRef> globalDeclarations(llvm::Module &mod1,
     for (auto &global1 : mod1.globals()) {
         std::string globalName = global1.getName();
         if (mod2.getNamedGlobal(globalName)) {
-            // we want the size of string constants not the size of the pointer
+            // we want the size of string constants not the size of the
+            // pointer
             // pointing to them
             if (const auto pointerTy =
                     llvm::dyn_cast<llvm::PointerType>(global1.getType())) {

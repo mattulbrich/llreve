@@ -16,6 +16,7 @@
 #include <fstream>
 #include <regex>
 
+using std::shared_ptr;
 using std::map;
 using std::set;
 using std::string;
@@ -30,9 +31,10 @@ void SMTGenerationOpts::initialize(
     std::string mainFunction, bool heap, bool stack, bool globalConstants,
     bool onlyRecursive, bool noByteHeap, bool everythingSigned, bool muZ,
     bool perfectSync, bool passInputThrough, bool bitVect, bool invert,
-    bool initPredicate, bool disableAutoCoupling, bool disableAutoAbstraction,
-    map<int, SharedSMTRef> invariants, set<MonoPair<string>> assumeEquivalent,
-    set<MonoPair<string>> coupledFunctions) {
+    bool initPredicate, bool disableAutoAbstraction,
+    map<int, SharedSMTRef> invariants,
+    set<MonoPair<const llvm::Function *>> assumeEquivalent,
+    set<MonoPair<llvm::Function *>> coupledFunctions) {
     SMTGenerationOpts &i = getInstance();
     i.MainFunction = mainFunction;
     i.Heap = heap;
@@ -46,7 +48,6 @@ void SMTGenerationOpts::initialize(
     i.PassInputThrough = passInputThrough;
     i.BitVect = bitVect;
     i.InitPredicate = initPredicate;
-    i.DisableAutoCoupling = disableAutoCoupling;
     i.DisableAutoAbstraction = disableAutoAbstraction;
     i.Invariants = invariants;
     i.Invert = invert;
@@ -216,11 +217,90 @@ parseFunctionPairFlags(llvm::cl::list<string> &functionPairFlags) {
     return functionPairs;
 }
 
-bool isPartOfEquivalence(const llvm::Function &f) {
+bool isPartOfEquivalence(const llvm::Function &f) { return false; }
+
+set<MonoPair<llvm::Function *>>
+getCoupledFunctions(MonoPair<shared_ptr<llvm::Module>> modules,
+                    bool disableAutoCoupling,
+                    std::set<MonoPair<std::string>> coupledFunctionNames) {
+    if (disableAutoCoupling) {
+        return lookupFunctionNamePairs(modules, coupledFunctionNames);
+    } else {
+        return inferCoupledFunctionsByName(modules);
+    }
+}
+set<MonoPair<llvm::Function *>>
+inferCoupledFunctionsByName(MonoPair<shared_ptr<llvm::Module>> modules) {
+    set<MonoPair<llvm::Function *>> coupledFunctions;
+    for (auto &fun1 : *modules.first) {
+        // These functions are removed before we ever look for couplings
+        if (isLlreveIntrinsic(fun1)) {
+            continue;
+        }
+        llvm::Function *fun2 = modules.second->getFunction(fun1.getName());
+        if (!fun2) {
+            continue;
+        }
+        coupledFunctions.insert({&fun1, fun2});
+    }
+    return coupledFunctions;
+}
+
+set<MonoPair<llvm::Function *>>
+lookupFunctionNamePairs(MonoPair<shared_ptr<llvm::Module>> modules,
+                        std::set<MonoPair<std::string>> coupledFunctionNames) {
+    set<MonoPair<llvm::Function *>> coupledFunctions;
+    for (const auto namePair : coupledFunctionNames) {
+        llvm::Function *fun1 = modules.first->getFunction(namePair.first);
+        llvm::Function *fun2 = modules.second->getFunction(namePair.second);
+        if (fun1 == nullptr) {
+            logError("Could not find function '" + namePair.first +
+                     "' in first module\n");
+            exit(1);
+        }
+        if (fun2 == nullptr) {
+            logError("Could not find function '" + namePair.second +
+                     "' in second module\n");
+            exit(1);
+        }
+        coupledFunctions.insert({fun1, fun2});
+    }
+    return coupledFunctions;
+}
+
+set<MonoPair<const llvm::Function *>>
+addConstToFunctionPairSet(set<MonoPair<llvm::Function *>> functionPairs) {
+    set<MonoPair<const llvm::Function *>> constFunctionPairs;
+    for (const auto &funPair : functionPairs) {
+        constFunctionPairs.insert(funPair);
+    }
+    return constFunctionPairs;
+}
+
+bool isLlreveIntrinsic(const llvm::Function &f) {
+    return f.getName() == "__mark" || f.getName() == "__splitmark" ||
+           f.getName() == "__criterion";
+}
+bool hasMutualFixedAbstraction(MonoPair<const llvm::Function *> functions) {
+    if (functions.first->isDeclaration() || functions.second->isDeclaration()) {
+        return true;
+    }
+    if (SMTGenerationOpts::getInstance().AssumeEquivalent.find(functions) !=
+        SMTGenerationOpts::getInstance().AssumeEquivalent.end()) {
+        return true;
+    }
+    return false;
+}
+
+bool hasFixedAbstraction(const llvm::Function &function) {
+    if (function.isDeclaration()) {
+        return true;
+    }
+    // TODO refactor
     for (const auto &functionPair :
          SMTGenerationOpts::getInstance().AssumeEquivalent) {
-        if (functionPair.first == f.getName() ||
-            functionPair.second == f.getName()) {
+        if (functionPair.first == &function ||
+            functionPair.second == &function) {
             return true;
         }
     }

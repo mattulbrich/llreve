@@ -626,16 +626,12 @@ auto coupledCalls(const CallInfo &call1, const CallInfo &call2) -> bool {
     const auto &coupledFunctions =
         SMTGenerationOpts::getInstance().CoupledFunctions;
     bool coupledNames = false;
-    if (SMTGenerationOpts::getInstance().DisableAutoCoupling) {
-        coupledNames =
-            coupledFunctions.find({call1.callName, call2.callName}) !=
-                coupledFunctions.end() ||
-            coupledFunctions.find({call2.callName, call1.callName}) !=
-                coupledFunctions.end();
-    } else {
-        coupledNames = call1.callName == call2.callName;
-    }
-    if (!call1.externFun) {
+    // The const cast here is safe because we are only comparing pointers
+    coupledNames =
+        coupledFunctions.find({const_cast<llvm::Function *>(&call1.fun),
+                               const_cast<llvm::Function *>(&call2.fun)}) !=
+        coupledFunctions.end();
+    if (!call1.externFun || !call2.externFun) {
         return coupledNames;
     }
     return coupledNames &&

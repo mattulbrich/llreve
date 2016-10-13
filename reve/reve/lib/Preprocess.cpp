@@ -43,95 +43,16 @@ vector<MonoPair<PreprocessedFunction>>
 preprocessFunctions(MonoPair<shared_ptr<llvm::Module>> modules,
                     PreprocessOpts opts) {
     vector<MonoPair<PreprocessedFunction>> processedFuns;
-    auto funs = zipFunctions(*modules.first, *modules.second);
-    for (auto funPair : funs.get()) {
-        auto results1 = preprocessFunction(*funPair.first, "1", opts);
-        auto results2 = preprocessFunction(*funPair.second, "2", opts);
-        processedFuns.push_back(
-            makeMonoPair(PreprocessedFunction(funPair.first, results1),
-                         PreprocessedFunction(funPair.second, results2)));
+    for (auto funPair : SMTGenerationOpts::getInstance().CoupledFunctions) {
+        if (!hasMutualFixedAbstraction(funPair)) {
+            auto results1 = preprocessFunction(*funPair.first, "1", opts);
+            auto results2 = preprocessFunction(*funPair.second, "2", opts);
+            processedFuns.push_back(
+                makeMonoPair(PreprocessedFunction(funPair.first, results1),
+                             PreprocessedFunction(funPair.second, results2)));
+        }
     }
     return processedFuns;
-}
-
-ErrorOr<std::vector<MonoPair<llvm::Function *>>>
-zipFunctions(llvm::Module &mod1, llvm::Module &mod2) {
-    std::vector<MonoPair<llvm::Function *>> funs;
-    int size1 = 0;
-    int size2 = 0;
-    for (auto &fun : mod1) {
-        if (!fun.isDeclaration()) {
-            ++size1;
-        }
-    }
-    for (auto &fun : mod2) {
-        if (!fun.isDeclaration()) {
-            ++size2;
-        }
-    }
-    if (size1 != size2) {
-        logWarning("Number of functions is not equal\n");
-    }
-    if (SMTGenerationOpts::getInstance().DisableAutoCoupling) {
-        for (const auto functionPair :
-             SMTGenerationOpts::getInstance().CoupledFunctions) {
-            llvm::Function *fun1 = mod1.getFunction(functionPair.first);
-            if (fun1 == nullptr) {
-                logError("Could not find function '" + functionPair.first +
-                         "' in first module\n");
-                exit(1);
-            }
-            llvm::Function *fun2 = mod2.getFunction(functionPair.second);
-            if (fun2 == nullptr) {
-                logError("Could not find function '" + functionPair.second +
-                         "' in second module\n");
-                exit(1);
-            }
-            if (fun1->isDeclaration() != fun2->isDeclaration()) {
-                logError("Function '" + functionPair.first +
-                         "' and function '" + functionPair.second +
-                         "' need to be either both declarations or both "
-                         "definitions\n");
-                exit(1);
-            }
-            if (!fun1->isDeclaration()) {
-                const auto assumeEquivalent =
-                    SMTGenerationOpts::getInstance().AssumeEquivalent;
-                if (!SMTGenerationOpts::getInstance().DisableAutoAbstraction ||
-                    (assumeEquivalent.find(
-                         {fun1->getName(), fun2->getName()}) ==
-                         assumeEquivalent.end() &&
-                     assumeEquivalent.find(
-                         {fun1->getName(), fun2->getName()}) ==
-                         assumeEquivalent.end())) {
-                    funs.push_back({fun1, fun2});
-                }
-            }
-        }
-    } else {
-        for (auto &Fun1 : mod1) {
-            if (Fun1.isDeclaration()) {
-                continue;
-            }
-            llvm::Function *fun2 = mod2.getFunction(Fun1.getName());
-            if (!fun2) {
-                logWarning("No corresponding function for " + Fun1.getName() +
-                           "\n");
-                continue;
-            }
-            llvm::Function *fun1 = &Fun1;
-            const auto assumeEquivalent =
-                SMTGenerationOpts::getInstance().AssumeEquivalent;
-            if (!SMTGenerationOpts::getInstance().DisableAutoAbstraction ||
-                (assumeEquivalent.find({fun1->getName(), fun2->getName()}) ==
-                     assumeEquivalent.end() &&
-                 assumeEquivalent.find({fun1->getName(), fun2->getName()}) ==
-                     assumeEquivalent.end())) {
-                funs.push_back(makeMonoPair(fun1, fun2));
-            }
-        }
-    }
-    return ErrorOr<std::vector<MonoPair<llvm::Function *>>>(funs);
 }
 
 AnalysisResults preprocessFunction(llvm::Function &fun, string prefix,

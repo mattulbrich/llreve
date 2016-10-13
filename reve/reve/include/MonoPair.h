@@ -24,11 +24,9 @@ template <typename T> struct MonoPair {
 
     MonoPair(const T &first, const T &second) : first(first), second(second) {}
 
-    template <typename T1>
-    MonoPair(const MonoPair<T1> &p,
-             typename std::enable_if<
-                 std::is_convertible<const T1 &, T>::value>::type * = 0)
-        : first(p.first), second(p.second) {}
+    template <typename T1, typename = std::enable_if_t<
+                               std::is_convertible<const T1 &, T>::value>>
+    MonoPair(const MonoPair<T1> &p) : first(p.first), second(p.second) {}
 
     MonoPair(const MonoPair &p) = default;
 

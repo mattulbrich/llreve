@@ -715,17 +715,8 @@ SMTRef mutualRecursiveForall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
                       : !callPair.first.externFun);
     SMTRef result = makeOp("=>", std::move(postInvariant), clause);
     result = std::make_unique<Forall>(args, std::move(result));
-    const auto assumeEquivalent =
-        SMTGenerationOpts::getInstance().AssumeEquivalent;
-    bool assumedEquivalent =
-        SMTGenerationOpts::getInstance().DisableAutoAbstraction &&
-        (assumeEquivalent.find(
-             {callPair.first.fun.getName(), callPair.second.fun.getName()}) !=
-             assumeEquivalent.end() ||
-         assumeEquivalent.find(
-             {callPair.first.fun.getName(), callPair.second.fun.getName()}) !=
-             assumeEquivalent.end());
-    if (callPair.first.externFun || assumedEquivalent) {
+    if (hasMutualFixedAbstraction(
+            {&callPair.first.fun, &callPair.second.fun})) {
         return result;
     }
     SMTRef preInv = std::make_unique<Op>(
