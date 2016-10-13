@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.0)
 project(llvm-reve)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
+include(GetGitRevisionDescription)
+get_git_head_revision(GIT_REFSPEC GIT_SHA1)
+
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
   set(CXX_WARNINGS_FLAGS "-Weverything")
   if("Ninja" STREQUAL ${CMAKE_GENERATOR})
@@ -54,7 +59,8 @@ target_include_directories(libreve PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-add_executable(reve Reve.cpp ${headers})
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/GitSHA1.cpp.in" "${CMAKE_CURRENT_BINARY_DIR}/GitSHA1.cpp" @ONLY)
+add_executable(reve Reve.cpp ${CMAKE_CURRENT_BINARY_DIR}/GitSHA1.cpp ${headers})
 
 llvm_map_components_to_libnames(llvm_libs
   bitwriter

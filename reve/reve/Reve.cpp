@@ -9,6 +9,7 @@
  */
 
 #include "Compile.h"
+#include "GitSHA1.h"
 #include "ModuleSMTGeneration.h"
 #include "Opts.h"
 #include "Preprocess.h"
@@ -151,7 +152,12 @@ static llvm::cl::opt<bool>
     InitPredFlag("init-pred",
                  llvm::cl::desc("Introduce the toplevel predicate INIT"),
                  llvm::cl::cat(ReveCategory));
+
+static void printVersion() {
+    std::cout << "llrêve version " << g_GIT_SHA1 << "\n";
+}
 int main(int argc, const char **argv) {
+    llvm::cl::SetVersionPrinter(printVersion);
     parseCommandLineArguments(argc, argv);
 
     PreprocessOpts preprocessOpts(ShowCFGFlag, ShowMarkedCFGFlag,
