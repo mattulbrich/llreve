@@ -94,7 +94,7 @@ inline bool operator==(const MarkPair &lhs, const MarkPair &rhs) {
 
 inline bool operator<(const MarkPair &lhs, const MarkPair &rhs) {
     if (lhs.startMark == rhs.startMark) {
-        return lhs.endMark < rhs.startMark;
+        return lhs.endMark < rhs.endMark;
     }
     return lhs.startMark < rhs.startMark;
 }
