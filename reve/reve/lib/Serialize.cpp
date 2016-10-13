@@ -57,8 +57,7 @@ void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
         }
     } else {
         for (const auto &smt : smtExprs) {
-            smt::SharedSMTRef out =
-                opts.Pretty ? smt->compressLets()->renameAssignments({}) : smt;
+            smt::SharedSMTRef out = opts.Pretty ? smt->compressLets() : smt;
             if (opts.MergeImplications) {
                 out = out->mergeImplications({});
             }
