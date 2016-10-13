@@ -6,11 +6,13 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
   set(CXX_WARNINGS_FLAGS "-Wall")
 endif()
-set(CXX_WARNINGS_FLAGS "${CXX_WARNING_FLAGS} -Wno-c++98-compat -Wno-exit-time-destructors -Wno-global-constructors -Wno-padded -Wno-switch-enum -Wno-shadow")
-set(CXX_OTHER_FLAGS "-fno-omit-frame-pointer")
-set(CXX_STANDARD_FLAGS "-std=c++14 -fno-rtti")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CXX_WARNINGS_FLAGS} ${CXX_STANDARD_FLAGS} ${CXX_OTHER_FLAGS}")
-set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
+if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+  set(CXX_WARNINGS_FLAGS "${CXX_WARNING_FLAGS} -Wno-c++98-compat -Wno-exit-time-destructors -Wno-global-constructors -Wno-padded -Wno-switch-enum -Wno-shadow")
+  set(CXX_OTHER_FLAGS "-fno-omit-frame-pointer")
+  set(CXX_STANDARD_FLAGS "-std=c++14 -fno-rtti")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CXX_WARNINGS_FLAGS} ${CXX_STANDARD_FLAGS} ${CXX_OTHER_FLAGS}")
+  set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
+endif()
 
 find_package(LLVM 3.8 REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
@@ -32,6 +34,7 @@ endif ()
 message(STATUS "use libcxx: ${REVE_USE_LIBCXX}")
 
 find_path(Z3_INCLUDE_DIRS NAMES z3++.h)
+find_library(Z3_LIB NAMES z3 libz3)
 include_directories(${LLVM_INCLUDE_DIRS} ${Z3_INCLUDE_DIRS} include)
 add_definitions(${LLVM_DEFINITIONS})
 
@@ -77,7 +80,7 @@ target_link_libraries(libreve
   clangEdit
   clangLex
   ${llvm_libs}
-  z3
+  ${Z3_LIB}
   ${CMAKE_THREAD_LIBS_INIT}
   )
 target_link_libraries(reve
