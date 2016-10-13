@@ -4,7 +4,7 @@ int sumItems(int *items, int itemCount, int *onlineItems, int onlineItemCount, i
    int sum = 0;
    int i = 0;
 
-   while(__mark(42) & i < itemCount || i < onlineItemCount) {
+   while(__mark(42) & (i < itemCount || i < onlineItemCount)) {
       if(i < itemCount) sum = sum + items[i];
       if(i < onlineItemCount) sum = sum + onlineItems[i];
       i++;

@@ -1,3 +1,4 @@
+int g(int n, int s);
 int triangle(int n) {
   int r;
   r = g(n, 0);

@@ -4,7 +4,7 @@ int f(int n) {
   int j;
   i = n + 1;
   j = 0;
-  while (__mark(42) & i > 0) {
+  while (__mark(42) & (i > 0)) {
     j = j + 2;
     i = i - 1;
   }

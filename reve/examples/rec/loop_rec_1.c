@@ -1,4 +1,6 @@
+/*@ opt -fun f @*/
 extern int __mark(int);
+int tr(int n);
 int f(int m) {
     int result;
 

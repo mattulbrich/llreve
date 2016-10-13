@@ -1,4 +1,5 @@
-/*@ opt -only-rec @*/
+/*@ opt -only-rec -fun triangle @*/
+int g(int n);
 int triangle(int n) {
   int r;
   r = g(n);
