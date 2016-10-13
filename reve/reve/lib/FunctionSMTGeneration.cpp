@@ -218,7 +218,8 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     checkPathMaps(pathMaps.first, pathMaps.second);
     const auto marked = preprocessedFuns.map<BidirBlockMarkMap>(
         [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
-    const string funName = preprocessedFuns.first.fun->getName();
+    const string funName = preprocessedFuns.first.fun->getName().str() + "^" +
+                           preprocessedFuns.second.fun->getName().str();
     const auto funArgsPair =
         functionArgs(*preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
     const auto funArgs = functionArgsFreeVars(*preprocessedFuns.first.fun,
