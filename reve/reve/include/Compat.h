@@ -58,10 +58,10 @@ template <typename A, typename B> class Zip {
     };
     A a;
     B b;
-    Zip<A, B>::iterator begin() {
+    iterator begin() {
         return Zip<A, B>::iterator(a.begin(), b.begin());
     }
-    Zip<A, B>::iterator end() { return Zip<A, B>::iterator(a.end(), b.end()); }
+    iterator end() { return Zip<A, B>::iterator(a.end(), b.end()); }
     Zip(A a, B b) : a(a), b(b) {}
 };
 

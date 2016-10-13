@@ -14,6 +14,7 @@
 #include "Memory.h"
 #include "Opts.h"
 
+#include <ctype.h>
 #include <iostream>
 
 bool isArray(std::string type) {
@@ -751,7 +752,7 @@ template <>
 SharedSMTRef
 Primitive<string>::renameAssignments(map<string, int> variableMap) const {
     if (val == "false" || val == "true" || val.at(0) == '(' ||
-        std::isdigit(val.at(0))) {
+        isdigit(val.at(0))) {
         return shared_from_this();
     } else {
         string name = val;
@@ -765,7 +766,7 @@ Primitive<string>::renameAssignments(map<string, int> variableMap) const {
 template <>
 SharedSMTRef Primitive<string>::renameDefineFuns(string suffix) const {
     if (val == "false" || val == "true" || val.at(0) == '(' ||
-        std::isdigit(val.at(0))) {
+        isdigit(val.at(0))) {
         return shared_from_this();
     } else {
         return make_shared<Primitive>(val + suffix);

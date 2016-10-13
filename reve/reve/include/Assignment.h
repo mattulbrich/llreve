@@ -40,7 +40,7 @@ enum class DefOrCallInfoTag { Call, Def };
 struct DefOrCallInfo {
     std::shared_ptr<const smt::Assignment> definition;
     std::shared_ptr<CallInfo> callInfo;
-    enum DefOrCallInfoTag tag;
+    DefOrCallInfoTag tag;
     DefOrCallInfo(std::shared_ptr<const smt::Assignment> definition)
         : definition(definition), callInfo(nullptr),
           tag(DefOrCallInfoTag::Def) {}
