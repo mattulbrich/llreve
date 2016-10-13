@@ -64,6 +64,11 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
 
     SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
 
+    if (SMTGenerationOpts::getInstance().Stack) {
+        declarations.push_back(select_Declaration());
+        declarations.push_back(store_Declaration());
+    }
+
     externDeclarations(*modules.first, *modules.second, declarations,
                        fileOpts.FunctionConditions);
     if (smtOpts.MainFunction == "" && !preprocessedFuns.empty()) {
@@ -214,11 +219,6 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                                     decls.end());
             }
         }
-    }
-    // TODO Move that to a more sensible place
-    if (SMTGenerationOpts::getInstance().Stack) {
-        declarations.push_back(select_Declaration());
-        declarations.push_back(store_Declaration());
     }
     for (auto &fun1 : mod1) {
         if (hasFixedAbstraction(fun1) && !isLlreveIntrinsic(fun1)) {
