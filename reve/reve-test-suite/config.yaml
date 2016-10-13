@@ -7,17 +7,24 @@ ignored-dirs:
   - torch
   - voting
   - loop/scale
+  - reducers
+  - stack
+  - bitvect
+  - misc
 ignored-files:
   - a_1.c
   - heap/findmax_1.c
   - heap/fib_1.c
   - argon2/fill_memory_blocks_1.c
   - libc/strncasecmp_1_1.c
+  - redis/trace_1.c
 z3-files:
-  - rec/rec_while.smt2
-  - rec/cocome1.smt2
-  - rec/triangular.smt2
-  - libc/strncasecmp_1.smt2
+  - rec/rec_while
+  - rec/cocome1
+  - rec/triangular
+  - libc/strncasecmp_1
+native-z3-files:
+  - loop/barthe2-big
 custom-args: {}
 custom-eldarica-args:
   heap/swaparray.smt2:

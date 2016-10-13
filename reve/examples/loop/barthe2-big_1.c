@@ -1,4 +1,3 @@
-/*@ opt -nest @*/
 extern int __mark(int);
 int f(int n) {
     int i = 1;

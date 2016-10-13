@@ -37,11 +37,14 @@ import           Types
 solveSmt
   :: (Monad m, MonadIO m, MonadSafe m, MonadLogger m, MonadReader (Options,Config) m)
   => FilePath -> m (FilePath,Status)
-solveSmt smt =
-  do (opts,conf) <- ask
-     if smt `elem` map (optBuild opts </>) (conf ^. cnfZ3Files)
-        then solveZ3 smt
-        else solveEldarica (optEldarica opts) smt
+solveSmt smt = do
+  (opts, conf) <- ask
+  let baseName = dropFromEnd 5 smt -- remove '.smt2'
+  if | baseName `elem` map (optBuild opts </>) (conf ^. cnfZ3Files) ->
+       solveZ3 smt
+     | baseName `elem` map (optBuild opts </>) (conf ^. cnfNativeZ3Files) ->
+       solveNativeZ3 smt
+     | otherwise -> solveEldarica (optEldarica opts) smt
 
 solveZ3 :: (Monad m, MonadIO m, MonadSafe m, MonadLogger m,MonadReader (Options,a) m)
         => FilePath -> m (FilePath,Status)
@@ -59,12 +62,30 @@ solveZ3 smt =
      output <- F.purely P.fold solverFold (void $ concats $ z3Producer ^. utf8 . P.lines)
      pure (smt',solverStatus output)
 
+solveNativeZ3 :: (Monad m, MonadIO m, MonadSafe m, MonadLogger m,MonadReader (Options,a) m)
+        => FilePath -> m (FilePath,Status)
+solveNativeZ3 smt = do
+  opts <- asks fst
+  $logDebug $ "Solving using z3: " <> (T.pack smt)
+  let z3Producer =
+        producerCmd (optZ3 opts <> " -T:300 fixedpoint.engine=duality " <> smt) >->
+        P.map (either id id)
+  output <-
+    F.purely P.fold solverFold (void $ concats $ z3Producer ^. utf8 . P.lines)
+  pure (smt, invertStatus $ solverStatus output)
 
 solverFold :: F.Fold P.Text SolverOutput
 solverFold =
   (SolverOutput <$> F.any (== "unsat") <*> F.any (== "sat") <*>
    F.any (== "unknown") <*>
    F.list)
+
+invertStatus :: Status -> Status
+invertStatus Unsat = Sat
+invertStatus Sat = Unsat
+invertStatus Unknown = Unknown
+invertStatus (Error t) = Error t
+invertStatus Timeout = Timeout
 
 solverStatus :: SolverOutput -> Status
 solverStatus (SolverOutput{..})
@@ -91,26 +112,24 @@ solveEldarica eldarica smt =
 
 generateSmt :: (MonadIO m, MonadThrow m, MonadReader (Options,Config) m, MonadLogger m)
             => FilePath -> m FilePath
-generateSmt path =
-  do (opts,conf) <- ask
-     let path' =
-           makeRelative (optExamples opts)
-                        path
-         smtfile = (optBuild opts) </> (dropFromEnd 4 path') -<.> "smt2"
-         file1 = path
-         file2 = (dropFromEnd 4 path) <> "_2" -<.> "c"
-     liftIO $
-       createDirectoryIfMissing True
-                                (takeDirectory smtfile)
-     let reveOpts = [file1,file2,"-o",smtfile,"-I","/usr/lib/clang/3.8.0/include"] ++
-           optionsFor (conf ^. cnfCustomArgs)
-                      smtfile
-     $logDebug $ "Running reve: " <> T.pack (show reveOpts)
-     liftIO $
-       safeReadProcess
-         (optReve opts)
-          reveOpts
-     pure smtfile
+generateSmt path = do
+  (opts, conf) <- ask
+  let path' = makeRelative (optExamples opts) path
+      relativeBasename = dropFromEnd 4 path'
+      smtfile = (optBuild opts) </> relativeBasename -<.> "smt2"
+      file1 = path
+      basename = dropFromEnd 4 file1
+      file2 = basename <> "_2" -<.> "c"
+  liftIO $ createDirectoryIfMissing True (takeDirectory smtfile)
+  let reveOpts =
+        [file1, file2, "-o", smtfile, "-I", "/usr/lib/clang/3.8.1/include"] ++
+        optionsFor (conf ^. cnfCustomArgs) smtfile ++
+        if (relativeBasename `elem` conf ^. cnfNativeZ3Files)
+          then ["-muz"]
+          else []
+  $logDebug $ "Running reve: " <> T.pack (show reveOpts)
+  liftIO $ safeReadProcess (optReve opts) reveOpts
+  pure smtfile
 
 optionsFor :: M.Map FilePath [String] -> FilePath -> [String]
 optionsFor m file =

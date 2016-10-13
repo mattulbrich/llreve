@@ -1,4 +1,3 @@
-/*@ opt -nest @*/
 /*@ pre (bvsge n$1_0__1 (_ bv0 32)) (bvsle n$1_0__1 (_ bv13 32)) @*/
 extern int __mark(int);
 int f(int n) {
