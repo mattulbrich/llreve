@@ -391,8 +391,6 @@ bool doesAccessHeap(const llvm::Module &mod) {
                 for (auto &instr : bb) {
                     if (llvm::isa<llvm::LoadInst>(&instr) ||
                         llvm::isa<llvm::StoreInst>(&instr)) {
-                        fun.dump();
-                        llvm::errs() << "\n";
                         return true;
                     }
                 }
