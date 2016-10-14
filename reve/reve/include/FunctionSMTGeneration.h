@@ -180,51 +180,6 @@ auto equalInputsEqualOutputs(std::vector<smt::SortedVar> funArgs,
                              const llvm::Type *returnType) -> smt::SharedSMTRef;
 
 /* -------------------------------------------------------------------------- */
-// Functions related to the search for free variables
-
-struct FreeVar {
-    smt::SortedVar var;
-    llvm::Type *type;
-};
-
-inline bool operator<(const FreeVar &lhs, const FreeVar &rhs) {
-    return lhs.var < rhs.var;
-}
-
-inline bool operator>(const FreeVar &lhs, const FreeVar &rhs) {
-    return rhs < lhs;
-}
-
-inline bool operator<=(const FreeVar &lhs, const FreeVar &rhs) {
-    return !(lhs > rhs);
-}
-
-inline bool operator>=(const FreeVar &lhs, const FreeVar &rhs) {
-    return !(lhs < rhs);
-}
-
-inline bool operator==(const FreeVar &lhs, const FreeVar &rhs) {
-    return lhs.var == rhs.var;
-}
-
-inline bool operator!=(const FreeVar &lhs, const FreeVar &rhs) {
-    return !(lhs == rhs);
-}
-
-auto llvmValToFreeVar(const llvm::Value *val) -> FreeVar;
-struct VariablesResult {
-    std::set<FreeVar> accessed;
-    std::map<int, std::set<FreeVar>> constructed;
-};
-auto freeVarsInBlock(llvm::BasicBlock &block, const llvm::BasicBlock *prev,
-                     std::set<FreeVar> &freeVars,
-                     std::set<FreeVar> &constructed) -> void;
-auto freeVarsOnPaths(std::map<int, Paths> pathMap) -> VariablesResult;
-auto freeVars(PathMap map1, PathMap map2, std::vector<smt::SortedVar> funArgs)
-    -> smt::FreeVarsMap;
-auto freeVars(PathMap map, std::vector<smt::SortedVar> funArgs, Program prog)
-    -> smt::FreeVarsMap;
-/* -------------------------------------------------------------------------- */
 // Miscellanous helper functions that don't really belong anywhere
 
 auto functionArgs(const llvm::Function &fun) -> std::vector<smt::SortedVar>;
