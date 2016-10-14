@@ -54,11 +54,11 @@ struct AssignmentBlock {
 This creates complete assertions containing the input and output parameters of
 the function. Each jump is modeled as a possibly recursive call.
  */
-auto relationalFunctionAssertion(
+auto relationalFunctionAssertions(
     MonoPair<PreprocessedFunction> preprocessedFuns)
     -> std::vector<smt::SharedSMTRef>;
-auto functionalFunctionAssertion(PreprocessedFunction preprocessedFun,
-                                 Program prog)
+auto functionalFunctionAssertions(PreprocessedFunction preprocessedFun,
+                                  Program prog)
     -> std::vector<smt::SharedSMTRef>;
 
 /// Create the mutual assertions for slicing.
@@ -256,3 +256,17 @@ auto addAssignments(const smt::SharedSMTRef end,
     -> smt::SharedSMTRef;
 auto addMemory(std::vector<smt::SharedSMTRef> &implArgs)
     -> std::function<void(CallInfo call, int index)>;
+
+// This combines `relationalFunctionDeclarations` and
+// `relationalFunctionAssertions`.
+auto generateRelationalFunctionSMT(
+    MonoPair<PreprocessedFunction> preprocessedFunction,
+    std::vector<smt::SharedSMTRef> &assertions,
+    std::vector<smt::SharedSMTRef> &declarations) -> void;
+// This combines `functionalFunctionDeclarations` and
+// `functionalFunctionAssertions`.
+auto generateFunctionalFunctionSMT(PreprocessedFunction preprocessedFunction,
+                                   Program prog,
+                                   std::vector<smt::SharedSMTRef> &assertions,
+                                   std::vector<smt::SharedSMTRef> &declarations)
+    -> void;

@@ -113,28 +113,12 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
                 assertions.insert(assertions.end(), newSmtExprs.begin(),
                                   newSmtExprs.end());
             } else {
-                auto newSmtExprs = relationalFunctionAssertion(funPair);
-                assertions.insert(assertions.end(), newSmtExprs.begin(),
-                                  newSmtExprs.end());
-                newSmtExprs =
-                    functionalFunctionAssertion(funPair.first, Program::First);
-                assertions.insert(assertions.end(), newSmtExprs.begin(),
-                                  newSmtExprs.end());
-                newSmtExprs = functionalFunctionAssertion(funPair.second,
-                                                          Program::Second);
-                assertions.insert(assertions.end(), newSmtExprs.begin(),
-                                  newSmtExprs.end());
-                auto newDeclarations = relationalFunctionDeclarations(funPair);
-                declarations.insert(declarations.end(), newDeclarations.begin(),
-                                    newDeclarations.end());
-                newDeclarations = functionalFunctionDeclarations(
-                    funPair.first, Program::First);
-                declarations.insert(declarations.end(), newDeclarations.begin(),
-                                    newDeclarations.end());
-                newDeclarations = functionalFunctionDeclarations(
-                    funPair.second, Program::Second);
-                declarations.insert(declarations.end(), newDeclarations.begin(),
-                                    newDeclarations.end());
+                generateRelationalFunctionSMT(funPair, assertions,
+                                              declarations);
+                generateFunctionalFunctionSMT(funPair.first, Program::First,
+                                              assertions, declarations);
+                generateFunctionalFunctionSMT(funPair.second, Program::Second,
+                                              assertions, declarations);
             }
         }
     }

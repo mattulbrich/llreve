@@ -46,7 +46,7 @@ using std::unique_ptr;
 using std::vector;
 
 vector<SharedSMTRef>
-relationalFunctionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns) {
+relationalFunctionAssertions(MonoPair<PreprocessedFunction> preprocessedFuns) {
     const auto pathMaps = preprocessedFuns.map<PathMap>(
         [](PreprocessedFunction fun) { return fun.results.paths; });
     checkPathMaps(pathMaps.first, pathMaps.second);
@@ -425,8 +425,8 @@ vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
 }
 
 vector<SharedSMTRef>
-functionalFunctionAssertion(PreprocessedFunction preprocessedFun,
-                            Program prog) {
+functionalFunctionAssertions(PreprocessedFunction preprocessedFun,
+                             Program prog) {
     const auto pathMap = preprocessedFun.results.paths;
     const auto funName = preprocessedFun.fun->getName();
     const auto returnType = preprocessedFun.fun->getReturnType();
@@ -1249,4 +1249,28 @@ auto dropTypesFreeVars(smt::FreeVarsMap map)
 
 FreeVar llvmValToFreeVar(const llvm::Value *val) {
     return {llvmValToSortedVar(val), val->getType()};
+}
+
+void generateRelationalFunctionSMT(
+    MonoPair<PreprocessedFunction> preprocessedFunction,
+    vector<SharedSMTRef> &assertions, vector<SharedSMTRef> &declarations) {
+    auto newAssertions = relationalFunctionAssertions(preprocessedFunction);
+    auto newDeclarations = relationalFunctionDeclarations(preprocessedFunction);
+    assertions.insert(assertions.end(), newAssertions.begin(),
+                      newAssertions.end());
+    declarations.insert(declarations.end(), newDeclarations.begin(),
+                        newDeclarations.end());
+}
+void generateFunctionalFunctionSMT(PreprocessedFunction preprocessedFunction,
+                                   Program prog,
+                                   vector<SharedSMTRef> &assertions,
+                                   vector<SharedSMTRef> &declarations) {
+    auto newAssertions =
+        functionalFunctionAssertions(preprocessedFunction, prog);
+    auto newDeclarations =
+        functionalFunctionDeclarations(preprocessedFunction, prog);
+    assertions.insert(assertions.end(), newAssertions.begin(),
+                      newAssertions.end());
+    declarations.insert(declarations.end(), newDeclarations.begin(),
+                        newDeclarations.end());
 }
