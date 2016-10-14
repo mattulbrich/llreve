@@ -212,6 +212,9 @@ struct VariablesResult {
     std::set<FreeVar> accessed;
     std::map<int, std::set<FreeVar>> constructed;
 };
+auto freeVarsInBlock(llvm::BasicBlock &block, const llvm::BasicBlock *prev,
+                     std::set<FreeVar> &freeVars,
+                     std::set<FreeVar> &constructed) -> void;
 auto freeVarsOnPaths(std::map<int, Paths> pathMap) -> VariablesResult;
 auto freeVars(PathMap map1, PathMap map2, std::vector<smt::SortedVar> funArgs)
     -> smt::FreeVarsMap;

@@ -898,8 +898,39 @@ SharedSMTRef equalInputsEqualOutputs(vector<smt::SortedVar> funArgs,
 /* -------------------------------------------------------------------------- */
 // Functions  related to the search for free variables
 
-/// Collect the free variables for the entry block of the PathMap
-/// A variable is free if we use it but didn't create it
+///
+void freeVarsInBlock(llvm::BasicBlock &block, const llvm::BasicBlock *prev,
+                     set<FreeVar> &freeVars, set<FreeVar> &constructed) {
+    for (auto &instr : block) {
+        constructed.insert(llvmValToFreeVar(&instr));
+        if (const auto phiInst = llvm::dyn_cast<llvm::PHINode>(&instr)) {
+            if (prev == nullptr) {
+                // This is needed for phi nodes in a marked block since we can’t
+                // resolve theme here
+                freeVars.insert(llvmValToFreeVar(&instr));
+            } else {
+                const auto incoming = phiInst->getIncomingValueForBlock(prev);
+                if (constructed.find(llvmValToFreeVar(incoming)) ==
+                        constructed.end() &&
+                    !incoming->getName().empty() &&
+                    !llvm::isa<llvm::BasicBlock>(incoming)) {
+                    freeVars.insert(llvmValToFreeVar(incoming));
+                }
+            }
+        } else {
+            for (const auto op : instr.operand_values()) {
+                if (constructed.find(llvmValToFreeVar(op)) ==
+                        constructed.end() &&
+                    !op->getName().empty() &&
+                    !llvm::isa<llvm::BasicBlock>(op) &&
+                    !llvm::isa<llvm::GlobalValue>(op)) {
+                    freeVars.insert(llvmValToFreeVar(op));
+                }
+            }
+        }
+    }
+}
+/// Collect the free variables for all paths starting at some mark
 VariablesResult freeVarsOnPaths(map<int, Paths> pathMap) {
     set<FreeVar> freeVars;
     map<int, set<FreeVar>> constructedIntersection;
@@ -908,78 +939,17 @@ VariablesResult freeVarsOnPaths(map<int, Paths> pathMap) {
             const llvm::BasicBlock *prev = path.Start;
             set<FreeVar> constructed;
 
-            // the first block is special since we can't resolve phi
-            // nodes here
-            for (auto &instr : *path.Start) {
-                constructed.insert(llvmValToFreeVar(&instr));
-                if (llvm::isa<llvm::PHINode>(instr)) {
-                    freeVars.insert(llvmValToFreeVar(&instr));
-                    continue;
-                }
-                if (const auto callInst =
-                        llvm::dyn_cast<llvm::CallInst>(&instr)) {
-                    for (unsigned int i = 0; i < callInst->getNumArgOperands();
-                         i++) {
-                        const auto arg = callInst->getArgOperand(i);
-                        if (!arg->getName().empty() &&
-                            constructed.find(llvmValToFreeVar(arg)) ==
-                                constructed.end()) {
-                            freeVars.insert(llvmValToFreeVar(arg));
-                        }
-                    }
-                    continue;
-                }
-                for (const auto op : instr.operand_values()) {
-                    if (constructed.find(llvmValToFreeVar(op)) ==
-                            constructed.end() &&
-                        !op->getName().empty() &&
-                        !llvm::isa<llvm::BasicBlock>(op)) {
-                        freeVars.insert(llvmValToFreeVar(op));
-                    }
-                }
-            }
+            freeVarsInBlock(*path.Start, nullptr, freeVars, constructed);
 
             // now deal with the rest
             for (const auto &edge : path.Edges) {
-                for (auto &instr : *edge.Block) {
-                    constructed.insert(llvmValToFreeVar(&instr));
-                    if (const auto phiInst =
-                            llvm::dyn_cast<llvm::PHINode>(&instr)) {
-                        const auto incoming =
-                            phiInst->getIncomingValueForBlock(prev);
-                        if (constructed.find(llvmValToFreeVar(incoming)) ==
-                                constructed.end() &&
-                            !incoming->getName().empty() &&
-                            !llvm::isa<llvm::BasicBlock>(incoming)) {
-                            freeVars.insert(llvmValToFreeVar(incoming));
-                        }
-                        continue;
-                    }
-                    if (const auto callInst =
-                            llvm::dyn_cast<llvm::CallInst>(&instr)) {
-                        for (unsigned int i = 0;
-                             i < callInst->getNumArgOperands(); i++) {
-                            const auto arg = callInst->getArgOperand(i);
-                            if (!arg->getName().empty() &&
-                                constructed.find(llvmValToFreeVar(arg)) ==
-                                    constructed.end()) {
-                                freeVars.insert(llvmValToFreeVar(arg));
-                            }
-                        }
-                        continue;
-                    }
-                    for (const auto op : instr.operand_values()) {
-                        if (constructed.find(llvmValToFreeVar(op)) ==
-                                constructed.end() &&
-                            !op->getName().empty() &&
-                            !llvm::isa<llvm::BasicBlock>(op)) {
-                            freeVars.insert(llvmValToFreeVar(op));
-                        }
-                    }
-                }
+                freeVarsInBlock(*edge.Block, prev, freeVars, constructed);
                 prev = edge.Block;
             }
 
+            // A variable is constructed on a way to a mark if it is constructed
+            // on all paths. We thus have to take the intersection of the
+            // constructed variables.
             set<FreeVar> newConstructedIntersection;
             if (constructedIntersection.find(paths.first) ==
                 constructedIntersection.end()) {
