@@ -15,6 +15,7 @@
 #include "Helper.h"
 #include "Invariant.h"
 #include "Memory.h"
+#include "Slicing.h"
 
 #include "llvm/IR/Constants.h"
 
