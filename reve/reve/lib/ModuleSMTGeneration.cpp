@@ -58,8 +58,11 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
         smtExprs.push_back(std::make_shared<SetLogic>("HORN"));
     }
 
-    if (doesAccessMemory(*modules.first) || doesAccessMemory(*modules.second)) {
+    if (doesAccessHeap(*modules.first) || doesAccessHeap(*modules.second)) {
         SMTGenerationOpts::getInstance().Heap = true;
+    }
+    if (doesAccessStack(*modules.first) || doesAccessStack(*modules.second)) {
+        SMTGenerationOpts::getInstance().Stack = true;
     }
 
     SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
@@ -377,12 +380,25 @@ bool doesNotRecurse(llvm::Function &fun) {
     return true;
 }
 
-bool doesAccessMemory(const llvm::Module &mod) {
+bool doesAccessHeap(const llvm::Module &mod) {
     for (auto &fun : mod) {
         for (auto &bb : fun) {
             for (auto &instr : bb) {
                 if (llvm::isa<llvm::LoadInst>(&instr) ||
                     llvm::isa<llvm::StoreInst>(&instr)) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool doesAccessStack(const llvm::Module &mod) {
+    for (auto &fun : mod) {
+        for (auto &bb : fun) {
+            for (auto &instr : bb) {
+                if (llvm::isa<llvm::AllocaInst>(&instr)) {
                     return true;
                 }
             }
