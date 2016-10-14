@@ -55,7 +55,7 @@ This creates complete assertions containing the input and output parameters of
 the function. Each jump is modeled as a possibly recursive call.
  */
 auto mutualFunctionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
-                       std::vector<smt::SharedSMTRef> &declarations)
+                             std::vector<smt::SharedSMTRef> &declarations)
     -> std::vector<smt::SharedSMTRef>;
 
 /// Create the mutual assertions for slicing.
@@ -208,9 +208,14 @@ inline bool operator!=(const FreeVar &lhs, const FreeVar &rhs) {
 }
 
 auto llvmValToFreeVar(const llvm::Value *val) -> FreeVar;
-auto freeVarsForBlock(std::map<int, Paths> pathMap)
-    -> std::pair<std::set<FreeVar>, std::map<int, std::set<FreeVar>>>;
+struct VariablesResult {
+    std::set<FreeVar> accessed;
+    std::map<int, std::set<FreeVar>> constructed;
+};
+auto freeVarsOnPaths(std::map<int, Paths> pathMap) -> VariablesResult;
 auto freeVars(PathMap map1, PathMap map2, std::vector<smt::SortedVar> funArgs)
+    -> smt::FreeVarsMap;
+auto freeVars(PathMap map, std::vector<smt::SortedVar> funArgs, Program prog)
     -> smt::FreeVarsMap;
 /* -------------------------------------------------------------------------- */
 // Miscellanous helper functions that don't really belong anywhere

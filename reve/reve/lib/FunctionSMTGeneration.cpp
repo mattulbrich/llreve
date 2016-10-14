@@ -47,7 +47,7 @@ using std::vector;
 
 vector<SharedSMTRef>
 mutualFunctionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
-                  vector<SharedSMTRef> &declarations) {
+                        vector<SharedSMTRef> &declarations) {
     const auto pathMaps = preprocessedFuns.map<PathMap>(
         [](PreprocessedFunction fun) { return fun.results.paths; });
     checkPathMaps(pathMaps.first, pathMaps.second);
@@ -900,8 +900,7 @@ SharedSMTRef equalInputsEqualOutputs(vector<smt::SortedVar> funArgs,
 
 /// Collect the free variables for the entry block of the PathMap
 /// A variable is free if we use it but didn't create it
-std::pair<set<FreeVar>, map<int, set<FreeVar>>>
-freeVarsForBlock(map<int, Paths> pathMap) {
+VariablesResult freeVarsOnPaths(map<int, Paths> pathMap) {
     set<FreeVar> freeVars;
     map<int, set<FreeVar>> constructedIntersection;
     for (const auto &paths : pathMap) {
@@ -999,66 +998,73 @@ freeVarsForBlock(map<int, Paths> pathMap) {
             }
         }
     }
-    return make_pair(freeVars, constructedIntersection);
+    return {freeVars, constructedIntersection};
+}
+
+static set<SortedVar> addMemoryLocations(const set<FreeVar> &freeVars) {
+    set<SortedVar> newFreeVars;
+    for (const auto &var : freeVars) {
+        newFreeVars.insert(var.var);
+        if (SMTGenerationOpts::getInstance().Stack && var.type->isPointerTy()) {
+            newFreeVars.insert({var.var.name + "_OnStack", "Bool"});
+        }
+    }
+    return newFreeVars;
 }
 
 smt::FreeVarsMap freeVars(PathMap map1, PathMap map2,
                           vector<smt::SortedVar> funArgs) {
-    map<int, set<SortedVar>> freeVarsMap;
+    return mergeVectorMaps(
+        freeVars(map1, filterVars(1, funArgs), Program::First),
+        freeVars(map2, filterVars(2, funArgs), Program::Second));
+}
+
+static auto addMemoryArrays(vector<smt::SortedVar> vars, Program prog)
+    -> vector<smt::SortedVar> {
+    int index = programIndex(prog);
+    if (SMTGenerationOpts::getInstance().Heap) {
+        vars.push_back(SortedVar(heapName(index), arrayType()));
+    }
+    if (SMTGenerationOpts::getInstance().Stack) {
+        vars.push_back(SortedVar(stackPointerName(index), stackPointerType()));
+        vars.push_back(SortedVar(stackName(index), arrayType()));
+    }
+    return vars;
+}
+smt::FreeVarsMap freeVars(PathMap map, vector<smt::SortedVar> funArgs,
+                          Program prog) {
+    std::map<int, set<SortedVar>> freeVarsMap;
     smt::FreeVarsMap freeVarsMapVect;
-    map<int, map<int, set<SortedVar>>> constructed;
-    for (const auto &it : map1) {
+    std::map<int, std::map<int, set<SortedVar>>> constructed;
+    for (const auto &it : map) {
         const int index = it.first;
-        auto freeVars1 = freeVarsForBlock(map1.at(index));
-        const auto freeVars2 = freeVarsForBlock(map2.at(index));
-        for (auto var : freeVars2.first) {
-            freeVars1.first.insert(var);
-        }
-        set<SortedVar> freeVars;
-        for (const auto var : freeVars1.first) {
-            freeVars.insert(var.var);
-            if (SMTGenerationOpts::getInstance().Stack &&
-                var.type->isPointerTy()) {
-                freeVars.insert({var.var.name + "_OnStack", "Bool"});
-            }
-        }
-        freeVarsMap.insert(make_pair(index, freeVars));
+        auto freeVarsResult = freeVarsOnPaths(map.at(index));
 
-        // constructed variables
-        for (auto mapIt : freeVars2.second) {
-            for (auto var : mapIt.second) {
-                freeVars1.second[mapIt.first].insert(var);
-            }
-        }
+        const auto accessed = addMemoryLocations(freeVarsResult.accessed);
+        freeVarsMap.insert(make_pair(index, accessed));
 
-        map<int, set<SortedVar>> constructedVarsMap;
-        for (const auto &it : freeVars1.second) {
-            set<SortedVar> constructedVars;
-            for (const auto var : it.second) {
-                constructedVars.insert(var.var);
-                if (var.type->isPointerTy()) {
-                    constructedVars.insert({var.var.name + "_OnStack", "Bool"});
-                }
-            }
+        std::map<int, set<SortedVar>> constructedVarsMap;
+        for (const auto &it : freeVarsResult.constructed) {
+            const auto constructedVars = addMemoryLocations(it.second);
             constructedVarsMap.insert({it.first, constructedVars});
         }
 
         constructed.insert(make_pair(index, constructedVarsMap));
     }
 
-    freeVarsMap[EXIT_MARK] = set<smt::SortedVar>();
+    freeVarsMap[EXIT_MARK] = {};
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
         for (const auto &arg : funArgs) {
             freeVarsMap[EXIT_MARK].insert(arg);
         }
     }
-    freeVarsMap[UNREACHABLE_MARK] = set<smt::SortedVar>();
+    freeVarsMap[UNREACHABLE_MARK] = {};
 
     // search for a least fixpoint
     bool changed = true;
     while (changed) {
         changed = false;
-        for (const auto &it : map1) {
+        for (const auto &it : map) {
             const int startIndex = it.first;
             for (const auto &itInner : it.second) {
                 const int endIndex = itInner.first;
@@ -1074,37 +1080,18 @@ smt::FreeVarsMap freeVars(PathMap map1, PathMap map2,
         }
     }
 
-    const auto addMemoryArrays = [](vector<smt::SortedVar> vars,
-                                    int index) -> vector<smt::SortedVar> {
-        if (SMTGenerationOpts::getInstance().Heap) {
-            vars.push_back(SortedVar(heapName(index), arrayType()));
-        }
-        if (SMTGenerationOpts::getInstance().Stack) {
-            vars.push_back(
-                SortedVar(stackPointerName(index), stackPointerType()));
-            vars.push_back(SortedVar(stackName(index), arrayType()));
-        }
-        return vars;
-    };
-
     for (auto it : freeVarsMap) {
         const int index = it.first;
         vector<smt::SortedVar> varsVect;
         for (const auto &var : it.second) {
             varsVect.push_back(var);
         }
-        const auto argPair =
-            makeMonoPair(filterVars(1, varsVect), filterVars(2, varsVect))
-                .indexedMap<vector<smt::SortedVar>>(addMemoryArrays);
-        freeVarsMapVect[index] = concat(argPair);
+        freeVarsMapVect[index] = addMemoryArrays(varsVect, prog);
     }
 
-    const auto argPair =
-        makeMonoPair(filterVars(1, funArgs), filterVars(2, funArgs))
-            .indexedMap<vector<smt::SortedVar>>(addMemoryArrays);
-    // The input arguments should be in the function call order so we can’t add
-    // them before
-    freeVarsMapVect[ENTRY_MARK] = concat(argPair);
+    // The input arguments should be in the function argument order so we can’t
+    // add them before
+    freeVarsMapVect[ENTRY_MARK] = addMemoryArrays(funArgs, prog);
 
     return freeVarsMapVect;
 }

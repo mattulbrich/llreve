@@ -154,6 +154,13 @@ auto transpose(std::map<KeyA, std::map<KeyB, Val>> map)
     return mapResult;
 }
 
+template <typename T>
+auto setUnion(std::set<T> a, std::set<T> b) -> std::set<T> {
+    for (const auto &x : b) {
+        a.insert(x);
+    }
+    return a;
+}
 template <typename K, typename V>
 auto mergeVectorMaps(std::map<K, std::vector<V>> a,
                      std::map<K, std::vector<V>> b)
@@ -162,6 +169,20 @@ auto mergeVectorMaps(std::map<K, std::vector<V>> a,
         a, b, [](std::vector<V> a, std::vector<V> b) {
             a.insert(a.end(), b.begin(), b.end());
             return a;
+        });
+}
+template <typename K1, typename K2, typename V>
+auto mergeNestedVectorMaps(std::map<K1, std::map<K2, std::vector<V>>> a,
+                           std::map<K1, std::map<K2, std::vector<V>>> b)
+    -> std::map<K1, std::map<K2, std::vector<V>>> {
+    return unionWith<K1, std::map<K2, std::vector<V>>>(
+        a, b,
+        [](std::map<K1, std::vector<V>> a, std::map<K1, std::vector<V>> b) {
+            return unionWith<K2, std::vector<V>>(
+                a, b, [](std::vector<V> a, std::vector<V> b) {
+                    a.insert(a.end(), b.begin(), b.end());
+                    return a;
+                });
         });
 }
 
