@@ -234,7 +234,7 @@ inferCoupledFunctionsByName(MonoPair<shared_ptr<llvm::Module>> modules) {
     set<MonoPair<llvm::Function *>> coupledFunctions;
     for (auto &fun1 : *modules.first) {
         // These functions are removed before we ever look for couplings
-        if (isLlreveIntrinsic(fun1)) {
+        if (isLlreveIntrinsic(fun1) || fun1.isIntrinsic()) {
             continue;
         }
         llvm::Function *fun2 = modules.second->getFunction(fun1.getName());
