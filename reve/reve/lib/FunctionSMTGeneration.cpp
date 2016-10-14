@@ -710,9 +710,7 @@ SMTRef mutualRecursiveForall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
         invariantName(ENTRY_MARK, ProgramSelection::Both,
                       callPair.first.callName + "^" + callPair.second.callName,
                       InvariantAttr::NONE, varArgs),
-        implArgs, SMTGenerationOpts::getInstance().DisableAutoAbstraction
-                      ? !isPartOfEquivalence(callPair.first.fun)
-                      : !callPair.first.externFun);
+        implArgs, !hasFixedAbstraction(callPair.first.fun));
     SMTRef result = makeOp("=>", std::move(postInvariant), clause);
     result = std::make_unique<Forall>(args, std::move(result));
     if (hasMutualFixedAbstraction(
@@ -752,12 +750,10 @@ SMTRef nonmutualRecursiveForall(SharedSMTRef clause, CallInfo call,
     const SharedSMTRef endInvariant = make_shared<Op>(
         invariantName(ENTRY_MARK, asSelection(prog), call.callName,
                       InvariantAttr::NONE, varArgs),
-        implArgs, SMTGenerationOpts::getInstance().DisableAutoAbstraction
-                      ? !isPartOfEquivalence(call.fun)
-                      : !call.externFun);
+        implArgs, !hasFixedAbstraction(call.fun));
     SMTRef result = makeOp("=>", endInvariant, clause);
     result = std::make_unique<Forall>(forallArgs, std::move(result));
-    if (call.externFun || isPartOfEquivalence(call.fun)) {
+    if (hasFixedAbstraction(call.fun)) {
         return result;
     }
     const auto preInv =

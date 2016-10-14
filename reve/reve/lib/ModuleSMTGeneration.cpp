@@ -209,6 +209,10 @@ void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                     SMTGenerationOpts::getInstance().AssumeEquivalent;
                 if (assumeEquivalent.find(functionPair) !=
                     assumeEquivalent.end()) {
+                    auto decls = equivalentExternDecls(
+                        *functionPair.first, *functionPair.second, funCondMap);
+                    declarations.insert(declarations.end(), decls.begin(),
+                                        decls.end());
                 } else {
                     auto decls = notEquivalentExternDecls(*functionPair.first,
                                                           *functionPair.second);
@@ -382,11 +386,15 @@ bool doesNotRecurse(llvm::Function &fun) {
 
 bool doesAccessHeap(const llvm::Module &mod) {
     for (auto &fun : mod) {
-        for (auto &bb : fun) {
-            for (auto &instr : bb) {
-                if (llvm::isa<llvm::LoadInst>(&instr) ||
-                    llvm::isa<llvm::StoreInst>(&instr)) {
-                    return true;
+        if (!hasFixedAbstraction(fun)) {
+            for (auto &bb : fun) {
+                for (auto &instr : bb) {
+                    if (llvm::isa<llvm::LoadInst>(&instr) ||
+                        llvm::isa<llvm::StoreInst>(&instr)) {
+                        fun.dump();
+                        llvm::errs() << "\n";
+                        return true;
+                    }
                 }
             }
         }
@@ -396,10 +404,12 @@ bool doesAccessHeap(const llvm::Module &mod) {
 
 bool doesAccessStack(const llvm::Module &mod) {
     for (auto &fun : mod) {
-        for (auto &bb : fun) {
-            for (auto &instr : bb) {
-                if (llvm::isa<llvm::AllocaInst>(&instr)) {
-                    return true;
+        if (!hasFixedAbstraction(fun)) {
+            for (auto &bb : fun) {
+                for (auto &instr : bb) {
+                    if (llvm::isa<llvm::AllocaInst>(&instr)) {
+                        return true;
+                    }
                 }
             }
         }

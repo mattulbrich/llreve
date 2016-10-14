@@ -23,14 +23,13 @@ struct CallInfo {
     std::string assignedTo;
     std::string callName;
     std::vector<smt::SharedSMTRef> args;
-    bool externFun;
     unsigned varArgs;
     const llvm::Function &fun;
     CallInfo(std::string assignedTo, std::string callName,
-             std::vector<smt::SharedSMTRef> args, bool externFun,
-             unsigned varArgs, const llvm::Function &fun)
+             std::vector<smt::SharedSMTRef> args, unsigned varArgs,
+             const llvm::Function &fun)
         : assignedTo(assignedTo), callName(callName), args(args),
-          externFun(externFun), varArgs(varArgs), fun(fun) {}
+          varArgs(varArgs), fun(fun) {}
 };
 
 auto coupledCalls(const CallInfo &call1, const CallInfo &call2) -> bool;

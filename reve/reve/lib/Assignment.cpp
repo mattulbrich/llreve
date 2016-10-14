@@ -609,8 +609,7 @@ std::shared_ptr<CallInfo> toCallInfo(string assignedTo, Program prog,
         ++i;
     }
     unsigned varargs = suppliedArgs - funTy.getNumParams();
-    return make_shared<CallInfo>(assignedTo, fun.getName(), args,
-                                 fun.isDeclaration(), varargs, fun);
+    return make_shared<CallInfo>(assignedTo, fun.getName(), args, varargs, fun);
 }
 
 bool isPtrDiff(const llvm::Instruction &instr) {
@@ -631,7 +630,7 @@ auto coupledCalls(const CallInfo &call1, const CallInfo &call2) -> bool {
         coupledFunctions.find({const_cast<llvm::Function *>(&call1.fun),
                                const_cast<llvm::Function *>(&call2.fun)}) !=
         coupledFunctions.end();
-    if (!call1.externFun || !call2.externFun) {
+    if (!hasFixedAbstraction(call1.fun) || !hasFixedAbstraction(call2.fun)) {
         return coupledNames;
     }
     return coupledNames &&
