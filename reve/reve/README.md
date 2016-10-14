@@ -116,5 +116,58 @@ The easiest solution to this problem is probably to insult the package
 maintainers until they stop messing with upstream packages and just
 distribute them like they are intended.
 
-### Arch
-Just install the packages from the repo and be happy that you have to do way less work than everybody else.
+### Archlinux
+
+Just install the packages from the repo and be happy that you have to
+do way less work than everybody else.
+
+### Windows
+
+First of all you need to install `Visual Studio 2015` (other versions
+may work but have not been tested). The free community edition is
+enough for our purposes. Make sure to select the C++ toolchain during
+the installation process.
+
+Before we start building anything, download the
+[`ninja` build system](https://github.com/ninja-build/ninja/releases)
+and add the executable to your path. In `Powershell` you can do this
+permanently via
+
+```
+[Environment]::SetEnvironmentVariable("Path", "$env:Path;C:\path\to\directory\containing\ninja\", "User")
+```
+
+From now on you should run everything from inside the `Developer
+Command Prompt for VS2015` which you can find in the start menu.
+
+You can now install LLVM & Clang via the usual installation procedure
+using Ninja. (I’ll leave it up to you to translate the commands to
+windows).
+
+```
+wget -c http://llvm.org/releases/3.8.0/llvm-3.8.0.src.tar.xz
+wget -c http://llvm.org/releases/3.8.0/cfe-3.8.0.src.tar.xz
+tar xvf llvm-3.8.0.src.tar.xz
+tar xvf cfe-3.8.0.src.tar.xz
+mkdir llvm-3.8.0.src/tools/clang
+cp -r cfe-3.8.0.src/* llvm-3.8.0.src/tools/clang
+cd llvm-3.8.0.src
+mkdir build
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=C:\Where\You\Want\To\Install\LLVM -GNinja
+ninja
+ninja install
+```
+
+Now you can install [Z3](https://github.com/Z3Prover/z3.git) from the
+git master branch using the
+[cmake](https://github.com/Z3Prover/z3/blob/master/README-CMake.md)
+instructions. The important customizations here are `-GNinja` and
+`-DCMAKE_INSTALL_PREFIX`, `-DBUILD_LIBZ3_SHARED=OFF`. You also need to make sure to set
+`-DCMAKE_BUILD_TYPE=Release`.
+
+Now that all dependencies are setup we can finally build `llreve`
+using the usual cmake dance. Again you should use `-GNinja` and if
+`Z3` is not detected, pass
+`-DZ3_LIB=C:\Z3\Install_prefix\lib\libz3.lib` and
+`-DZ3_INCLUDE_DIRS=C:\Z3\Install_prefix\include` to cmake.
