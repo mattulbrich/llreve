@@ -10,7 +10,6 @@ ignored-dirs:
   - reducers
   - stack
   - bitvect
-  - misc
 ignored-files:
   - a_1.c
   - heap/findmax_1.c
@@ -18,6 +17,7 @@ ignored-files:
   - argon2/fill_memory_blocks_1.c
   - libc/strncasecmp_1_1.c
   - redis/trace_1.c
+  - misc/lookuptable_1.c
 z3-files:
   - rec/rec_while
   - rec/cocome1
