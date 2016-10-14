@@ -113,7 +113,16 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
                 assertions.insert(assertions.end(), newSmtExprs.begin(),
                                   newSmtExprs.end());
             } else {
-                auto newSmtExprs = mutualFunctionAssertion(funPair, declarations);
+                auto newSmtExprs =
+                    relationalFunctionAssertion(funPair, declarations);
+                assertions.insert(assertions.end(), newSmtExprs.begin(),
+                                  newSmtExprs.end());
+                newSmtExprs = functionalFunctionAssertion(
+                    funPair.first, Program::First, declarations);
+                assertions.insert(assertions.end(), newSmtExprs.begin(),
+                                  newSmtExprs.end());
+                newSmtExprs = functionalFunctionAssertion(
+                    funPair.second, Program::Second, declarations);
                 assertions.insert(assertions.end(), newSmtExprs.begin(),
                                   newSmtExprs.end());
             }

@@ -54,8 +54,13 @@ struct AssignmentBlock {
 This creates complete assertions containing the input and output parameters of
 the function. Each jump is modeled as a possibly recursive call.
  */
-auto mutualFunctionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
-                             std::vector<smt::SharedSMTRef> &declarations)
+auto relationalFunctionAssertion(
+    MonoPair<PreprocessedFunction> preprocessedFuns,
+    std::vector<smt::SharedSMTRef> &declarations)
+    -> std::vector<smt::SharedSMTRef>;
+auto functionalFunctionAssertion(PreprocessedFunction preprocessedFun,
+                                 Program prog,
+                                 std::vector<smt::SharedSMTRef> &declarations)
     -> std::vector<smt::SharedSMTRef>;
 
 /// Create the mutual assertions for slicing.
@@ -123,11 +128,10 @@ auto getForbiddenPaths(MonoPair<PathMap> pathMaps,
                        smt::FreeVarsMap freeVarsMap, std::string funName,
                        bool main) -> std::vector<smt::SharedSMTRef>;
 /// Get the assertions for a single program
-auto nonmutualPaths(PathMap pathMap, std::vector<smt::SharedSMTRef> &pathExprs,
-                    smt::FreeVarsMap freeVarsMap, Program prog,
+auto nonmutualPaths(PathMap pathMap, smt::FreeVarsMap freeVarsMap, Program prog,
                     std::string funName,
                     std::vector<smt::SharedSMTRef> &declarations,
-                    const llvm::Type *type) -> void;
+                    const llvm::Type *type) -> std::vector<smt::SharedSMTRef>;
 auto getOffByNPaths(PathMap pathMap1, PathMap pathMap2,
                     smt::FreeVarsMap freeVarsMap, std::string funName,
                     bool main)
@@ -223,6 +227,7 @@ auto freeVars(PathMap map, std::vector<smt::SortedVar> funArgs, Program prog)
 /* -------------------------------------------------------------------------- */
 // Miscellanous helper functions that don't really belong anywhere
 
+auto functionArgs(const llvm::Function &fun) -> std::vector<smt::SortedVar>;
 auto functionArgs(const llvm::Function &fun1, const llvm::Function &fun2)
     -> MonoPair<std::vector<smt::SortedVar>>;
 auto functionArgsFreeVars(const llvm::Function &fun1,

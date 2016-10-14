@@ -46,8 +46,8 @@ using std::unique_ptr;
 using std::vector;
 
 vector<SharedSMTRef>
-mutualFunctionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
-                        vector<SharedSMTRef> &declarations) {
+relationalFunctionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
+                            vector<SharedSMTRef> &declarations) {
     const auto pathMaps = preprocessedFuns.map<PathMap>(
         [](PreprocessedFunction fun) { return fun.results.paths; });
     checkPathMaps(pathMaps.first, pathMaps.second);
@@ -106,14 +106,6 @@ mutualFunctionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
                 ProgramSelection::Both, funName, false, freeVarsMap)));
         }
     }
-    // these are needed for calls that can’t be matched with the same call in
-    // the other program
-    nonmutualPaths(pathMaps.first, pathExprs, freeVarsMap, Program::First,
-                   preprocessedFuns.first.fun->getName(), declarations,
-                   returnType);
-    nonmutualPaths(pathMaps.second, pathExprs, freeVarsMap, Program::Second,
-                   preprocessedFuns.second.fun->getName(), declarations,
-                   returnType);
 
     const auto forbiddenPaths =
         getForbiddenPaths(pathMaps, marked, freeVarsMap, funName, false);
@@ -425,10 +417,23 @@ vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
     return pathExprs;
 }
 
-void nonmutualPaths(PathMap pathMap, vector<SharedSMTRef> &pathExprs,
-                    smt::FreeVarsMap freeVarsMap, Program prog, string funName,
-                    vector<SharedSMTRef> &declarations,
-                    const llvm::Type *returnType) {
+vector<SharedSMTRef>
+functionalFunctionAssertion(PreprocessedFunction preprocessedFun, Program prog,
+                            vector<SharedSMTRef> &declarations) {
+    const auto pathMap = preprocessedFun.results.paths;
+    const auto funName = preprocessedFun.fun->getName();
+    const auto returnType = preprocessedFun.fun->getReturnType();
+    const auto funArgs = functionArgs(*preprocessedFun.fun);
+    const auto freeVarsMap = freeVars(pathMap, funArgs, prog);
+    return nonmutualPaths(pathMap, freeVarsMap, prog, funName, declarations,
+                          returnType);
+}
+vector<SharedSMTRef> nonmutualPaths(PathMap pathMap,
+                                    smt::FreeVarsMap freeVarsMap, Program prog,
+                                    string funName,
+                                    vector<SharedSMTRef> &declarations,
+                                    const llvm::Type *returnType) {
+    vector<SharedSMTRef> smtExprs;
     const int progIndex = programIndex(prog);
     for (const auto &pathMapIt : pathMap) {
         const int startIndex = pathMapIt.first;
@@ -450,7 +455,7 @@ void nonmutualPaths(PathMap pathMap, vector<SharedSMTRef> &pathExprs,
                 const auto defs =
                     assignmentsOnPath(path, prog, freeVarsMap.at(startIndex),
                                       endIndex == EXIT_MARK);
-                pathExprs.push_back(make_shared<Assert>(forallStartingAt(
+                smtExprs.push_back(make_shared<Assert>(forallStartingAt(
                     nonmutualSMT(std::move(endInvariant1), defs, prog),
                     filterVars(progIndex, freeVarsMap.at(startIndex)),
                     startIndex, asSelection(prog), funName, false,
@@ -458,6 +463,7 @@ void nonmutualPaths(PathMap pathMap, vector<SharedSMTRef> &pathExprs,
             }
         }
     }
+    return smtExprs;
 }
 
 map<MarkPair, vector<SharedSMTRef>> getOffByNPaths(PathMap pathMap1,
@@ -1069,27 +1075,21 @@ smt::FreeVarsMap freeVars(PathMap map, vector<smt::SortedVar> funArgs,
 /* -------------------------------------------------------------------------- */
 // Miscellanous helper functions that don't really belong anywhere
 
+vector<smt::SortedVar> functionArgs(const llvm::Function &fun) {
+    vector<smt::SortedVar> args;
+    for (auto &arg : fun.args()) {
+        auto sVar = llvmValToSortedVar(&arg);
+        args.push_back(sVar);
+        if (SMTGenerationOpts::getInstance().Stack &&
+            arg.getType()->isPointerTy()) {
+            args.push_back({sVar.name + "_OnStack", "Bool"});
+        }
+    }
+    return args;
+}
 MonoPair<vector<smt::SortedVar>> functionArgs(const llvm::Function &fun1,
                                               const llvm::Function &fun2) {
-    vector<smt::SortedVar> args1;
-    for (auto &arg : fun1.args()) {
-        auto sVar = llvmValToSortedVar(&arg);
-        args1.push_back(sVar);
-        if (SMTGenerationOpts::getInstance().Stack &&
-            arg.getType()->isPointerTy()) {
-            args1.push_back({sVar.name + "_OnStack", "Bool"});
-        }
-    }
-    vector<smt::SortedVar> args2;
-    for (auto &arg : fun2.args()) {
-        auto sVar = llvmValToSortedVar(&arg);
-        args2.push_back(sVar);
-        if (SMTGenerationOpts::getInstance().Stack &&
-            arg.getType()->isPointerTy()) {
-            args2.push_back({sVar.name + "_OnStack", "Bool"});
-        }
-    }
-    return makeMonoPair(args1, args2);
+    return {functionArgs(fun1), functionArgs(fun2)};
 }
 
 auto functionArgsFreeVars(const llvm::Function &fun1,
