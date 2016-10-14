@@ -46,8 +46,7 @@ using std::unique_ptr;
 using std::vector;
 
 vector<SharedSMTRef>
-relationalFunctionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
-                            vector<SharedSMTRef> &declarations) {
+relationalFunctionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns) {
     const auto pathMaps = preprocessedFuns.map<PathMap>(
         [](PreprocessedFunction fun) { return fun.results.paths; });
     checkPathMaps(pathMaps.first, pathMaps.second);
@@ -62,30 +61,6 @@ relationalFunctionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     const auto freeVarsMap = freeVars(pathMaps.first, pathMaps.second, funArgs);
     vector<SharedSMTRef> smtExprs;
     vector<SharedSMTRef> pathExprs;
-
-    const auto addInvariant = [&](SMTRef invariant) {
-        declarations.push_back(std::move(invariant));
-
-    };
-    const llvm::Type *returnType = preprocessedFuns.first.fun->getReturnType();
-    MonoPair<SMTRef> invariants =
-        invariantDeclaration(ENTRY_MARK, freeVarsMap.at(ENTRY_MARK),
-                             ProgramSelection::Both, funName, returnType);
-    MonoPair<SMTRef> invariants1 = invariantDeclaration(
-        ENTRY_MARK, filterVars(1, freeVarsMap.at(ENTRY_MARK)),
-        ProgramSelection::First, preprocessedFuns.first.fun->getName(),
-        returnType);
-    MonoPair<SMTRef> invariants2 = invariantDeclaration(
-        ENTRY_MARK, filterVars(2, freeVarsMap.at(ENTRY_MARK)),
-        ProgramSelection::Second, preprocessedFuns.second.fun->getName(),
-        returnType);
-    std::move(invariants).forEach(addInvariant);
-    std::move(invariants1).forEach(addInvariant);
-    std::move(invariants2).forEach(addInvariant);
-
-    const vector<SharedSMTRef> recDecls =
-        recDeclarations(pathMaps.first, funName, freeVarsMap, returnType);
-    declarations.insert(declarations.end(), recDecls.begin(), recDecls.end());
 
     const auto synchronizedPaths = getSynchronizedPaths(
         pathMaps.first, pathMaps.second, freeVarsMap,
@@ -340,20 +315,52 @@ vector<SharedSMTRef> mainDeclarations(PathMap pathMap, string funName,
     return declarations;
 }
 
-vector<SharedSMTRef> recDeclarations(PathMap pathMap, string funName,
-                                     smt::FreeVarsMap freeVarsMap,
-                                     const llvm::Type *returnType) {
+vector<SharedSMTRef> relationalFunctionDeclarations(
+    MonoPair<PreprocessedFunction> preprocessedFunctions) {
+    const string functionName =
+        preprocessedFunctions.first.fun->getName().str() + "^" +
+        preprocessedFunctions.second.fun->getName().str();
+    const auto pathMaps = preprocessedFunctions.map<PathMap>(
+        [](PreprocessedFunction fun) { return fun.results.paths; });
+    // TODO Do we need to take the intersection of the pathmaps here?
+    const auto pathMap = pathMaps.first;
+    const auto returnType = preprocessedFunctions.first.fun->getReturnType();
+    const auto funArgsPair = functionArgs(*preprocessedFunctions.first.fun,
+                                          *preprocessedFunctions.second.fun);
+    const auto functionArguments = functionArgsFreeVars(
+        *preprocessedFunctions.first.fun, *preprocessedFunctions.second.fun);
+    const auto freeVarsMap =
+        freeVars(pathMaps.first, pathMaps.second, functionArguments);
+
     vector<SharedSMTRef> declarations;
     for (const auto &pathMapIt : pathMap) {
         const int startIndex = pathMapIt.first;
-        if (startIndex != ENTRY_MARK) {
-            // ignore entry node
-            MonoPair<SharedSMTRef> invariants = invariantDeclaration(
-                startIndex, freeVarsMap.at(startIndex), ProgramSelection::Both,
-                funName, returnType);
-            declarations.push_back(invariants.first);
-            declarations.push_back(invariants.second);
-        }
+        MonoPair<SMTRef> invariants = invariantDeclaration(
+            startIndex, freeVarsMap.at(startIndex), ProgramSelection::Both,
+            functionName, returnType);
+        declarations.push_back(std::move(invariants.first));
+        declarations.push_back(std::move(invariants.second));
+    }
+    return declarations;
+}
+
+vector<SharedSMTRef>
+functionalFunctionDeclarations(PreprocessedFunction preprocessedFunction,
+                               Program prog) {
+    const string functionName = preprocessedFunction.fun->getName().str();
+    const auto pathMap = preprocessedFunction.results.paths;
+    const auto returnType = preprocessedFunction.fun->getReturnType();
+    const auto functionArguments = functionArgs(*preprocessedFunction.fun);
+    const auto freeVarsMap = freeVars(pathMap, functionArguments, prog);
+
+    vector<SharedSMTRef> declarations;
+    for (const auto &pathMapIt : pathMap) {
+        const int startIndex = pathMapIt.first;
+        MonoPair<SMTRef> invariants =
+            invariantDeclaration(startIndex, freeVarsMap.at(startIndex),
+                                 asSelection(prog), functionName, returnType);
+        declarations.push_back(std::move(invariants.first));
+        declarations.push_back(std::move(invariants.second));
     }
     return declarations;
 }
@@ -418,33 +425,23 @@ vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
 }
 
 vector<SharedSMTRef>
-functionalFunctionAssertion(PreprocessedFunction preprocessedFun, Program prog,
-                            vector<SharedSMTRef> &declarations) {
+functionalFunctionAssertion(PreprocessedFunction preprocessedFun,
+                            Program prog) {
     const auto pathMap = preprocessedFun.results.paths;
     const auto funName = preprocessedFun.fun->getName();
     const auto returnType = preprocessedFun.fun->getReturnType();
     const auto funArgs = functionArgs(*preprocessedFun.fun);
     const auto freeVarsMap = freeVars(pathMap, funArgs, prog);
-    return nonmutualPaths(pathMap, freeVarsMap, prog, funName, declarations,
-                          returnType);
+    return nonmutualPaths(pathMap, freeVarsMap, prog, funName, returnType);
 }
 vector<SharedSMTRef> nonmutualPaths(PathMap pathMap,
                                     smt::FreeVarsMap freeVarsMap, Program prog,
                                     string funName,
-                                    vector<SharedSMTRef> &declarations,
                                     const llvm::Type *returnType) {
     vector<SharedSMTRef> smtExprs;
     const int progIndex = programIndex(prog);
     for (const auto &pathMapIt : pathMap) {
         const int startIndex = pathMapIt.first;
-        if (startIndex != ENTRY_MARK) {
-            MonoPair<SMTRef> invariants = invariantDeclaration(
-                startIndex, filterVars(progIndex, freeVarsMap.at(startIndex)),
-                asSelection(prog), funName, returnType);
-            std::move(invariants).forEach([&declarations](SMTRef inv) {
-                declarations.push_back(std::move(inv));
-            });
-        }
         for (const auto &innerPathMapIt : pathMapIt.second) {
             const int endIndex = innerPathMapIt.first;
             for (const auto &path : innerPathMapIt.second) {

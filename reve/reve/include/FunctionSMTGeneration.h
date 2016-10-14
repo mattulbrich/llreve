@@ -55,12 +55,10 @@ This creates complete assertions containing the input and output parameters of
 the function. Each jump is modeled as a possibly recursive call.
  */
 auto relationalFunctionAssertion(
-    MonoPair<PreprocessedFunction> preprocessedFuns,
-    std::vector<smt::SharedSMTRef> &declarations)
+    MonoPair<PreprocessedFunction> preprocessedFuns)
     -> std::vector<smt::SharedSMTRef>;
 auto functionalFunctionAssertion(PreprocessedFunction preprocessedFun,
-                                 Program prog,
-                                 std::vector<smt::SharedSMTRef> &declarations)
+                                 Program prog)
     -> std::vector<smt::SharedSMTRef>;
 
 /// Create the mutual assertions for slicing.
@@ -113,8 +111,11 @@ auto mainDeclarations(PathMap pathMap, std::string funName,
                       smt::FreeVarsMap freeVarsMap)
     -> std::vector<smt::SharedSMTRef>;
 /// Declarations for functions that can be called.
-auto recDeclarations(PathMap pathMap, std::string funName,
-                     smt::FreeVarsMap freeVarsMap, const llvm::Type *returnType)
+auto relationalFunctionDeclarations(
+    MonoPair<PreprocessedFunction> preprocessedFunctions)
+    -> std::vector<smt::SharedSMTRef>;
+auto functionalFunctionDeclarations(PreprocessedFunction preprocessedFunction,
+                                    Program program)
     -> std::vector<smt::SharedSMTRef>;
 /// Find all paths with the same start but different end marks
 /**
@@ -129,9 +130,8 @@ auto getForbiddenPaths(MonoPair<PathMap> pathMaps,
                        bool main) -> std::vector<smt::SharedSMTRef>;
 /// Get the assertions for a single program
 auto nonmutualPaths(PathMap pathMap, smt::FreeVarsMap freeVarsMap, Program prog,
-                    std::string funName,
-                    std::vector<smt::SharedSMTRef> &declarations,
-                    const llvm::Type *type) -> std::vector<smt::SharedSMTRef>;
+                    std::string funName, const llvm::Type *type)
+    -> std::vector<smt::SharedSMTRef>;
 auto getOffByNPaths(PathMap pathMap1, PathMap pathMap2,
                     smt::FreeVarsMap freeVarsMap, std::string funName,
                     bool main)
@@ -158,10 +158,10 @@ auto nonmutualSMT(smt::SharedSMTRef endClause,
 /* -------------------------------------------------------------------------- */
 // Functions to generate various foralls
 
-auto mutualFunctionCall(smt::SharedSMTRef clause,
-                           MonoPair<CallInfo> callPair) -> smt::SMTRef;
+auto mutualFunctionCall(smt::SharedSMTRef clause, MonoPair<CallInfo> callPair)
+    -> smt::SMTRef;
 auto nonMutualFunctionCall(smt::SharedSMTRef clause, CallInfo call,
-                              Program prog) -> smt::SMTRef;
+                           Program prog) -> smt::SMTRef;
 auto forallStartingAt(smt::SharedSMTRef clause,
                       std::vector<smt::SortedVar> freeVars, int blockIndex,
                       ProgramSelection prog, std::string funName, bool main,
