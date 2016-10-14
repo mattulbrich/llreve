@@ -622,14 +622,13 @@ SharedSMTRef interleaveAssignments(
         switch (step) {
         case InterleaveStep::StepFirst:
             clause = addAssignments(clause, *assignmentIt1);
-            clause = nonmutualRecursiveForall(clause, *callIt1, Program::First);
+            clause = nonMutualFunctionCall(clause, *callIt1, Program::First);
             ++callIt1;
             ++assignmentIt1;
             break;
         case InterleaveStep::StepSecond:
             clause = addAssignments(clause, *assignmentIt2);
-            clause =
-                nonmutualRecursiveForall(clause, *callIt2, Program::Second);
+            clause = nonMutualFunctionCall(clause, *callIt2, Program::Second);
             ++callIt2;
             ++assignmentIt2;
             break;
@@ -638,7 +637,7 @@ SharedSMTRef interleaveAssignments(
             clause = addAssignments(clause, *assignmentIt2);
             clause = addAssignments(clause, *assignmentIt1);
             clause =
-                mutualRecursiveForall(clause, makeMonoPair(*callIt1, *callIt2));
+                mutualFunctionCall(clause, makeMonoPair(*callIt1, *callIt2));
             ++callIt1;
             ++callIt2;
             ++assignmentIt1;
@@ -677,7 +676,7 @@ SharedSMTRef nonmutualSMT(SharedSMTRef endClause,
         if (first) {
             first = false;
         } else {
-            clause = nonmutualRecursiveForall(clause, *callIt, prog);
+            clause = nonMutualFunctionCall(clause, *callIt, prog);
             ++callIt;
         }
         clause = addAssignments(clause, assgnsVec);
@@ -685,10 +684,7 @@ SharedSMTRef nonmutualSMT(SharedSMTRef endClause,
     return clause;
 }
 
-/* -------------------------------------------------------------------------- */
-// Functions to generate various foralls
-
-SMTRef mutualRecursiveForall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
+SMTRef mutualFunctionCall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
     const uint32_t varArgs = callPair.first.varArgs;
     vector<SortedVar> args;
     args.push_back(
@@ -731,8 +727,7 @@ SMTRef mutualRecursiveForall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
     return makeOp("and", std::move(preInv), std::move(result));
 }
 
-SMTRef nonmutualRecursiveForall(SharedSMTRef clause, CallInfo call,
-                                Program prog) {
+SMTRef nonMutualFunctionCall(SharedSMTRef clause, CallInfo call, Program prog) {
     vector<SortedVar> forallArgs;
     vector<SharedSMTRef> implArgs;
 

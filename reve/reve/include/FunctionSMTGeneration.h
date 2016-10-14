@@ -158,9 +158,9 @@ auto nonmutualSMT(smt::SharedSMTRef endClause,
 /* -------------------------------------------------------------------------- */
 // Functions to generate various foralls
 
-auto mutualRecursiveForall(smt::SharedSMTRef clause,
+auto mutualFunctionCall(smt::SharedSMTRef clause,
                            MonoPair<CallInfo> callPair) -> smt::SMTRef;
-auto nonmutualRecursiveForall(smt::SharedSMTRef clause, CallInfo call,
+auto nonMutualFunctionCall(smt::SharedSMTRef clause, CallInfo call,
                               Program prog) -> smt::SMTRef;
 auto forallStartingAt(smt::SharedSMTRef clause,
                       std::vector<smt::SortedVar> freeVars, int blockIndex,
