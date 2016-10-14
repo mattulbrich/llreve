@@ -54,6 +54,7 @@ executable reve-test-suite
   build-depends:       async
                      , base
                      , containers
+                     , directory
                      , filepath
                      , lens
                      , monad-control
