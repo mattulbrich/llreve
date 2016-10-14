@@ -154,7 +154,7 @@ static llvm::cl::opt<bool>
                  llvm::cl::cat(ReveCategory));
 
 static void printVersion() {
-    std::cout << "llrêve version " << g_GIT_SHA1 << "\n";
+    std::cout << "llreve version " << g_GIT_SHA1 << "\n";
 }
 int main(int argc, const char **argv) {
     llvm::cl::SetVersionPrinter(printVersion);
