@@ -179,8 +179,7 @@ vector<SharedSMTRef> slicingAssertion(MonoPair<PreprocessedFunction> funPair) {
 // the main function that we want to check doesn’t need the output parameters in
 // the assertions since it is never called
 vector<SharedSMTRef>
-mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
-              vector<SharedSMTRef> &declarations, bool onlyRec) {
+relationalIterativeAssertions(MonoPair<PreprocessedFunction> preprocessedFuns) {
     const auto pathMaps = preprocessedFuns.map<PathMap>(
         [](PreprocessedFunction fun) { return fun.results.paths; });
     checkPathMaps(pathMaps.first, pathMaps.second);
@@ -195,7 +194,7 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
     vector<SharedSMTRef> smtExprs;
 
     const llvm::Type *returnType = preprocessedFuns.first.fun->getReturnType();
-    if (onlyRec) {
+    if (SMTGenerationOpts::getInstance().OnlyRecursive) {
         smtExprs.push_back(
             equalInputsEqualOutputs(freeVarsMap.at(ENTRY_MARK),
                                     filterVars(1, freeVarsMap.at(ENTRY_MARK)),
@@ -216,9 +215,7 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
             }
             return endInvariant;
         });
-    const auto mainDecls =
-        mainDeclarations(pathMaps.first, funName, freeVarsMap);
-    declarations.insert(declarations.end(), mainDecls.begin(), mainDecls.end());
+
     const auto forbiddenPaths =
         getForbiddenPaths(pathMaps, marked, freeVarsMap, funName, true);
     if (!SMTGenerationOpts::getInstance().PerfectSync) {
@@ -290,28 +287,6 @@ getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
     }
 
     return clauses;
-}
-
-vector<SharedSMTRef> mainDeclarations(PathMap pathMap, string funName,
-                                      smt::FreeVarsMap freeVarsMap) {
-    vector<SharedSMTRef> declarations;
-    for (const auto &pathMapIt : pathMap) {
-        const int startIndex = pathMapIt.first;
-        if (startIndex != ENTRY_MARK) {
-            // ignore entry node
-            if (SMTGenerationOpts::getInstance().Invariants.find(startIndex) ==
-                SMTGenerationOpts::getInstance().Invariants.end()) {
-                const auto invariant = mainInvariantDeclaration(
-                    startIndex, freeVarsMap.at(startIndex),
-                    ProgramSelection::Both, funName);
-                declarations.push_back(invariant);
-            } else {
-                declarations.push_back(
-                    SMTGenerationOpts::getInstance().Invariants.at(startIndex));
-            }
-        }
-    }
-    return declarations;
 }
 
 vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
@@ -1004,6 +979,18 @@ void generateFunctionalFunctionSMT(PreprocessedFunction preprocessedFunction,
         functionalFunctionAssertions(preprocessedFunction, prog);
     auto newDeclarations =
         functionalFunctionDeclarations(preprocessedFunction, prog);
+    assertions.insert(assertions.end(), newAssertions.begin(),
+                      newAssertions.end());
+    declarations.insert(declarations.end(), newDeclarations.begin(),
+                        newDeclarations.end());
+}
+
+void generateRelationalIterativeSMT(
+    MonoPair<PreprocessedFunction> preprocessedFunctions,
+    vector<SharedSMTRef> &assertions, vector<SharedSMTRef> &declarations) {
+    auto newAssertions = relationalIterativeAssertions(preprocessedFunctions);
+    auto newDeclarations =
+        relationalIterativeDeclarations(preprocessedFunctions);
     assertions.insert(assertions.end(), newAssertions.begin(),
                       newAssertions.end());
     declarations.insert(declarations.end(), newDeclarations.begin(),

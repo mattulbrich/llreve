@@ -8,3 +8,7 @@ auto relationalFunctionDeclarations(
 auto functionalFunctionDeclarations(PreprocessedFunction preprocessedFunction,
                                     Program program)
     -> std::vector<smt::SharedSMTRef>;
+
+auto relationalIterativeDeclarations(
+    MonoPair<PreprocessedFunction> preprocessedFunctions)
+    -> std::vector<smt::SharedSMTRef>;

@@ -58,3 +58,36 @@ functionalFunctionDeclarations(PreprocessedFunction preprocessedFunction,
     }
     return declarations;
 }
+vector<SharedSMTRef> relationalIterativeDeclarations(
+    MonoPair<PreprocessedFunction> preprocessedFunctions) {
+    const auto pathMaps = preprocessedFunctions.map<PathMap>(
+        [](PreprocessedFunction fun) { return fun.results.paths; });
+    // TODO Do we need to take the intersection of the pathmaps here?
+    const auto pathMap = pathMaps.first;
+    const string functionName =
+        preprocessedFunctions.first.fun->getName().str() + "^" +
+        preprocessedFunctions.second.fun->getName().str();
+    const auto functionArguments = functionArgs(
+        *preprocessedFunctions.first.fun, *preprocessedFunctions.second.fun);
+    const auto freeVarsMap =
+        freeVars(pathMaps.first, pathMaps.second, functionArguments);
+
+    vector<SharedSMTRef> declarations;
+    for (const auto &pathMapIt : pathMap) {
+        const int startIndex = pathMapIt.first;
+        if (startIndex != ENTRY_MARK) {
+            // ignore entry node, it has the fixed predicate IN_INV
+            if (SMTGenerationOpts::getInstance().Invariants.find(startIndex) ==
+                SMTGenerationOpts::getInstance().Invariants.end()) {
+                const auto invariant = mainInvariantDeclaration(
+                    startIndex, freeVarsMap.at(startIndex),
+                    ProgramSelection::Both, functionName);
+                declarations.push_back(invariant);
+            } else {
+                declarations.push_back(
+                    SMTGenerationOpts::getInstance().Invariants.at(startIndex));
+            }
+        }
+    }
+    return declarations;
+}

@@ -97,10 +97,7 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
                 smtExprs.push_back(initPredicateComment(inInv));
                 assertions.push_back(initImplication(inInv));
             }
-            auto newSmtExprs =
-                mainAssertion(funPair, declarations, smtOpts.OnlyRecursive);
-            assertions.insert(assertions.end(), newSmtExprs.begin(),
-                              newSmtExprs.end());
+            generateRelationalIterativeSMT(funPair, assertions, declarations);
         }
         // Other functions used by the main function or the main function if
         // it’s recursive

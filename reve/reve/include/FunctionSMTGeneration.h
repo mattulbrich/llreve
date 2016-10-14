@@ -74,8 +74,9 @@ The main function is special because it is never called so the predicates don’
 need to contain the output parameters. While it’s not necessary to use this
 encoding it seems to perform better in some cases.
  */
-auto mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
-                   std::vector<smt::SharedSMTRef> &declarations, bool onlyRec)
+auto relationalIterativeAssertions(
+    MonoPair<PreprocessedFunction> preprocessedFuns,
+    std::vector<smt::SharedSMTRef> &declarations, bool onlyRec)
     -> std::vector<smt::SharedSMTRef>;
 
 /// Get all combinations of paths that have the same start and end mark.
@@ -106,10 +107,6 @@ auto getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
                           smt::FreeVarsMap freeVarsMap,
                           ReturnInvariantGenerator generateReturnInvariant)
     -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
-/// Declarations for the main function.
-auto mainDeclarations(PathMap pathMap, std::string funName,
-                      smt::FreeVarsMap freeVarsMap)
-    -> std::vector<smt::SharedSMTRef>;
 
 /// Find all paths with the same start but different end marks
 /**
@@ -213,3 +210,9 @@ auto generateFunctionalFunctionSMT(PreprocessedFunction preprocessedFunction,
                                    std::vector<smt::SharedSMTRef> &assertions,
                                    std::vector<smt::SharedSMTRef> &declarations)
     -> void;
+// This combines `relationalIterativeDeclarations` and
+// `relationalIterativeAssertions`.
+auto generateRelationalIterativeSMT(
+    MonoPair<PreprocessedFunction> preprocessedFunctions,
+    std::vector<smt::SharedSMTRef> &assertions,
+    std::vector<smt::SharedSMTRef> &declarations) -> void;
