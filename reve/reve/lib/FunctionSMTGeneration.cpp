@@ -58,9 +58,8 @@ relationalFunctionAssertions(MonoPair<PreprocessedFunction> preprocessedFuns) {
                            preprocessedFuns.second.fun->getName().str();
     const auto funArgsPair =
         functionArgs(*preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
-    const auto funArgs = functionArgsFreeVars(*preprocessedFuns.first.fun,
-                                              *preprocessedFuns.second.fun);
-    const auto freeVarsMap = freeVars(pathMaps.first, pathMaps.second, funArgs);
+    const auto freeVarsMap =
+        freeVars(pathMaps.first, pathMaps.second, funArgsPair);
     vector<SharedSMTRef> smtExprs;
     vector<SharedSMTRef> pathExprs;
 
@@ -191,10 +190,8 @@ mainAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
                            preprocessedFuns.second.fun->getName().str();
     const auto funArgsPair =
         functionArgs(*preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
-    const auto funArgs = functionArgsFreeVars(*preprocessedFuns.first.fun,
-                                              *preprocessedFuns.second.fun);
-
-    const auto freeVarsMap = freeVars(pathMaps.first, pathMaps.second, funArgs);
+    const auto freeVarsMap =
+        freeVars(pathMaps.first, pathMaps.second, funArgsPair);
     vector<SharedSMTRef> smtExprs;
 
     const llvm::Type *returnType = preprocessedFuns.first.fun->getReturnType();

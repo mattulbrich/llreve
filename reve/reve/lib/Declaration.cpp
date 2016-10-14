@@ -21,7 +21,7 @@ vector<SharedSMTRef> relationalFunctionDeclarations(
     const auto returnType = preprocessedFunctions.first.fun->getReturnType();
     const auto funArgsPair = functionArgs(*preprocessedFunctions.first.fun,
                                           *preprocessedFunctions.second.fun);
-    const auto functionArguments = functionArgsFreeVars(
+    const auto functionArguments = functionArgs(
         *preprocessedFunctions.first.fun, *preprocessedFunctions.second.fun);
     const auto freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, functionArguments);
