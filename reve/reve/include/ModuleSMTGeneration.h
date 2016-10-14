@@ -19,7 +19,7 @@
 #include "llvm/IR/Module.h"
 
 auto generateSMT(MonoPair<std::shared_ptr<llvm::Module>> modules,
-                 std::vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
+                 const AnalysisResultsMap &analysisResults,
                  FileOptions fileOpts) -> std::vector<smt::SharedSMTRef>;
 auto select_Declaration() -> smt::SMTRef;
 auto store_Declaration() -> smt::SMTRef;

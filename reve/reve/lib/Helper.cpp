@@ -19,6 +19,7 @@
 using smt::SharedSMTRef;
 using smt::SMTRef;
 using smt::stringExpr;
+using std::set;
 using std::string;
 using std::unique_ptr;
 using std::vector;
@@ -238,4 +239,35 @@ auto functionArgsFreeVars(const llvm::Function &fun1,
                           const llvm::Function &fun2)
     -> std::vector<smt::SortedVar> {
     return concat(functionArgs(fun1, fun2));
+}
+auto callsTransitively(const llvm::Function &caller,
+                       const llvm::Function &callee) -> bool {
+    set<const llvm::Function *> visited;
+    set<const llvm::Function *> toProcess;
+    toProcess.insert(&caller);
+    while (!toProcess.empty()) {
+        const auto called = calledFunctions(**toProcess.begin());
+
+        if (called.find(&callee) != called.end()) {
+            return true;
+        }
+
+        visited.insert(*toProcess.begin());
+        toProcess.erase(toProcess.begin());
+        std::set_difference(called.begin(), called.end(), visited.begin(),
+                            visited.end(),
+                            std::inserter(toProcess, toProcess.begin()));
+    }
+    return false;
+}
+auto calledFunctions(const llvm::Function &f) -> set<const llvm::Function *> {
+    set<const llvm::Function *> called;
+    for (const auto &bb : f) {
+        for (const auto &instr : bb) {
+            if (auto call = llvm::dyn_cast<llvm::CallInst>(&instr)) {
+                called.insert(call->getCalledFunction());
+            }
+        }
+    }
+    return called;
 }

@@ -208,3 +208,8 @@ std::vector<std::string> split(const std::string &s, char delim);
 auto functionArgs(const llvm::Function &fun) -> std::vector<smt::SortedVar>;
 auto functionArgs(const llvm::Function &fun1, const llvm::Function &fun2)
     -> MonoPair<std::vector<smt::SortedVar>>;
+
+auto callsTransitively(const llvm::Function &caller,
+                       const llvm::Function &callee) -> bool;
+auto calledFunctions(const llvm::Function &f)
+    -> std::set<const llvm::Function *>;

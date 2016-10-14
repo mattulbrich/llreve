@@ -14,7 +14,9 @@ using std::make_shared;
 using std::string;
 using std::vector;
 
-vector<SharedSMTRef> slicingAssertion(MonoPair<PreprocessedFunction> funPair) {
+vector<SharedSMTRef>
+slicingAssertion(MonoPair<llvm::Function *> funPair,
+                 const AnalysisResultsMap &analysisResults) {
     vector<SharedSMTRef> assertions;
 
     string typeBool = "Bool";
@@ -24,8 +26,8 @@ vector<SharedSMTRef> slicingAssertion(MonoPair<PreprocessedFunction> funPair) {
     // Collect arguments for call
     std::vector<SortedVar> args;
 
-    auto funArgs1 = functionArgs(*(funPair.first.fun));
-    auto funArgs2 = functionArgs(*(funPair.second.fun));
+    auto funArgs1 = functionArgs(*funPair.first);
+    auto funArgs2 = functionArgs(*funPair.second);
     assert(funArgs1.size() == funArgs2.size());
 
     args.insert(args.end(), funArgs1.begin(), funArgs1.end());

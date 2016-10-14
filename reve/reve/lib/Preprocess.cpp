@@ -33,6 +33,7 @@
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
 #include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
 
+using std::map;
 using std::vector;
 using std::shared_ptr;
 using std::make_shared;
@@ -46,32 +47,31 @@ static void nameFunctionArguments(llvm::Function &fun, Program prog) {
     }
 }
 
-vector<MonoPair<PreprocessedFunction>>
+AnalysisResultsMap
 preprocessFunctions(MonoPair<shared_ptr<llvm::Module>> modules,
                     PreprocessOpts opts) {
-    vector<MonoPair<PreprocessedFunction>> processedFuns;
-    for (auto funPair : SMTGenerationOpts::getInstance().CoupledFunctions) {
-        if (!hasMutualFixedAbstraction(funPair)) {
-            auto results1 = preprocessFunction(*funPair.first, "1", opts);
-            auto results2 = preprocessFunction(*funPair.second, "2", opts);
-            processedFuns.push_back(
-                makeMonoPair(PreprocessedFunction(funPair.first, results1),
-                             PreprocessedFunction(funPair.second, results2)));
+    AnalysisResultsMap preprocessingResults;
+    preprocessFunctions(*modules.first, opts, preprocessingResults,
+                        Program::First);
+    preprocessFunctions(*modules.second, opts, preprocessingResults,
+                        Program::Second);
+    return preprocessingResults;
+}
+
+void preprocessFunctions(llvm::Module &module, PreprocessOpts opts,
+                         AnalysisResultsMap &preprocessingResults,
+                         Program prog) {
+    for (auto &f : module) {
+        if (!f.isIntrinsic() && !isLlreveIntrinsic(f)) {
+            if (hasFixedAbstraction(f)) {
+                nameFunctionArguments(f, prog);
+            } else {
+                preprocessingResults.insert(
+                    {&f, preprocessFunction(
+                             f, std::to_string(programIndex(prog)), opts)});
+            }
         }
     }
-    // Functions that have fixed abstractions are not preprocessed so we set the
-    // names of function arguments separately.
-    for (auto &fun : *modules.first) {
-        if (hasFixedAbstraction(fun)) {
-            nameFunctionArguments(fun, Program::First);
-        }
-    }
-    for (auto &fun : *modules.second) {
-        if (hasFixedAbstraction(fun)) {
-            nameFunctionArguments(fun, Program::Second);
-        }
-    }
-    return processedFuns;
 }
 
 AnalysisResults preprocessFunction(llvm::Function &fun, string prefix,

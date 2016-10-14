@@ -41,7 +41,7 @@ class SMTGenerationOpts {
     }
     // Convenience method to make sure you don’t forget to set parameters
     static void
-    initialize(std::string mainFunction, bool heap, bool stack,
+    initialize(MonoPair<llvm::Function *> mainFunctions, bool heap, bool stack,
                bool globalConstants, bool onlyRecursive, bool noByteHeap,
                bool everythingSigned, bool muZ, bool perfectSync,
                bool passInputThrough, bool bitvect, bool invert,
@@ -49,7 +49,7 @@ class SMTGenerationOpts {
                std::map<int, smt::SharedSMTRef> invariants,
                std::set<MonoPair<const llvm::Function *>> assumeEquivalent,
                std::set<MonoPair<llvm::Function *>> coupleFunctions);
-    std::string MainFunction;
+    MonoPair<llvm::Function *> MainFunctions;
     bool Heap;
     bool Stack;
     bool GlobalConstants;
@@ -72,7 +72,7 @@ class SMTGenerationOpts {
     std::set<MonoPair<llvm::Function *>> CoupledFunctions;
 
   private:
-    SMTGenerationOpts() {}
+    SMTGenerationOpts() : MainFunctions({nullptr, nullptr}) {}
     SMTGenerationOpts(SMTGenerationOpts const &) = delete;
     void operator=(SMTGenerationOpts const &) = delete;
 };
@@ -162,7 +162,9 @@ auto lookupFunctionNamePairs(
     MonoPair<std::shared_ptr<llvm::Module>> modules,
     std::set<MonoPair<std::string>> coupledFunctionNames)
     -> std::set<MonoPair<llvm::Function *>>;
-auto isPartOfEquivalence(const llvm::Function &f) -> bool;
+MonoPair<llvm::Function *>
+findMainFunction(MonoPair<std::shared_ptr<llvm::Module>> modules,
+                 std::string functionName);
 
 bool isLlreveIntrinsic(const llvm::Function &);
 bool hasMutualFixedAbstraction(MonoPair<const llvm::Function *> functions);

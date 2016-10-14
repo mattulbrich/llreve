@@ -11,6 +11,7 @@
 #pragma once
 
 #include "MarkAnalysis.h"
+#include "MonoPair.h"
 #include "PathAnalysis.h"
 
 struct AnalysisResults {
@@ -19,3 +20,13 @@ struct AnalysisResults {
     AnalysisResults(BidirBlockMarkMap marks, PathMap pm)
         : blockMarkMap(marks), paths(pm) {}
 };
+
+using AnalysisResultsMap = std::map<const llvm::Function *, AnalysisResults>;
+MonoPair<PathMap>
+
+getPathMaps(MonoPair<llvm::Function *> functions,
+            const AnalysisResultsMap &analysisResults);
+MonoPair<BidirBlockMarkMap>
+getBlockMarkMaps(MonoPair<llvm::Function *> functions,
+                 const AnalysisResultsMap &analysisResults);
+std::string getFunctionName(MonoPair<llvm::Function *> functions);

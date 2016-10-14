@@ -1,14 +1,17 @@
 #pragma once
 
+#include "AnalysisResults.h"
 #include "Preprocess.h"
 
 auto relationalFunctionDeclarations(
-    MonoPair<PreprocessedFunction> preprocessedFunctions)
+    MonoPair<llvm::Function *> preprocessedFunctions,
+    const AnalysisResultsMap &analysisResults)
     -> std::vector<smt::SharedSMTRef>;
-auto functionalFunctionDeclarations(PreprocessedFunction preprocessedFunction,
+auto functionalFunctionDeclarations(llvm::Function *preprocessedFunction,
+                                    const AnalysisResultsMap &analysisResults,
                                     Program program)
     -> std::vector<smt::SharedSMTRef>;
-
 auto relationalIterativeDeclarations(
-    MonoPair<PreprocessedFunction> preprocessedFunctions)
+    MonoPair<llvm::Function *> preprocessedFunctions,
+    const AnalysisResultsMap &analysisResults)
     -> std::vector<smt::SharedSMTRef>;

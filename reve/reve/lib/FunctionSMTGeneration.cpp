@@ -48,16 +48,14 @@ using std::unique_ptr;
 using std::vector;
 
 vector<SharedSMTRef>
-relationalFunctionAssertions(MonoPair<PreprocessedFunction> preprocessedFuns) {
-    const auto pathMaps = preprocessedFuns.map<PathMap>(
-        [](PreprocessedFunction fun) { return fun.results.paths; });
+relationalFunctionAssertions(MonoPair<llvm::Function *> preprocessedFuns,
+                             const AnalysisResultsMap &analysisResults) {
+    const auto pathMaps = getPathMaps(preprocessedFuns, analysisResults);
     checkPathMaps(pathMaps.first, pathMaps.second);
-    const auto marked = preprocessedFuns.map<BidirBlockMarkMap>(
-        [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
-    const string funName = preprocessedFuns.first.fun->getName().str() + "^" +
-                           preprocessedFuns.second.fun->getName().str();
+    const auto marked = getBlockMarkMaps(preprocessedFuns, analysisResults);
+    const string funName = getFunctionName(preprocessedFuns);
     const auto funArgsPair =
-        functionArgs(*preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
+        functionArgs(*preprocessedFuns.first, *preprocessedFuns.second);
     const auto freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgsPair);
     vector<SharedSMTRef> smtExprs;
@@ -109,21 +107,19 @@ relationalFunctionAssertions(MonoPair<PreprocessedFunction> preprocessedFuns) {
 // the main function that we want to check doesn’t need the output parameters in
 // the assertions since it is never called
 vector<SharedSMTRef>
-relationalIterativeAssertions(MonoPair<PreprocessedFunction> preprocessedFuns) {
-    const auto pathMaps = preprocessedFuns.map<PathMap>(
-        [](PreprocessedFunction fun) { return fun.results.paths; });
+relationalIterativeAssertions(MonoPair<llvm::Function *> preprocessedFuns,
+                              const AnalysisResultsMap &analysisResults) {
+    const auto pathMaps = getPathMaps(preprocessedFuns, analysisResults);
     checkPathMaps(pathMaps.first, pathMaps.second);
-    const auto marked = preprocessedFuns.map<BidirBlockMarkMap>(
-        [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
-    const string funName = preprocessedFuns.first.fun->getName().str() + "^" +
-                           preprocessedFuns.second.fun->getName().str();
+    const auto marked = getBlockMarkMaps(preprocessedFuns, analysisResults);
+    const string funName = getFunctionName(preprocessedFuns);
     const auto funArgsPair =
-        functionArgs(*preprocessedFuns.first.fun, *preprocessedFuns.second.fun);
+        functionArgs(*preprocessedFuns.first, *preprocessedFuns.second);
     const auto freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, funArgsPair);
     vector<SharedSMTRef> smtExprs;
 
-    const llvm::Type *returnType = preprocessedFuns.first.fun->getReturnType();
+    const llvm::Type *returnType = preprocessedFuns.first->getReturnType();
     if (SMTGenerationOpts::getInstance().OnlyRecursive) {
         smtExprs.push_back(
             equalInputsEqualOutputs(freeVarsMap.at(ENTRY_MARK),
@@ -279,12 +275,13 @@ vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
 }
 
 vector<SharedSMTRef>
-functionalFunctionAssertions(PreprocessedFunction preprocessedFun,
+functionalFunctionAssertions(llvm::Function *f,
+                             const AnalysisResultsMap &analysisResults,
                              Program prog) {
-    const auto pathMap = preprocessedFun.results.paths;
-    const auto funName = preprocessedFun.fun->getName();
-    const auto returnType = preprocessedFun.fun->getReturnType();
-    const auto funArgs = functionArgs(*preprocessedFun.fun);
+    const auto pathMap = analysisResults.at(f).paths;
+    const auto funName = f->getName();
+    const auto returnType = f->getReturnType();
+    const auto funArgs = functionArgs(*f);
     const auto freeVarsMap = freeVars(pathMap, funArgs, prog);
     return nonmutualPaths(pathMap, freeVarsMap, prog, funName, returnType);
 }
@@ -892,23 +889,27 @@ auto addMemory(vector<SharedSMTRef> &implArgs)
 }
 
 void generateRelationalFunctionSMT(
-    MonoPair<PreprocessedFunction> preprocessedFunction,
-    vector<SharedSMTRef> &assertions, vector<SharedSMTRef> &declarations) {
-    auto newAssertions = relationalFunctionAssertions(preprocessedFunction);
-    auto newDeclarations = relationalFunctionDeclarations(preprocessedFunction);
+    MonoPair<llvm::Function *> preprocessedFunction,
+    const AnalysisResultsMap &analysisResults, vector<SharedSMTRef> &assertions,
+    vector<SharedSMTRef> &declarations) {
+    auto newAssertions =
+        relationalFunctionAssertions(preprocessedFunction, analysisResults);
+    auto newDeclarations =
+        relationalFunctionDeclarations(preprocessedFunction, analysisResults);
     assertions.insert(assertions.end(), newAssertions.begin(),
                       newAssertions.end());
     declarations.insert(declarations.end(), newDeclarations.begin(),
                         newDeclarations.end());
 }
-void generateFunctionalFunctionSMT(PreprocessedFunction preprocessedFunction,
+void generateFunctionalFunctionSMT(llvm::Function *preprocessedFunction,
+                                   const AnalysisResultsMap &analysisResults,
                                    Program prog,
                                    vector<SharedSMTRef> &assertions,
                                    vector<SharedSMTRef> &declarations) {
-    auto newAssertions =
-        functionalFunctionAssertions(preprocessedFunction, prog);
-    auto newDeclarations =
-        functionalFunctionDeclarations(preprocessedFunction, prog);
+    auto newAssertions = functionalFunctionAssertions(preprocessedFunction,
+                                                      analysisResults, prog);
+    auto newDeclarations = functionalFunctionDeclarations(
+        preprocessedFunction, analysisResults, prog);
     assertions.insert(assertions.end(), newAssertions.begin(),
                       newAssertions.end());
     declarations.insert(declarations.end(), newDeclarations.begin(),
@@ -916,11 +917,13 @@ void generateFunctionalFunctionSMT(PreprocessedFunction preprocessedFunction,
 }
 
 void generateRelationalIterativeSMT(
-    MonoPair<PreprocessedFunction> preprocessedFunctions,
-    vector<SharedSMTRef> &assertions, vector<SharedSMTRef> &declarations) {
-    auto newAssertions = relationalIterativeAssertions(preprocessedFunctions);
+    MonoPair<llvm::Function *> preprocessedFunctions,
+    const AnalysisResultsMap &analysisResults, vector<SharedSMTRef> &assertions,
+    vector<SharedSMTRef> &declarations) {
+    auto newAssertions =
+        relationalIterativeAssertions(preprocessedFunctions, analysisResults);
     auto newDeclarations =
-        relationalIterativeDeclarations(preprocessedFunctions);
+        relationalIterativeDeclarations(preprocessedFunctions, analysisResults);
     assertions.insert(assertions.end(), newAssertions.begin(),
                       newAssertions.end());
     declarations.insert(declarations.end(), newDeclarations.begin(),

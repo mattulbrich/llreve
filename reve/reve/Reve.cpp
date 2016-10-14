@@ -175,10 +175,10 @@ int main(int argc, const char **argv) {
         compileToModules(argv[0], inputOpts, acts);
 
     SMTGenerationOpts::initialize(
-        MainFunctionFlag, HeapFlag, StackFlag, GlobalConstantsFlag,
-        OnlyRecursiveFlag, NoByteHeapFlag, EverythingSignedFlag, MuZFlag,
-        PerfectSyncFlag, PassInputThroughFlag, BitVectFlag, InvertFlag,
-        InitPredFlag, DisableAutoAbstraction, {},
+        findMainFunction(modules, MainFunctionFlag), HeapFlag, StackFlag,
+        GlobalConstantsFlag, OnlyRecursiveFlag, NoByteHeapFlag,
+        EverythingSignedFlag, MuZFlag, PerfectSyncFlag, PassInputThroughFlag,
+        BitVectFlag, InvertFlag, InitPredFlag, DisableAutoAbstraction, {},
         addConstToFunctionPairSet(lookupFunctionNamePairs(
             modules, parseFunctionPairFlags(AssumeEquivalentFlags))),
         getCoupledFunctions(modules, DisableAutoCouplingFlag,
@@ -189,11 +189,10 @@ int main(int argc, const char **argv) {
     PM.run(*modules.first);
     PM.run(*modules.second);
 
-    vector<MonoPair<PreprocessedFunction>> preprocessedFuns =
-        preprocessFunctions(modules, preprocessOpts);
+    const auto analysisResults = preprocessFunctions(modules, preprocessOpts);
 
     vector<SharedSMTRef> smtExprs =
-        generateSMT(modules, preprocessedFuns, fileOpts);
+        generateSMT(modules, analysisResults, fileOpts);
 
     serializeSMT(smtExprs, SMTGenerationOpts::getInstance().MuZ, serializeOpts);
 

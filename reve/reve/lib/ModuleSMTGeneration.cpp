@@ -40,89 +40,97 @@ using smt::VarDecl;
 using smt::makeOp;
 using smt::stringExpr;
 
-vector<SharedSMTRef>
-generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
-            vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
-            FileOptions fileOpts) {
+vector<SharedSMTRef> generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
+                                 const AnalysisResultsMap &analysisResults,
+                                 FileOptions fileOpts) {
     std::vector<SharedSMTRef> declarations;
     std::vector<SortedVar> variableDeclarations;
+    SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
 
-    if (SMTGenerationOpts::getInstance().MuZ) {
+    if (smtOpts.MuZ) {
         vector<string> args;
         declarations.push_back(
             make_shared<smt::FunDecl>("END_QUERY", args, "Bool"));
     }
     std::vector<SharedSMTRef> assertions;
     std::vector<SharedSMTRef> smtExprs;
-    if (!SMTGenerationOpts::getInstance().MuZ &&
-        !SMTGenerationOpts::getInstance().Invert) {
+    if (!smtOpts.MuZ && !smtOpts.Invert) {
         smtExprs.push_back(std::make_shared<SetLogic>("HORN"));
     }
 
     if (doesAccessHeap(*modules.first) || doesAccessHeap(*modules.second)) {
-        SMTGenerationOpts::getInstance().Heap = true;
+        smtOpts.Heap = true;
     }
     if (doesAccessStack(*modules.first) || doesAccessStack(*modules.second)) {
-        SMTGenerationOpts::getInstance().Stack = true;
+        smtOpts.Stack = true;
     }
 
-    SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
-
-    if (SMTGenerationOpts::getInstance().Stack) {
+    if (smtOpts.Stack) {
         declarations.push_back(select_Declaration());
         declarations.push_back(store_Declaration());
     }
 
     externDeclarations(*modules.first, *modules.second, declarations,
                        fileOpts.FunctionConditions);
-    if (smtOpts.MainFunction == "" && !preprocessedFuns.empty()) {
-        smtOpts.MainFunction = preprocessedFuns.at(0).first.fun->getName();
-    }
 
     auto globalDecls = globalDeclarations(*modules.first, *modules.second);
     smtExprs.insert(smtExprs.end(), globalDecls.begin(), globalDecls.end());
 
-    for (auto &funPair : preprocessedFuns) {
+    for (auto &funPair : smtOpts.CoupledFunctions) {
         // Main function
-        if (funPair.first.fun->getName() == smtOpts.MainFunction) {
+        if (funPair.first == smtOpts.MainFunctions.first) {
             auto inInv = inInvariant(
-                makeMonoPair(funPair.first.fun, funPair.second.fun),
+                makeMonoPair(funPair.first, funPair.second),
                 fileOpts.InRelation, *modules.first, *modules.second,
                 smtOpts.GlobalConstants, fileOpts.AdditionalInRelation);
             smtExprs.push_back(inInv);
             smtExprs.push_back(outInvariant(
-                functionArgs(*funPair.first.fun, *funPair.second.fun),
-                fileOpts.OutRelation, funPair.first.fun->getReturnType()));
+                functionArgs(*funPair.first, *funPair.second),
+                fileOpts.OutRelation, funPair.first->getReturnType()));
             if (smtOpts.InitPredicate) {
                 smtExprs.push_back(initPredicate(inInv));
                 smtExprs.push_back(initPredicateComment(inInv));
                 assertions.push_back(initImplication(inInv));
             }
-            generateRelationalIterativeSMT(funPair, assertions, declarations);
+            generateRelationalIterativeSMT(funPair, analysisResults, assertions,
+                                           declarations);
         }
         // Other functions used by the main function or the main function if
         // it’s recursive
-        if (funPair.first.fun->getName() != smtOpts.MainFunction ||
-            (!(doesNotRecurse(*funPair.first.fun) &&
-               doesNotRecurse(*funPair.second.fun)) ||
-             smtOpts.OnlyRecursive)) {
-            if (funPair.first.fun->getName() == "__criterion") {
-                auto newSmtExprs = slicingAssertion(funPair);
+        if (!hasMutualFixedAbstraction(funPair) &&
+            ((funPair.first == smtOpts.MainFunctions.first &&
+              smtOpts.OnlyRecursive) ||
+             (callsTransitively(*smtOpts.MainFunctions.first, *funPair.first) &&
+              callsTransitively(*smtOpts.MainFunctions.second,
+                                *funPair.second)))) {
+            if (funPair.first->getName() == "__criterion") {
+                auto newSmtExprs = slicingAssertion(funPair, analysisResults);
                 assertions.insert(assertions.end(), newSmtExprs.begin(),
                                   newSmtExprs.end());
             } else {
-                generateRelationalFunctionSMT(funPair, assertions,
-                                              declarations);
-                generateFunctionalFunctionSMT(funPair.first, Program::First,
-                                              assertions, declarations);
-                generateFunctionalFunctionSMT(funPair.second, Program::Second,
+                generateRelationalFunctionSMT(funPair, analysisResults,
                                               assertions, declarations);
             }
         }
     }
+    for (auto &fun : *modules.first) {
+        if (!isLlreveIntrinsic(fun) && !hasFixedAbstraction(fun) &&
+            callsTransitively(*smtOpts.MainFunctions.first, fun)) {
+            generateFunctionalFunctionSMT(&fun, analysisResults, Program::First,
+                                          assertions, declarations);
+        }
+    }
+    for (auto &fun : *modules.second) {
+        if (!isLlreveIntrinsic(fun) && !hasFixedAbstraction(fun) &&
+            callsTransitively(*smtOpts.MainFunctions.second, fun)) {
+            generateFunctionalFunctionSMT(&fun, analysisResults,
+                                          Program::Second, assertions,
+                                          declarations);
+        }
+    }
     smtExprs.insert(smtExprs.end(), declarations.begin(), declarations.end());
     smtExprs.insert(smtExprs.end(), assertions.begin(), assertions.end());
-    if (SMTGenerationOpts::getInstance().MuZ) {
+    if (smtOpts.MuZ) {
         smtExprs.push_back(make_shared<Query>("END_QUERY"));
     } else {
         smtExprs.push_back(make_shared<CheckSat>());

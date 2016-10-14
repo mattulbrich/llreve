@@ -18,15 +18,11 @@
 #include "llvm/IR/PassManager.h"
 #include "llvm/Support/ErrorOr.h"
 
-struct PreprocessedFunction {
-    llvm::Function *fun;
-    AnalysisResults results;
-    PreprocessedFunction(llvm::Function *fun, AnalysisResults results)
-        : fun(fun), results(results) {}
-};
-
-std::vector<MonoPair<PreprocessedFunction>>
+AnalysisResultsMap
 preprocessFunctions(MonoPair<std::shared_ptr<llvm::Module>> modules,
                     PreprocessOpts opts);
+void preprocessFunctions(llvm::Module &module, PreprocessOpts opts,
+                         AnalysisResultsMap &preprocessingResults,
+                         Program prog);
 auto preprocessFunction(llvm::Function &fun, std::string prefix,
                         PreprocessOpts opts) -> AnalysisResults;

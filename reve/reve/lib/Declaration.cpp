@@ -9,20 +9,16 @@ using smt::SMTRef;
 using std::string;
 using std::vector;
 
-vector<SharedSMTRef> relationalFunctionDeclarations(
-    MonoPair<PreprocessedFunction> preprocessedFunctions) {
-    const string functionName =
-        preprocessedFunctions.first.fun->getName().str() + "^" +
-        preprocessedFunctions.second.fun->getName().str();
-    const auto pathMaps = preprocessedFunctions.map<PathMap>(
-        [](PreprocessedFunction fun) { return fun.results.paths; });
+vector<SharedSMTRef>
+relationalFunctionDeclarations(MonoPair<llvm::Function *> preprocessedFunctions,
+                               const AnalysisResultsMap &analysisResults) {
+    const string functionName = getFunctionName(preprocessedFunctions);
+    const auto pathMaps = getPathMaps(preprocessedFunctions, analysisResults);
     // TODO Do we need to take the intersection of the pathmaps here?
     const auto pathMap = pathMaps.first;
-    const auto returnType = preprocessedFunctions.first.fun->getReturnType();
-    const auto funArgsPair = functionArgs(*preprocessedFunctions.first.fun,
-                                          *preprocessedFunctions.second.fun);
-    const auto functionArguments = functionArgs(
-        *preprocessedFunctions.first.fun, *preprocessedFunctions.second.fun);
+    const auto returnType = preprocessedFunctions.first->getReturnType();
+    const auto functionArguments = functionArgs(*preprocessedFunctions.first,
+                                                *preprocessedFunctions.second);
     const auto freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, functionArguments);
 
@@ -39,12 +35,13 @@ vector<SharedSMTRef> relationalFunctionDeclarations(
 }
 
 vector<SharedSMTRef>
-functionalFunctionDeclarations(PreprocessedFunction preprocessedFunction,
+functionalFunctionDeclarations(llvm::Function *preprocessedFunction,
+                               const AnalysisResultsMap &analysisResults,
                                Program prog) {
-    const string functionName = preprocessedFunction.fun->getName().str();
-    const auto pathMap = preprocessedFunction.results.paths;
-    const auto returnType = preprocessedFunction.fun->getReturnType();
-    const auto functionArguments = functionArgs(*preprocessedFunction.fun);
+    const string functionName = preprocessedFunction->getName().str();
+    const auto pathMap = analysisResults.at(preprocessedFunction).paths;
+    const auto returnType = preprocessedFunction->getReturnType();
+    const auto functionArguments = functionArgs(*preprocessedFunction);
     const auto freeVarsMap = freeVars(pathMap, functionArguments, prog);
 
     vector<SharedSMTRef> declarations;
@@ -59,16 +56,14 @@ functionalFunctionDeclarations(PreprocessedFunction preprocessedFunction,
     return declarations;
 }
 vector<SharedSMTRef> relationalIterativeDeclarations(
-    MonoPair<PreprocessedFunction> preprocessedFunctions) {
-    const auto pathMaps = preprocessedFunctions.map<PathMap>(
-        [](PreprocessedFunction fun) { return fun.results.paths; });
+    MonoPair<llvm::Function *> preprocessedFunctions,
+    const AnalysisResultsMap &analysisResults) {
+    const auto pathMaps = getPathMaps(preprocessedFunctions, analysisResults);
     // TODO Do we need to take the intersection of the pathmaps here?
     const auto pathMap = pathMaps.first;
-    const string functionName =
-        preprocessedFunctions.first.fun->getName().str() + "^" +
-        preprocessedFunctions.second.fun->getName().str();
-    const auto functionArguments = functionArgs(
-        *preprocessedFunctions.first.fun, *preprocessedFunctions.second.fun);
+    const string functionName = getFunctionName(preprocessedFunctions);
+    const auto functionArguments = functionArgs(*preprocessedFunctions.first,
+                                                *preprocessedFunctions.second);
     const auto freeVarsMap =
         freeVars(pathMaps.first, pathMaps.second, functionArguments);
 
