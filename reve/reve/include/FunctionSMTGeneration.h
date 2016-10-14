@@ -110,13 +110,7 @@ auto getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
 auto mainDeclarations(PathMap pathMap, std::string funName,
                       smt::FreeVarsMap freeVarsMap)
     -> std::vector<smt::SharedSMTRef>;
-/// Declarations for functions that can be called.
-auto relationalFunctionDeclarations(
-    MonoPair<PreprocessedFunction> preprocessedFunctions)
-    -> std::vector<smt::SharedSMTRef>;
-auto functionalFunctionDeclarations(PreprocessedFunction preprocessedFunction,
-                                    Program program)
-    -> std::vector<smt::SharedSMTRef>;
+
 /// Find all paths with the same start but different end marks
 /**
 This is usually (when PerfectSync is false) slightly relaxed. If one program can
@@ -182,12 +176,6 @@ auto equalInputsEqualOutputs(std::vector<smt::SortedVar> funArgs,
 /* -------------------------------------------------------------------------- */
 // Miscellanous helper functions that don't really belong anywhere
 
-auto functionArgs(const llvm::Function &fun) -> std::vector<smt::SortedVar>;
-auto functionArgs(const llvm::Function &fun1, const llvm::Function &fun2)
-    -> MonoPair<std::vector<smt::SortedVar>>;
-auto functionArgsFreeVars(const llvm::Function &fun1,
-                          const llvm::Function &fun2)
-    -> std::vector<smt::SortedVar>;
 auto swapIndex(int i) -> int;
 
 struct SplitAssignments {

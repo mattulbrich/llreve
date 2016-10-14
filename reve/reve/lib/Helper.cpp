@@ -19,8 +19,9 @@
 using smt::SharedSMTRef;
 using smt::SMTRef;
 using smt::stringExpr;
-using std::unique_ptr;
 using std::string;
+using std::unique_ptr;
+using std::vector;
 
 SMTRef instrLocation(const llvm::Value *val) {
     if (!val->getName().empty()) {
@@ -215,4 +216,26 @@ std::vector<std::string> split(const std::string &s, char delim) {
     std::vector<std::string> elems;
     split(s, delim, elems);
     return elems;
+}
+
+vector<smt::SortedVar> functionArgs(const llvm::Function &fun) {
+    vector<smt::SortedVar> args;
+    for (auto &arg : fun.args()) {
+        auto sVar = llvmValToSortedVar(&arg);
+        args.push_back(sVar);
+        if (SMTGenerationOpts::getInstance().Stack &&
+            arg.getType()->isPointerTy()) {
+            args.push_back({sVar.name + "_OnStack", "Bool"});
+        }
+    }
+    return args;
+}
+MonoPair<vector<smt::SortedVar>> functionArgs(const llvm::Function &fun1,
+                                              const llvm::Function &fun2) {
+    return {functionArgs(fun1), functionArgs(fun2)};
+}
+auto functionArgsFreeVars(const llvm::Function &fun1,
+                          const llvm::Function &fun2)
+    -> std::vector<smt::SortedVar> {
+    return concat(functionArgs(fun1, fun2));
 }
