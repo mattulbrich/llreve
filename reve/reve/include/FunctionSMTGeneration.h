@@ -54,7 +54,7 @@ struct AssignmentBlock {
 This creates complete assertions containing the input and output parameters of
 the function. Each jump is modeled as a possibly recursive call.
  */
-auto functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
+auto mutualFunctionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
                        std::vector<smt::SharedSMTRef> &declarations)
     -> std::vector<smt::SharedSMTRef>;
 

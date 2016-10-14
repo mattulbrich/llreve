@@ -46,7 +46,7 @@ using std::unique_ptr;
 using std::vector;
 
 vector<SharedSMTRef>
-functionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
+mutualFunctionAssertion(MonoPair<PreprocessedFunction> preprocessedFuns,
                   vector<SharedSMTRef> &declarations) {
     const auto pathMaps = preprocessedFuns.map<PathMap>(
         [](PreprocessedFunction fun) { return fun.results.paths; });

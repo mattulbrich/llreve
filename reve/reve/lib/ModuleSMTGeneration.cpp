@@ -113,7 +113,7 @@ generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
                 assertions.insert(assertions.end(), newSmtExprs.begin(),
                                   newSmtExprs.end());
             } else {
-                auto newSmtExprs = functionAssertion(funPair, declarations);
+                auto newSmtExprs = mutualFunctionAssertion(funPair, declarations);
                 assertions.insert(assertions.end(), newSmtExprs.begin(),
                                   newSmtExprs.end());
             }
