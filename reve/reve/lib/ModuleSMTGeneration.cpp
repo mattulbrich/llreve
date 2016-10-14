@@ -155,13 +155,11 @@ static SMTRef equalOutputs(std::string functionName,
 static SMTRef equalInputs(llvm::Function &fun1, llvm::Function &fun2,
                           unsigned numberOfArguments) {
     std::vector<SharedSMTRef> equal;
-    auto funArgs1 = funArgs(fun1, "arg1_", numberOfArguments);
-    auto funArgs2 = funArgs(fun2, "arg2_", numberOfArguments);
+    auto funArgs1 = functionArgs(fun1);
+    auto funArgs2 = functionArgs(fun2);
 
-    for (auto it1 = funArgs1.begin(), it2 = funArgs2.begin();
-         it1 != funArgs1.end() && it2 != funArgs2.end(); ++it1) {
-        equal.push_back(makeOp("=", it1->name, it2->name));
-        ++it2;
+    for (auto argPair : makeZip(funArgs1, funArgs2)) {
+        equal.push_back(makeOp("=", argPair.first.name, argPair.second.name));
     }
     if (SMTGenerationOpts::getInstance().Heap) {
         std::vector<SortedVar> forallArgs = {SortedVar("i", "Int")};
@@ -175,14 +173,14 @@ static std::vector<SortedVar> externDeclArgs(llvm::Function &fun1,
                                              llvm::Function &fun2,
                                              unsigned numberOfArguments) {
     std::vector<SortedVar> args;
-    auto funArgs1 = funArgs(fun1, "arg1_", numberOfArguments);
+    auto funArgs1 = functionArgs(fun1);
     for (auto arg : funArgs1) {
         args.push_back(arg);
     }
     if (SMTGenerationOpts::getInstance().Heap) {
         args.push_back(SortedVar("HEAP$1", arrayType()));
     }
-    auto funArgs2 = funArgs(fun2, "arg2_", numberOfArguments);
+    auto funArgs2 = functionArgs(fun2);
     for (auto arg : funArgs2) {
         args.push_back(arg);
     }
@@ -278,27 +276,6 @@ std::set<uint32_t> getVarArgs(const llvm::Function &fun) {
     return varArgs;
 }
 
-std::vector<SortedVar> funArgs(llvm::Function &fun, std::string prefix,
-                               uint32_t varArgs) {
-    std::vector<SortedVar> args;
-    int argIndex = 0;
-    for (auto &arg : fun.getArgumentList()) {
-        if (arg.getName().empty()) {
-            arg.setName(prefix + "$" + std::to_string(argIndex++));
-        }
-        // Functions that are abstracted but have source code available will
-        // have names but no postfixes
-        if (arg.getName().find('$') == string::npos) {
-            arg.setName(prefix + "$" + arg.getName());
-        }
-        args.push_back(SortedVar(arg.getName(), "Int"));
-    }
-    for (uint32_t i = 0; i < varArgs; ++i) {
-        args.push_back(SortedVar("var" + prefix + std::to_string(i), "Int"));
-    }
-    return args;
-}
-
 std::vector<SharedSMTRef>
 equivalentExternDecls(llvm::Function &fun1, llvm::Function &fun2,
                       std::multimap<string, string> funCondMap) {
@@ -351,7 +328,7 @@ std::vector<SharedSMTRef> externFunDecl(llvm::Function &fun, Program program) {
     std::vector<SharedSMTRef> decls;
     set<uint32_t> varArgs = getVarArgs(fun);
     for (auto argNum : varArgs) {
-        std::vector<SortedVar> args = funArgs(fun, "arg_", argNum);
+        std::vector<SortedVar> args = functionArgs(fun);
         if (SMTGenerationOpts::getInstance().Heap) {
             args.push_back(SortedVar("HEAP", "(Array Int Int)"));
         }

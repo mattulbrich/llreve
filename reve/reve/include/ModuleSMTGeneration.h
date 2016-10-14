@@ -27,8 +27,6 @@ auto externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
                         std::vector<smt::SharedSMTRef> &declarations,
                         std::multimap<std::string, std::string> funCondMap)
     -> void;
-auto funArgs(llvm::Function &fun, std::string prefix, uint32_t varArgs)
-    -> std::vector<smt::SortedVar>;
 auto getVarArgs(const llvm::Function &fun) -> std::set<uint32_t>;
 auto externFunDecl(llvm::Function &fun, Program program)
     -> std::vector<smt::SharedSMTRef>;

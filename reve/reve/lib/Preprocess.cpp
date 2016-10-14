@@ -39,6 +39,13 @@ using std::make_shared;
 using std::string;
 using llvm::ErrorOr;
 
+static void nameFunctionArguments(llvm::Function &fun, Program prog) {
+    std::map<string, int> instructionNames;
+    for (auto &arg : fun.args()) {
+        makePrefixed(arg, std::to_string(programIndex(prog)), instructionNames);
+    }
+}
+
 vector<MonoPair<PreprocessedFunction>>
 preprocessFunctions(MonoPair<shared_ptr<llvm::Module>> modules,
                     PreprocessOpts opts) {
@@ -50,6 +57,18 @@ preprocessFunctions(MonoPair<shared_ptr<llvm::Module>> modules,
             processedFuns.push_back(
                 makeMonoPair(PreprocessedFunction(funPair.first, results1),
                              PreprocessedFunction(funPair.second, results2)));
+        }
+    }
+    // Functions that have fixed abstractions are not preprocessed so we set the
+    // names of function arguments separately.
+    for (auto &fun : *modules.first) {
+        if (hasFixedAbstraction(fun)) {
+            nameFunctionArguments(fun, Program::First);
+        }
+    }
+    for (auto &fun : *modules.second) {
+        if (hasFixedAbstraction(fun)) {
+            nameFunctionArguments(fun, Program::Second);
         }
     }
     return processedFuns;
