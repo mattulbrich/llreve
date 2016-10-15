@@ -21,6 +21,16 @@
 auto generateSMT(MonoPair<std::shared_ptr<llvm::Module>> modules,
                  const AnalysisResultsMap &analysisResults,
                  FileOptions fileOpts) -> std::vector<smt::SharedSMTRef>;
+auto generateSMTForMainFunctions(
+    MonoPair<std::shared_ptr<llvm::Module>> modules,
+    const AnalysisResultsMap &analysisResults, FileOptions fileOpts,
+    std::vector<smt::SharedSMTRef> &assertions,
+    std::vector<smt::SharedSMTRef> &declarations) -> void;
+auto generateFunctionalAbstractions(
+    llvm::Module &module, const llvm::Function *mainFunction,
+    const AnalysisResultsMap &analysisResults, Program prog,
+    std::vector<smt::SharedSMTRef> &assertions,
+    std::vector<smt::SharedSMTRef> &declarations) -> void;
 auto select_Declaration() -> smt::SMTRef;
 auto store_Declaration() -> smt::SMTRef;
 auto externDeclarations(llvm::Module &mod1, llvm::Module &mod2,

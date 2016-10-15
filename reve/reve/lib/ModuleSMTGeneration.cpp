@@ -76,33 +76,24 @@ vector<SharedSMTRef> generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
     auto globalDecls = globalDeclarations(*modules.first, *modules.second);
     smtExprs.insert(smtExprs.end(), globalDecls.begin(), globalDecls.end());
 
+    // We use an iterative encoding for the main function since this seems to
+    // perform better than a recursive encoding
+    generateSMTForMainFunctions(modules, analysisResults, fileOpts, assertions,
+                                declarations);
+
     for (auto &funPair : smtOpts.CoupledFunctions) {
-        // Main function
-        if (funPair.first == smtOpts.MainFunctions.first) {
-            auto inInv = inInvariant(
-                makeMonoPair(funPair.first, funPair.second),
-                fileOpts.InRelation, *modules.first, *modules.second,
-                smtOpts.GlobalConstants, fileOpts.AdditionalInRelation);
-            smtExprs.push_back(inInv);
-            smtExprs.push_back(outInvariant(
-                functionArgs(*funPair.first, *funPair.second),
-                fileOpts.OutRelation, funPair.first->getReturnType()));
-            if (smtOpts.InitPredicate) {
-                smtExprs.push_back(initPredicate(inInv));
-                smtExprs.push_back(initPredicateComment(inInv));
-                assertions.push_back(initImplication(inInv));
-            }
-            generateRelationalIterativeSMT(funPair, analysisResults, assertions,
-                                           declarations);
-        }
-        // Other functions used by the main function or the main function if
-        // it’s recursive
+        // We only need to generate a relational abstraction if both program
+        // call a function transitively since we will never couple calls
+        // otherwise
+        auto isCalledFromMain =
+            callsTransitively(*smtOpts.MainFunctions.first, *funPair.first) &&
+            callsTransitively(*smtOpts.MainFunctions.second, *funPair.second);
+        // Main is abstracted using an iterative encoding except for the case
+        // where OnlyRecursive is enabled
+        auto onlyRecursiveMain =
+            funPair == smtOpts.MainFunctions && smtOpts.OnlyRecursive;
         if (!hasMutualFixedAbstraction(funPair) &&
-            ((funPair.first == smtOpts.MainFunctions.first &&
-              smtOpts.OnlyRecursive) ||
-             (callsTransitively(*smtOpts.MainFunctions.first, *funPair.first) &&
-              callsTransitively(*smtOpts.MainFunctions.second,
-                                *funPair.second)))) {
+            (onlyRecursiveMain || isCalledFromMain)) {
             if (funPair.first->getName() == "__criterion") {
                 auto newSmtExprs = slicingAssertion(funPair, analysisResults);
                 assertions.insert(assertions.end(), newSmtExprs.begin(),
@@ -113,21 +104,13 @@ vector<SharedSMTRef> generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
             }
         }
     }
-    for (auto &fun : *modules.first) {
-        if (!isLlreveIntrinsic(fun) && !hasFixedAbstraction(fun) &&
-            callsTransitively(*smtOpts.MainFunctions.first, fun)) {
-            generateFunctionalFunctionSMT(&fun, analysisResults, Program::First,
-                                          assertions, declarations);
-        }
-    }
-    for (auto &fun : *modules.second) {
-        if (!isLlreveIntrinsic(fun) && !hasFixedAbstraction(fun) &&
-            callsTransitively(*smtOpts.MainFunctions.second, fun)) {
-            generateFunctionalFunctionSMT(&fun, analysisResults,
-                                          Program::Second, assertions,
-                                          declarations);
-        }
-    }
+    generateFunctionalAbstractions(*modules.first, smtOpts.MainFunctions.first,
+                                   analysisResults, Program::First, assertions,
+                                   declarations);
+    generateFunctionalAbstractions(
+        *modules.second, smtOpts.MainFunctions.second, analysisResults,
+        Program::Second, assertions, declarations);
+
     smtExprs.insert(smtExprs.end(), declarations.begin(), declarations.end());
     smtExprs.insert(smtExprs.end(), assertions.begin(), assertions.end());
     if (smtOpts.MuZ) {
@@ -137,6 +120,44 @@ vector<SharedSMTRef> generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
         smtExprs.push_back(make_shared<GetModel>());
     }
     return smtExprs;
+}
+
+void generateSMTForMainFunctions(
+    MonoPair<std::shared_ptr<llvm::Module>> modules,
+    const AnalysisResultsMap &analysisResults, FileOptions fileOpts,
+    std::vector<smt::SharedSMTRef> &assertions,
+    std::vector<smt::SharedSMTRef> &declarations) {
+    const auto &smtOpts = SMTGenerationOpts::getInstance();
+    auto inInv =
+        inInvariant(smtOpts.MainFunctions, fileOpts.InRelation, *modules.first,
+                    *modules.second, smtOpts.GlobalConstants,
+                    fileOpts.AdditionalInRelation);
+    declarations.push_back(inInv);
+    declarations.push_back(outInvariant(
+        functionArgs(*smtOpts.MainFunctions.first,
+                     *smtOpts.MainFunctions.second),
+        fileOpts.OutRelation, smtOpts.MainFunctions.first->getReturnType()));
+    if (smtOpts.InitPredicate) {
+        declarations.push_back(initPredicate(inInv));
+        declarations.push_back(initPredicateComment(inInv));
+        assertions.push_back(initImplication(inInv));
+    }
+    generateRelationalIterativeSMT(smtOpts.MainFunctions, analysisResults,
+                                   assertions, declarations);
+}
+
+void generateFunctionalAbstractions(
+    llvm::Module &module, const llvm::Function *mainFunction,
+    const AnalysisResultsMap &analysisResults, Program prog,
+    std::vector<smt::SharedSMTRef> &assertions,
+    std::vector<smt::SharedSMTRef> &declarations) {
+    for (auto &fun : module) {
+        if (!isLlreveIntrinsic(fun) && !hasFixedAbstraction(fun) &&
+            callsTransitively(*mainFunction, fun)) {
+            generateFunctionalFunctionSMT(&fun, analysisResults, prog,
+                                          assertions, declarations);
+        }
+    }
 }
 
 static SMTRef equalOutputs(std::string functionName,
