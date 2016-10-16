@@ -24,5 +24,5 @@ preprocessFunctions(MonoPair<std::shared_ptr<llvm::Module>> modules,
 void preprocessFunctions(llvm::Module &module, PreprocessOpts opts,
                          AnalysisResultsMap &preprocessingResults,
                          Program prog);
-auto preprocessFunction(llvm::Function &fun, std::string prefix,
-                        PreprocessOpts opts) -> AnalysisResults;
+auto preprocessFunction(llvm::Function &fun, Program prog, PreprocessOpts opts)
+    -> AnalysisResults;

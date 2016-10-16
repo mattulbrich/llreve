@@ -67,14 +67,13 @@ void preprocessFunctions(llvm::Module &module, PreprocessOpts opts,
                 nameFunctionArguments(f, prog);
             } else {
                 preprocessingResults.insert(
-                    {&f, preprocessFunction(
-                             f, std::to_string(programIndex(prog)), opts)});
+                    {&f, preprocessFunction(f, prog, opts)});
             }
         }
     }
 }
 
-AnalysisResults preprocessFunction(llvm::Function &fun, string prefix,
+AnalysisResults preprocessFunction(llvm::Function &fun, Program prog,
                                    PreprocessOpts opts) {
     auto fpm =
         std::make_unique<llvm::legacy::FunctionPassManager>(fun.getParent());
@@ -97,7 +96,7 @@ AnalysisResults preprocessFunction(llvm::Function &fun, string prefix,
     fpm->add(llvm::createAggressiveDCEPass());
     fpm->add(llvm::createConstantPropagationPass());
     // Passes need to have a default ctor
-    UniqueNamePass::Prefix = prefix;
+    UniqueNamePass::Prefix = std::to_string(programIndex(prog));
     fpm->add(new UniqueNamePass()); // prefix register names
     if (opts.ShowMarkedCFG) {
         fpm->add(new CFGViewerPass()); // show marked cfg
