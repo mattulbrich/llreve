@@ -11,6 +11,7 @@
 #pragma once
 
 #include "Assignment.h"
+#include "FreeVariables.h"
 #include "Helper.h"
 #include "Memory.h"
 #include "MonoPair.h"
@@ -28,7 +29,7 @@
 
 using FAMRef = std::shared_ptr<llvm::FunctionAnalysisManager>;
 
-auto dropTypesFreeVars(smt::FreeVarsMap map)
+auto dropTypesFreeVars(FreeVarsMap map)
     -> std::map<int, std::vector<std::string>>;
 
 enum class InterleaveStep { StepBoth, StepFirst, StepSecond };
@@ -99,7 +100,7 @@ inline bool operator<(const MarkPair &lhs, const MarkPair &rhs) {
 }
 
 auto getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
-                          smt::FreeVarsMap freeVarsMap,
+                          FreeVarsMap freeVarsMap,
                           ReturnInvariantGenerator generateReturnInvariant)
     -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
 
@@ -112,18 +113,17 @@ other is still allowed to loop at its block.
  */
 auto getForbiddenPaths(MonoPair<PathMap> pathMaps,
                        MonoPair<BidirBlockMarkMap> marked,
-                       smt::FreeVarsMap freeVarsMap, std::string funName,
-                       bool main) -> std::vector<smt::SharedSMTRef>;
+                       FreeVarsMap freeVarsMap, std::string funName, bool main)
+    -> std::vector<smt::SharedSMTRef>;
 /// Get the assertions for a single program
-auto nonmutualPaths(PathMap pathMap, smt::FreeVarsMap freeVarsMap, Program prog,
+auto nonmutualPaths(PathMap pathMap, FreeVarsMap freeVarsMap, Program prog,
                     std::string funName, const llvm::Type *type)
     -> std::vector<smt::SharedSMTRef>;
-auto getOffByNPaths(PathMap pathMap1, PathMap pathMap2,
-                    smt::FreeVarsMap freeVarsMap, std::string funName,
-                    bool main)
+auto getOffByNPaths(PathMap pathMap1, PathMap pathMap2, FreeVarsMap freeVarsMap,
+                    std::string funName, bool main)
     -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
 auto offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
-                       smt::FreeVarsMap freeVarsMap, Program prog,
+                       FreeVarsMap freeVarsMap, Program prog,
                        std::string funName, bool main)
     -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
 
@@ -151,7 +151,7 @@ auto nonMutualFunctionCall(smt::SharedSMTRef clause, CallInfo call,
 auto forallStartingAt(smt::SharedSMTRef clause,
                       std::vector<smt::SortedVar> freeVars, int blockIndex,
                       ProgramSelection prog, std::string funName, bool main,
-                      smt::FreeVarsMap freeVarsMap) -> smt::SharedSMTRef;
+                      FreeVarsMap freeVarsMap) -> smt::SharedSMTRef;
 
 /* -------------------------------------------------------------------------- */
 // Functions forcing arguments to be equal
@@ -162,7 +162,7 @@ auto makeFunArgsEqual(smt::SharedSMTRef clause, smt::SharedSMTRef preClause,
 auto equalInputsEqualOutputs(std::vector<smt::SortedVar> funArgs,
                              std::vector<smt::SortedVar> funArgs1,
                              std::vector<smt::SortedVar> funArgs2,
-                             std::string funName, smt::FreeVarsMap freeVarsMap,
+                             std::string funName, FreeVarsMap freeVarsMap,
                              const llvm::Type *returnType) -> smt::SharedSMTRef;
 
 /* -------------------------------------------------------------------------- */
@@ -184,7 +184,7 @@ auto matchFunCalls(std::vector<CallInfo> callInfos1,
 auto checkPathMaps(PathMap map1, PathMap map2) -> void;
 auto mapSubset(PathMap map1, PathMap map2) -> bool;
 auto getDontLoopInvariant(smt::SMTRef endClause, int startIndex,
-                          PathMap pathMap, smt::FreeVarsMap freeVarsMap,
+                          PathMap pathMap, FreeVarsMap freeVarsMap,
                           Program prog) -> smt::SMTRef;
 auto addAssignments(const smt::SharedSMTRef end,
                     std::vector<AssignmentBlock> assignments)

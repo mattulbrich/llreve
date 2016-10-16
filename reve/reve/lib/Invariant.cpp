@@ -33,7 +33,7 @@ using std::map;
 
 SMTRef invariant(int StartIndex, int EndIndex, vector<SortedVar> InputArgs,
                  vector<SortedVar> EndArgs, ProgramSelection SMTFor,
-                 std::string FunName, smt::FreeVarsMap freeVarsMap) {
+                 std::string FunName, FreeVarsMap freeVarsMap) {
     // we want to end up with something like
     // (and pre (=> (nextcall newargs res) (currentcall oldargs res)))
     auto FilteredArgs = InputArgs;
@@ -187,7 +187,7 @@ size_t invariantArgs(vector<smt::SortedVar> freeVars, ProgramSelection prog,
     return numArgs;
 }
 
-size_t maxArgs(smt::FreeVarsMap freeVarsMap, ProgramSelection prog,
+size_t maxArgs(FreeVarsMap freeVarsMap, ProgramSelection prog,
                InvariantAttr attr) {
     size_t maxArgs = 0;
     for (auto It : freeVarsMap) {

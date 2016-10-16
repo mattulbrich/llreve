@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "FreeVariables.h"
 #include "Memory.h"
 #include "MonoPair.h"
 #include "Opts.h"
@@ -22,8 +23,7 @@ enum class InvariantAttr { MAIN, PRE, NONE };
 auto invariant(int StartIndex, int EndIndex,
                std::vector<smt::SortedVar> InputArgs,
                std::vector<smt::SortedVar> EndArgs, ProgramSelection SMTFor,
-               std::string FunName, smt::FreeVarsMap freeVarsMap)
-    -> smt::SMTRef;
+               std::string FunName, FreeVarsMap freeVarsMap) -> smt::SMTRef;
 auto mainInvariant(int EndIndex, std::vector<smt::SortedVar> FreeVars,
                    std::string FunName) -> smt::SMTRef;
 auto invariantDeclaration(int BlockIndex, std::vector<smt::SortedVar> FreeVars,

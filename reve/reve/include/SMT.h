@@ -131,8 +131,6 @@ class SortedVar : public SMTExpr {
     SortedVar(const SortedVar &other) : name(other.name), type(other.type) {}
 };
 
-using FreeVarsMap = std::map<int, std::vector<smt::SortedVar>>;
-
 inline bool operator<(const SortedVar &lhs, const SortedVar &rhs) {
     return lhs.name < rhs.name;
 }
