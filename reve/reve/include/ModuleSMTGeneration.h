@@ -18,14 +18,15 @@
 
 #include "llvm/IR/Module.h"
 
-auto generateSMT(MonoPair<std::shared_ptr<const llvm::Module>> modules,
+auto generateSMT(MonoPair<const llvm::Module &> modules,
                  const AnalysisResultsMap &analysisResults,
                  FileOptions fileOpts) -> std::vector<smt::SharedSMTRef>;
-auto generateSMTForMainFunctions(
-    MonoPair<std::shared_ptr<const llvm::Module>> modules,
-    const AnalysisResultsMap &analysisResults, FileOptions fileOpts,
-    std::vector<smt::SharedSMTRef> &assertions,
-    std::vector<smt::SharedSMTRef> &declarations) -> void;
+auto generateSMTForMainFunctions(MonoPair<const llvm::Module &> modules,
+                                 const AnalysisResultsMap &analysisResults,
+                                 FileOptions fileOpts,
+                                 std::vector<smt::SharedSMTRef> &assertions,
+                                 std::vector<smt::SharedSMTRef> &declarations)
+    -> void;
 auto generateFunctionalAbstractions(
     const llvm::Module &module, const llvm::Function *mainFunction,
     const AnalysisResultsMap &analysisResults, Program prog,

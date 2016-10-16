@@ -54,25 +54,25 @@ static void nameModuleGlobals(llvm::Module &module, Program prog) {
     }
 }
 
-static void detectMemoryOptions(MonoPair<shared_ptr<llvm::Module>> modules) {
-    if (doesAccessHeap(*modules.first) || doesAccessHeap(*modules.second)) {
+static void detectMemoryOptions(MonoPair<const llvm::Module &> modules) {
+    if (doesAccessHeap(modules.first) || doesAccessHeap(modules.second)) {
         SMTGenerationOpts::getInstance().Heap = true;
     }
-    if (doesAccessStack(*modules.first) || doesAccessStack(*modules.second)) {
+    if (doesAccessStack(modules.first) || doesAccessStack(modules.second)) {
         SMTGenerationOpts::getInstance().Stack = true;
     }
 }
-AnalysisResultsMap preprocessModules(MonoPair<shared_ptr<llvm::Module>> modules,
+AnalysisResultsMap preprocessModules(MonoPair<llvm::Module &> modules,
                                      PreprocessOpts opts) {
     map<const llvm::Function *, PassAnalysisResults> passResults;
-    runFunctionPasses(*modules.first, opts, passResults, Program::First);
-    runFunctionPasses(*modules.second, opts, passResults, Program::Second);
-    nameModuleGlobals(*modules.first, Program::First);
-    nameModuleGlobals(*modules.second, Program::Second);
+    runFunctionPasses(modules.first, opts, passResults, Program::First);
+    runFunctionPasses(modules.second, opts, passResults, Program::Second);
+    nameModuleGlobals(modules.first, Program::First);
+    nameModuleGlobals(modules.second, Program::Second);
     detectMemoryOptions(modules);
     AnalysisResultsMap analysisResults;
-    runAnalyses(*modules.first, Program::First, passResults, analysisResults);
-    runAnalyses(*modules.second, Program::Second, passResults, analysisResults);
+    runAnalyses(modules.first, Program::First, passResults, analysisResults);
+    runAnalyses(modules.second, Program::Second, passResults, analysisResults);
     return analysisResults;
 }
 

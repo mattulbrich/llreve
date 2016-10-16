@@ -149,22 +149,20 @@ auto parseFunctionPairFlags(llvm::cl::list<std::string> &functionPairFlag)
 // Depending on the value of disableAutoCoupling this will infer functions to be
 // coupled based on their name or use the function names in the
 // `coupledFunctionNames`
-auto getCoupledFunctions(MonoPair<std::shared_ptr<llvm::Module>> modules,
+auto getCoupledFunctions(MonoPair<llvm::Module &> modules,
                          bool disableAutoCoupling,
                          std::set<MonoPair<std::string>> coupledFunctionNames)
     -> std::set<MonoPair<llvm::Function *>>;
-auto inferCoupledFunctionsByName(
-    MonoPair<std::shared_ptr<llvm::Module>> modules)
+auto inferCoupledFunctionsByName(MonoPair<llvm::Module &> modules)
     -> std::set<MonoPair<llvm::Function *>>;
 // This function will exit the program if it fails so only use this for input
 // validation
 auto lookupFunctionNamePairs(
-    MonoPair<std::shared_ptr<llvm::Module>> modules,
+    MonoPair<llvm::Module &> modules,
     std::set<MonoPair<std::string>> coupledFunctionNames)
     -> std::set<MonoPair<llvm::Function *>>;
-MonoPair<llvm::Function *>
-findMainFunction(MonoPair<std::shared_ptr<llvm::Module>> modules,
-                 std::string functionName);
+MonoPair<llvm::Function *> findMainFunction(MonoPair<llvm::Module &> modules,
+                                            std::string functionName);
 
 bool isLlreveIntrinsic(const llvm::Function &);
 bool hasMutualFixedAbstraction(MonoPair<const llvm::Function *> functions);

@@ -26,7 +26,7 @@
 /// hours debugging really weird segfaults.
 auto compileToModules(const char *exeName, InputOpts &opts,
                       MonoPair<std::shared_ptr<clang::CodeGenAction>> acts)
-    -> MonoPair<std::shared_ptr<llvm::Module>>;
+    -> MonoPair<std::unique_ptr<llvm::Module>>;
 auto executeCodeGenActions(const char *exeName, InputOpts &opts,
                            MonoPair<std::shared_ptr<clang::CodeGenAction>> acts)
     -> void;

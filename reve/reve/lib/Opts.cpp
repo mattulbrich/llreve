@@ -218,8 +218,7 @@ parseFunctionPairFlags(llvm::cl::list<string> &functionPairFlags) {
 }
 
 set<MonoPair<llvm::Function *>>
-getCoupledFunctions(MonoPair<shared_ptr<llvm::Module>> modules,
-                    bool disableAutoCoupling,
+getCoupledFunctions(MonoPair<llvm::Module &> modules, bool disableAutoCoupling,
                     std::set<MonoPair<std::string>> coupledFunctionNames) {
     if (disableAutoCoupling) {
         return lookupFunctionNamePairs(modules, coupledFunctionNames);
@@ -228,14 +227,14 @@ getCoupledFunctions(MonoPair<shared_ptr<llvm::Module>> modules,
     }
 }
 set<MonoPair<llvm::Function *>>
-inferCoupledFunctionsByName(MonoPair<shared_ptr<llvm::Module>> modules) {
+inferCoupledFunctionsByName(MonoPair<llvm::Module &> modules) {
     set<MonoPair<llvm::Function *>> coupledFunctions;
-    for (auto &fun1 : *modules.first) {
+    for (auto &fun1 : modules.first) {
         // These functions are removed before we ever look for couplings
         if (isLlreveIntrinsic(fun1) || fun1.isIntrinsic()) {
             continue;
         }
-        llvm::Function *fun2 = modules.second->getFunction(fun1.getName());
+        llvm::Function *fun2 = modules.second.getFunction(fun1.getName());
         if (!fun2) {
             continue;
         }
@@ -245,12 +244,12 @@ inferCoupledFunctionsByName(MonoPair<shared_ptr<llvm::Module>> modules) {
 }
 
 set<MonoPair<llvm::Function *>>
-lookupFunctionNamePairs(MonoPair<shared_ptr<llvm::Module>> modules,
+lookupFunctionNamePairs(MonoPair<llvm::Module &> modules,
                         std::set<MonoPair<std::string>> coupledFunctionNames) {
     set<MonoPair<llvm::Function *>> coupledFunctions;
     for (const auto namePair : coupledFunctionNames) {
-        llvm::Function *fun1 = modules.first->getFunction(namePair.first);
-        llvm::Function *fun2 = modules.second->getFunction(namePair.second);
+        llvm::Function *fun1 = modules.first.getFunction(namePair.first);
+        llvm::Function *fun2 = modules.second.getFunction(namePair.second);
         if (fun1 == nullptr) {
             logError("Could not find function '" + namePair.first +
                      "' in first module\n");
@@ -275,14 +274,13 @@ std::string inferMainFunctionName(const llvm::Module &module) {
     logError("Could not infer a main function to analyze\n");
     exit(1);
 }
-MonoPair<llvm::Function *>
-findMainFunction(MonoPair<shared_ptr<llvm::Module>> modules,
-                 std::string functionName) {
+MonoPair<llvm::Function *> findMainFunction(MonoPair<llvm::Module &> modules,
+                                            std::string functionName) {
     if (functionName.empty()) {
-        return findMainFunction(modules, inferMainFunctionName(*modules.first));
+        return findMainFunction(modules, inferMainFunctionName(modules.first));
     }
-    auto fun1 = modules.first->getFunction(functionName);
-    auto fun2 = modules.second->getFunction(functionName);
+    auto fun1 = modules.first.getFunction(functionName);
+    auto fun2 = modules.second.getFunction(functionName);
     if (fun1 == nullptr) {
         logError("Could not find function '" + functionName +
                  "' in first module\n");

@@ -171,28 +171,29 @@ int main(int argc, const char **argv) {
     MonoPair<shared_ptr<CodeGenAction>> acts =
         makeMonoPair(make_shared<clang::EmitLLVMOnlyAction>(),
                      make_shared<clang::EmitLLVMOnlyAction>());
-    MonoPair<shared_ptr<llvm::Module>> modules =
+    MonoPair<unique_ptr<llvm::Module>> modules =
         compileToModules(argv[0], inputOpts, acts);
+    MonoPair<llvm::Module &> moduleRefs = {*modules.first, *modules.second};
 
     SMTGenerationOpts::initialize(
-        findMainFunction(modules, MainFunctionFlag), HeapFlag, StackFlag,
+        findMainFunction(moduleRefs, MainFunctionFlag), HeapFlag, StackFlag,
         GlobalConstantsFlag, OnlyRecursiveFlag, NoByteHeapFlag,
         EverythingSignedFlag, MuZFlag, PerfectSyncFlag, PassInputThroughFlag,
         BitVectFlag, InvertFlag, InitPredFlag, DisableAutoAbstraction, {},
         addConstToFunctionPairSet(lookupFunctionNamePairs(
-            modules, parseFunctionPairFlags(AssumeEquivalentFlags))),
-        getCoupledFunctions(modules, DisableAutoCouplingFlag,
+            moduleRefs, parseFunctionPairFlags(AssumeEquivalentFlags))),
+        getCoupledFunctions(moduleRefs, DisableAutoCouplingFlag,
                             parseFunctionPairFlags(CoupleFunctionsFlag)));
 
     llvm::legacy::PassManager PM;
     PM.add(llvm::createStripSymbolsPass(true));
-    PM.run(*modules.first);
-    PM.run(*modules.second);
+    PM.run(moduleRefs.first);
+    PM.run(moduleRefs.second);
 
-    const auto analysisResults = preprocessModules(modules, preprocessOpts);
+    const auto analysisResults = preprocessModules(moduleRefs, preprocessOpts);
 
     vector<SharedSMTRef> smtExprs =
-        generateSMT(modules, analysisResults, fileOpts);
+        generateSMT(moduleRefs, analysisResults, fileOpts);
 
     serializeSMT(smtExprs, SMTGenerationOpts::getInstance().MuZ, serializeOpts);
 

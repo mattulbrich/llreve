@@ -40,9 +40,9 @@ using smt::VarDecl;
 using smt::makeOp;
 using smt::stringExpr;
 
-vector<SharedSMTRef>
-generateSMT(MonoPair<shared_ptr<const llvm::Module>> modules,
-            const AnalysisResultsMap &analysisResults, FileOptions fileOpts) {
+vector<SharedSMTRef> generateSMT(MonoPair<const llvm::Module &> modules,
+                                 const AnalysisResultsMap &analysisResults,
+                                 FileOptions fileOpts) {
     std::vector<SharedSMTRef> declarations;
     std::vector<SortedVar> variableDeclarations;
     SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
@@ -63,10 +63,10 @@ generateSMT(MonoPair<shared_ptr<const llvm::Module>> modules,
         declarations.push_back(store_Declaration());
     }
 
-    externDeclarations(*modules.first, *modules.second, declarations,
+    externDeclarations(modules.first, modules.second, declarations,
                        fileOpts.FunctionConditions);
 
-    auto globalDecls = globalDeclarations(*modules.first, *modules.second);
+    auto globalDecls = globalDeclarations(modules.first, modules.second);
     smtExprs.insert(smtExprs.end(), globalDecls.begin(), globalDecls.end());
 
     // We use an iterative encoding for the main function since this seems to
@@ -97,12 +97,12 @@ generateSMT(MonoPair<shared_ptr<const llvm::Module>> modules,
             }
         }
     }
-    generateFunctionalAbstractions(*modules.first, smtOpts.MainFunctions.first,
+    generateFunctionalAbstractions(modules.first, smtOpts.MainFunctions.first,
                                    analysisResults, Program::First, assertions,
                                    declarations);
-    generateFunctionalAbstractions(
-        *modules.second, smtOpts.MainFunctions.second, analysisResults,
-        Program::Second, assertions, declarations);
+    generateFunctionalAbstractions(modules.second, smtOpts.MainFunctions.second,
+                                   analysisResults, Program::Second, assertions,
+                                   declarations);
 
     smtExprs.insert(smtExprs.end(), declarations.begin(), declarations.end());
     smtExprs.insert(smtExprs.end(), assertions.begin(), assertions.end());
@@ -115,15 +115,15 @@ generateSMT(MonoPair<shared_ptr<const llvm::Module>> modules,
     return smtExprs;
 }
 
-void generateSMTForMainFunctions(
-    MonoPair<std::shared_ptr<const llvm::Module>> modules,
-    const AnalysisResultsMap &analysisResults, FileOptions fileOpts,
-    std::vector<smt::SharedSMTRef> &assertions,
-    std::vector<smt::SharedSMTRef> &declarations) {
+void generateSMTForMainFunctions(MonoPair<const llvm::Module &> modules,
+                                 const AnalysisResultsMap &analysisResults,
+                                 FileOptions fileOpts,
+                                 std::vector<smt::SharedSMTRef> &assertions,
+                                 std::vector<smt::SharedSMTRef> &declarations) {
     const auto &smtOpts = SMTGenerationOpts::getInstance();
     auto inInv =
         inInvariant(smtOpts.MainFunctions, analysisResults, fileOpts.InRelation,
-                    *modules.first, *modules.second, smtOpts.GlobalConstants,
+                    modules.first, modules.second, smtOpts.GlobalConstants,
                     fileOpts.AdditionalInRelation);
     declarations.push_back(inInv);
     declarations.push_back(outInvariant(

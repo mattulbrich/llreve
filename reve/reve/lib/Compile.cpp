@@ -32,20 +32,18 @@ using llvm::ErrorOr;
 using llvm::IntrusiveRefCntPtr;
 using llvm::opt::ArgStringList;
 
-MonoPair<shared_ptr<llvm::Module>>
+MonoPair<unique_ptr<llvm::Module>>
 compileToModules(const char *exeName, InputOpts &opts,
                  MonoPair<std::shared_ptr<CodeGenAction>> acts) {
     executeCodeGenActions(exeName, opts, acts);
 
-    shared_ptr<llvm::Module> mod1 = acts.first->takeModule();
-    shared_ptr<llvm::Module> mod2 = acts.second->takeModule();
+    unique_ptr<llvm::Module> mod1 = acts.first->takeModule();
+    unique_ptr<llvm::Module> mod2 = acts.second->takeModule();
     if (!mod1 || !mod2) {
         logError("Module was not successful\n");
         exit(1);
     }
-    MonoPair<shared_ptr<llvm::Module>> monoPair =
-        makeMonoPair(std::move(mod1), std::move(mod2));
-    return monoPair;
+    return {std::move(mod1), std::move(mod2)};
 }
 
 /// Compile the inputs to llvm assembly and return the corresponding
