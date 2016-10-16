@@ -9,9 +9,9 @@ using smt::SMTRef;
 using std::string;
 using std::vector;
 
-vector<SharedSMTRef>
-relationalFunctionDeclarations(MonoPair<llvm::Function *> preprocessedFunctions,
-                               const AnalysisResultsMap &analysisResults) {
+vector<SharedSMTRef> relationalFunctionDeclarations(
+    MonoPair<const llvm::Function *> preprocessedFunctions,
+    const AnalysisResultsMap &analysisResults) {
     const string functionName = getFunctionName(preprocessedFunctions);
     const auto pathMaps = getPathMaps(preprocessedFunctions, analysisResults);
     // TODO Do we need to take the intersection of the pathmaps here?
@@ -35,7 +35,7 @@ relationalFunctionDeclarations(MonoPair<llvm::Function *> preprocessedFunctions,
 }
 
 vector<SharedSMTRef>
-functionalFunctionDeclarations(llvm::Function *preprocessedFunction,
+functionalFunctionDeclarations(const llvm::Function *preprocessedFunction,
                                const AnalysisResultsMap &analysisResults,
                                Program prog) {
     const string functionName = preprocessedFunction->getName().str();
@@ -58,7 +58,7 @@ functionalFunctionDeclarations(llvm::Function *preprocessedFunction,
     return declarations;
 }
 vector<SharedSMTRef> relationalIterativeDeclarations(
-    MonoPair<llvm::Function *> preprocessedFunctions,
+    MonoPair<const llvm::Function *> preprocessedFunctions,
     const AnalysisResultsMap &analysisResults) {
     const auto pathMaps = getPathMaps(preprocessedFunctions, analysisResults);
     // TODO Do we need to take the intersection of the pathmaps here?

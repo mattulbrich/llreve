@@ -48,7 +48,7 @@ using std::unique_ptr;
 using std::vector;
 
 vector<SharedSMTRef>
-relationalFunctionAssertions(MonoPair<llvm::Function *> preprocessedFuns,
+relationalFunctionAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
                              const AnalysisResultsMap &analysisResults) {
     const auto pathMaps = getPathMaps(preprocessedFuns, analysisResults);
     checkPathMaps(pathMaps.first, pathMaps.second);
@@ -106,7 +106,7 @@ relationalFunctionAssertions(MonoPair<llvm::Function *> preprocessedFuns,
 // the main function that we want to check doesn’t need the output parameters in
 // the assertions since it is never called
 vector<SharedSMTRef>
-relationalIterativeAssertions(MonoPair<llvm::Function *> preprocessedFuns,
+relationalIterativeAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
                               const AnalysisResultsMap &analysisResults) {
     const auto pathMaps = getPathMaps(preprocessedFuns, analysisResults);
     checkPathMaps(pathMaps.first, pathMaps.second);
@@ -273,7 +273,7 @@ vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
 }
 
 vector<SharedSMTRef>
-functionalFunctionAssertions(llvm::Function *f,
+functionalFunctionAssertions(const llvm::Function *f,
                              const AnalysisResultsMap &analysisResults,
                              Program prog) {
     const auto pathMap = analysisResults.at(f).paths;
@@ -885,7 +885,7 @@ auto addMemory(vector<SharedSMTRef> &implArgs)
 }
 
 void generateRelationalFunctionSMT(
-    MonoPair<llvm::Function *> preprocessedFunction,
+    MonoPair<const llvm::Function *> preprocessedFunction,
     const AnalysisResultsMap &analysisResults, vector<SharedSMTRef> &assertions,
     vector<SharedSMTRef> &declarations) {
     auto newAssertions =
@@ -897,7 +897,7 @@ void generateRelationalFunctionSMT(
     declarations.insert(declarations.end(), newDeclarations.begin(),
                         newDeclarations.end());
 }
-void generateFunctionalFunctionSMT(llvm::Function *preprocessedFunction,
+void generateFunctionalFunctionSMT(const llvm::Function *preprocessedFunction,
                                    const AnalysisResultsMap &analysisResults,
                                    Program prog,
                                    vector<SharedSMTRef> &assertions,
@@ -913,7 +913,7 @@ void generateFunctionalFunctionSMT(llvm::Function *preprocessedFunction,
 }
 
 void generateRelationalIterativeSMT(
-    MonoPair<llvm::Function *> preprocessedFunctions,
+    MonoPair<const llvm::Function *> preprocessedFunctions,
     const AnalysisResultsMap &analysisResults, vector<SharedSMTRef> &assertions,
     vector<SharedSMTRef> &declarations) {
     auto newAssertions =

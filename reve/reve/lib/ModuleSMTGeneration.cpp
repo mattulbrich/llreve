@@ -40,9 +40,9 @@ using smt::VarDecl;
 using smt::makeOp;
 using smt::stringExpr;
 
-vector<SharedSMTRef> generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
-                                 const AnalysisResultsMap &analysisResults,
-                                 FileOptions fileOpts) {
+vector<SharedSMTRef>
+generateSMT(MonoPair<shared_ptr<const llvm::Module>> modules,
+            const AnalysisResultsMap &analysisResults, FileOptions fileOpts) {
     std::vector<SharedSMTRef> declarations;
     std::vector<SortedVar> variableDeclarations;
     SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
@@ -116,7 +116,7 @@ vector<SharedSMTRef> generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
 }
 
 void generateSMTForMainFunctions(
-    MonoPair<std::shared_ptr<llvm::Module>> modules,
+    MonoPair<std::shared_ptr<const llvm::Module>> modules,
     const AnalysisResultsMap &analysisResults, FileOptions fileOpts,
     std::vector<smt::SharedSMTRef> &assertions,
     std::vector<smt::SharedSMTRef> &declarations) {
@@ -139,7 +139,7 @@ void generateSMTForMainFunctions(
 }
 
 void generateFunctionalAbstractions(
-    llvm::Module &module, const llvm::Function *mainFunction,
+    const llvm::Module &module, const llvm::Function *mainFunction,
     const AnalysisResultsMap &analysisResults, Program prog,
     std::vector<smt::SharedSMTRef> &assertions,
     std::vector<smt::SharedSMTRef> &declarations) {
@@ -173,7 +173,8 @@ static SMTRef equalOutputs(std::string functionName,
     return body;
 }
 
-static SMTRef equalInputs(llvm::Function &fun1, llvm::Function &fun2,
+static SMTRef equalInputs(const llvm::Function &fun1,
+                          const llvm::Function &fun2,
                           unsigned numberOfArguments) {
     std::vector<SharedSMTRef> equal;
     auto funArgs1 = functionArgs(fun1);
@@ -190,8 +191,8 @@ static SMTRef equalInputs(llvm::Function &fun1, llvm::Function &fun2,
     return make_unique<Op>("and", equal);
 }
 
-static std::vector<SortedVar> externDeclArgs(llvm::Function &fun1,
-                                             llvm::Function &fun2,
+static std::vector<SortedVar> externDeclArgs(const llvm::Function &fun1,
+                                             const llvm::Function &fun2,
                                              unsigned numberOfArguments) {
     std::vector<SortedVar> args;
     auto funArgs1 = functionArgs(fun1);
@@ -217,10 +218,9 @@ static std::vector<SortedVar> externDeclArgs(llvm::Function &fun1,
     return args;
 }
 
-void externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
+void externDeclarations(const llvm::Module &mod1, const llvm::Module &mod2,
                         std::vector<SharedSMTRef> &declarations,
                         std::multimap<string, string> funCondMap) {
-    // TODO Move outside
     for (const auto &functionPair :
          SMTGenerationOpts::getInstance().CoupledFunctions) {
         if (hasMutualFixedAbstraction(functionPair)) {
@@ -298,7 +298,7 @@ std::set<uint32_t> getVarArgs(const llvm::Function &fun) {
 }
 
 std::vector<SharedSMTRef>
-equivalentExternDecls(llvm::Function &fun1, llvm::Function &fun2,
+equivalentExternDecls(const llvm::Function &fun1, const llvm::Function &fun2,
                       std::multimap<string, string> funCondMap) {
     vector<SharedSMTRef> declarations;
     set<uint32_t> varArgs = getVarArgs(fun1);
@@ -324,8 +324,8 @@ equivalentExternDecls(llvm::Function &fun1, llvm::Function &fun2,
     return declarations;
 }
 
-std::vector<SharedSMTRef> notEquivalentExternDecls(llvm::Function &fun1,
-                                                   llvm::Function &fun2) {
+std::vector<SharedSMTRef> notEquivalentExternDecls(const llvm::Function &fun1,
+                                                   const llvm::Function &fun2) {
     vector<SharedSMTRef> declarations;
     set<uint32_t> varArgs = getVarArgs(fun1);
     set<uint32_t> varArgs2 = getVarArgs(fun2);
@@ -345,7 +345,8 @@ std::vector<SharedSMTRef> notEquivalentExternDecls(llvm::Function &fun1,
     return declarations;
 }
 
-std::vector<SharedSMTRef> externFunDecl(llvm::Function &fun, Program program) {
+std::vector<SharedSMTRef> externFunDecl(const llvm::Function &fun,
+                                        Program program) {
     std::vector<SharedSMTRef> decls;
     set<uint32_t> varArgs = getVarArgs(fun);
     for (auto argNum : varArgs) {
@@ -366,31 +367,16 @@ std::vector<SharedSMTRef> externFunDecl(llvm::Function &fun, Program program) {
     return decls;
 }
 
-// this does not actually check if the function recurses but the next
-// version of
-// llvm provides a function for that and I’m too lazy to implement it myself
-bool doesNotRecurse(llvm::Function &fun) {
-    for (auto &bb : fun) {
-        for (auto &inst : bb) {
-            if (const auto callInst = llvm::dyn_cast<llvm::CallInst>(&inst)) {
-                const auto calledFun = callInst->getCalledFunction();
-                if (calledFun && !calledFun->isDeclaration()) {
-                    return false;
-                }
-            }
-        }
-    }
-    return true;
-}
-
 vector<SharedSMTRef> globalDeclarationsForMod(int globalPointer,
-                                              llvm::Module &mod,
-                                              llvm::Module &modOther,
+                                              const llvm::Module &mod,
+                                              const llvm::Module &modOther,
                                               int program) {
     std::vector<SharedSMTRef> declarations;
     for (auto &global1 : mod.globals()) {
         std::string globalName = global1.getName();
-        if (!modOther.getNamedGlobal(globalName)) {
+        std::string otherGlobalName = dropSuffixFromName(globalName) + "$" +
+                                      std::to_string(swapIndex(program));
+        if (!modOther.getNamedGlobal(otherGlobalName)) {
             // we want the size of string constants not the size of the
             // pointer
             // pointing to them
@@ -403,23 +389,24 @@ vector<SharedSMTRef> globalDeclarationsForMod(int globalPointer,
                     typeSize(global1.getType(), mod.getDataLayout());
             }
             std::vector<SortedVar> empty;
-            auto constDef1 = make_shared<FunDef>(
-                globalName + "$" + std::to_string(program), empty, "Int",
-                makeOp("-", std::to_string(globalPointer)));
+            auto constDef1 =
+                make_shared<FunDef>(globalName, empty, "Int",
+                                    makeOp("-", std::to_string(globalPointer)));
             declarations.push_back(constDef1);
         }
     }
     return declarations;
 }
-std::vector<SharedSMTRef> globalDeclarations(llvm::Module &mod1,
-                                             llvm::Module &mod2) {
+std::vector<SharedSMTRef> globalDeclarations(const llvm::Module &mod1,
+                                             const llvm::Module &mod2) {
     // First match globals with the same name to make sure that they get the
     // same pointer, then match globals that only exist in one module
     std::vector<SharedSMTRef> declarations;
     int globalPointer = 1;
     for (auto &global1 : mod1.globals()) {
         std::string globalName = global1.getName();
-        if (mod2.getNamedGlobal(globalName)) {
+        std::string otherGlobalName = dropSuffixFromName(globalName) + "$2";
+        if (mod2.getNamedGlobal(otherGlobalName)) {
             // we want the size of string constants not the size of the
             // pointer
             // pointing to them
@@ -433,10 +420,10 @@ std::vector<SharedSMTRef> globalDeclarations(llvm::Module &mod1,
             }
             std::vector<SortedVar> empty;
             auto constDef1 =
-                make_shared<FunDef>(globalName + "$1", empty, "Int",
+                make_shared<FunDef>(globalName, empty, "Int",
                                     makeOp("-", std::to_string(globalPointer)));
             auto constDef2 =
-                make_shared<FunDef>(globalName + "$2", empty, "Int",
+                make_shared<FunDef>(otherGlobalName, empty, "Int",
                                     makeOp("-", std::to_string(globalPointer)));
             declarations.push_back(constDef1);
             declarations.push_back(constDef2);
@@ -446,12 +433,6 @@ std::vector<SharedSMTRef> globalDeclarations(llvm::Module &mod1,
     auto decls2 = globalDeclarationsForMod(globalPointer, mod2, mod1, 2);
     declarations.insert(declarations.end(), decls1.begin(), decls1.end());
     declarations.insert(declarations.end(), decls2.begin(), decls2.end());
-    for (auto &global1 : mod1.globals()) {
-        global1.setName(global1.getName() + "$1");
-    }
-    for (auto &global2 : mod2.globals()) {
-        global2.setName(global2.getName() + "$2");
-    }
     return declarations;
 }
 

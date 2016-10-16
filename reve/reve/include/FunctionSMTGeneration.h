@@ -55,12 +55,13 @@ struct AssignmentBlock {
 This creates complete assertions containing the input and output parameters of
 the function. Each jump is modeled as a possibly recursive call.
  */
-auto relationalFunctionAssertions(MonoPair<llvm::Function *> preprocessedFuns,
-                                  const AnalysisResultsMap &analysisResults)
+auto relationalFunctionAssertions(
+    MonoPair<const llvm::Function *> preprocessedFuns,
+    const AnalysisResultsMap &analysisResults)
     -> std::vector<smt::SharedSMTRef>;
-auto functionalFunctionAssertions(MonoPair<llvm::Function *> preprocessedFun,
-                                  const AnalysisResultsMap &analysisResults,
-                                  Program prog)
+auto functionalFunctionAssertions(
+    MonoPair<const llvm::Function *> preprocessedFun,
+    const AnalysisResultsMap &analysisResults, Program prog)
     -> std::vector<smt::SharedSMTRef>;
 
 /// Create the assertion for the passed main function.
@@ -69,10 +70,10 @@ The main function is special because it is never called so the predicates don’
 need to contain the output parameters. While it’s not necessary to use this
 encoding it seems to perform better in some cases.
  */
-auto relationalIterativeAssertions(MonoPair<llvm::Function *> preprocessedFuns,
-                                   const AnalysisResultsMap &analysisResults,
-                                   std::vector<smt::SharedSMTRef> &declarations,
-                                   bool onlyRec)
+auto relationalIterativeAssertions(
+    MonoPair<const llvm::Function *> preprocessedFuns,
+    const AnalysisResultsMap &analysisResults,
+    std::vector<smt::SharedSMTRef> &declarations, bool onlyRec)
     -> std::vector<smt::SharedSMTRef>;
 
 /// Get all combinations of paths that have the same start and end mark.
@@ -195,13 +196,13 @@ auto addMemory(std::vector<smt::SharedSMTRef> &implArgs)
 // This combines `relationalFunctionDeclarations` and
 // `relationalFunctionAssertions`.
 auto generateRelationalFunctionSMT(
-    MonoPair<llvm::Function *> preprocessedFunction,
+    MonoPair<const llvm::Function *> preprocessedFunction,
     const AnalysisResultsMap &analysisResults,
     std::vector<smt::SharedSMTRef> &assertions,
     std::vector<smt::SharedSMTRef> &declarations) -> void;
 // This combines `functionalFunctionDeclarations` and
 // `functionalFunctionAssertions`.
-auto generateFunctionalFunctionSMT(llvm::Function *preprocessedFunction,
+auto generateFunctionalFunctionSMT(const llvm::Function *preprocessedFunction,
                                    const AnalysisResultsMap &analysisResults,
                                    Program prog,
                                    std::vector<smt::SharedSMTRef> &assertions,
@@ -210,7 +211,7 @@ auto generateFunctionalFunctionSMT(llvm::Function *preprocessedFunction,
 // This combines `relationalIterativeDeclarations` and
 // `relationalIterativeAssertions`.
 auto generateRelationalIterativeSMT(
-    MonoPair<llvm::Function *> preprocessedFunctions,
+    MonoPair<const llvm::Function *> preprocessedFunctions,
     const AnalysisResultsMap &analysisResults,
     std::vector<smt::SharedSMTRef> &assertions,
     std::vector<smt::SharedSMTRef> &declarations) -> void;

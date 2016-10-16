@@ -263,3 +263,11 @@ auto calledFunctions(const llvm::Function &f) -> set<const llvm::Function *> {
     }
     return called;
 }
+
+auto dropSuffixFromName(string name) -> string {
+    size_t suffix = name.find('$');
+    if (suffix != string::npos) {
+        return name.substr(0, suffix);
+    }
+    return name;
+}

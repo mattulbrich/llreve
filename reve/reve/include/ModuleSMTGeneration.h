@@ -18,38 +18,39 @@
 
 #include "llvm/IR/Module.h"
 
-auto generateSMT(MonoPair<std::shared_ptr<llvm::Module>> modules,
+auto generateSMT(MonoPair<std::shared_ptr<const llvm::Module>> modules,
                  const AnalysisResultsMap &analysisResults,
                  FileOptions fileOpts) -> std::vector<smt::SharedSMTRef>;
 auto generateSMTForMainFunctions(
-    MonoPair<std::shared_ptr<llvm::Module>> modules,
+    MonoPair<std::shared_ptr<const llvm::Module>> modules,
     const AnalysisResultsMap &analysisResults, FileOptions fileOpts,
     std::vector<smt::SharedSMTRef> &assertions,
     std::vector<smt::SharedSMTRef> &declarations) -> void;
 auto generateFunctionalAbstractions(
-    llvm::Module &module, const llvm::Function *mainFunction,
+    const llvm::Module &module, const llvm::Function *mainFunction,
     const AnalysisResultsMap &analysisResults, Program prog,
     std::vector<smt::SharedSMTRef> &assertions,
     std::vector<smt::SharedSMTRef> &declarations) -> void;
 auto select_Declaration() -> smt::SMTRef;
 auto store_Declaration() -> smt::SMTRef;
-auto externDeclarations(llvm::Module &mod1, llvm::Module &mod2,
+auto externDeclarations(const llvm::Module &mod1, const llvm::Module &mod2,
                         std::vector<smt::SharedSMTRef> &declarations,
                         std::multimap<std::string, std::string> funCondMap)
     -> void;
 auto getVarArgs(const llvm::Function &fun) -> std::set<uint32_t>;
-auto externFunDecl(llvm::Function &fun, Program program)
+auto externFunDecl(const llvm::Function &fun, Program program)
     -> std::vector<smt::SharedSMTRef>;
-auto equivalentExternDecls(llvm::Function &fun1, llvm::Function &fun2,
+auto equivalentExternDecls(const llvm::Function &fun1,
+                           const llvm::Function &fun2,
                            std::multimap<std::string, std::string> funCondMap)
     -> std::vector<smt::SharedSMTRef>;
-auto notEquivalentExternDecls(llvm::Function &fun1, llvm::Function &fun2)
+auto notEquivalentExternDecls(const llvm::Function &fun1,
+                              const llvm::Function &fun2)
     -> std::vector<smt::SharedSMTRef>;
-auto doesNotRecurse(llvm::Function &fun) -> bool;
-auto globalDeclarations(llvm::Module &mod1, llvm::Module &mod2)
+auto globalDeclarations(const llvm::Module &mod1, const llvm::Module &mod2)
     -> std::vector<smt::SharedSMTRef>;
-auto globalDeclarationsForMod(int globalPointer, llvm::Module &mod,
-                              llvm::Module &otherMod, int program)
+auto globalDeclarationsForMod(int globalPointer, const llvm::Module &mod,
+                              const llvm::Module &otherMod, int program)
     -> std::vector<smt::SharedSMTRef>;
 auto stringConstants(const llvm::Module &mod, std::string heap)
     -> std::vector<smt::SharedSMTRef>;

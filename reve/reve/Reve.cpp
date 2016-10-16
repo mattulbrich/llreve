@@ -189,7 +189,7 @@ int main(int argc, const char **argv) {
     PM.run(*modules.first);
     PM.run(*modules.second);
 
-    const auto analysisResults = preprocessFunctions(modules, preprocessOpts);
+    const auto analysisResults = preprocessModules(modules, preprocessOpts);
 
     vector<SharedSMTRef> smtExprs =
         generateSMT(modules, analysisResults, fileOpts);

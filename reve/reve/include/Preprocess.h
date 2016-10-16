@@ -24,7 +24,7 @@ struct PassAnalysisResults {
 };
 
 AnalysisResultsMap
-preprocessFunctions(MonoPair<std::shared_ptr<llvm::Module>> modules,
+preprocessModules(MonoPair<std::shared_ptr<llvm::Module>> modules,
                     PreprocessOpts opts);
 void runFunctionPasses(
     llvm::Module &module, PreprocessOpts opts,

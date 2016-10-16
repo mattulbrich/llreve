@@ -211,3 +211,5 @@ auto callsTransitively(const llvm::Function &caller,
                        const llvm::Function &callee) -> bool;
 auto calledFunctions(const llvm::Function &f)
     -> std::set<const llvm::Function *>;
+
+auto dropSuffixFromName(std::string) -> std::string;
