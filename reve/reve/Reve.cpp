@@ -40,124 +40,131 @@ using std::unique_ptr;
 using std::vector;
 
 // Input flags
-static llvm::cl::list<string> IncludesFlag("I", llvm::cl::desc("Include path"),
-                                           llvm::cl::cat(ReveCategory));
-static llvm::cl::list<string> AssumeEquivalentFlags(
+static llreve::cl::list<string> IncludesFlag("I",
+                                             llreve::cl::desc("Include path"),
+                                             llreve::cl::cat(ReveCategory));
+static llreve::cl::list<string> AssumeEquivalentFlags(
     "assume-equivalent",
-    llvm::cl::desc("Pair of function names separated by ',' that are assumed "
-                   "to be equivalent"),
-    llvm::cl::cat(ReveCategory));
-static llvm::cl::list<string> CoupleFunctionsFlag(
+    llreve::cl::desc("Pair of function names separated by ',' that are assumed "
+                     "to be equivalent"),
+    llreve::cl::cat(ReveCategory));
+static llreve::cl::list<string> CoupleFunctionsFlag(
     "couple-functions",
-    llvm::cl::desc("Pair of function names separated by ',' that are coupled"),
-    llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<string> ResourceDirFlag(
+    llreve::cl::desc(
+        "Pair of function names separated by ',' that are coupled"),
+    llreve::cl::cat(ReveCategory));
+static llreve::cl::opt<string> ResourceDirFlag(
     "resource-dir",
-    llvm::cl::desc("Directory containing the clang resource files, "
-                   "e.g. /usr/local/lib/clang/3.8.0"),
-    llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<string> FileName1Flag(llvm::cl::Positional,
-                                           llvm::cl::desc("FILE1"),
-                                           llvm::cl::Required,
-                                           llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<string> FileName2Flag(llvm::cl::Positional,
-                                           llvm::cl::desc("FILE2"),
-                                           llvm::cl::Required,
-                                           llvm::cl::cat(ReveCategory));
+    llreve::cl::desc("Directory containing the clang resource files, "
+                     "e.g. /usr/local/lib/clang/3.8.0"),
+    llreve::cl::cat(ReveCategory));
+static llreve::cl::opt<string> FileName1Flag(llreve::cl::Positional,
+                                             llreve::cl::desc("FILE1"),
+                                             llreve::cl::Required,
+                                             llreve::cl::cat(ReveCategory));
+static llreve::cl::opt<string> FileName2Flag(llreve::cl::Positional,
+                                             llreve::cl::desc("FILE2"),
+                                             llreve::cl::Required,
+                                             llreve::cl::cat(ReveCategory));
 
 // Serialize flags
-static llvm::cl::opt<string>
-    OutputFileNameFlag("o", llvm::cl::desc("SMT output filename"),
-                       llvm::cl::value_desc("filename"),
-                       llvm::cl::cat(ReveCategory));
+static llreve::cl::opt<string>
+    OutputFileNameFlag("o", llreve::cl::desc("SMT output filename"),
+                       llreve::cl::value_desc("filename"),
+                       llreve::cl::cat(ReveCategory));
 
 // Preprocess flags
-static llvm::cl::opt<bool> ShowCFGFlag("show-cfg", llvm::cl::desc("Show cfg"),
-                                       llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<bool>
+static llreve::cl::opt<bool> ShowCFGFlag("show-cfg",
+                                         llreve::cl::desc("Show cfg"),
+                                         llreve::cl::cat(ReveCategory));
+static llreve::cl::opt<bool>
     ShowMarkedCFGFlag("show-marked-cfg",
-                      llvm::cl::desc("Show cfg before mark removal"),
-                      llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<bool> InferMarksFlag(
+                      llreve::cl::desc("Show cfg before mark removal"),
+                      llreve::cl::cat(ReveCategory));
+static llreve::cl::opt<bool> InferMarksFlag(
     "infer-marks",
-    llvm::cl::desc("Infer marks instead of relying on annotations"),
-    llvm::cl::cat(ReveCategory));
+    llreve::cl::desc("Infer marks instead of relying on annotations"),
+    llreve::cl::cat(ReveCategory));
 
 // SMT generation opts
-static llvm::cl::opt<string> MainFunctionFlag(
-    "fun", llvm::cl::desc("Name of the function which should be verified"),
-    llvm::cl::cat(ReveCategory));
+static llreve::cl::opt<string> MainFunctionFlag(
+    "fun", llreve::cl::desc("Name of the function which should be verified"),
+    llreve::cl::cat(ReveCategory));
 
-static llvm::cl::opt<bool> HeapFlag("heap", llvm::cl::desc("Enable heap"),
-                                    llvm::cl::cat(ReveCategory));
+static llreve::cl::opt<bool> HeapFlag("heap", llreve::cl::desc("Enable heap"),
+                                      llreve::cl::cat(ReveCategory));
 
-static llvm::cl::opt<bool> StackFlag("stack", llvm::cl::desc("Enable stack"),
-                                     llvm::cl::cat(ReveCategory));
+static llreve::cl::opt<bool> StackFlag("stack",
+                                       llreve::cl::desc("Enable stack"),
+                                       llreve::cl::cat(ReveCategory));
 
-static llvm::cl::opt<bool>
-    GlobalConstantsFlag("strings", llvm::cl::desc("Set global constants"),
-                        llvm::cl::cat(ReveCategory));
+static llreve::cl::opt<bool>
+    GlobalConstantsFlag("strings", llreve::cl::desc("Set global constants"),
+                        llreve::cl::cat(ReveCategory));
 
-static llvm::cl::opt<bool>
+static llreve::cl::opt<bool>
     OnlyRecursiveFlag("only-rec",
-                      llvm::cl::desc("Only generate recursive invariants"),
-                      llvm::cl::cat(ReveCategory));
+                      llreve::cl::desc("Only generate recursive invariants"),
+                      llreve::cl::cat(ReveCategory));
 
-static llvm::cl::opt<bool> NoByteHeapFlag(
+static llreve::cl::opt<bool> NoByteHeapFlag(
     "no-byte-heap",
-    llvm::cl::desc("Treat each primitive type as a single array entry"),
-    llvm::cl::cat(ReveCategory));
+    llreve::cl::desc("Treat each primitive type as a single array entry"),
+    llreve::cl::cat(ReveCategory));
 
-static llvm::cl::opt<bool> EverythingSignedFlag(
-    "signed", llvm::cl::desc("Treat all operations as signed operatons"),
-    llvm::cl::cat(ReveCategory));
+static llreve::cl::opt<bool> EverythingSignedFlag(
+    "signed", llreve::cl::desc("Treat all operations as signed operatons"),
+    llreve::cl::cat(ReveCategory));
 
-static llvm::cl::opt<bool>
-    MuZFlag("muz", llvm::cl::desc("Create smt intended for conversion to muz"),
-            llvm::cl::cat(ReveCategory));
+static llreve::cl::opt<bool>
+    MuZFlag("muz",
+            llreve::cl::desc("Create smt intended for conversion to muz"),
+            llreve::cl::cat(ReveCategory));
 
-static llvm::cl::opt<bool> PerfectSyncFlag(
+static llreve::cl::opt<bool> PerfectSyncFlag(
     "perfect-sync",
-    llvm::cl::desc("Perfect synchronization, don’t allow off by n loops"),
-    llvm::cl::cat(ReveCategory));
+    llreve::cl::desc("Perfect synchronization, don’t allow off by n loops"),
+    llreve::cl::cat(ReveCategory));
 
-static llvm::cl::opt<bool> PassInputThroughFlag(
+static llreve::cl::opt<bool> PassInputThroughFlag(
     "pass-input-through",
-    llvm::cl::desc("Pass the input arguments through the "
-                   "complete program. This makes it possible "
-                   "to use them in custom postconditions"),
-    llvm::cl::cat(ReveCategory));
+    llreve::cl::desc("Pass the input arguments through the "
+                     "complete program. This makes it possible "
+                     "to use them in custom postconditions"),
+    llreve::cl::cat(ReveCategory));
 
-static llvm::cl::opt<bool>
+static llreve::cl::opt<bool>
     BitVectFlag("bitvect",
-                llvm::cl::desc("Use bitvects instead of unbounded ints"),
-                llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<bool>
+                llreve::cl::desc("Use bitvects instead of unbounded ints"),
+                llreve::cl::cat(ReveCategory));
+static llreve::cl::opt<bool>
     DontInstantiate("dont-instantiate",
-                    llvm::cl::desc("Dont instantiate arrays"),
-                    llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<bool>
-    InvertFlag("invert", llvm::cl::desc("Check for satisfiabilty of negation"),
-               llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<bool> DisableAutoCouplingFlag(
+                    llreve::cl::desc("Dont instantiate arrays"),
+                    llreve::cl::cat(ReveCategory));
+static llreve::cl::opt<bool>
+    InvertFlag("invert",
+               llreve::cl::desc("Check for satisfiabilty of negation"),
+               llreve::cl::cat(ReveCategory));
+static llreve::cl::opt<bool> DisableAutoCouplingFlag(
     "disable-auto-coupling",
-    llvm::cl::desc("Disable automatic coupling based on function names"),
-    llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<bool> DisableAutoAbstraction(
+    llreve::cl::desc("Disable automatic coupling based on function names"),
+    llreve::cl::cat(ReveCategory));
+static llreve::cl::opt<bool> DisableAutoAbstraction(
     "disable-auto-abstraction",
-    llvm::cl::desc("Disable automatic abstraction of coupled extern functions "
-                   "as equivalent"),
-    llvm::cl::cat(ReveCategory));
-static llvm::cl::opt<bool>
+    llreve::cl::desc(
+        "Disable automatic abstraction of coupled extern functions "
+        "as equivalent"),
+    llreve::cl::cat(ReveCategory));
+static llreve::cl::opt<bool>
     InitPredFlag("init-pred",
-                 llvm::cl::desc("Introduce the toplevel predicate INIT"),
-                 llvm::cl::cat(ReveCategory));
+                 llreve::cl::desc("Introduce the toplevel predicate INIT"),
+                 llreve::cl::cat(ReveCategory));
 
 static void printVersion() {
     std::cout << "llreve version " << g_GIT_SHA1 << "\n";
 }
 int main(int argc, const char **argv) {
-    llvm::cl::SetVersionPrinter(printVersion);
+    llreve::cl::SetVersionPrinter(printVersion);
     parseCommandLineArguments(argc, argv);
 
     PreprocessOpts preprocessOpts(ShowCFGFlag, ShowMarkedCFGFlag,

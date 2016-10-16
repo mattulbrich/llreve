@@ -10,15 +10,15 @@
 
 #pragma once
 
+#include "CommandLine.h"
 #include "MonoPair.h"
 #include "SMT.h"
 
 #include "llvm/IR/Function.h"
-#include "llvm/Support/CommandLine.h"
 
 #include <map>
 
-extern llvm::cl::OptionCategory ReveCategory;
+extern llreve::cl::OptionCategory ReveCategory;
 
 /// Options used for preprocessing modules
 class PreprocessOpts {
@@ -144,7 +144,7 @@ auto searchFunctionConditions(MonoPair<std::string> fileNames)
     -> std::multimap<std::string, std::string>;
 auto searchFunctionConditionsInFile(std::string file)
     -> std::multimap<std::string, std::string>;
-auto parseFunctionPairFlags(llvm::cl::list<std::string> &functionPairFlag)
+auto parseFunctionPairFlags(llreve::cl::list<std::string> &functionPairFlag)
     -> std::set<MonoPair<std::string>>;
 // Depending on the value of disableAutoCoupling this will infer functions to be
 // coupled based on their name or use the function names in the

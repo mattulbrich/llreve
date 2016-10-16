@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
-project(llvm-reve)
+project(llreve)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
@@ -22,7 +22,7 @@ if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
   set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
 endif()
 
-find_package(LLVM 3.8 REQUIRED CONFIG)
+find_package(LLVM 3.9 REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
 find_package (Threads REQUIRED)
 
@@ -49,15 +49,21 @@ add_definitions(${LLVM_DEFINITIONS})
 file(GLOB sources lib/*.cpp)
 file(GLOB headers include/*.h)
 
+add_library(llreve-cl
+  ${CMAKE_CURRENT_SOURCE_DIR}/cllib/CommandLine.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/cllib/CommandLine.h)
+target_include_directories(llreve-cl PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/cllib)
+export(TARGETS llreve-cl FILE llreve-cl-exports.cmake)
+
 add_library(libreve ${sources} ${headers})
+target_include_directories(libreve PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # Export libreve to be used within other projects.
 # Note that this is not designed for installation, yet.
 # Can only be used from build directory.
 export(TARGETS libreve FILE libreve-exports.cmake)
-target_include_directories(libreve PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
 
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/GitSHA1.cpp.in" "${CMAKE_CURRENT_BINARY_DIR}/GitSHA1.cpp" @ONLY)
 add_executable(reve Reve.cpp ${CMAKE_CURRENT_BINARY_DIR}/GitSHA1.cpp ${headers})
@@ -91,6 +97,7 @@ target_link_libraries(libreve
   ${llvm_libs}
   ${Z3_LIB}
   ${CMAKE_THREAD_LIBS_INIT}
+  llreve-cl
   )
 target_link_libraries(reve
   libreve

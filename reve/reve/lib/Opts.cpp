@@ -11,8 +11,6 @@
 #include "Opts.h"
 #include "Helper.h"
 
-#include "llvm/Support/CommandLine.h"
-
 #include <fstream>
 #include <regex>
 
@@ -24,8 +22,8 @@ using std::vector;
 using smt::stringExpr;
 using smt::SharedSMTRef;
 
-llvm::cl::OptionCategory ReveCategory("Reve options",
-                                      "Options for controlling reve.");
+llreve::cl::OptionCategory ReveCategory("Reve options",
+                                        "Options for controlling reve.");
 
 void SMTGenerationOpts::initialize(
     MonoPair<llvm::Function *> mainFunctions, bool heap, bool stack,
@@ -56,7 +54,7 @@ void SMTGenerationOpts::initialize(
 }
 
 void parseCommandLineArguments(int argc, const char **argv) {
-    llvm::cl::HideUnrelatedOptions(ReveCategory);
+    llreve::cl::HideUnrelatedOptions(ReveCategory);
     bool inlineOpts = false;
     // We can’t use the option parser for this since it can only be run once
     // (global state, fuck yeah) and
@@ -87,9 +85,9 @@ void parseCommandLineArguments(int argc, const char **argv) {
         }
         argc = static_cast<int>(parsedOptsCStyle.size());
         argv = &parsedOptsCStyle[0];
-        llvm::cl::ParseCommandLineOptions(argc, argv, "reve\n");
+        llreve::cl::ParseCommandLineOptions(argc, argv, "reve\n");
     } else {
-        llvm::cl::ParseCommandLineOptions(argc, argv, "reve\n");
+        llreve::cl::ParseCommandLineOptions(argc, argv, "reve\n");
     }
 }
 
@@ -204,7 +202,7 @@ FileOptions getFileOptions(MonoPair<string> fileNames) {
 }
 
 set<MonoPair<string>>
-parseFunctionPairFlags(llvm::cl::list<string> &functionPairFlags) {
+parseFunctionPairFlags(llreve::cl::list<string> &functionPairFlags) {
     set<MonoPair<string>> functionPairs;
     for (const auto &flag : functionPairFlags) {
         const auto &splitted = split(flag, ',');

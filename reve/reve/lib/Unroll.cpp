@@ -276,7 +276,7 @@ void peelAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
     for (auto bb : newBlocks) {
         for (auto &i : *bb) {
             RemapInstruction(&i, vmap, llvm::RF_NoModuleLevelChanges |
-                                           llvm::RF_IgnoreMissingEntries);
+                                           llvm::RF_IgnoreMissingLocals);
         }
     }
 
