@@ -132,12 +132,6 @@ static set<SortedVar> addMemoryLocations(const set<FreeVar> &freeVars) {
     return newFreeVars;
 }
 
-FreeVarsMap freeVars(PathMap map1, PathMap map2,
-                     MonoPair<vector<smt::SortedVar>> funArgs) {
-    return mergeVectorMaps(freeVars(map1, funArgs.first, Program::First),
-                           freeVars(map2, funArgs.second, Program::Second));
-}
-
 static auto addMemoryArrays(vector<smt::SortedVar> vars, Program prog)
     -> vector<smt::SortedVar> {
     int index = programIndex(prog);

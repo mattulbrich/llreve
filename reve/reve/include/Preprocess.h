@@ -18,11 +18,28 @@
 #include "llvm/IR/PassManager.h"
 #include "llvm/Support/ErrorOr.h"
 
+struct PassAnalysisResults {
+    BidirBlockMarkMap blockMarkMap;
+    PathMap paths;
+};
+
 AnalysisResultsMap
 preprocessFunctions(MonoPair<std::shared_ptr<llvm::Module>> modules,
                     PreprocessOpts opts);
-void preprocessFunctions(llvm::Module &module, PreprocessOpts opts,
-                         AnalysisResultsMap &preprocessingResults,
-                         Program prog);
-auto preprocessFunction(llvm::Function &fun, Program prog, PreprocessOpts opts)
+void runFunctionPasses(
+    llvm::Module &module, PreprocessOpts opts,
+    std::map<const llvm::Function *, PassAnalysisResults> &passResults,
+    Program prog);
+auto runFunctionPasses(llvm::Function &fun, Program prog, PreprocessOpts opts)
+    -> PassAnalysisResults;
+auto runAnalyses(
+    const llvm::Module &module, Program prog,
+    std::map<const llvm::Function *, PassAnalysisResults> &passResults,
+    AnalysisResultsMap &analysisResults) -> void;
+auto runAnalyses(
+    const llvm::Function &fun, Program prog,
+    std::map<const llvm::Function *, PassAnalysisResults> &passResults)
     -> AnalysisResults;
+
+auto doesAccessHeap(const llvm::Module &mod) -> bool;
+auto doesAccessStack(const llvm::Module &mod) -> bool;

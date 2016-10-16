@@ -17,10 +17,10 @@ relationalFunctionDeclarations(MonoPair<llvm::Function *> preprocessedFunctions,
     // TODO Do we need to take the intersection of the pathmaps here?
     const auto pathMap = pathMaps.first;
     const auto returnType = preprocessedFunctions.first->getReturnType();
-    const auto functionArguments = functionArgs(*preprocessedFunctions.first,
-                                                *preprocessedFunctions.second);
+    const auto functionArguments =
+        getFunctionArguments(preprocessedFunctions, analysisResults);
     const auto freeVarsMap =
-        freeVars(pathMaps.first, pathMaps.second, functionArguments);
+        getFreeVarsMap(preprocessedFunctions, analysisResults);
 
     vector<SharedSMTRef> declarations;
     for (const auto &pathMapIt : pathMap) {
@@ -41,8 +41,10 @@ functionalFunctionDeclarations(llvm::Function *preprocessedFunction,
     const string functionName = preprocessedFunction->getName().str();
     const auto pathMap = analysisResults.at(preprocessedFunction).paths;
     const auto returnType = preprocessedFunction->getReturnType();
-    const auto functionArguments = functionArgs(*preprocessedFunction);
-    const auto freeVarsMap = freeVars(pathMap, functionArguments, prog);
+    const auto functionArguments =
+        analysisResults.at(preprocessedFunction).functionArguments;
+    const auto freeVarsMap =
+        analysisResults.at(preprocessedFunction).freeVariables;
 
     vector<SharedSMTRef> declarations;
     for (const auto &pathMapIt : pathMap) {
@@ -62,10 +64,10 @@ vector<SharedSMTRef> relationalIterativeDeclarations(
     // TODO Do we need to take the intersection of the pathmaps here?
     const auto pathMap = pathMaps.first;
     const string functionName = getFunctionName(preprocessedFunctions);
-    const auto functionArguments = functionArgs(*preprocessedFunctions.first,
-                                                *preprocessedFunctions.second);
+    const auto functionArguments =
+        getFunctionArguments(preprocessedFunctions, analysisResults);
     const auto freeVarsMap =
-        freeVars(pathMaps.first, pathMaps.second, functionArguments);
+        getFreeVarsMap(preprocessedFunctions, analysisResults);
 
     vector<SharedSMTRef> declarations;
     for (const auto &pathMapIt : pathMap) {

@@ -55,9 +55,8 @@ relationalFunctionAssertions(MonoPair<llvm::Function *> preprocessedFuns,
     const auto marked = getBlockMarkMaps(preprocessedFuns, analysisResults);
     const string funName = getFunctionName(preprocessedFuns);
     const auto funArgsPair =
-        functionArgs(*preprocessedFuns.first, *preprocessedFuns.second);
-    const auto freeVarsMap =
-        freeVars(pathMaps.first, pathMaps.second, funArgsPair);
+        getFunctionArguments(preprocessedFuns, analysisResults);
+    const auto freeVarsMap = getFreeVarsMap(preprocessedFuns, analysisResults);
     vector<SharedSMTRef> smtExprs;
     vector<SharedSMTRef> pathExprs;
 
@@ -114,9 +113,8 @@ relationalIterativeAssertions(MonoPair<llvm::Function *> preprocessedFuns,
     const auto marked = getBlockMarkMaps(preprocessedFuns, analysisResults);
     const string funName = getFunctionName(preprocessedFuns);
     const auto funArgsPair =
-        functionArgs(*preprocessedFuns.first, *preprocessedFuns.second);
-    const auto freeVarsMap =
-        freeVars(pathMaps.first, pathMaps.second, funArgsPair);
+        getFunctionArguments(preprocessedFuns, analysisResults);
+    const auto freeVarsMap = getFreeVarsMap(preprocessedFuns, analysisResults);
     vector<SharedSMTRef> smtExprs;
 
     const llvm::Type *returnType = preprocessedFuns.first->getReturnType();
@@ -281,8 +279,8 @@ functionalFunctionAssertions(llvm::Function *f,
     const auto pathMap = analysisResults.at(f).paths;
     const auto funName = f->getName();
     const auto returnType = f->getReturnType();
-    const auto funArgs = functionArgs(*f);
-    const auto freeVarsMap = freeVars(pathMap, funArgs, prog);
+    const auto funArgs = analysisResults.at(f).functionArguments;
+    const auto freeVarsMap = analysisResults.at(f).freeVariables;
     return nonmutualPaths(pathMap, freeVarsMap, prog, funName, returnType);
 }
 vector<SharedSMTRef> nonmutualPaths(PathMap pathMap, FreeVarsMap freeVarsMap,

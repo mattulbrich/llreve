@@ -58,13 +58,6 @@ vector<SharedSMTRef> generateSMT(MonoPair<shared_ptr<llvm::Module>> modules,
         smtExprs.push_back(std::make_shared<SetLogic>("HORN"));
     }
 
-    if (doesAccessHeap(*modules.first) || doesAccessHeap(*modules.second)) {
-        smtOpts.Heap = true;
-    }
-    if (doesAccessStack(*modules.first) || doesAccessStack(*modules.second)) {
-        smtOpts.Stack = true;
-    }
-
     if (smtOpts.Stack) {
         declarations.push_back(select_Declaration());
         declarations.push_back(store_Declaration());
@@ -129,13 +122,12 @@ void generateSMTForMainFunctions(
     std::vector<smt::SharedSMTRef> &declarations) {
     const auto &smtOpts = SMTGenerationOpts::getInstance();
     auto inInv =
-        inInvariant(smtOpts.MainFunctions, fileOpts.InRelation, *modules.first,
-                    *modules.second, smtOpts.GlobalConstants,
+        inInvariant(smtOpts.MainFunctions, analysisResults, fileOpts.InRelation,
+                    *modules.first, *modules.second, smtOpts.GlobalConstants,
                     fileOpts.AdditionalInRelation);
     declarations.push_back(inInv);
     declarations.push_back(outInvariant(
-        functionArgs(*smtOpts.MainFunctions.first,
-                     *smtOpts.MainFunctions.second),
+        getFunctionArguments(smtOpts.MainFunctions, analysisResults),
         fileOpts.OutRelation, smtOpts.MainFunctions.first->getReturnType()));
     if (smtOpts.InitPredicate) {
         declarations.push_back(initPredicate(inInv));
@@ -391,37 +383,6 @@ bool doesNotRecurse(llvm::Function &fun) {
     return true;
 }
 
-bool doesAccessHeap(const llvm::Module &mod) {
-    for (auto &fun : mod) {
-        if (!hasFixedAbstraction(fun)) {
-            for (auto &bb : fun) {
-                for (auto &instr : bb) {
-                    if (llvm::isa<llvm::LoadInst>(&instr) ||
-                        llvm::isa<llvm::StoreInst>(&instr)) {
-                        return true;
-                    }
-                }
-            }
-        }
-    }
-    return false;
-}
-
-bool doesAccessStack(const llvm::Module &mod) {
-    for (auto &fun : mod) {
-        if (!hasFixedAbstraction(fun)) {
-            for (auto &bb : fun) {
-                for (auto &instr : bb) {
-                    if (llvm::isa<llvm::AllocaInst>(&instr)) {
-                        return true;
-                    }
-                }
-            }
-        }
-    }
-    return false;
-}
-
 vector<SharedSMTRef> globalDeclarationsForMod(int globalPointer,
                                               llvm::Module &mod,
                                               llvm::Module &modOther,
@@ -518,13 +479,14 @@ vector<SharedSMTRef> stringConstants(const llvm::Module &mod, string memory) {
 }
 
 shared_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
+                               const AnalysisResultsMap &analysisResults,
                                SharedSMTRef body, const llvm::Module &mod1,
                                const llvm::Module &mod2, bool strings,
                                bool additionalIn) {
 
     vector<SharedSMTRef> args;
     const auto funArgsPair =
-        functionArgs(*funs.first, *funs.second)
+        getFunctionArguments(funs, analysisResults)
             .indexedMap<vector<smt::SortedVar>>(
                 [](vector<smt::SortedVar> args,
                    int index) -> vector<smt::SortedVar> {

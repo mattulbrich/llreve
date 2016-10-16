@@ -231,15 +231,7 @@ vector<smt::SortedVar> functionArgs(const llvm::Function &fun) {
     }
     return args;
 }
-MonoPair<vector<smt::SortedVar>> functionArgs(const llvm::Function &fun1,
-                                              const llvm::Function &fun2) {
-    return {functionArgs(fun1), functionArgs(fun2)};
-}
-auto functionArgsFreeVars(const llvm::Function &fun1,
-                          const llvm::Function &fun2)
-    -> std::vector<smt::SortedVar> {
-    return concat(functionArgs(fun1, fun2));
-}
+
 auto callsTransitively(const llvm::Function &caller,
                        const llvm::Function &callee) -> bool {
     set<const llvm::Function *> visited;

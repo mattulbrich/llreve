@@ -51,13 +51,12 @@ auto globalDeclarations(llvm::Module &mod1, llvm::Module &mod2)
 auto globalDeclarationsForMod(int globalPointer, llvm::Module &mod,
                               llvm::Module &otherMod, int program)
     -> std::vector<smt::SharedSMTRef>;
-auto doesAccessHeap(const llvm::Module &mod) -> bool;
-auto doesAccessStack(const llvm::Module &mod) -> bool;
 auto stringConstants(const llvm::Module &mod, std::string heap)
     -> std::vector<smt::SharedSMTRef>;
-auto inInvariant(MonoPair<const llvm::Function *> funs, smt::SharedSMTRef body,
-                 const llvm::Module &mod1, const llvm::Module &mod2,
-                 bool strings, bool inInvariant)
+auto inInvariant(MonoPair<const llvm::Function *> funs,
+                 const AnalysisResultsMap &analysisResults,
+                 smt::SharedSMTRef body, const llvm::Module &mod1,
+                 const llvm::Module &mod2, bool strings, bool inInvariant)
     -> std::shared_ptr<smt::FunDef>;
 auto outInvariant(MonoPair<std::vector<smt::SortedVar>> funArgs,
                   smt::SharedSMTRef body, const llvm::Type *type)

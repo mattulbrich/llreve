@@ -47,34 +47,44 @@ static void nameFunctionArguments(llvm::Function &fun, Program prog) {
     }
 }
 
+static void detectMemoryOptions(MonoPair<shared_ptr<llvm::Module>> modules) {
+    if (doesAccessHeap(*modules.first) || doesAccessHeap(*modules.second)) {
+        SMTGenerationOpts::getInstance().Heap = true;
+    }
+    if (doesAccessStack(*modules.first) || doesAccessStack(*modules.second)) {
+        SMTGenerationOpts::getInstance().Stack = true;
+    }
+}
 AnalysisResultsMap
 preprocessFunctions(MonoPair<shared_ptr<llvm::Module>> modules,
                     PreprocessOpts opts) {
-    AnalysisResultsMap preprocessingResults;
-    preprocessFunctions(*modules.first, opts, preprocessingResults,
-                        Program::First);
-    preprocessFunctions(*modules.second, opts, preprocessingResults,
-                        Program::Second);
-    return preprocessingResults;
+    map<const llvm::Function *, PassAnalysisResults> passResults;
+    runFunctionPasses(*modules.first, opts, passResults, Program::First);
+    runFunctionPasses(*modules.second, opts, passResults, Program::Second);
+    detectMemoryOptions(modules);
+    AnalysisResultsMap analysisResults;
+    runAnalyses(*modules.first, Program::First, passResults, analysisResults);
+    runAnalyses(*modules.second, Program::Second, passResults, analysisResults);
+    return analysisResults;
 }
 
-void preprocessFunctions(llvm::Module &module, PreprocessOpts opts,
-                         AnalysisResultsMap &preprocessingResults,
-                         Program prog) {
+void runFunctionPasses(
+    llvm::Module &module, PreprocessOpts opts,
+    std::map<const llvm::Function *, PassAnalysisResults> &passResults,
+    Program prog) {
     for (auto &f : module) {
         if (!f.isIntrinsic() && !isLlreveIntrinsic(f)) {
             if (hasFixedAbstraction(f)) {
                 nameFunctionArguments(f, prog);
             } else {
-                preprocessingResults.insert(
-                    {&f, preprocessFunction(f, prog, opts)});
+                passResults.insert({&f, runFunctionPasses(f, prog, opts)});
             }
         }
     }
 }
 
-AnalysisResults preprocessFunction(llvm::Function &fun, Program prog,
-                                   PreprocessOpts opts) {
+PassAnalysisResults runFunctionPasses(llvm::Function &fun, Program prog,
+                                      PreprocessOpts opts) {
     auto fpm =
         std::make_unique<llvm::legacy::FunctionPassManager>(fun.getParent());
     fpm->add(llvm::createUnifyFunctionExitNodesPass());
@@ -115,10 +125,62 @@ AnalysisResults preprocessFunction(llvm::Function &fun, Program prog,
     fpm->doInitialization();
     fpm->run(fun);
     if (opts.InferMarks) {
-        return AnalysisResults(inferMarkAnalysis->BlockMarkMap,
-                               pathAnalysis->PathsMap);
+        return {inferMarkAnalysis->BlockMarkMap, pathAnalysis->PathsMap};
     } else {
-        return AnalysisResults(markAnalysis->BlockMarkMap,
-                               pathAnalysis->PathsMap);
+        return {markAnalysis->BlockMarkMap, pathAnalysis->PathsMap};
     }
+}
+
+void runAnalyses(const llvm::Module &module, Program prog,
+                 map<const llvm::Function *, PassAnalysisResults> &passResults,
+                 AnalysisResultsMap &analysisResults) {
+    for (auto &f : module) {
+        if (!f.isIntrinsic() && !isLlreveIntrinsic(f)) {
+            if (!hasFixedAbstraction(f)) {
+                analysisResults.insert({&f, runAnalyses(f, prog, passResults)});
+            }
+        }
+    }
+}
+
+AnalysisResults runAnalyses(
+    const llvm::Function &fun, Program prog,
+    std::map<const llvm::Function *, PassAnalysisResults> &passResults) {
+    const auto functionArguments = functionArgs(fun);
+    const auto freeVariables =
+        freeVars(passResults.at(&fun).paths, functionArguments, prog);
+    return AnalysisResults(passResults.at(&fun).blockMarkMap,
+                           passResults.at(&fun).paths, functionArguments,
+                           freeVariables);
+}
+
+bool doesAccessHeap(const llvm::Module &mod) {
+    for (auto &fun : mod) {
+        if (!hasFixedAbstraction(fun)) {
+            for (auto &bb : fun) {
+                for (auto &instr : bb) {
+                    if (llvm::isa<llvm::LoadInst>(&instr) ||
+                        llvm::isa<llvm::StoreInst>(&instr)) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool doesAccessStack(const llvm::Module &mod) {
+    for (auto &fun : mod) {
+        if (!hasFixedAbstraction(fun)) {
+            for (auto &bb : fun) {
+                for (auto &instr : bb) {
+                    if (llvm::isa<llvm::AllocaInst>(&instr)) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
 }

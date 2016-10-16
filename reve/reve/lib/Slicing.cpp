@@ -26,8 +26,8 @@ slicingAssertion(MonoPair<llvm::Function *> funPair,
     // Collect arguments for call
     std::vector<SortedVar> args;
 
-    auto funArgs1 = functionArgs(*funPair.first);
-    auto funArgs2 = functionArgs(*funPair.second);
+    auto funArgs1 = analysisResults.at(funPair.first).functionArguments;
+    auto funArgs2 = analysisResults.at(funPair.second).functionArguments;
     assert(funArgs1.size() == funArgs2.size());
 
     args.insert(args.end(), funArgs1.begin(), funArgs1.end());
