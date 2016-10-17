@@ -68,7 +68,7 @@ class SwitchDefault : public Condition {
 using Path_ = std::vector<Edge>;
 using Paths_ = std::vector<Path_>;
 using Paths = std::vector<Path>;
-using PathMap = std::map<int, std::map<int, Paths>>;
+using PathMap = std::map<Mark, std::map<Mark, Paths>>;
 
 class PathAnalysis : public llvm::FunctionPass {
   public:
@@ -87,9 +87,9 @@ auto lastBlock(Path Path) -> llvm::BasicBlock *;
 
 auto findPaths(BidirBlockMarkMap markedBlocks) -> PathMap;
 
-auto findPathsStartingAt(int For, llvm::BasicBlock *BB,
+auto findPathsStartingAt(Mark For, llvm::BasicBlock *BB,
                          BidirBlockMarkMap MarkedBlocks)
-    -> std::map<int, Paths>;
+    -> std::map<Mark, Paths>;
 
 auto traverse(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks, bool First,
               std::set<const llvm::BasicBlock *> Visited) -> Paths_;

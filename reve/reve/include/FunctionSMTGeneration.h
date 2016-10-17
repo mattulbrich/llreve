@@ -83,10 +83,10 @@ auto relationalIterativeAssertions(
   needs to hold
           at the end mark.
  */
-using ReturnInvariantGenerator = std::function<smt::SMTRef(int, int)>;
+using ReturnInvariantGenerator = std::function<smt::SMTRef(Mark, Mark)>;
 struct MarkPair {
-    int startMark;
-    int endMark;
+    Mark startMark;
+    Mark endMark;
 };
 
 inline bool operator==(const MarkPair &lhs, const MarkPair &rhs) {
@@ -150,7 +150,7 @@ auto mutualFunctionCall(smt::SharedSMTRef clause, MonoPair<CallInfo> callPair)
 auto nonMutualFunctionCall(smt::SharedSMTRef clause, CallInfo call,
                            Program prog) -> smt::SMTRef;
 auto forallStartingAt(smt::SharedSMTRef clause,
-                      std::vector<smt::SortedVar> freeVars, int blockIndex,
+                      std::vector<smt::SortedVar> freeVars, Mark blockIndex,
                       ProgramSelection prog, std::string funName, bool main,
                       FreeVarsMap freeVarsMap) -> smt::SharedSMTRef;
 
@@ -184,7 +184,7 @@ auto matchFunCalls(std::vector<CallInfo> callInfos1,
     -> std::vector<InterleaveStep>;
 auto checkPathMaps(PathMap map1, PathMap map2) -> void;
 auto mapSubset(PathMap map1, PathMap map2) -> bool;
-auto getDontLoopInvariant(smt::SMTRef endClause, int startIndex,
+auto getDontLoopInvariant(smt::SMTRef endClause, Mark startIndex,
                           PathMap pathMap, FreeVarsMap freeVarsMap,
                           Program prog) -> smt::SMTRef;
 auto addAssignments(const smt::SharedSMTRef end,

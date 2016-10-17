@@ -11,6 +11,7 @@
 #pragma once
 
 #include "CommandLine.h"
+#include "MarkAnalysis.h"
 #include "MonoPair.h"
 #include "SMT.h"
 
@@ -46,7 +47,7 @@ class SMTGenerationOpts {
                bool everythingSigned, bool muZ, bool perfectSync,
                bool passInputThrough, bool bitvect, bool invert,
                bool initPredicate, bool disableAutoAbstraction,
-               std::map<int, smt::SharedSMTRef> invariants,
+               std::map<Mark, smt::SharedSMTRef> invariants,
                std::set<MonoPair<const llvm::Function *>> assumeEquivalent,
                std::set<MonoPair<llvm::Function *>> coupleFunctions);
     MonoPair<llvm::Function *> MainFunctions;
@@ -65,7 +66,7 @@ class SMTGenerationOpts {
     bool DisableAutoAbstraction;
     // If an invariant is not in the map a declaration is added and it’s up to
     // the SMT solver to find it
-    std::map<int, smt::SharedSMTRef> Invariants;
+    std::map<Mark, smt::SharedSMTRef> Invariants;
     std::set<MonoPair<const llvm::Function *>> AssumeEquivalent;
     // The order in the pairs is normalized so that the first function is always
     // in the first module.

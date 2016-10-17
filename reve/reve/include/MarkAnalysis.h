@@ -15,17 +15,38 @@
 
 #include "llvm/IR/LegacyPassManager.h"
 
-const int UNREACHABLE_MARK = -3;
-const int EXIT_MARK = -2;
-const int ENTRY_MARK = -1;
+struct Mark {
+  private:
+    int index;
+
+  public:
+    explicit Mark(int index) : index(index) {}
+    inline bool operator<(const Mark &other) const {
+        return index < other.index;
+    }
+    inline bool operator>(const Mark &other) const { return other < *this; }
+    inline bool operator<=(const Mark &other) const { return !(*this > other); }
+    inline bool operator>=(const Mark &other) const { return !(*this < other); }
+    inline bool operator==(const Mark &other) const {
+        return index == other.index;
+    }
+    inline bool operator!=(const Mark &other) const {
+        return !(index == other.index);
+    }
+    std::string toString() const;
+};
+
+const Mark UNREACHABLE_MARK(-3);
+const Mark EXIT_MARK(-2);
+const Mark ENTRY_MARK(-1);
 
 struct BidirBlockMarkMap {
-    std::map<llvm::BasicBlock *, std::set<int>> BlockToMarksMap;
-    std::map<int, std::set<llvm::BasicBlock *>> MarkToBlocksMap;
+    std::map<llvm::BasicBlock *, std::set<Mark>> BlockToMarksMap;
+    std::map<Mark, std::set<llvm::BasicBlock *>> MarkToBlocksMap;
     BidirBlockMarkMap() : BlockToMarksMap({}), MarkToBlocksMap({}) {}
     BidirBlockMarkMap(
-        std::map<llvm::BasicBlock *, std::set<int>> BlockToMarksMap,
-        std::map<int, std::set<llvm::BasicBlock *>> MarkToBlocksMap)
+        std::map<llvm::BasicBlock *, std::set<Mark>> BlockToMarksMap,
+        std::map<Mark, std::set<llvm::BasicBlock *>> MarkToBlocksMap)
         : BlockToMarksMap(BlockToMarksMap), MarkToBlocksMap(MarkToBlocksMap) {}
 };
 class MarkAnalysis : public llvm::FunctionPass {

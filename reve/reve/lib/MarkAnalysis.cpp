@@ -20,11 +20,13 @@
 using std::make_pair;
 using std::set;
 
+std::string Mark::toString() const { return std::to_string(index); }
+
 char MarkAnalysis::ID = 0;
 
 bool MarkAnalysis::runOnFunction(llvm::Function &Fun) {
-    std::map<int, set<llvm::BasicBlock *>> MarkedBlocks;
-    std::map<llvm::BasicBlock *, set<int>> BlockedMarks;
+    std::map<Mark, set<llvm::BasicBlock *>> MarkedBlocks;
+    std::map<llvm::BasicBlock *, set<Mark>> BlockedMarks;
     MarkedBlocks[ENTRY_MARK].insert(&Fun.getEntryBlock());
     BlockedMarks[&Fun.getEntryBlock()].insert(ENTRY_MARK);
     MarkedBlocks[EXIT_MARK].insert(
@@ -45,8 +47,9 @@ bool MarkAnalysis::runOnFunction(llvm::Function &Fun) {
                         ID = static_cast<int>(
                             ConstInt->getValue().getSExtValue());
                     }
-                    MarkedBlocks[ID].insert(&BB);
-                    BlockedMarks[&BB].insert(ID);
+                    // TODO does defaulting to 0 make sense here?
+                    MarkedBlocks[Mark(ID)].insert(&BB);
+                    BlockedMarks[&BB].insert(Mark(ID));
                 }
             }
         }

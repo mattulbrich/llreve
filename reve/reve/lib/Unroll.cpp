@@ -35,7 +35,7 @@ using llvm::BasicBlock;
 using llvm::ValueToValueMapTy;
 using llvm::BranchInst;
 
-void unrollAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
+void unrollAtMark(llvm::Function &f, Mark mark, const BidirBlockMarkMap &marks,
                   size_t factor) {
     if (factor <= 1) {
         return;
@@ -184,7 +184,7 @@ void unrollAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
     }
 }
 
-void peelAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
+void peelAtMark(llvm::Function &f, Mark mark, const BidirBlockMarkMap &marks,
                 std::string prefix) {
     assert(marks.MarkToBlocksMap.at(mark).size() ==
            1); // For now we assume that there is only block per mark
@@ -397,7 +397,7 @@ void peelAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
         llvm::PHINode::Create(llvm::Type::getInt32Ty(markedBlock->getContext()),
                               static_cast<uint32_t>(exitEdges.size()),
                               "exitIndex", &markedBlock->front());
-    exitIndex->setName("exitIndex$" + prefix + "_" + std::to_string(mark));
+    exitIndex->setName("exitIndex$" + prefix + "_" + mark.toString());
     {
         // For loop exit i (the numbering is arbitrary) we set exitIndex to i
         size_t i = 1;
@@ -512,7 +512,7 @@ void UnrollPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
 bool UnrollPass::runOnFunction(llvm::Function &f) {
     getAnalysis<llvm::DominatorTreeWrapperPass>().getDomTree();
     auto map = getAnalysis<MarkAnalysis>().getBlockMarkMap();
-    peelAtMark(f, 2, map, "1");
+    peelAtMark(f, Mark(2), map, "1");
     return true;
 }
 

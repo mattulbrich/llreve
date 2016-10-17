@@ -19,7 +19,7 @@ bool RemoveMarkRefsPass::runOnFunction(llvm::Function & /*unused*/) {
     std::set<llvm::Instruction *> ToDelete;
     for (auto BBTuple : BidirMarkBlockMap.MarkToBlocksMap) {
         // no need to remove anything in exit and entry nodes
-        if (BBTuple.first >= 0) {
+        if (BBTuple.first >= Mark(0)) {
             for (auto BB : BBTuple.second) {
                 for (auto &Inst : *BB) {
                     if (auto CallInst = llvm::dyn_cast<llvm::CallInst>(&Inst)) {

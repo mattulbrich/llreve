@@ -14,7 +14,7 @@
 
 #include "llvm/Analysis/LoopInfo.h"
 
-void peelAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
+void peelAtMark(llvm::Function &f, Mark mark, const BidirBlockMarkMap &marks,
                 std::string prefix);
 
 std::set<llvm::BasicBlock *> blocksInLoop(llvm::BasicBlock *start,
@@ -36,5 +36,5 @@ class UnrollPass : public llvm::FunctionPass {
     UnrollPass() : llvm::FunctionPass(ID) {}
 };
 
-void unrollAtMark(llvm::Function &f, int mark, const BidirBlockMarkMap &marks,
+void unrollAtMark(llvm::Function &f, Mark mark, const BidirBlockMarkMap &marks,
                   size_t factor);

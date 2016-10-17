@@ -24,7 +24,7 @@ vector<SharedSMTRef> relationalFunctionDeclarations(
 
     vector<SharedSMTRef> declarations;
     for (const auto &pathMapIt : pathMap) {
-        const int startIndex = pathMapIt.first;
+        const Mark startIndex = pathMapIt.first;
         MonoPair<SMTRef> invariants = invariantDeclaration(
             startIndex, freeVarsMap.at(startIndex), ProgramSelection::Both,
             functionName, returnType);
@@ -48,7 +48,7 @@ functionalFunctionDeclarations(const llvm::Function *preprocessedFunction,
 
     vector<SharedSMTRef> declarations;
     for (const auto &pathMapIt : pathMap) {
-        const int startIndex = pathMapIt.first;
+        const Mark startIndex = pathMapIt.first;
         MonoPair<SMTRef> invariants =
             invariantDeclaration(startIndex, freeVarsMap.at(startIndex),
                                  asSelection(prog), functionName, returnType);
@@ -71,7 +71,7 @@ vector<SharedSMTRef> relationalIterativeDeclarations(
 
     vector<SharedSMTRef> declarations;
     for (const auto &pathMapIt : pathMap) {
-        const int startIndex = pathMapIt.first;
+        const Mark startIndex = pathMapIt.first;
         if (startIndex != ENTRY_MARK) {
             // ignore entry node, it has the fixed predicate IN_INV
             if (SMTGenerationOpts::getInstance().Invariants.find(startIndex) ==

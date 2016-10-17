@@ -45,7 +45,7 @@ PathMap findPaths(BidirBlockMarkMap markedBlocks) {
         // don't start at return instructäions
         if (BBTuple.first != EXIT_MARK && BBTuple.first != UNREACHABLE_MARK) {
             for (auto BB : BBTuple.second) {
-                const std::map<int, Paths> NewPaths =
+                const std::map<Mark, Paths> NewPaths =
                     findPathsStartingAt(BBTuple.first, BB, markedBlocks);
                 for (auto NewPathTuple : NewPaths) {
                     MyPaths[BBTuple.first][NewPathTuple.first].insert(
@@ -66,12 +66,12 @@ void PathAnalysis::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
     AU.addRequired<InferMarksAnalysis>();
 }
 
-std::map<int, Paths> findPathsStartingAt(int For, llvm::BasicBlock *BB,
-                                         BidirBlockMarkMap BidirBlockMarkMap) {
-    std::map<int, Paths> FoundPaths;
+std::map<Mark, Paths> findPathsStartingAt(Mark For, llvm::BasicBlock *BB,
+                                          BidirBlockMarkMap BidirBlockMarkMap) {
+    std::map<Mark, Paths> FoundPaths;
     const auto MyPaths = traverse(BB, BidirBlockMarkMap, true, {});
     for (auto &PathIt : MyPaths) {
-        set<int> Indices;
+        set<Mark> Indices;
         if (PathIt.empty()) {
             Indices.insert(EXIT_MARK);
         } else {

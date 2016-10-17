@@ -23,8 +23,8 @@ using std::set;
 char InferMarksAnalysis::ID = 0;
 
 bool InferMarksAnalysis::runOnFunction(llvm::Function &Fun) {
-    std::map<int, set<llvm::BasicBlock *>> MarkedBlocks;
-    std::map<llvm::BasicBlock *, set<int>> BlockedMarks;
+    std::map<Mark, set<llvm::BasicBlock *>> MarkedBlocks;
+    std::map<llvm::BasicBlock *, set<Mark>> BlockedMarks;
     MarkedBlocks[ENTRY_MARK].insert(&Fun.getEntryBlock());
     BlockedMarks[&Fun.getEntryBlock()].insert(ENTRY_MARK);
     MarkedBlocks[EXIT_MARK].insert(
@@ -37,11 +37,8 @@ bool InferMarksAnalysis::runOnFunction(llvm::Function &Fun) {
         getAnalysis<llvm::LoopInfoWrapperPass>().getLoopInfo();
     int i = 1;
     for (auto loop : loopInfo) {
-        set<int> marks = {i};
-        std::pair<int, set<llvm::BasicBlock *>> p(i, {loop->getHeader()});
-        MarkedBlocks.insert(p);
-        BlockedMarks.insert(
-            make_pair<llvm::BasicBlock *, set<int>>(loop->getHeader(), {i}));
+        MarkedBlocks.insert({Mark(i), {loop->getHeader()}});
+        BlockedMarks.insert({loop->getHeader(), {Mark(i)}});
         ++i;
     }
 

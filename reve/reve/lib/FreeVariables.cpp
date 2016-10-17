@@ -41,7 +41,7 @@ inline bool operator!=(const FreeVar &lhs, const FreeVar &rhs) {
 
 struct VariablesResult {
     std::set<FreeVar> accessed;
-    std::map<int, std::set<FreeVar>> constructed;
+    std::map<Mark, std::set<FreeVar>> constructed;
 };
 
 static FreeVar llvmValToFreeVar(const llvm::Value *val) {
@@ -81,9 +81,9 @@ static void freeVarsInBlock(llvm::BasicBlock &block,
     }
 }
 /// Collect the free variables for all paths starting at some mark
-static VariablesResult freeVarsOnPaths(map<int, Paths> pathMap) {
+static VariablesResult freeVarsOnPaths(map<Mark, Paths> pathMap) {
     set<FreeVar> freeVars;
-    map<int, set<FreeVar>> constructedIntersection;
+    map<Mark, set<FreeVar>> constructedIntersection;
     for (const auto &paths : pathMap) {
         for (const auto &path : paths.second) {
             const llvm::BasicBlock *prev = path.Start;
@@ -146,17 +146,17 @@ static auto addMemoryArrays(vector<smt::SortedVar> vars, Program prog)
 }
 FreeVarsMap freeVars(PathMap map, vector<smt::SortedVar> funArgs,
                      Program prog) {
-    std::map<int, set<SortedVar>> freeVarsMap;
+    std::map<Mark, set<SortedVar>> freeVarsMap;
     FreeVarsMap freeVarsMapVect;
-    std::map<int, std::map<int, set<SortedVar>>> constructed;
+    std::map<Mark, std::map<Mark, set<SortedVar>>> constructed;
     for (const auto &it : map) {
-        const int index = it.first;
+        const Mark index = it.first;
         auto freeVarsResult = freeVarsOnPaths(map.at(index));
 
         const auto accessed = addMemoryLocations(freeVarsResult.accessed);
         freeVarsMap.insert(make_pair(index, accessed));
 
-        std::map<int, set<SortedVar>> constructedVarsMap;
+        std::map<Mark, set<SortedVar>> constructedVarsMap;
         for (const auto &it : freeVarsResult.constructed) {
             const auto constructedVars = addMemoryLocations(it.second);
             constructedVarsMap.insert({it.first, constructedVars});
@@ -178,9 +178,9 @@ FreeVarsMap freeVars(PathMap map, vector<smt::SortedVar> funArgs,
     while (changed) {
         changed = false;
         for (const auto &it : map) {
-            const int startIndex = it.first;
+            const Mark startIndex = it.first;
             for (const auto &itInner : it.second) {
-                const int endIndex = itInner.first;
+                const Mark endIndex = itInner.first;
                 for (auto var : freeVarsMap.at(endIndex)) {
                     if (constructed.at(startIndex).at(endIndex).find(var) ==
                         constructed.at(startIndex).at(endIndex).end()) {
@@ -194,7 +194,7 @@ FreeVarsMap freeVars(PathMap map, vector<smt::SortedVar> funArgs,
     }
 
     for (auto it : freeVarsMap) {
-        const int index = it.first;
+        const Mark index = it.first;
         vector<smt::SortedVar> varsVect;
         for (const auto &var : it.second) {
             varsVect.push_back(var);

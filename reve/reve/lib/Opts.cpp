@@ -30,7 +30,7 @@ void SMTGenerationOpts::initialize(
     bool globalConstants, bool onlyRecursive, bool noByteHeap,
     bool everythingSigned, bool muZ, bool perfectSync, bool passInputThrough,
     bool bitVect, bool invert, bool initPredicate, bool disableAutoAbstraction,
-    map<int, SharedSMTRef> invariants,
+    map<Mark, SharedSMTRef> invariants,
     set<MonoPair<const llvm::Function *>> assumeEquivalent,
     set<MonoPair<llvm::Function *>> coupledFunctions) {
     SMTGenerationOpts &i = getInstance();

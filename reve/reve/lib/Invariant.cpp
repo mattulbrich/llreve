@@ -31,7 +31,7 @@ using std::map;
 /* -------------------------------------------------------------------------- */
 // Functions related to generating invariants
 
-SMTRef invariant(int StartIndex, int EndIndex, vector<SortedVar> InputArgs,
+SMTRef invariant(Mark StartIndex, Mark EndIndex, vector<SortedVar> InputArgs,
                  vector<SortedVar> EndArgs, ProgramSelection SMTFor,
                  std::string FunName, FreeVarsMap freeVarsMap) {
     // we want to end up with something like
@@ -115,7 +115,8 @@ SMTRef invariant(int StartIndex, int EndIndex, vector<SortedVar> InputArgs,
     return Clause;
 }
 
-SMTRef mainInvariant(int EndIndex, vector<SortedVar> FreeVars, string FunName) {
+SMTRef mainInvariant(Mark EndIndex, vector<SortedVar> FreeVars,
+                     string FunName) {
     vector<string> args;
     for (const auto &var : FreeVars) {
         args.push_back(var.name);
@@ -139,7 +140,7 @@ SMTRef mainInvariant(int EndIndex, vector<SortedVar> FreeVars, string FunName) {
 }
 
 /// Declare an invariant
-MonoPair<SMTRef> invariantDeclaration(int BlockIndex,
+MonoPair<SMTRef> invariantDeclaration(Mark BlockIndex,
                                       vector<smt::SortedVar> FreeVars,
                                       ProgramSelection For, std::string FunName,
                                       const llvm::Type *resultType) {
@@ -199,7 +200,7 @@ size_t maxArgs(FreeVarsMap freeVarsMap, ProgramSelection prog,
     return maxArgs;
 }
 
-SharedSMTRef mainInvariantDeclaration(int BlockIndex,
+SharedSMTRef mainInvariantDeclaration(Mark BlockIndex,
                                       vector<smt::SortedVar> FreeVars,
                                       ProgramSelection For,
                                       std::string FunName) {
@@ -214,17 +215,17 @@ SharedSMTRef mainInvariantDeclaration(int BlockIndex,
 }
 
 /// Return the invariant name, special casing the entry block
-string invariantName(int Index, ProgramSelection For, std::string FunName,
+string invariantName(Mark Index, ProgramSelection For, std::string FunName,
                      InvariantAttr attr, uint32_t VarArgs) {
     string Name;
     if (attr == InvariantAttr::MAIN) {
         Name = "INV_MAIN";
-        Name += "_" + std::to_string(Index);
+        Name += "_" + Index.toString();
     } else {
         if (Index == ENTRY_MARK) {
             Name = "INV_REC_" + FunName;
         } else {
-            Name = "INV_" + std::to_string(Index);
+            Name = "INV_" + Index.toString();
         }
     }
 

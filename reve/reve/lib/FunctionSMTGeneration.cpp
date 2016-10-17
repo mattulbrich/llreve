@@ -62,7 +62,7 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
 
     const auto synchronizedPaths = getSynchronizedPaths(
         pathMaps.first, pathMaps.second, freeVarsMap,
-        [&freeVarsMap, funName](int startIndex, int endIndex) {
+        [&freeVarsMap, funName](Mark startIndex, Mark endIndex) {
             return invariant(startIndex, endIndex, freeVarsMap.at(startIndex),
                              freeVarsMap.at(endIndex), ProgramSelection::Both,
                              funName, freeVarsMap);
@@ -129,7 +129,7 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
 
     auto synchronizedPaths = getSynchronizedPaths(
         pathMaps.first, pathMaps.second, freeVarsMap,
-        [&freeVarsMap, funName](int startIndex, int endIndex) {
+        [&freeVarsMap, funName](Mark startIndex, Mark endIndex) {
             SMTRef endInvariant =
                 mainInvariant(endIndex, freeVarsMap.at(endIndex), funName);
             if (SMTGenerationOpts::getInstance().MuZ && endIndex == EXIT_MARK) {
@@ -155,10 +155,10 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
                 path, freeVarsMap.at(it.first.startMark), it.first.startMark,
                 ProgramSelection::Both, funName, true, freeVarsMap);
             if (SMTGenerationOpts::getInstance().Invert) {
-                negations.push_back(
-                    makeOp("and", makeOp("=", "INV_INDEX",
-                                         std::to_string(it.first.startMark)),
-                           makeOp("not", clause)));
+                negations.push_back(makeOp(
+                    "and",
+                    makeOp("=", "INV_INDEX", it.first.startMark.toString()),
+                    makeOp("not", clause)));
             } else {
                 smtExprs.push_back(make_shared<Assert>(clause));
             }
@@ -182,9 +182,9 @@ getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
                      ReturnInvariantGenerator generateReturnInvariant) {
     map<MarkPair, vector<SharedSMTRef>> clauses;
     for (const auto &pathMapIt : pathMap1) {
-        const int startIndex = pathMapIt.first;
+        const Mark startIndex = pathMapIt.first;
         for (const auto &innerPathMapIt : pathMapIt.second) {
-            const int endIndex = innerPathMapIt.first;
+            const Mark endIndex = innerPathMapIt.first;
             if (pathMap2.at(startIndex).find(endIndex) !=
                 pathMap2.at(startIndex).end()) {
                 const auto paths = pathMap2.at(startIndex).at(endIndex);
@@ -219,9 +219,9 @@ vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
                                        bool main) {
     vector<SharedSMTRef> pathExprs;
     for (const auto &pathMapIt : pathMaps.first) {
-        const int startIndex = pathMapIt.first;
+        const Mark startIndex = pathMapIt.first;
         for (const auto &innerPathMapIt1 : pathMapIt.second) {
-            const int endIndex1 = innerPathMapIt1.first;
+            const Mark endIndex1 = innerPathMapIt1.first;
             for (auto &innerPathMapIt2 : pathMaps.second.at(startIndex)) {
                 const auto endIndex2 = innerPathMapIt2.first;
                 if (endIndex1 != endIndex2) {
@@ -230,14 +230,14 @@ vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
                             const auto endBlocks =
                                 makeMonoPair(path1, path2)
                                     .map<llvm::BasicBlock *>(lastBlock);
-                            const auto endIndices =
-                                zipWith<BidirBlockMarkMap, llvm::BasicBlock *,
-                                        set<int>>(
-                                    marked, endBlocks,
-                                    [](BidirBlockMarkMap marks,
-                                       llvm::BasicBlock *endBlock) -> set<int> {
-                                        return marks.BlockToMarksMap[endBlock];
-                                    });
+                            const auto endIndices = zipWith<BidirBlockMarkMap,
+                                                            llvm::BasicBlock *,
+                                                            set<Mark>>(
+                                marked, endBlocks,
+                                [](BidirBlockMarkMap marks,
+                                   llvm::BasicBlock *endBlock) -> set<Mark> {
+                                    return marks.BlockToMarksMap[endBlock];
+                                });
                             if (SMTGenerationOpts::getInstance().PerfectSync ||
                                 ((startIndex != endIndex1 && // no circles
                                   startIndex != endIndex2) &&
@@ -289,9 +289,9 @@ vector<SharedSMTRef> nonmutualPaths(PathMap pathMap, FreeVarsMap freeVarsMap,
     vector<SharedSMTRef> smtExprs;
     const int progIndex = programIndex(prog);
     for (const auto &pathMapIt : pathMap) {
-        const int startIndex = pathMapIt.first;
+        const Mark startIndex = pathMapIt.first;
         for (const auto &innerPathMapIt : pathMapIt.second) {
-            const int endIndex = innerPathMapIt.first;
+            const Mark endIndex = innerPathMapIt.first;
             for (const auto &path : innerPathMapIt.second) {
                 SMTRef endInvariant1 =
                     invariant(startIndex, endIndex, freeVarsMap.at(startIndex),
@@ -330,9 +330,9 @@ offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
     const int progIndex = programIndex(prog);
     map<MarkPair, vector<SharedSMTRef>> clauses;
     for (const auto &pathMapIt : pathMap) {
-        const int startIndex = pathMapIt.first;
+        const Mark startIndex = pathMapIt.first;
         for (const auto &innerPathMapIt : pathMapIt.second) {
-            const int endIndex = innerPathMapIt.first;
+            const Mark endIndex = innerPathMapIt.first;
             if (startIndex == endIndex) {
                 // we found a loop
                 for (const auto &path : innerPathMapIt.second) {
@@ -611,7 +611,7 @@ SMTRef nonMutualFunctionCall(SharedSMTRef clause, CallInfo call, Program prog) {
 
 /// Wrap the clause in a forall
 SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
-                              int blockIndex, ProgramSelection prog,
+                              Mark blockIndex, ProgramSelection prog,
                               string funName, bool main,
                               FreeVarsMap freeVarsMap) {
     vector<SortedVar> vars;
@@ -835,7 +835,7 @@ void checkPathMaps(PathMap map1, PathMap map2) {
 bool mapSubset(PathMap map1, PathMap map2) {
     for (auto Pair : map1) {
         if (map2.find(Pair.first) == map2.end()) {
-            logError("Mark '" + std::to_string(Pair.first) +
+            logError("Mark '" + Pair.first.toString() +
                      "' doesn’t exist in both files\n");
             return false;
         }
@@ -843,7 +843,7 @@ bool mapSubset(PathMap map1, PathMap map2) {
     return true;
 }
 
-SMTRef getDontLoopInvariant(SMTRef endClause, int startIndex, PathMap pathMap,
+SMTRef getDontLoopInvariant(SMTRef endClause, Mark startIndex, PathMap pathMap,
                             FreeVarsMap freeVars, Program prog) {
     SMTRef clause = std::move(endClause);
     vector<Path> dontLoopPaths;

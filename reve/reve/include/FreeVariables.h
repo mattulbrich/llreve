@@ -5,6 +5,6 @@
 #include "Program.h"
 #include "SMT.h"
 
-using FreeVarsMap = std::map<int, std::vector<smt::SortedVar>>;
+using FreeVarsMap = std::map<Mark, std::vector<smt::SortedVar>>;
 auto freeVars(PathMap map, std::vector<smt::SortedVar> funArgs, Program prog)
     -> FreeVarsMap;

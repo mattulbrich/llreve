@@ -20,21 +20,21 @@
 
 enum class InvariantAttr { MAIN, PRE, NONE };
 
-auto invariant(int StartIndex, int EndIndex,
+auto invariant(Mark StartIndex, Mark EndIndex,
                std::vector<smt::SortedVar> InputArgs,
                std::vector<smt::SortedVar> EndArgs, ProgramSelection SMTFor,
                std::string FunName, FreeVarsMap freeVarsMap) -> smt::SMTRef;
-auto mainInvariant(int EndIndex, std::vector<smt::SortedVar> FreeVars,
+auto mainInvariant(Mark EndIndex, std::vector<smt::SortedVar> FreeVars,
                    std::string FunName) -> smt::SMTRef;
-auto invariantDeclaration(int BlockIndex, std::vector<smt::SortedVar> FreeVars,
+auto invariantDeclaration(Mark BlockIndex, std::vector<smt::SortedVar> FreeVars,
                           ProgramSelection For, std::string FunName,
                           const llvm::Type *resultType)
     -> MonoPair<smt::SMTRef>;
-auto mainInvariantDeclaration(int BlockIndex,
+auto mainInvariantDeclaration(Mark BlockIndex,
                               std::vector<smt::SortedVar> FreeVars,
                               ProgramSelection For, std::string FunName)
     -> smt::SharedSMTRef;
-auto invariantName(int Index, ProgramSelection For, std::string FunName,
+auto invariantName(Mark Index, ProgramSelection For, std::string FunName,
                    InvariantAttr attr = InvariantAttr::NONE,
                    uint32_t VarArgs = 0) -> std::string;
 
