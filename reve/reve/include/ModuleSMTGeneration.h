@@ -34,20 +34,6 @@ auto generateFunctionalAbstractions(
     std::vector<smt::SharedSMTRef> &declarations) -> void;
 auto select_Declaration() -> smt::SMTRef;
 auto store_Declaration() -> smt::SMTRef;
-auto externDeclarations(const llvm::Module &mod1, const llvm::Module &mod2,
-                        std::vector<smt::SharedSMTRef> &declarations,
-                        std::multimap<std::string, std::string> funCondMap)
-    -> void;
-auto getVarArgs(const llvm::Function &fun) -> std::set<uint32_t>;
-auto externFunDecl(const llvm::Function &fun, Program program)
-    -> std::vector<smt::SharedSMTRef>;
-auto equivalentExternDecls(const llvm::Function &fun1,
-                           const llvm::Function &fun2,
-                           std::multimap<std::string, std::string> funCondMap)
-    -> std::vector<smt::SharedSMTRef>;
-auto notEquivalentExternDecls(const llvm::Function &fun1,
-                              const llvm::Function &fun2)
-    -> std::vector<smt::SharedSMTRef>;
 auto globalDeclarations(const llvm::Module &mod1, const llvm::Module &mod2)
     -> std::vector<smt::SharedSMTRef>;
 auto globalDeclarationsForMod(int globalPointer, const llvm::Module &mod,
