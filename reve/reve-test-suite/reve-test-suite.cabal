@@ -23,7 +23,7 @@ library
                        Workers
   build-depends:       aeson
                      , ansi-wl-pprint
-                     , base >= 4.7 && < 5
+                     , base >= 4.9 && < 5
                      , containers
                      , directory
                      , dirstream

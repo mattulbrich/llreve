@@ -1,8 +1,10 @@
-resolver: lts-6.23
+resolver: lts-7.4
 packages:
   - '.'
 extra-deps:
   - process-streaming-0.9.1.2
   - dirstream-1.0.1
+  - pipes-transduce-0.4
+  - conceit-0.4.0.0
 flags: {}
 extra-package-dbs: []

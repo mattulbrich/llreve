@@ -34,7 +34,7 @@ import           System.Process.Streaming
 import           Types
 
 solveSmt
-  :: (Monad m, MonadIO m, MonadSafe m, MonadLogger m, MonadReader (Options,Config) m)
+  :: (MonadIO m, MonadSafe m, MonadLogger m, MonadReader (Options,Config) m)
   => FilePath -> m (FilePath,Status)
 solveSmt smt = do
   (opts, conf) <- ask
@@ -129,8 +129,9 @@ solveEldarica eldarica smt = do
   output <- liftIO producer
   pure (smt, solverStatus output)
 
-generateSmt :: (MonadIO m, MonadThrow m, MonadReader (Options,Config) m, MonadLogger m)
-            => FilePath -> m FilePath
+generateSmt
+  :: (MonadIO m, MonadReader (Options, Config) m, MonadLogger m)
+  => FilePath -> m FilePath
 generateSmt path = do
   (opts, conf) <- ask
   let path' = makeRelative (optExamples opts) path
