@@ -70,7 +70,7 @@ static void freeVarsInBlock(llvm::BasicBlock &block,
         } else {
             for (const auto op : instr.operand_values()) {
                 if (llvm::isa<llvm::Instruction>(op) ||
-                    llvm::isa<llvm::Argument>(op))
+                    llvm::isa<llvm::Argument>(op)) {
                     if (constructed.find(llvmValToFreeVar(op)) ==
                             constructed.end() &&
                         !op->getName().empty() &&
@@ -78,6 +78,7 @@ static void freeVarsInBlock(llvm::BasicBlock &block,
                         !llvm::isa<llvm::GlobalValue>(op)) {
                         freeVars.insert(llvmValToFreeVar(op));
                     }
+                }
             }
         }
     }
