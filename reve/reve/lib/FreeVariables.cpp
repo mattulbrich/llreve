@@ -69,13 +69,15 @@ static void freeVarsInBlock(llvm::BasicBlock &block,
             }
         } else {
             for (const auto op : instr.operand_values()) {
-                if (constructed.find(llvmValToFreeVar(op)) ==
-                        constructed.end() &&
-                    !op->getName().empty() &&
-                    !llvm::isa<llvm::BasicBlock>(op) &&
-                    !llvm::isa<llvm::GlobalValue>(op)) {
-                    freeVars.insert(llvmValToFreeVar(op));
-                }
+                if (llvm::isa<llvm::Instruction>(op) ||
+                    llvm::isa<llvm::Argument>(op))
+                    if (constructed.find(llvmValToFreeVar(op)) ==
+                            constructed.end() &&
+                        !op->getName().empty() &&
+                        !llvm::isa<llvm::BasicBlock>(op) &&
+                        !llvm::isa<llvm::GlobalValue>(op)) {
+                        freeVars.insert(llvmValToFreeVar(op));
+                    }
             }
         }
     }
@@ -126,7 +128,7 @@ static set<SortedVar> addMemoryLocations(const set<FreeVar> &freeVars) {
     for (const auto &var : freeVars) {
         newFreeVars.insert(var.var);
         if (SMTGenerationOpts::getInstance().Stack && var.type->isPointerTy()) {
-            newFreeVars.insert({var.var.name + "_OnStack", "Bool"});
+            newFreeVars.insert({var.var.name + "_OnStack", boolType()});
         }
     }
     return newFreeVars;
@@ -136,11 +138,11 @@ static auto addMemoryArrays(vector<smt::SortedVar> vars, Program prog)
     -> vector<smt::SortedVar> {
     int index = programIndex(prog);
     if (SMTGenerationOpts::getInstance().Heap) {
-        vars.push_back(SortedVar(heapName(index), arrayType()));
+        vars.push_back(SortedVar(heapName(index), int64ArrayType()));
     }
     if (SMTGenerationOpts::getInstance().Stack) {
-        vars.push_back(SortedVar(stackPointerName(index), stackPointerType()));
-        vars.push_back(SortedVar(stackName(index), arrayType()));
+        vars.push_back(SortedVar(stackPointerName(index), pointerType()));
+        vars.push_back(SortedVar(stackName(index), int64ArrayType()));
     }
     return vars;
 }

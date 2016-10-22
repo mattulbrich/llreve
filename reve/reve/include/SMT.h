@@ -11,6 +11,7 @@
 #pragma once
 
 #include "SExpr.h"
+#include "Type.h"
 
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/STLExtras.h"
@@ -26,9 +27,6 @@ namespace smt {
 
 // forward declare
 class SortedVar;
-
-using SExpr = const sexpr::SExpr<std::string>;
-using SExprRef = std::unique_ptr<SExpr>;
 
 struct HeapInfo {
     std::string arrayName;
@@ -116,19 +114,20 @@ class Assert : public SMTExpr {
 
 class SortedVar : public SMTExpr {
   public:
-    SortedVar(std::string name, std::string type)
-        : name(std::move(name)), type(std::move(type)) {}
     std::string name;
-    std::string type;
+    std::unique_ptr<Type> type;
+    SortedVar(std::string name, std::unique_ptr<Type> type)
+        : name(std::move(name)), type(std::move(type)) {}
     SExprRef toSExpr() const override;
     std::set<std::string> uses() const override;
     SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
-    SortedVar &operator=(const SortedVar other) {
+    SortedVar &operator=(const SortedVar &other) {
         name = other.name;
-        type = other.type;
+        type = other.type->copy();
         return *this;
     }
-    SortedVar(const SortedVar &other) : name(other.name), type(other.type) {}
+    SortedVar(const SortedVar &other)
+        : name(other.name), type(other.type->copy()) {}
 };
 
 inline bool operator<(const SortedVar &lhs, const SortedVar &rhs) {
@@ -300,13 +299,13 @@ auto makeOp(std::string opName, std::vector<std::string> args)
 
 class FunDecl : public SMTExpr {
   public:
-    FunDecl(std::string funName, std::vector<std::string> inTypes,
-            std::string outType)
+    FunDecl(std::string funName, std::vector<std::unique_ptr<Type>> inTypes,
+            std::unique_ptr<Type> outType)
         : funName(std::move(funName)), inTypes(std::move(inTypes)),
           outType(std::move(outType)) {}
     std::string funName;
-    std::vector<std::string> inTypes;
-    std::string outType;
+    std::vector<std::unique_ptr<Type>> inTypes;
+    std::unique_ptr<Type> outType;
     SExprRef toSExpr() const override;
     SharedSMTRef instantiateArrays() const override;
 };
@@ -315,12 +314,12 @@ class FunDef : public SMTExpr {
 
   public:
     FunDef(std::string funName, std::vector<SortedVar> args,
-           std::string outType, SharedSMTRef body)
+           std::unique_ptr<Type> outType, SharedSMTRef body)
         : funName(std::move(funName)), args(std::move(args)),
           outType(std::move(outType)), body(std::move(body)) {}
     std::string funName;
     std::vector<SortedVar> args;
-    std::string outType;
+    std::unique_ptr<Type> outType;
     SharedSMTRef body;
     SExprRef toSExpr() const override;
     SharedSMTRef instantiateArrays() const override;

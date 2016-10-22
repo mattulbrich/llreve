@@ -129,3 +129,5 @@ std::ostream &operator<<(std::ostream &os, const SExpr<T> &val) {
 }
 
 } // namespace sexpr
+
+using SExprRef = std::unique_ptr<const sexpr::SExpr<std::string>>;

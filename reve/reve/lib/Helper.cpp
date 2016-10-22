@@ -146,49 +146,8 @@ bool varBelongsTo(std::string varName, int program) {
     return varName.substr(pos + 1, programName.length()) == programName;
 }
 
-string argSort(string arg) {
-    if (std::regex_match(arg, HEAP_REGEX) || arg == "HEAP$1_res" ||
-        arg == "HEAP$2_res") {
-        return "(Array Int Int)";
-    }
-    return "Int";
-}
-
-string llvmTypeToSMTSort(const llvm::Type *type) {
-    if (!SMTGenerationOpts::getInstance().BitVect) {
-        return "Int";
-    }
-    if (type->isPointerTy()) {
-        return "(_ BitVec 64)";
-    } else if (type->isIntegerTy()) {
-        return "(_ BitVec " + std::to_string(type->getIntegerBitWidth()) + ")";
-    } else if (type->isVoidTy()) {
-        // Void is always a constant zero
-        return "Int";
-    } else if (type->isLabelTy()) {
-        // These types will never arise in the generated SMT but giving it a
-        // dummy type avoids a special case when searching for free variables
-        return "LABEL";
-    } else {
-        logErrorData("Unsupported type\n", *type);
-        exit(1);
-    }
-}
-
 smt::SortedVar llvmValToSortedVar(const llvm::Value *val) {
-    return smt::SortedVar(val->getName(), llvmTypeToSMTSort(val->getType()));
-}
-
-std::string arrayType() {
-    return SMTGenerationOpts::getInstance().BitVect
-               ? "(Array (_ BitVec 64) (_ BitVec 8))"
-               : "(Array Int Int)";
-}
-
-std::string stackPointerType() { return "Int"; }
-
-smt::SortedVar toSMTSortedVar(smt::SortedVar var) {
-    return smt::SortedVar(var.name, getSMTType(var.type));
+    return smt::SortedVar(val->getName(), llvmType(val->getType()));
 }
 
 std::string heapName(int progIndex) {
@@ -226,7 +185,7 @@ vector<smt::SortedVar> functionArgs(const llvm::Function &fun) {
         args.push_back(sVar);
         if (SMTGenerationOpts::getInstance().Stack &&
             arg.getType()->isPointerTy()) {
-            args.push_back({sVar.name + "_OnStack", "Bool"});
+            args.push_back({sVar.name + "_OnStack", boolType()});
         }
     }
     return args;

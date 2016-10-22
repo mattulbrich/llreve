@@ -189,12 +189,7 @@ auto mergeNestedVectorMaps(std::map<K1, std::map<K2, std::vector<V>>> a,
 auto filterVars(int program, std::vector<smt::SortedVar> vars)
     -> std::vector<smt::SortedVar>;
 
-auto argSort(std::string arg) -> std::string;
-auto llvmTypeToSMTSort(const llvm::Type *type) -> std::string;
 auto llvmValToSortedVar(const llvm::Value *val) -> smt::SortedVar;
-auto arrayType() -> std::string;
-auto stackPointerType() -> std::string;
-auto toSMTSortedVar(smt::SortedVar var) -> smt::SortedVar;
 bool varBelongsTo(std::string varName, int program);
 
 auto heapName(int progIndex) -> std::string;

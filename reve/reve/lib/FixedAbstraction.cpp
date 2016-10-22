@@ -1,8 +1,8 @@
 #include "FixedAbstraction.h"
 
-#include "Invariant.h"
 #include "Compat.h"
 #include "Helper.h"
+#include "Invariant.h"
 #include "MarkAnalysis.h"
 #include "Opts.h"
 
@@ -43,20 +43,20 @@ static std::vector<SortedVar> externDeclArgs(const llvm::Function &fun1,
         args.push_back(arg);
     }
     if (SMTGenerationOpts::getInstance().Heap) {
-        args.push_back(SortedVar("HEAP$1", arrayType()));
+        args.push_back(SortedVar("HEAP$1", int64ArrayType()));
     }
     auto funArgs2 = functionArgs(fun2);
     for (auto arg : funArgs2) {
         args.push_back(arg);
     }
     if (SMTGenerationOpts::getInstance().Heap) {
-        args.push_back(SortedVar("HEAP$2", arrayType()));
+        args.push_back(SortedVar("HEAP$2", int64ArrayType()));
     }
-    args.push_back(SortedVar("res1", "Int"));
-    args.push_back(SortedVar("res2", "Int"));
+    args.push_back(SortedVar("res1", int64Type()));
+    args.push_back(SortedVar("res2", int64Type()));
     if (SMTGenerationOpts::getInstance().Heap) {
-        args.push_back(SortedVar("HEAP$1_res", arrayType()));
-        args.push_back(SortedVar("HEAP$2_res", arrayType()));
+        args.push_back(SortedVar("HEAP$1_res", int64ArrayType()));
+        args.push_back(SortedVar("HEAP$2_res", int64ArrayType()));
     }
     return args;
 }
@@ -136,7 +136,7 @@ static SMTRef equalInputs(const llvm::Function &fun1,
         equal.push_back(makeOp("=", argPair.first.name, argPair.second.name));
     }
     if (SMTGenerationOpts::getInstance().Heap) {
-        std::vector<SortedVar> forallArgs = {SortedVar("i", "Int")};
+        std::vector<SortedVar> forallArgs = {SortedVar("i", int64Type())};
         SharedSMTRef heapInEqual = makeOp("=", "HEAP$1", "HEAP$2");
         equal.push_back(heapInEqual);
     }
@@ -164,7 +164,7 @@ equivalentExternDecls(const llvm::Function &fun1, const llvm::Function &fun2,
         SMTRef body = makeOp("=>", std::move(eqInputs), std::move(eqOutputs));
 
         SharedSMTRef mainInv =
-            make_shared<FunDef>(funName, args, "Bool", std::move(body));
+            make_shared<FunDef>(funName, args, boolType(), std::move(body));
         declarations.push_back(std::move(mainInv));
     }
     return declarations;
@@ -184,8 +184,8 @@ std::vector<SharedSMTRef> notEquivalentExternDecls(const llvm::Function &fun1,
             invariantName(ENTRY_MARK, ProgramSelection::Both,
                           fun1.getName().str() + "^" + fun2.getName().str(),
                           InvariantAttr::NONE, argNum);
-        SharedSMTRef mainInv =
-            make_shared<FunDef>(funName, args, "Bool", smt::stringExpr("true"));
+        SharedSMTRef mainInv = make_shared<FunDef>(funName, args, boolType(),
+                                                   smt::stringExpr("true"));
         declarations.push_back(std::move(mainInv));
     }
     return declarations;
@@ -198,17 +198,17 @@ std::vector<SharedSMTRef> externFunDecl(const llvm::Function &fun,
     for (auto argNum : varArgs) {
         std::vector<SortedVar> args = functionArgs(fun);
         if (SMTGenerationOpts::getInstance().Heap) {
-            args.push_back(SortedVar("HEAP", "(Array Int Int)"));
+            args.push_back(SortedVar("HEAP", int64ArrayType()));
         }
-        args.push_back(SortedVar("res", "Int"));
+        args.push_back(SortedVar("res", int64Type()));
         if (SMTGenerationOpts::getInstance().Heap) {
-            args.push_back(SortedVar("HEAP_res", "(Array Int Int)"));
+            args.push_back(SortedVar("HEAP_res", int64ArrayType()));
         }
         std::string funName =
             invariantName(ENTRY_MARK, asSelection(program), fun.getName().str(),
                           InvariantAttr::NONE, argNum);
         SharedSMTRef body = stringExpr("true");
-        decls.push_back(make_shared<FunDef>(funName, args, "Bool", body));
+        decls.push_back(make_shared<FunDef>(funName, args, boolType(), body));
     }
     return decls;
 }

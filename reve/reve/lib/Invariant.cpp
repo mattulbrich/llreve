@@ -89,7 +89,8 @@ SMTRef invariant(Mark StartIndex, Mark EndIndex, vector<SortedVar> InputArgs,
         // so we do do that call and use the result in the current invariant
         vector<SortedVar> ForallArgs;
         for (auto ResultArg : ResultArgs) {
-            ForallArgs.push_back(SortedVar(ResultArg, argSort(ResultArg)));
+            ForallArgs.push_back(
+                SortedVar(ResultArg, inferTypeByName(ResultArg)));
         }
         if (EndIndex != UNREACHABLE_MARK) {
             vector<string> usingArgsPre;
@@ -144,29 +145,32 @@ MonoPair<SMTRef> invariantDeclaration(Mark BlockIndex,
                                       vector<smt::SortedVar> FreeVars,
                                       ProgramSelection For, std::string FunName,
                                       const llvm::Type *resultType) {
-    vector<string> args;
-    for (const auto &arg : FreeVars) {
-        args.push_back(getSMTType(arg.type));
+    vector<unique_ptr<Type>> args;
+    for (auto arg : FreeVars) {
+        args.push_back(std::move(arg.type));
     }
-    const vector<string> preArgs = args;
+    vector<unique_ptr<Type>> preArgs;
+    for (const auto &arg : args) {
+        preArgs.push_back(arg->copy());
+    }
     // add results
-    args.push_back(llvmTypeToSMTSort(resultType));
+    args.push_back(llvmType(resultType));
     if (For == ProgramSelection::Both) {
-        args.push_back(llvmTypeToSMTSort(resultType));
+        args.push_back(llvmType(resultType));
     }
     if (SMTGenerationOpts::getInstance().Heap) {
-        args.push_back(arrayType());
+        args.push_back(int64ArrayType());
         if (For == ProgramSelection::Both) {
-            args.push_back(arrayType());
+            args.push_back(int64ArrayType());
         }
     }
 
     return makeMonoPair<SMTRef>(
-        std::make_unique<FunDecl>(invariantName(BlockIndex, For, FunName), args,
-                                  "Bool"),
+        std::make_unique<FunDecl>(invariantName(BlockIndex, For, FunName),
+                                  std::move(args), boolType()),
         std::make_unique<FunDecl>(
             invariantName(BlockIndex, For, FunName, InvariantAttr::PRE),
-            preArgs, "Bool"));
+            std::move(preArgs), boolType()));
 }
 
 size_t invariantArgs(vector<smt::SortedVar> freeVars, ProgramSelection prog,
@@ -204,14 +208,14 @@ SharedSMTRef mainInvariantDeclaration(Mark BlockIndex,
                                       vector<smt::SortedVar> FreeVars,
                                       ProgramSelection For,
                                       std::string FunName) {
-    vector<string> Args;
-    for (const auto &arg : FreeVars) {
-        Args.push_back(getSMTType(arg.type));
+    vector<unique_ptr<Type>> args;
+    for (auto arg : FreeVars) {
+        args.push_back(std::move(arg.type));
     }
 
     return std::make_shared<class FunDecl>(
-        invariantName(BlockIndex, For, FunName, InvariantAttr::MAIN), Args,
-        "Bool");
+        invariantName(BlockIndex, For, FunName, InvariantAttr::MAIN),
+        std::move(args), boolType());
 }
 
 /// Return the invariant name, special casing the entry block

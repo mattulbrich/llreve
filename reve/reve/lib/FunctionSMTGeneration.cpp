@@ -346,14 +346,14 @@ offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
                             args.push_back(arg);
                         }
                         for (auto arg : endArgs2) {
-                            args.push_back(
-                                SortedVar(arg.name + "_old", arg.type));
+                            args.push_back(SortedVar(arg.name + "_old",
+                                                     std::move(arg.type)));
                         }
 
                     } else {
                         for (auto arg : endArgs2) {
-                            args.push_back(
-                                SortedVar(arg.name + "_old", arg.type));
+                            args.push_back(SortedVar(arg.name + "_old",
+                                                     std::move(arg.type)));
                         }
                         for (auto arg : endArgs) {
                             args.push_back(arg);
@@ -532,15 +532,13 @@ SharedSMTRef nonmutualSMT(SharedSMTRef endClause,
 SMTRef mutualFunctionCall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
     const uint32_t varArgs = callPair.first.varArgs;
     vector<SortedVar> args;
-    args.push_back(
-        SortedVar(callPair.first.assignedTo,
-                  llvmTypeToSMTSort(callPair.first.fun.getReturnType())));
-    args.push_back(
-        SortedVar(callPair.second.assignedTo,
-                  llvmTypeToSMTSort(callPair.second.fun.getReturnType())));
+    args.push_back(SortedVar(callPair.first.assignedTo,
+                             llvmType(callPair.first.fun.getReturnType())));
+    args.push_back(SortedVar(callPair.second.assignedTo,
+                             llvmType(callPair.second.fun.getReturnType())));
     if (SMTGenerationOpts::getInstance().Heap) {
-        args.push_back(SortedVar("HEAP$1_res", arrayType()));
-        args.push_back(SortedVar("HEAP$2_res", arrayType()));
+        args.push_back(SortedVar("HEAP$1_res", int64ArrayType()));
+        args.push_back(SortedVar("HEAP$2_res", int64ArrayType()));
     }
     vector<SharedSMTRef> implArgs;
 
@@ -580,10 +578,11 @@ SMTRef nonMutualFunctionCall(SharedSMTRef clause, CallInfo call, Program prog) {
     const string programS = std::to_string(progIndex);
 
     const uint32_t varArgs = call.varArgs;
-    forallArgs.push_back(SortedVar(call.assignedTo, "Int"));
+    // TODO figure out proper return type
+    forallArgs.push_back(SortedVar(call.assignedTo, int64Type()));
     if (SMTGenerationOpts::getInstance().Heap) {
         forallArgs.push_back(
-            SortedVar("HEAP$" + programS + "_res", arrayType()));
+            SortedVar("HEAP$" + programS + "_res", int64ArrayType()));
     }
     addMemory(implArgs)(call, progIndex);
     const vector<SharedSMTRef> preArgs = implArgs;
@@ -616,9 +615,9 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
                               FreeVarsMap freeVarsMap) {
     vector<SortedVar> vars;
     vector<string> preVars;
-    for (const auto &arg : freeVars) {
+    for (auto arg : freeVars) {
         std::smatch matchResult;
-        vars.push_back(toSMTSortedVar(SortedVar(arg.name + "_old", arg.type)));
+        vars.push_back(SortedVar(arg.name + "_old", std::move(arg.type)));
         preVars.push_back(arg.name + "_old");
     }
 
@@ -687,11 +686,11 @@ SharedSMTRef equalInputsEqualOutputs(vector<smt::SortedVar> funArgs,
 
     args.push_back("result$1");
     args.push_back("result$2");
-    forallArgs.push_back(SortedVar("result$1", llvmTypeToSMTSort(returnType)));
-    forallArgs.push_back(SortedVar("result$2", llvmTypeToSMTSort(returnType)));
+    forallArgs.push_back(SortedVar("result$1", llvmType(returnType)));
+    forallArgs.push_back(SortedVar("result$2", llvmType(returnType)));
     if (SMTGenerationOpts::getInstance().Heap) {
-        forallArgs.push_back(SortedVar("HEAP$1_res", arrayType()));
-        forallArgs.push_back(SortedVar("HEAP$2_res", arrayType()));
+        forallArgs.push_back(SortedVar("HEAP$1_res", int64ArrayType()));
+        forallArgs.push_back(SortedVar("HEAP$2_res", int64ArrayType()));
         args.push_back("HEAP$1_res");
         args.push_back("HEAP$2_res");
     }

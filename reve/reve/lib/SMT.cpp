@@ -17,9 +17,7 @@
 #include <ctype.h>
 #include <iostream>
 
-bool isArray(std::string type) {
-    return type.length() >= 6 && type.substr(1, 5) == "Array";
-}
+bool isArray(const Type &type) { return type.getTag() == TypeTag::Array; }
 
 namespace smt {
 using std::map;
@@ -83,7 +81,7 @@ SExprRef Forall::toSExpr() const {
 
 SExprRef SortedVar::toSExpr() const {
     std::vector<SExprRef> typeSExpr;
-    typeSExpr.push_back(std::make_unique<const Value<std::string>>(type));
+    typeSExpr.push_back(type->toSExpr());
     return std::make_unique<Apply<std::string>>(name, std::move(typeSExpr));
 }
 
@@ -115,15 +113,15 @@ SExprRef Op::toSExpr() const {
 
 SExprRef FunDecl::toSExpr() const {
     std::vector<SExprRef> inTypeSExprs;
-    for (auto inType : inTypes) {
-        inTypeSExprs.push_back(stringExpr(inType)->toSExpr());
+    for (const auto &inType : inTypes) {
+        inTypeSExprs.push_back(inType->toSExpr());
     }
     std::vector<SExprRef> args;
     args.push_back(stringExpr(funName)->toSExpr());
     args.push_back(
         std::make_unique<List<std::string>>(std::move(inTypeSExprs)));
     if (!SMTGenerationOpts::getInstance().MuZ) {
-        args.push_back(stringExpr(outType)->toSExpr());
+        args.push_back(outType->toSExpr());
     }
     const string keyword =
         SMTGenerationOpts::getInstance().MuZ ? "declare-rel" : "declare-fun";
@@ -138,7 +136,7 @@ SExprRef FunDef::toSExpr() const {
     std::vector<SExprRef> args;
     args.push_back(stringExpr(funName)->toSExpr());
     args.push_back(std::make_unique<List<std::string>>(std::move(argSExprs)));
-    args.push_back(stringExpr(outType)->toSExpr());
+    args.push_back(outType->toSExpr());
     args.push_back(body->toSExpr());
     return std::make_unique<Apply<std::string>>("define-fun", std::move(args));
 }
@@ -150,20 +148,20 @@ SExprRef Comment::toSExpr() const {
 SExprRef VarDecl::toSExpr() const {
     vector<SExprRef> args;
     args.push_back(stringExpr(var.name)->toSExpr());
-    args.push_back(stringExpr(var.type)->toSExpr());
+    args.push_back(var.type->toSExpr());
     return std::make_unique<Apply<std::string>>("declare-var", std::move(args));
 }
 
 void VarDecl::toZ3(z3::context &cxt, z3::solver & /* unused */,
                    std::map<std::string, z3::expr> &nameMap,
                    std::map<std::string, Z3DefineFun> & /* unused */) const {
-    if (var.type == "Int") {
+    if (var.type->getTag() == TypeTag::Int) {
         z3::expr c = cxt.int_const(var.name.c_str());
         auto it = nameMap.insert({var.name, c});
         if (!it.second) {
             it.first->second = c;
         }
-    } else if (var.type == "(Array Int Int)") {
+    } else if (var.type->getTag() == TypeTag::Array) {
         z3::sort intArraySort = cxt.array_sort(cxt.int_sort(), cxt.int_sort());
         z3::expr c = cxt.constant(var.name.c_str(), intArraySort);
         auto it = nameMap.insert({var.name, c});
@@ -237,7 +235,7 @@ SharedSMTRef Assert::compressLets(std::vector<Assignment> defs) const {
 SharedSMTRef SortedVar::compressLets(std::vector<Assignment> defs) const {
     assert(defs.empty());
     unused(defs);
-    return make_shared<SortedVar>(name, type);
+    return make_shared<SortedVar>(name, type->copy());
 }
 
 SharedSMTRef Forall::compressLets(std::vector<Assignment> defs) const {
@@ -388,11 +386,11 @@ vector<SharedSMTRef> Op::splitConjunctions() const {
 
 SharedSMTRef Forall::renameAssignments(map<string, int> variableMap) const {
     vector<SortedVar> newVars;
-    for (const auto &var : this->vars) {
+    for (auto var : this->vars) {
         variableMap[var.name]++;
         newVars.push_back(
-            SortedVar(var.name + "_" + std::to_string(variableMap.at(var.name)),
-                      var.type));
+            {var.name + "_" + std::to_string(variableMap.at(var.name)),
+             std::move(var.type)});
     }
     return make_shared<Forall>(newVars, expr->renameAssignments(variableMap));
 }
@@ -434,8 +432,7 @@ SharedSMTRef Op::instantiateArrays() const {
                     string index = "i" + array->index + array->suffix;
                     newArgs.push_back(stringExpr(index));
                     newArgs.push_back(makeOp("select", arg, stringExpr(index)));
-                    indices.push_back(
-                        SortedVar(index, getSMTType("(_ BitVec 64)")));
+                    indices.push_back({index, pointerType()});
                 } else {
                     newArgs.push_back(arg);
                 }
@@ -445,8 +442,7 @@ SharedSMTRef Op::instantiateArrays() const {
         }
         return make_shared<Forall>(indices, make_shared<Op>(opName, newArgs));
     } else if (opName == "=" && args.size() == 2 && args.at(0)->heapInfo()) {
-        std::vector<SortedVar> indices = {
-            SortedVar("i", getSMTType("(_ BitVec 64)"))};
+        std::vector<SortedVar> indices = {{"i", pointerType()}};
         return make_shared<Forall>(
             indices, makeOp("=", makeOp("select", args.at(0), "i"),
                             makeOp("select", args.at(1), "i")));
@@ -460,21 +456,22 @@ SharedSMTRef Op::instantiateArrays() const {
 }
 
 SharedSMTRef FunDef::instantiateArrays() const {
-    return make_shared<FunDef>(funName, args, outType,
+    return make_shared<FunDef>(funName, args, outType->copy(),
                                body->instantiateArrays());
 }
 
 SharedSMTRef FunDecl::instantiateArrays() const {
-    std::vector<string> newInTypes;
-    for (const string &type : inTypes) {
-        if (isArray(type)) {
-            newInTypes.push_back(getSMTType("(_ BitVec 64)"));
-            newInTypes.push_back(getSMTType("(_ BitVec 8)"));
+    std::vector<unique_ptr<Type>> newInTypes;
+    for (const auto &type : inTypes) {
+        if (isArray(*type)) {
+            newInTypes.push_back(int64Type());
+            newInTypes.push_back(std::make_unique<IntType>(8));
         } else {
-            newInTypes.push_back(type);
+            newInTypes.push_back(type->copy());
         }
     }
-    return make_shared<FunDecl>(funName, newInTypes, outType);
+    return make_shared<FunDecl>(funName, std::move(newInTypes),
+                                outType->copy());
 }
 
 unique_ptr<const HeapInfo> SMTExpr::heapInfo() const { return nullptr; }
@@ -706,14 +703,14 @@ void FunDef::toZ3(z3::context &cxt, z3::solver & /* unused */,
                   std::map<std::string, Z3DefineFun> &defineFunMap) const {
     z3::expr_vector vars(cxt);
     for (const auto &arg : args) {
-        if (arg.type == "Int") {
+        if (arg.type->getTag() == TypeTag::Int) {
             z3::expr c = cxt.int_const(arg.name.c_str());
             vars.push_back(c);
             auto it = nameMap.insert({arg.name, c});
             if (!it.second) {
                 it.first->second = c;
             }
-        } else if (arg.type == "(Array Int Int)") {
+        } else if (arg.type->getTag() == TypeTag::Array) {
             z3::sort intArraySort =
                 cxt.array_sort(cxt.int_sort(), cxt.int_sort());
             z3::expr c = cxt.constant(arg.name.c_str(), intArraySort);
@@ -723,7 +720,8 @@ void FunDef::toZ3(z3::context &cxt, z3::solver & /* unused */,
                 it.first->second = c;
             }
         } else {
-            std::cerr << "Unknown argument type: " << arg.type << "\n";
+            std::cerr << "Unknown argument type: " << *arg.type->toSExpr()
+                      << "\n";
             exit(1);
         }
     }
@@ -733,10 +731,10 @@ void FunDef::toZ3(z3::context &cxt, z3::solver & /* unused */,
 
 SharedSMTRef FunDef::renameDefineFuns(string suffix) const {
     vector<SortedVar> newArgs;
-    for (const auto &arg : args) {
-        newArgs.push_back(SortedVar(arg.name + suffix, arg.type));
+    for (auto arg : args) {
+        newArgs.push_back(SortedVar(arg.name + suffix, std::move(arg.type)));
     }
-    return make_shared<FunDef>(funName, newArgs, outType,
+    return make_shared<FunDef>(funName, newArgs, outType->copy(),
                                body->renameDefineFuns(suffix));
 }
 
@@ -775,8 +773,8 @@ SharedSMTRef Primitive<string>::renameDefineFuns(string suffix) const {
 
 SharedSMTRef Forall::renameDefineFuns(std::string suffix) const {
     vector<SortedVar> newArgs;
-    for (const auto &arg : vars) {
-        newArgs.push_back(SortedVar(arg.name + suffix, arg.type));
+    for (auto arg : vars) {
+        newArgs.push_back(SortedVar(arg.name + suffix, std::move(arg.type)));
     }
     return make_shared<Forall>(newArgs, expr->renameDefineFuns(suffix));
 }
@@ -803,20 +801,6 @@ SharedSMTRef Op::removeForalls(set<SortedVar> &introducedVariables) const {
 SharedSMTRef Let::removeForalls(set<SortedVar> &introducedVariables) const {
     return make_shared<Let>(defs, expr->removeForalls(introducedVariables));
 }
-}
-
-std::string getSMTType(std::string arg) {
-    if (SMTGenerationOpts::getInstance().BitVect) {
-        return arg;
-    } else {
-        if (isArray(arg)) {
-            return "(Array Int Int)";
-        } else if (arg == "Bool") {
-            return "Bool";
-        } else {
-            return "Int";
-        }
-    }
 }
 
 smt::SharedSMTRef apIntToSMT(llvm::APInt i) {
