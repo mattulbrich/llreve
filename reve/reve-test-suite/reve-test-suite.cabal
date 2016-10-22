@@ -26,6 +26,7 @@ library
                      , base >= 4.7 && < 5
                      , containers
                      , directory
+                     , dirstream
                      , filepath
                      , foldl
                      , lens
@@ -36,12 +37,12 @@ library
                      , pipes
                      , pipes-bytestring
                      , pipes-concurrency
-                     , pipes-files
                      , pipes-safe
                      , pipes-text
                      , pipes-transduce
                      , process
                      , process-streaming
+                     , system-filepath
                      , text
                      , transformers
   default-language:    Haskell2010

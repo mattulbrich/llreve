@@ -6,14 +6,17 @@ module Workers
   ) where
 
 import           Config
-import           Control.Lens
+import           Control.Lens hiding (ignored)
 import           Control.Monad.Logger
 import           Control.Monad.Reader
+import           Data.DirStream
+import           Data.List
+import           Data.String
+import qualified Filesystem.Path.CurrentOS as F
 import           Options
 import           Output
 import           Pipes
 import           Pipes.Concurrent
-import           Pipes.Files as P
 import qualified Pipes.Prelude as P hiding (find)
 import           Pipes.Safe
 import           Process
@@ -31,16 +34,28 @@ solverWorker input seal mergeOutput =
 smtGeneratorWorker :: (MonadSafe m, MonadReader (Options, Config) m, MonadLogger m)
                    => Output FilePath -> STM () -> m ()
 smtGeneratorWorker output seal = do
-  (opts,config) <- ask
+  (opts, config) <- ask
+  let ignored =
+        map
+          (fromString . (optExamples opts </>))
+          (config ^. cnfIgnoredDirs ++ config ^. cnfIgnoredFiles)
   flip finally (liftIO (atomically seal)) $
     runEffect $
-      P.find (optExamples opts)
-               (when_ (pathname_ (`elem` (map (optExamples opts </>) $
-                                            config ^. cnfIgnoredDirs ++ config ^. cnfIgnoredFiles)))
-                        prune_ >>
-                  glob "*_1.c") >->
-      P.mapM generateSmt >->
-      toOutput output
+    every (sourceFiles ignored (fromString $ optExamples opts)) >->
+    P.map F.encodeString >->
+    P.mapM generateSmt >->
+    toOutput output
+
+sourceFiles :: (MonadSafe m) => [F.FilePath] -> F.FilePath -> ListT m F.FilePath
+sourceFiles ignored path = do
+  child <- childOf path
+  guard (not $ child `elem` ignored)
+  isDir <- liftIO $ isDirectory child
+  if isDir
+    then sourceFiles ignored child
+    else do
+      guard ("_1.c" `isSuffixOf` F.encodeString (F.filename child))
+      return child
 
 outputWorker :: MonadSafe m
              => Input (FilePath, Status) -> STM b -> m ()

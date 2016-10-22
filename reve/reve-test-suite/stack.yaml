@@ -3,8 +3,6 @@ packages:
   - '.'
 extra-deps:
   - process-streaming-0.9.1.2
-  - posix-paths-0.2.1.0
-  - pipes-files-0.1.1
-  - hierarchy-0.3.1
+  - dirstream-1.0.1
 flags: {}
 extra-package-dbs: []
