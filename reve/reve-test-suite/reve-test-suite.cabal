@@ -37,11 +37,11 @@ library
                      , pipes-bytestring
                      , pipes-concurrency
                      , pipes-files
-                     , pipes-group
                      , pipes-safe
-                     , pipes-shell
                      , pipes-text
+                     , pipes-transduce
                      , process
+                     , process-streaming
                      , text
                      , transformers
   default-language:    Haskell2010

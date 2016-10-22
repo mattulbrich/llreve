@@ -10,7 +10,7 @@ module Process
 import           Config
 import qualified Control.Exception as Ex
 import qualified Control.Foldl as F
-import           Control.Lens
+import           Control.Lens hiding (Fold1)
 import           Control.Monad.IO.Class
 import           Control.Monad.Logger
 import           Control.Monad.Reader
@@ -21,17 +21,16 @@ import qualified Data.Text as T
 import           Options
 import           Pipes
 import qualified Pipes.ByteString as PB
-import           Pipes.Group
-import qualified Pipes.Prelude as P
 import           Pipes.Safe hiding (handle)
-import           Pipes.Shell hiding (cmd)
 import qualified Pipes.Text as P hiding (find,map,last)
-import           Pipes.Text.Encoding
+import qualified Pipes.Text.IO as PT
+import qualified Pipes.Transduce.Text as PT
 import           System.Directory
 import           System.Exit
 import           System.FilePath
 import           System.IO hiding (utf8)
 import           System.Process
+import           System.Process.Streaming
 import           Types
 
 solveSmt
@@ -46,32 +45,53 @@ solveSmt smt = do
        solveNativeZ3 smt
      | otherwise -> solveEldarica (optEldarica opts) smt
 
-solveZ3 :: (Monad m, MonadIO m, MonadSafe m, MonadLogger m,MonadReader (Options,a) m)
-        => FilePath -> m (FilePath,Status)
-solveZ3 smt =
-  do opts <- asks fst
-     let producer =
-           producerCmd (optEldarica opts <> " -t:300 -sp " <> smt) >->
-           P.map (either (const "") id)
-         smt' = smt <> ".z3"
-     bracket (liftIO $ openFile smt' WriteMode)
-             (liftIO . hClose) $
-       \handle -> do runEffect $ producer >-> PB.toHandle handle
-     $logDebug $ "Solving using z3: " <> (T.pack smt')
-     let z3Producer = producerCmd (optZ3 opts <> " -T:300 fixedpoint.engine=duality " <> smt') >-> P.map (either id id)
-     output <- F.purely P.fold solverFold (void $ concats $ z3Producer ^. utf8 . P.lines)
-     pure (smt',solverStatus output)
+utf8Lines :: Transducer Delimited P.ByteString e T.Text
+utf8Lines = PT.lines PT.utf8x
 
-solveNativeZ3 :: (Monad m, MonadIO m, MonadSafe m, MonadLogger m,MonadReader (Options,a) m)
-        => FilePath -> m (FilePath,Status)
+foldUtf8Lines :: Fold1 T.Text e r -> Streams e r
+foldUtf8Lines fold = foldOutErr (combined utf8Lines utf8Lines fold)
+
+solveZ3
+  :: ( Monad m
+     , MonadIO m
+     , MonadSafe m
+     , MonadLogger m
+     , MonadReader (Options, a) m
+     )
+  => FilePath -> m (FilePath, Status)
+solveZ3 smt = do
+  opts <- asks fst
+  let simplifySMT handle =
+        execute
+          (piped $ proc (optEldarica opts) ["-t:300", "-sp", smt])
+          (foldUtf8Lines (withConsumer (PT.toHandle handle)))
+      smt' = smt <> ".z3"
+  bracket (liftIO $ openFile smt' WriteMode) (liftIO . hClose) $
+    liftIO . simplifySMT
+  $logDebug $ "Solving using z3: " <> (T.pack smt')
+  let z3Producer =
+        execute
+          (piped $ proc (optZ3 opts) ["-T:300", "fixedpoint.engine=duality", smt'])
+          (foldUtf8Lines (withFold solverFold))
+  output <- liftIO z3Producer
+  pure (smt', solverStatus output)
+
+solveNativeZ3
+  :: ( Monad m
+     , MonadIO m
+     , MonadSafe m
+     , MonadLogger m
+     , MonadReader (Options, a) m
+     )
+  => FilePath -> m (FilePath, Status)
 solveNativeZ3 smt = do
   opts <- asks fst
   $logDebug $ "Solving using z3: " <> (T.pack smt)
   let z3Producer =
-        producerCmd (optZ3 opts <> " -T:300 fixedpoint.engine=duality " <> smt) >->
-        P.map (either id id)
-  output <-
-    F.purely P.fold solverFold (void $ concats $ z3Producer ^. utf8 . P.lines)
+        execute
+          (piped $ proc (optZ3 opts) ["-T:300", "fixedpoint.engine=duality", smt])
+          (foldUtf8Lines (withFold solverFold))
+  output <- liftIO z3Producer
   pure (smt, invertStatus $ solverStatus output)
 
 solverFold :: F.Fold P.Text SolverOutput
@@ -97,18 +117,17 @@ solverStatus (SolverOutput{..})
 solveEldarica
   :: (Monad m, MonadIO m, MonadSafe m, MonadLogger m, MonadReader (Options,Config) m)
   => FilePath -> FilePath -> m (FilePath,Status)
-solveEldarica eldarica smt =
-  do customArgs <- asks (_cnfCustomEldArgs . snd)
-     let args = M.lookup smt customArgs
-         producer =
-           producerCmd
-             (eldarica <> " -t:300 " <> smt <>
-              maybe "" ((" " <>) . unwords) args) >->
-           P.map (either id id)
-     $logDebug $ "Solving using eldarica: " <> (T.pack smt) <> " " <> T.pack (show args)
-     output <-
-       F.purely P.fold solverFold (void $ concats $ producer ^. utf8 . P.lines)
-     pure (smt,solverStatus output)
+solveEldarica eldarica smt = do
+  customArgs <- asks (_cnfCustomEldArgs . snd)
+  let args = M.lookup smt customArgs
+      producer =
+        execute
+          (piped $ proc eldarica $ ["-t:300", smt] ++ fromMaybe [] args)
+          (foldUtf8Lines $ withFold solverFold)
+  $logDebug $
+    "Solving using eldarica: " <> (T.pack smt) <> " " <> T.pack (show args)
+  output <- liftIO producer
+  pure (smt, solverStatus output)
 
 generateSmt :: (MonadIO m, MonadThrow m, MonadReader (Options,Config) m, MonadLogger m)
             => FilePath -> m FilePath
