@@ -311,12 +311,6 @@ SharedSMTRef Assert::compressLets(std::vector<Assignment> defs) const {
     return make_shared<Assert>(expr->compressLets());
 }
 
-SharedSMTRef SortedVar::compressLets(std::vector<Assignment> defs) const {
-    assert(defs.empty());
-    unused(defs);
-    return make_shared<SortedVar>(name, type->copy());
-}
-
 SharedSMTRef Forall::compressLets(std::vector<Assignment> defs) const {
     return nestLets(make_shared<Forall>(vars, expr->compressLets()), defs);
 }

@@ -109,15 +109,14 @@ class Assert : public SMTExpr {
               std::map<std::string, Z3DefineFun> &defineFunMap) const override;
 };
 
-class SortedVar : public SMTExpr {
+class SortedVar {
   public:
     std::string name;
     std::unique_ptr<Type> type;
     SortedVar(std::string name, std::unique_ptr<Type> type)
         : name(std::move(name)), type(std::move(type)) {}
-    SExprRef toSExpr() const override;
-    std::set<std::string> uses() const override;
-    SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
+    SExprRef toSExpr() const;
+    std::set<std::string> uses() const;
     SortedVar &operator=(const SortedVar &other) {
         name = other.name;
         type = other.type->copy();
