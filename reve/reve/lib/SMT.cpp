@@ -233,48 +233,6 @@ SExprRef BinaryFPOperator::toSExpr() const {
     }
 }
 
-// Implementations of toZ3
-
-void VarDecl::toZ3(z3::context &cxt, z3::solver & /* unused */,
-                   std::map<std::string, z3::expr> &nameMap,
-                   std::map<std::string, Z3DefineFun> & /* unused */) const {
-    if (var.type->getTag() == TypeTag::Int) {
-        z3::expr c = cxt.int_const(var.name.c_str());
-        auto it = nameMap.insert({var.name, c});
-        if (!it.second) {
-            it.first->second = c;
-        }
-    } else if (var.type->getTag() == TypeTag::Array) {
-        z3::sort intArraySort = cxt.array_sort(cxt.int_sort(), cxt.int_sort());
-        z3::expr c = cxt.constant(var.name.c_str(), intArraySort);
-        auto it = nameMap.insert({var.name, c});
-        if (!it.second) {
-            it.first->second = c;
-        }
-    } else {
-        std::cerr << "Unsupported type\n";
-        exit(1);
-    }
-}
-
-void Assert::toZ3(z3::context &cxt, z3::solver &solver,
-                  std::map<std::string, z3::expr> &nameMap,
-                  std::map<std::string, Z3DefineFun> &defineFunMap) const {
-    solver.add(expr->toZ3Expr(cxt, nameMap, defineFunMap));
-}
-
-void CheckSat::toZ3(z3::context & /* unused */, z3::solver & /* unused */,
-                    std::map<std::string, z3::expr> & /* unused */,
-                    std::map<std::string, Z3DefineFun> & /* unused */) const {
-    /* noop */
-}
-
-void GetModel::toZ3(z3::context & /* unused */, z3::solver & /* unused */,
-                    std::map<std::string, z3::expr> & /* unused */,
-                    std::map<std::string, Z3DefineFun> & /* unused */) const {
-    /* noop */
-}
-
 // Implementations of uses()
 
 set<string> SMTExpr::uses() const { return {}; }
@@ -658,6 +616,46 @@ SharedSMTRef Let::removeForalls(set<SortedVar> &introducedVariables) const {
 }
 
 // Implementations for using the z3 API
+
+void VarDecl::toZ3(z3::context &cxt, z3::solver & /* unused */,
+                   std::map<std::string, z3::expr> &nameMap,
+                   std::map<std::string, Z3DefineFun> & /* unused */) const {
+    if (var.type->getTag() == TypeTag::Int) {
+        z3::expr c = cxt.int_const(var.name.c_str());
+        auto it = nameMap.insert({var.name, c});
+        if (!it.second) {
+            it.first->second = c;
+        }
+    } else if (var.type->getTag() == TypeTag::Array) {
+        z3::sort intArraySort = cxt.array_sort(cxt.int_sort(), cxt.int_sort());
+        z3::expr c = cxt.constant(var.name.c_str(), intArraySort);
+        auto it = nameMap.insert({var.name, c});
+        if (!it.second) {
+            it.first->second = c;
+        }
+    } else {
+        std::cerr << "Unsupported type\n";
+        exit(1);
+    }
+}
+
+void Assert::toZ3(z3::context &cxt, z3::solver &solver,
+                  std::map<std::string, z3::expr> &nameMap,
+                  std::map<std::string, Z3DefineFun> &defineFunMap) const {
+    solver.add(expr->toZ3Expr(cxt, nameMap, defineFunMap));
+}
+
+void CheckSat::toZ3(z3::context & /* unused */, z3::solver & /* unused */,
+                    std::map<std::string, z3::expr> & /* unused */,
+                    std::map<std::string, Z3DefineFun> & /* unused */) const {
+    /* noop */
+}
+
+void GetModel::toZ3(z3::context & /* unused */, z3::solver & /* unused */,
+                    std::map<std::string, z3::expr> & /* unused */,
+                    std::map<std::string, Z3DefineFun> & /* unused */) const {
+    /* noop */
+}
 
 void SMTExpr::toZ3(z3::context & /* unused */, z3::solver & /* unused */,
                    std::map<std::string, z3::expr> & /* unused */,
