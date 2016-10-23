@@ -57,6 +57,8 @@ auto instrAssignment(const llvm::Instruction &instr,
 auto predicateName(const llvm::CmpInst::Predicate pred) -> std::string;
 auto predicateFun(const llvm::CmpInst &pred)
     -> std::function<smt::SMTRef(smt::SMTRef)>;
+auto fpPredicate(const llvm::CmpInst::Predicate pred) -> smt::FPCmp::Predicate;
+auto binaryFPOpcode(const llvm::Instruction::BinaryOps op) -> smt::BinaryFPOperator::Opcode;
 auto opName(const llvm::BinaryOperator &op) -> std::string;
 auto combineOp(const llvm::BinaryOperator &op)
     -> std::function<smt::SMTRef(std::string, smt::SMTRef, smt::SMTRef)>;

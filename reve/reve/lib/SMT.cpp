@@ -11,6 +11,7 @@
 #include "SMT.h"
 
 #include "Compat.h"
+#include "Helper.h"
 #include "Memory.h"
 #include "Opts.h"
 
@@ -30,6 +31,21 @@ using sexpr::List;
 using std::set;
 using std::string;
 using std::vector;
+
+SExprRef ConstantFP::toSExpr() const {
+    if (SMTGenerationOpts::getInstance().BitVect) {
+        logError("Bitvector representation of floating points is not yet "
+                 "implemented\n");
+        exit(1);
+    } else {
+        // 4 is chosen arbitrarily
+        llvm::SmallVector<char, 4> stringVec;
+        // 500 is large enough to never use scientific notation
+        this->value.toString(stringVec, 0, 500);
+        string stringRepr(stringVec.begin(), stringVec.end());
+        return sexprFromString(stringRepr);
+    }
+}
 
 SExprRef SetLogic::toSExpr() const {
     std::vector<SExprRef> args;
@@ -214,6 +230,28 @@ set<string> Op::uses() const {
     return uses;
 }
 
+set<string> FPCmp::uses() const {
+    set<string> uses;
+    for (auto use : op0->uses()) {
+        uses.insert(use);
+    }
+    for (auto use : op1->uses()) {
+        uses.insert(use);
+    }
+    return uses;
+}
+
+set<string> BinaryFPOperator::uses() const {
+    set<string> uses;
+    for (auto use : op0->uses()) {
+        uses.insert(use);
+    }
+    for (auto use : op1->uses()) {
+        uses.insert(use);
+    }
+    return uses;
+}
+
 template <> set<string> Primitive<string>::uses() const {
     set<string> uses;
     uses.insert(val);
@@ -353,6 +391,19 @@ SharedSMTRef Op::renameAssignments(map<string, int> variableMap) const {
     return make_shared<Op>(opName, newArgs, instantiate);
 }
 
+SharedSMTRef FPCmp::renameAssignments(map<string, int> variableMap) const {
+    auto newOp0 = op0->renameAssignments(variableMap);
+    auto newOp1 = op1->renameAssignments(variableMap);
+    return make_shared<FPCmp>(op, type->copy(), newOp0, newOp1);
+}
+
+SharedSMTRef
+BinaryFPOperator::renameAssignments(map<string, int> variableMap) const {
+    auto newOp0 = op0->renameAssignments(variableMap);
+    auto newOp1 = op1->renameAssignments(variableMap);
+    return make_shared<BinaryFPOperator>(op, type->copy(), newOp0, newOp1);
+}
+
 SharedSMTRef Op::mergeImplications(std::vector<SharedSMTRef> conditions) const {
     if (opName == "=>") {
         assert(args.size() == 2);
@@ -474,6 +525,71 @@ SharedSMTRef FunDecl::instantiateArrays() const {
                                 outType->copy());
 }
 
+SExprRef FPCmp::toSExpr() const {
+    if (SMTGenerationOpts::getInstance().BitVect) {
+        logError("Floating point predicates for bitvectors are not yet "
+                 "impleneted\n");
+        exit(1);
+    } else {
+        vector<SExprRef> args;
+        args.push_back(op0->toSExpr());
+        args.push_back(op1->toSExpr());
+        switch (this->op) {
+        case Predicate::False:
+            return sexprFromString("False");
+        case Predicate::True:
+            return sexprFromString("True");
+        case Predicate::OEQ:
+        case Predicate::UEQ:
+            return std::make_unique<Apply<string>>("=", std::move(args));
+        case Predicate::OGT:
+        case Predicate::UGT:
+            return std::make_unique<Apply<string>>(">", std::move(args));
+        case Predicate::OGE:
+        case Predicate::UGE:
+            return std::make_unique<Apply<string>>(">=", std::move(args));
+        case Predicate::OLT:
+        case Predicate::ULT:
+            return std::make_unique<Apply<string>>("<", std::move(args));
+        case Predicate::OLE:
+        case Predicate::ULE:
+            return std::make_unique<Apply<string>>("<=", std::move(args));
+        case Predicate::ONE:
+        case Predicate::UNE:
+            return std::make_unique<Apply<string>>("distinct", std::move(args));
+        case Predicate::ORD:
+        case Predicate::UNO:
+            logError("Cannot check reals for orderedness\n");
+            exit(1);
+        }
+    }
+}
+
+SExprRef BinaryFPOperator::toSExpr() const {
+    if (SMTGenerationOpts::getInstance().BitVect) {
+        logError("Floating point binary operators for bitvectors are not yet "
+                 "implemented\n");
+        exit(1);
+    } else {
+        vector<SExprRef> args;
+        args.push_back(op0->toSExpr());
+        args.push_back(op1->toSExpr());
+        switch (this->op) {
+        case Opcode::FAdd:
+            return std::make_unique<Apply<string>>("+", std::move(args));
+        case Opcode::FSub:
+            return std::make_unique<Apply<string>>("-", std::move(args));
+        case Opcode::FMul:
+            return std::make_unique<Apply<string>>("*", std::move(args));
+        case Opcode::FDiv:
+            return std::make_unique<Apply<string>>("/", std::move(args));
+        case Opcode::FRem:
+            logError("SMT reals don’t support a remainder operation\n");
+            exit(1);
+        }
+    }
+}
+
 unique_ptr<const HeapInfo> SMTExpr::heapInfo() const { return nullptr; }
 
 template <> unique_ptr<const HeapInfo> Primitive<string>::heapInfo() const {
@@ -531,7 +647,8 @@ SharedSMTRef SMTExpr::renameDefineFuns(string /* unused */) const {
 
 void SMTExpr::toZ3(z3::context & /* unused */, z3::solver & /* unused */,
                    std::map<std::string, z3::expr> & /* unused */,
-                   std::map<std::string, Z3DefineFun> & /* unused */) const {
+                   std::map<std::string, Z3DefineFun> &
+                   /* unused */) const {
     std::cerr << "Unsupported smt toplevel\n";
     std::cerr << *toSExpr();
     exit(1);

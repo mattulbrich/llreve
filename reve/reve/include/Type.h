@@ -28,9 +28,13 @@ struct IntType : Type {
 };
 
 struct FloatType : Type {
-    unsigned bitWidth;
-    explicit FloatType(unsigned bitWidth) : bitWidth(bitWidth) {}
+    unsigned exponentWidth;
+    unsigned significandWidth;
+    explicit FloatType(unsigned exponentWidth, unsigned significandWidth)
+        : exponentWidth(exponentWidth), significandWidth(significandWidth) {}
     TypeTag getTag() const override;
+    SExprRef toSExpr() const override;
+    std::unique_ptr<Type> copy() const override;
 };
 
 struct ArrayType : Type {

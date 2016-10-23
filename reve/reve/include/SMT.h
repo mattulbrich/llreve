@@ -215,6 +215,13 @@ class Let : public SMTExpr {
         const std::map<std::string, Z3DefineFun> &defineFunMap) const override;
 };
 
+class ConstantFP : public SMTExpr {
+  public:
+    llvm::APFloat value;
+    explicit ConstantFP(const llvm::APFloat value) : value(value) {}
+    SExprRef toSExpr() const override;
+};
+
 template <typename T> class Primitive : public SMTExpr {
   public:
     explicit Primitive(const T val) : val(val) {}
@@ -272,6 +279,58 @@ class Op : public SMTExpr {
     z3::expr toZ3Expr(
         z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
         const std::map<std::string, Z3DefineFun> &defineFunMap) const override;
+};
+
+class FPCmp : public SMTExpr {
+  public:
+    enum class Predicate {
+        False,
+        OEQ,
+        OGT,
+        OGE,
+        OLT,
+        OLE,
+        ONE,
+        ORD,
+        UNO,
+        UEQ,
+        UGT,
+        UGE,
+        ULT,
+        ULE,
+        UNE,
+        True
+    };
+    // Operations that take two floats and return a bool
+    Predicate op;
+    // This is the type of the two arguments that an fcmp instruction retrieves
+    // (they have to be identical)
+    std::unique_ptr<Type> type;
+    SharedSMTRef op0;
+    SharedSMTRef op1;
+    FPCmp(Predicate op, std::unique_ptr<Type> type, SharedSMTRef op0,
+          SharedSMTRef op1)
+        : op(op), type(std::move(type)), op0(op0), op1(op1) {}
+    SExprRef toSExpr() const override;
+    std::set<std::string> uses() const override;
+    SharedSMTRef
+    renameAssignments(std::map<std::string, int> variableMap) const override;
+};
+
+class BinaryFPOperator : public SMTExpr {
+  public:
+    enum class Opcode { FAdd, FSub, FMul, FDiv, FRem };
+    Opcode op;
+    std::unique_ptr<Type> type;
+    SharedSMTRef op0;
+    SharedSMTRef op1;
+    BinaryFPOperator(Opcode op, std::unique_ptr<Type> type, SharedSMTRef op0,
+                     SharedSMTRef op1)
+        : op(op), type(std::move(type)), op0(op0), op1(op1) {}
+    SExprRef toSExpr() const override;
+    std::set<std::string> uses() const override;
+    SharedSMTRef
+    renameAssignments(std::map<std::string, int> variableMap) const override;
 };
 
 class Query : public SMTExpr {

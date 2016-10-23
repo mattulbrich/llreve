@@ -64,6 +64,9 @@ SMTRef instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) {
             }
         }
     }
+    if (const auto constFP = llvm::dyn_cast<llvm::ConstantFP>(val)) {
+        return std::make_unique<smt::ConstantFP>(constFP->getValueAPF());
+    }
     if (llvm::isa<llvm::ConstantPointerNull>(val)) {
         if (SMTGenerationOpts::getInstance().BitVect) {
             return smt::makeOp("_", "bv0", "64");

@@ -24,6 +24,8 @@ using std::shared_ptr;
 using std::unique_ptr;
 using llvm::Instruction;
 using llvm::CmpInst;
+using smt::FPCmp;
+using smt::BinaryFPOperator;
 using smt::Assignment;
 using smt::stringExpr;
 using smt::SharedSMTRef;
@@ -111,6 +113,15 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
                 Program prog) {
     const int progIndex = programIndex(prog);
     if (const auto BinOp = llvm::dyn_cast<llvm::BinaryOperator>(&Instr)) {
+        if (BinOp->getType()->isFloatingPointTy()) {
+            auto op = std::make_unique<smt::BinaryFPOperator>(
+                binaryFPOpcode(BinOp->getOpcode()), llvmType(BinOp->getType()),
+                instrNameOrVal(BinOp->getOperand(0),
+                               BinOp->getOperand(0)->getType()),
+                instrNameOrVal(BinOp->getOperand(1),
+                               BinOp->getOperand(1)->getType()));
+            return {makeAssignment(BinOp->getName(), std::move(op))};
+        }
         if (SMTGenerationOpts::getInstance().NoByteHeap &&
             BinOp->getOpcode() == Instruction::SDiv) {
             // This is a heuristic to remove divisions by 4 of pointer
@@ -154,6 +165,16 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
                                                BinOp->getOperand(0)->getType()),
                 instrNameOrVal(BinOp->getOperand(1),
                                BinOp->getOperand(1)->getType())))};
+    }
+    if (const auto fcmpInst = llvm::dyn_cast<llvm::FCmpInst>(&Instr)) {
+        auto cmp = std::make_unique<smt::FPCmp>(
+            fpPredicate(fcmpInst->getPredicate()),
+            llvmType(fcmpInst->getOperand(0)->getType()),
+            instrNameOrVal(fcmpInst->getOperand(0),
+                           fcmpInst->getOperand(0)->getType()),
+            instrNameOrVal(fcmpInst->getOperand(1),
+                           fcmpInst->getOperand(1)->getType()));
+        return {makeAssignment(fcmpInst->getName(), std::move(cmp))};
     }
     if (const auto cmpInst = llvm::dyn_cast<llvm::CmpInst>(&Instr)) {
         auto fun = predicateFun(*cmpInst);
@@ -419,6 +440,63 @@ string predicateName(llvm::CmpInst::Predicate pred) {
         default:
             return "unsupported predicate";
         }
+    }
+}
+FPCmp::Predicate fpPredicate(llvm::CmpInst::Predicate pred) {
+    switch (pred) {
+    case CmpInst::FCMP_FALSE:
+        return FPCmp::Predicate::False;
+    case CmpInst::FCMP_OEQ:
+        return FPCmp::Predicate::OEQ;
+    case CmpInst::FCMP_OGT:
+        return FPCmp::Predicate::OGT;
+    case CmpInst::FCMP_OGE:
+        return FPCmp::Predicate::OGE;
+    case CmpInst::FCMP_OLT:
+        return FPCmp::Predicate::OLT;
+    case CmpInst::FCMP_OLE:
+        return FPCmp::Predicate::OLE;
+    case CmpInst::FCMP_ONE:
+        return FPCmp::Predicate::ONE;
+    case CmpInst::FCMP_ORD:
+        return FPCmp::Predicate::ORD;
+    case CmpInst::FCMP_UNO:
+        return FPCmp::Predicate::UNO;
+    case CmpInst::FCMP_UEQ:
+        return FPCmp::Predicate::UEQ;
+    case CmpInst::FCMP_UGT:
+        return FPCmp::Predicate::UGT;
+    case CmpInst::FCMP_UGE:
+        return FPCmp::Predicate::UGE;
+    case CmpInst::FCMP_ULT:
+        return FPCmp::Predicate::ULT;
+    case CmpInst::FCMP_ULE:
+        return FPCmp::Predicate::ULE;
+    case CmpInst::FCMP_UNE:
+        return FPCmp::Predicate::UNE;
+    case CmpInst::FCMP_TRUE:
+        return FPCmp::Predicate::True;
+    default:
+        logError("No floating point predicate\n");
+        exit(1);
+    }
+}
+
+BinaryFPOperator::Opcode binaryFPOpcode(llvm::Instruction::BinaryOps op) {
+    switch (op) {
+    case Instruction::FAdd:
+        return BinaryFPOperator::Opcode::FAdd;
+    case Instruction::FSub:
+        return BinaryFPOperator::Opcode::FSub;
+    case Instruction::FMul:
+        return BinaryFPOperator::Opcode::FMul;
+    case Instruction::FDiv:
+        return BinaryFPOperator::Opcode::FDiv;
+    case Instruction::FRem:
+        return BinaryFPOperator::Opcode::FRem;
+    default:
+        logError("Not a floating point binary operator\n");
+        exit(1);
     }
 }
 
