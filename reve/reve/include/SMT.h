@@ -226,11 +226,21 @@ class Let : public SMTExpr {
         const std::map<std::string, Z3DefineFun> &defineFunMap) const override;
 };
 
+// We could unify these in a generic type but it’s probably not worth the
+// trouble
 class ConstantFP : public SMTExpr {
   public:
     llvm::APFloat value;
     explicit ConstantFP(const llvm::APFloat value) : value(value) {}
     SExprRef toSExpr() const override;
+};
+
+class ConstantBool : public SMTExpr {
+  public:
+    bool value;
+    explicit ConstantBool(bool value) : value(value) {}
+    SExprRef toSExpr() const override;
+    SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
 };
 
 template <typename T> class Primitive : public SMTExpr {

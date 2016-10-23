@@ -20,6 +20,8 @@
 
 using std::vector;
 using std::make_shared;
+using std::make_unique;
+using smt::ConstantBool;
 using std::shared_ptr;
 using std::unique_ptr;
 using llvm::Instruction;
@@ -369,7 +371,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             makeAssignment(sp, makeOp("-", sp, std::to_string(allocatedSize))),
             makeAssignment(allocaInst->getName(), stringExpr(sp)),
             makeAssignment(string(allocaInst->getName()) + "_OnStack",
-                           stringExpr("true"))};
+                           make_unique<ConstantBool>(true))};
     }
     logErrorData("Couldn’t convert instruction to def\n", Instr);
     return {makeAssignment("UNKNOWN INSTRUCTION", stringExpr("UNKNOWN ARGS"))};

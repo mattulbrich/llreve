@@ -50,6 +50,14 @@ SExprRef ConstantFP::toSExpr() const {
     }
 }
 
+SExprRef ConstantBool::toSExpr() const {
+    if (value) {
+        return sexprFromString("true");
+    } else {
+        return sexprFromString("false");
+    }
+}
+
 SExprRef SetLogic::toSExpr() const {
     std::vector<SExprRef> args;
     SExprRef logicPtr = std::make_unique<const Value<std::string>>(logic);
@@ -348,6 +356,10 @@ SharedSMTRef Op::compressLets(std::vector<Assignment> defs) const {
 template <typename T>
 SharedSMTRef Primitive<T>::compressLets(std::vector<Assignment> defs) const {
     return nestLets(make_shared<Primitive<T>>(val), defs);
+}
+
+SharedSMTRef ConstantBool::compressLets(std::vector<Assignment> defs) const {
+    return nestLets(shared_from_this(), defs);
 }
 
 // Implementations of renameAssignments

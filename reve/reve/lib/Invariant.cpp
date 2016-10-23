@@ -21,6 +21,7 @@ using std::string;
 using smt::TypedVariable;
 using smt::makeOp;
 using smt::stringExpr;
+using smt::ConstantBool;
 using smt::SharedSMTRef;
 using smt::SMTRef;
 using smt::SMTExpr;
@@ -140,7 +141,7 @@ SMTRef mainInvariant(Mark EndIndex, vector<SortedVar> FreeVars,
         }
         return std::make_unique<smt::Op>("OUT_INV", std::move(args));
     } else if (EndIndex == UNREACHABLE_MARK) {
-        return stringExpr("true");
+        return make_unique<ConstantBool>(true);
     } else {
         vector<SharedSMTRef> args;
         for (auto &arg : FreeVars) {

@@ -23,6 +23,7 @@
 
 #include <iostream>
 
+using smt::ConstantBool;
 using smt::memoryVariable;
 using llvm::CmpInst;
 using smt::Assert;
@@ -257,7 +258,7 @@ vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
                                 // We need to interleave here, because otherwise
                                 // extern functions are not matched
                                 const auto smt = interleaveAssignments(
-                                    stringExpr("false"),
+                                    make_unique<ConstantBool>(false),
                                     makeMonoPair(smt1, smt2));
                                 pathExprs.push_back(
                                     make_shared<Assert>(forallStartingAt(
@@ -870,7 +871,7 @@ SMTRef getDontLoopInvariant(SMTRef endClause, Mark startIndex, PathMap pathMap,
     for (auto path : dontLoopPaths) {
         auto defs =
             assignmentsOnPath(path, prog, freeVars.at(startIndex), false);
-        auto smt = nonmutualSMT(stringExpr("false"), defs, prog);
+        auto smt = nonmutualSMT(make_unique<ConstantBool>(false), defs, prog);
         dontLoopExprs.push_back(smt);
     }
     if (!dontLoopExprs.empty()) {

@@ -13,6 +13,7 @@ using std::make_unique;
 using smt::makeOp;
 using smt::FunDef;
 using smt::Op;
+using smt::ConstantBool;
 using smt::memoryVariable;
 using smt::SharedSMTRef;
 using smt::SMTRef;
@@ -190,8 +191,8 @@ std::vector<SharedSMTRef> notEquivalentExternDecls(const llvm::Function &fun1,
             invariantName(ENTRY_MARK, ProgramSelection::Both,
                           fun1.getName().str() + "^" + fun2.getName().str(),
                           InvariantAttr::NONE, argNum);
-        SharedSMTRef mainInv = make_shared<FunDef>(funName, args, boolType(),
-                                                   smt::stringExpr("true"));
+        SharedSMTRef mainInv = make_shared<FunDef>(
+            funName, args, boolType(), make_unique<ConstantBool>(true));
         declarations.push_back(std::move(mainInv));
     }
     return declarations;
@@ -213,7 +214,7 @@ std::vector<SharedSMTRef> externFunDecl(const llvm::Function &fun,
         std::string funName =
             invariantName(ENTRY_MARK, asSelection(program), fun.getName().str(),
                           InvariantAttr::NONE, argNum);
-        SharedSMTRef body = stringExpr("true");
+        SharedSMTRef body = make_unique<ConstantBool>(true);
         decls.push_back(make_shared<FunDef>(funName, args, boolType(), body));
     }
     return decls;

@@ -4,6 +4,8 @@
 #include "Helper.h"
 #include "Invariant.h"
 
+using std::make_unique;
+using smt::ConstantBool;
 using smt::FunDef;
 using smt::makeOp;
 using smt::Op;
@@ -40,8 +42,9 @@ slicingAssertion(MonoPair<llvm::Function *> funPair,
             std::string invName =
                 invariantName(ENTRY_MARK, asSelection(program), "__criterion",
                               InvariantAttr::PRE, 0);
-            assertions.push_back(make_shared<FunDef>(
-                invName, funArgs, boolType(), stringExpr("false")));
+            assertions.push_back(
+                make_shared<FunDef>(invName, funArgs, boolType(),
+                                    make_unique<ConstantBool>(false)));
         });
 
     // Ensure all variables in the criterion are equal in both versions
@@ -63,7 +66,7 @@ slicingAssertion(MonoPair<llvm::Function *> funPair,
     args.push_back(SortedVar("ret1", int64Type()));
     args.push_back(SortedVar("ret2", int64Type()));
 
-    SharedSMTRef invBody = stringExpr("true");
+    SharedSMTRef invBody = make_unique<ConstantBool>(true);
     name = invariantName(ENTRY_MARK, ProgramSelection::Both, "__criterion",
                          InvariantAttr::NONE, 0);
     assertions.push_back(make_shared<FunDef>(name, args, boolType(), invBody));

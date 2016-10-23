@@ -16,6 +16,8 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Operator.h"
 
+using std::make_unique;
+using smt::ConstantBool;
 using smt::SharedSMTRef;
 using smt::SMTRef;
 using smt::stringExpr;
@@ -41,7 +43,7 @@ SMTRef instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) {
     if (const auto constInt = llvm::dyn_cast<llvm::ConstantInt>(val)) {
         const auto apInt = constInt->getValue();
         if (apInt.isIntN(1) && ty->isIntegerTy(1)) {
-            return stringExpr(apInt.getBoolValue() ? "true" : "false");
+            return make_unique<ConstantBool>(apInt.getBoolValue());
         }
         if (apInt.isNegative()) {
             if (SMTGenerationOpts::getInstance().BitVect) {
