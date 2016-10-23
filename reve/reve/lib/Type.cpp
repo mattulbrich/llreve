@@ -23,7 +23,7 @@ SExprRef IntType::toSExpr() const {
         vector<SExprRef> args;
         args.push_back(sexprFromString("BitVec"));
         args.push_back(sexprFromString(std::to_string(this->bitWidth)));
-        return make_unique<Apply<string>>("_", std::move(args));
+        return make_unique<Apply>("_", std::move(args));
     } else {
         return sexprFromString("Int");
     }
@@ -34,7 +34,7 @@ SExprRef FloatType::toSExpr() const {
         args.push_back(sexprFromString("FloatingPoint"));
         args.push_back(sexprFromString(std::to_string(this->exponentWidth)));
         args.push_back(sexprFromString(std::to_string(this->significandWidth)));
-        return make_unique<Apply<string>>("_", std::move(args));
+        return make_unique<Apply>("_", std::move(args));
     } else {
         return sexprFromString("Real");
     }
@@ -43,7 +43,7 @@ SExprRef ArrayType::toSExpr() const {
     vector<SExprRef> args;
     args.push_back(domain->toSExpr());
     args.push_back(target->toSExpr());
-    return make_unique<Apply<string>>("Array", std::move(args));
+    return make_unique<Apply>("Array", std::move(args));
 }
 
 unique_ptr<Type> BoolType::copy() const { return make_unique<BoolType>(); }
