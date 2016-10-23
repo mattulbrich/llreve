@@ -243,16 +243,14 @@ class ConstantBool : public SMTExpr {
     SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
 };
 
-template <typename T> class Primitive : public SMTExpr {
+// This is for constants or expressions that have not been parsed and should
+// just be included literally
+class ConstantString : public SMTExpr {
   public:
-    explicit Primitive(const T val) : val(val) {}
-    SExprRef toSExpr() const override {
-        return std::make_unique<sexpr::Value<std::string>>(val);
-    }
-    const T val;
-    std::set<std::string> uses() const override {
-        return std::set<std::string>();
-    }
+    std::string value;
+    explicit ConstantString(std::string value) : value(value) {}
+    SExprRef toSExpr() const override; //  {
+    std::set<std::string> uses() const override;
     SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) const override;
@@ -260,14 +258,6 @@ template <typename T> class Primitive : public SMTExpr {
         z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
         const std::map<std::string, Z3DefineFun> &defineFunMap) const override;
 };
-
-template <>
-SharedSMTRef Primitive<std::string>::renameAssignments(
-    std::map<std::string, int> variableMap) const;
-template <>
-z3::expr Primitive<std::string>::toZ3Expr(
-    z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
-    const std::map<std::string, Z3DefineFun> &defineFunMap) const;
 
 class Op : public SMTExpr {
   public:
@@ -354,13 +344,11 @@ class Query : public SMTExpr {
     SExprRef toSExpr() const override;
 };
 
-auto stringExpr(std::string name)
-    -> std::unique_ptr<const Primitive<std::string>>;
+auto stringExpr(std::string name) -> std::unique_ptr<ConstantString>;
 
 auto makeSMTRef(SharedSMTRef arg) -> SharedSMTRef;
 auto makeSMTRef(std::string arg) -> SharedSMTRef;
-// auto makeSMTRef(SharedSMTRef arg) -> SharedSMTRef { return arg; }
-// auto makeSMTRef(std::string arg) -> SharedSMTRef { return stringExpr(arg); }
+
 template <typename... Args>
 auto makeOp(std::string opName, Args... args) -> std::unique_ptr<Op> {
     std::vector<SharedSMTRef> args_ = {makeSMTRef(std::move(args))...};

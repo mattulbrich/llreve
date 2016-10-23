@@ -58,6 +58,8 @@ SExprRef ConstantBool::toSExpr() const {
     }
 }
 
+SExprRef ConstantString::toSExpr() const { return sexprFromString(value); }
+
 SExprRef SetLogic::toSExpr() const {
     std::vector<SExprRef> args;
     SExprRef logicPtr = std::make_unique<const Value<std::string>>(logic);
@@ -190,9 +192,9 @@ SExprRef FPCmp::toSExpr() const {
         args.push_back(op1->toSExpr());
         switch (this->op) {
         case Predicate::False:
-            return sexprFromString("False");
+            return sexprFromString("false");
         case Predicate::True:
-            return sexprFromString("True");
+            return sexprFromString("true");
         case Predicate::OEQ:
         case Predicate::UEQ:
             return std::make_unique<Apply<string>>("=", std::move(args));
@@ -302,11 +304,7 @@ set<string> BinaryFPOperator::uses() const {
     return uses;
 }
 
-template <> set<string> Primitive<string>::uses() const {
-    set<string> uses;
-    uses.insert(val);
-    return uses;
-}
+set<string> ConstantString::uses() const { return {value}; }
 
 set<string> TypedVariable::uses() const { return {name}; }
 
@@ -353,9 +351,8 @@ SharedSMTRef Op::compressLets(std::vector<Assignment> defs) const {
     return nestLets(make_shared<Op>(opName, compressedArgs, instantiate), defs);
 }
 
-template <typename T>
-SharedSMTRef Primitive<T>::compressLets(std::vector<Assignment> defs) const {
-    return nestLets(make_shared<Primitive<T>>(val), defs);
+SharedSMTRef ConstantString::compressLets(std::vector<Assignment> defs) const {
+    return nestLets(shared_from_this(), defs);
 }
 
 SharedSMTRef ConstantBool::compressLets(std::vector<Assignment> defs) const {
@@ -368,18 +365,16 @@ SharedSMTRef SMTExpr::renameAssignments(map<string, int> variableMap) const {
     return shared_from_this();
 }
 
-template <>
 SharedSMTRef
-Primitive<string>::renameAssignments(map<string, int> variableMap) const {
-    if (val == "false" || val == "true" || val.at(0) == '(' ||
-        isdigit(val.at(0))) {
+ConstantString::renameAssignments(map<string, int> variableMap) const {
+    if (value.at(0) == '(' || isdigit(value.at(0))) {
         return shared_from_this();
     } else {
-        string name = val;
-        if (variableMap.find(val) != variableMap.end()) {
-            name += "_" + std::to_string(variableMap.at(val));
+        string name = value;
+        if (variableMap.find(value) != variableMap.end()) {
+            name += "_" + std::to_string(variableMap.at(value));
         }
-        return make_shared<Primitive>(name);
+        return make_shared<ConstantString>(name);
     }
 }
 
@@ -694,30 +689,18 @@ z3::expr SMTExpr::toZ3Expr(
     exit(1);
 }
 
-template <typename T>
-z3::expr Primitive<T>::toZ3Expr(
-    z3::context & /* unused */, std::map<std::string, z3::expr> & /* unusued */,
-    const std::map<std::string, Z3DefineFun> & /* unused */) const {
-    std::cerr << "Unsupported primitive\n";
-    exit(1);
-}
-
-template <>
-z3::expr Primitive<std::string>::toZ3Expr(
+z3::expr ConstantString::toZ3Expr(
     z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
     const std::map<std::string, Z3DefineFun> & /* unused */) const {
-    if (val == "false") {
-        return cxt.bool_val(false);
-    }
-    if (!val.empty() && (isdigit(val.at(0)) || val.at(0) == '-')) {
-        return cxt.int_val(std::stoi(val));
+    if (!value.empty() && (isdigit(value.at(0)) || value.at(0) == '-')) {
+        return cxt.int_val(std::stoi(value));
     }
 
-    if (nameMap.count(val) == 0) {
-        std::cerr << "Couldn’t find " << val << "\n";
+    if (nameMap.count(value) == 0) {
+        std::cerr << "Couldn’t find " << value << "\n";
         exit(1);
     } else {
-        return nameMap.at(val);
+        return nameMap.at(value);
     }
 }
 
@@ -917,8 +900,8 @@ SharedSMTRef nestLets(SharedSMTRef clause, std::vector<Assignment> defs) {
 SharedSMTRef makeSMTRef(SharedSMTRef arg) { return arg; }
 SharedSMTRef makeSMTRef(std::string arg) { return stringExpr(arg); }
 
-unique_ptr<const Primitive<std::string>> stringExpr(std::string name) {
-    return std::make_unique<Primitive<std::string>>(name);
+unique_ptr<ConstantString> stringExpr(std::string name) {
+    return std::make_unique<ConstantString>(name);
 }
 
 unique_ptr<const Op> makeOp(std::string opName, std::vector<std::string> args) {
