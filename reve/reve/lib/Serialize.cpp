@@ -64,9 +64,6 @@ void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
             if (!opts.DontInstantiate) {
                 out = out->instantiateArrays();
             }
-            if (opts.RenameDefineFuns) {
-                out = out->renameDefineFuns("__" + std::to_string(i));
-            }
             out->toSExpr()->serialize(outFile, 0, opts.Pretty);
             outFile << "\n";
             ++i;

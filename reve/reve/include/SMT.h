@@ -68,9 +68,6 @@ class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
     SMTExpr(const SMTExpr & /*unused*/) = default;
     SMTExpr &operator=(SMTExpr &) = delete;
     SMTExpr() = default;
-    // Necessary to prevent horn2vmt from fucking up
-    virtual std::shared_ptr<const SMTExpr>
-    renameDefineFuns(std::string suffix) const;
     virtual void toZ3(z3::context &cxt, z3::solver &solver,
                       std::map<std::string, z3::expr> &nameMap,
                       std::map<std::string, Z3DefineFun> &defineFunMap) const;
@@ -171,7 +168,6 @@ class Forall : public SMTExpr {
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) const override;
     std::vector<SharedSMTRef> splitConjunctions() const override;
-    SharedSMTRef renameDefineFuns(std::string suffix) const override;
 };
 
 class CheckSat : public SMTExpr {
@@ -238,7 +234,6 @@ template <typename T> class Primitive : public SMTExpr {
     }
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) const override;
-    SharedSMTRef renameDefineFuns(std::string suffix) const override;
     z3::expr toZ3Expr(
         z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
         const std::map<std::string, Z3DefineFun> &defineFunMap) const override;
@@ -247,8 +242,6 @@ template <typename T> class Primitive : public SMTExpr {
 template <>
 SharedSMTRef Primitive<std::string>::renameAssignments(
     std::map<std::string, int> variableMap) const;
-template <>
-SharedSMTRef Primitive<std::string>::renameDefineFuns(std::string suffix) const;
 template <>
 z3::expr Primitive<std::string>::toZ3Expr(
     z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
@@ -275,7 +268,6 @@ class Op : public SMTExpr {
     mergeImplications(std::vector<SharedSMTRef> conditions) const override;
     std::vector<SharedSMTRef> splitConjunctions() const override;
     SharedSMTRef instantiateArrays() const override;
-    SharedSMTRef renameDefineFuns(std::string suffix) const override;
     z3::expr toZ3Expr(
         z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
         const std::map<std::string, Z3DefineFun> &defineFunMap) const override;
@@ -370,7 +362,6 @@ class FunDecl : public SMTExpr {
 };
 
 class FunDef : public SMTExpr {
-
   public:
     FunDef(std::string funName, std::vector<SortedVar> args,
            std::unique_ptr<Type> outType, SharedSMTRef body)
@@ -382,14 +373,12 @@ class FunDef : public SMTExpr {
     SharedSMTRef body;
     SExprRef toSExpr() const override;
     SharedSMTRef instantiateArrays() const override;
-    SharedSMTRef renameDefineFuns(std::string suffix) const override;
     void toZ3(z3::context &cxt, z3::solver &solver,
               std::map<std::string, z3::expr> &nameMap,
               std::map<std::string, Z3DefineFun> &defineFunMap) const override;
 };
 
 class Comment : public SMTExpr {
-
   public:
     Comment(std::string val) : val(std::move(val)) {}
     std::string val;
@@ -408,10 +397,8 @@ class VarDecl : public SMTExpr {
 
 auto nestLets(SharedSMTRef clause, std::vector<Assignment> defs)
     -> SharedSMTRef;
-}
 
 auto isArray(std::string) -> bool;
 
 auto apIntToSMT(llvm::APInt i) -> smt::SharedSMTRef;
-
-auto getSMTType(std::string var) -> std::string;
+}

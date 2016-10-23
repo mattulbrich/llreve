@@ -32,6 +32,8 @@ using std::set;
 using std::string;
 using std::vector;
 
+// Implementations of toSExpr()
+
 SExprRef ConstantFP::toSExpr() const {
     if (SMTGenerationOpts::getInstance().BitVect) {
         logError("Bitvector representation of floating points is not yet "
@@ -168,6 +170,73 @@ SExprRef VarDecl::toSExpr() const {
     return std::make_unique<Apply<std::string>>("declare-var", std::move(args));
 }
 
+SExprRef FPCmp::toSExpr() const {
+    if (SMTGenerationOpts::getInstance().BitVect) {
+        logError("Floating point predicates for bitvectors are not yet "
+                 "impleneted\n");
+        exit(1);
+    } else {
+        vector<SExprRef> args;
+        args.push_back(op0->toSExpr());
+        args.push_back(op1->toSExpr());
+        switch (this->op) {
+        case Predicate::False:
+            return sexprFromString("False");
+        case Predicate::True:
+            return sexprFromString("True");
+        case Predicate::OEQ:
+        case Predicate::UEQ:
+            return std::make_unique<Apply<string>>("=", std::move(args));
+        case Predicate::OGT:
+        case Predicate::UGT:
+            return std::make_unique<Apply<string>>(">", std::move(args));
+        case Predicate::OGE:
+        case Predicate::UGE:
+            return std::make_unique<Apply<string>>(">=", std::move(args));
+        case Predicate::OLT:
+        case Predicate::ULT:
+            return std::make_unique<Apply<string>>("<", std::move(args));
+        case Predicate::OLE:
+        case Predicate::ULE:
+            return std::make_unique<Apply<string>>("<=", std::move(args));
+        case Predicate::ONE:
+        case Predicate::UNE:
+            return std::make_unique<Apply<string>>("distinct", std::move(args));
+        case Predicate::ORD:
+        case Predicate::UNO:
+            logError("Cannot check reals for orderedness\n");
+            exit(1);
+        }
+    }
+}
+
+SExprRef BinaryFPOperator::toSExpr() const {
+    if (SMTGenerationOpts::getInstance().BitVect) {
+        logError("Floating point binary operators for bitvectors are not yet "
+                 "implemented\n");
+        exit(1);
+    } else {
+        vector<SExprRef> args;
+        args.push_back(op0->toSExpr());
+        args.push_back(op1->toSExpr());
+        switch (this->op) {
+        case Opcode::FAdd:
+            return std::make_unique<Apply<string>>("+", std::move(args));
+        case Opcode::FSub:
+            return std::make_unique<Apply<string>>("-", std::move(args));
+        case Opcode::FMul:
+            return std::make_unique<Apply<string>>("*", std::move(args));
+        case Opcode::FDiv:
+            return std::make_unique<Apply<string>>("/", std::move(args));
+        case Opcode::FRem:
+            logError("SMT reals don’t support a remainder operation\n");
+            exit(1);
+        }
+    }
+}
+
+// Implementations of toZ3
+
 void VarDecl::toZ3(z3::context &cxt, z3::solver & /* unused */,
                    std::map<std::string, z3::expr> &nameMap,
                    std::map<std::string, Z3DefineFun> & /* unused */) const {
@@ -195,6 +264,20 @@ void Assert::toZ3(z3::context &cxt, z3::solver &solver,
                   std::map<std::string, Z3DefineFun> &defineFunMap) const {
     solver.add(expr->toZ3Expr(cxt, nameMap, defineFunMap));
 }
+
+void CheckSat::toZ3(z3::context & /* unused */, z3::solver & /* unused */,
+                    std::map<std::string, z3::expr> & /* unused */,
+                    std::map<std::string, Z3DefineFun> & /* unused */) const {
+    /* noop */
+}
+
+void GetModel::toZ3(z3::context & /* unused */, z3::solver & /* unused */,
+                    std::map<std::string, z3::expr> & /* unused */,
+                    std::map<std::string, Z3DefineFun> & /* unused */) const {
+    /* noop */
+}
+
+// Implementations of uses()
 
 set<string> SMTExpr::uses() const { return {}; }
 
@@ -258,6 +341,8 @@ template <> set<string> Primitive<string>::uses() const {
     return uses;
 }
 
+// Implementations of compressLets
+
 SharedSMTRef SMTExpr::compressLets(std::vector<Assignment> defs) const {
     assert(defs.empty());
     unused(defs);
@@ -286,18 +371,6 @@ SharedSMTRef CheckSat::compressLets(std::vector<Assignment> defs) const {
     return shared_from_this();
 }
 
-void CheckSat::toZ3(z3::context & /* unused */, z3::solver & /* unused */,
-                    std::map<std::string, z3::expr> & /* unused */,
-                    std::map<std::string, Z3DefineFun> & /* unused */) const {
-    /* noop */
-}
-
-void GetModel::toZ3(z3::context & /* unused */, z3::solver & /* unused */,
-                    std::map<std::string, z3::expr> & /* unused */,
-                    std::map<std::string, Z3DefineFun> & /* unused */) const {
-    /* noop */
-}
-
 SharedSMTRef GetModel::compressLets(std::vector<Assignment> defs) const {
     assert(defs.empty());
     unused(defs);
@@ -322,41 +395,30 @@ SharedSMTRef Primitive<T>::compressLets(std::vector<Assignment> defs) const {
     return nestLets(make_shared<Primitive<T>>(val), defs);
 }
 
+// Implementations of renameAssignments
+
 SharedSMTRef SMTExpr::renameAssignments(map<string, int> variableMap) const {
     return shared_from_this();
 }
 
+template <>
 SharedSMTRef
-SMTExpr::mergeImplications(std::vector<SharedSMTRef> conditions) const {
-    if (conditions.empty()) {
+Primitive<string>::renameAssignments(map<string, int> variableMap) const {
+    if (val == "false" || val == "true" || val.at(0) == '(' ||
+        isdigit(val.at(0))) {
         return shared_from_this();
     } else {
-        return makeOp("=>", make_shared<Op>("and", conditions),
-                      shared_from_this());
+        string name = val;
+        if (variableMap.find(val) != variableMap.end()) {
+            name += "_" + std::to_string(variableMap.at(val));
+        }
+        return make_shared<Primitive>(name);
     }
-}
-
-vector<SharedSMTRef> SMTExpr::splitConjunctions() const {
-    return {shared_from_this()};
 }
 
 SharedSMTRef Assert::renameAssignments(map<string, int> variableMap) const {
     assert(variableMap.empty());
     return make_shared<Assert>(expr->renameAssignments(variableMap));
-}
-
-SharedSMTRef
-Assert::mergeImplications(std::vector<SharedSMTRef> conditions) const {
-    assert(conditions.empty());
-    return make_shared<Assert>(expr->mergeImplications(conditions));
-}
-
-vector<SharedSMTRef> Assert::splitConjunctions() const {
-    vector<SharedSMTRef> smtExprs = expr->splitConjunctions();
-    for (auto &expr : smtExprs) {
-        expr = make_shared<Assert>(std::move(expr));
-    }
-    return smtExprs;
 }
 
 SharedSMTRef Let::renameAssignments(map<string, int> variableMap) const {
@@ -368,19 +430,6 @@ SharedSMTRef Let::renameAssignments(map<string, int> variableMap) const {
                            assgn.second->renameAssignments(variableMap)});
     }
     return make_shared<Let>(newDefs, expr->renameAssignments(newVariableMap));
-}
-
-SharedSMTRef
-Let::mergeImplications(std::vector<SharedSMTRef> conditions) const {
-    return make_shared<Let>(defs, expr->mergeImplications(conditions));
-}
-
-vector<SharedSMTRef> Let::splitConjunctions() const {
-    vector<SharedSMTRef> smtExprs = expr->splitConjunctions();
-    for (auto &expr : smtExprs) {
-        expr = make_shared<Let>(defs, std::move(expr));
-    }
-    return smtExprs;
 }
 
 SharedSMTRef Op::renameAssignments(map<string, int> variableMap) const {
@@ -404,6 +453,40 @@ BinaryFPOperator::renameAssignments(map<string, int> variableMap) const {
     return make_shared<BinaryFPOperator>(op, type->copy(), newOp0, newOp1);
 }
 
+SharedSMTRef Forall::renameAssignments(map<string, int> variableMap) const {
+    vector<SortedVar> newVars;
+    for (auto var : this->vars) {
+        variableMap[var.name]++;
+        newVars.push_back(
+            {var.name + "_" + std::to_string(variableMap.at(var.name)),
+             std::move(var.type)});
+    }
+    return make_shared<Forall>(newVars, expr->renameAssignments(variableMap));
+}
+
+// Implementations of mergeImplications
+
+SharedSMTRef
+SMTExpr::mergeImplications(std::vector<SharedSMTRef> conditions) const {
+    if (conditions.empty()) {
+        return shared_from_this();
+    } else {
+        return makeOp("=>", make_shared<Op>("and", conditions),
+                      shared_from_this());
+    }
+}
+
+SharedSMTRef
+Assert::mergeImplications(std::vector<SharedSMTRef> conditions) const {
+    assert(conditions.empty());
+    return make_shared<Assert>(expr->mergeImplications(conditions));
+}
+
+SharedSMTRef
+Let::mergeImplications(std::vector<SharedSMTRef> conditions) const {
+    return make_shared<Let>(defs, expr->mergeImplications(conditions));
+}
+
 SharedSMTRef Op::mergeImplications(std::vector<SharedSMTRef> conditions) const {
     if (opName == "=>") {
         assert(args.size() == 2);
@@ -413,6 +496,33 @@ SharedSMTRef Op::mergeImplications(std::vector<SharedSMTRef> conditions) const {
         return makeOp("=>", make_shared<Op>("and", conditions),
                       shared_from_this());
     }
+}
+
+SharedSMTRef
+Forall::mergeImplications(std::vector<SharedSMTRef> conditions) const {
+    return std::make_shared<Forall>(vars, expr->mergeImplications(conditions));
+}
+
+// Implementations of splitConjunctions()
+
+vector<SharedSMTRef> SMTExpr::splitConjunctions() const {
+    return {shared_from_this()};
+}
+
+vector<SharedSMTRef> Assert::splitConjunctions() const {
+    vector<SharedSMTRef> smtExprs = expr->splitConjunctions();
+    for (auto &expr : smtExprs) {
+        expr = make_shared<Assert>(std::move(expr));
+    }
+    return smtExprs;
+}
+
+vector<SharedSMTRef> Let::splitConjunctions() const {
+    vector<SharedSMTRef> smtExprs = expr->splitConjunctions();
+    for (auto &expr : smtExprs) {
+        expr = make_shared<Let>(defs, std::move(expr));
+    }
+    return smtExprs;
 }
 
 vector<SharedSMTRef> Op::splitConjunctions() const {
@@ -435,22 +545,6 @@ vector<SharedSMTRef> Op::splitConjunctions() const {
     }
 }
 
-SharedSMTRef Forall::renameAssignments(map<string, int> variableMap) const {
-    vector<SortedVar> newVars;
-    for (auto var : this->vars) {
-        variableMap[var.name]++;
-        newVars.push_back(
-            {var.name + "_" + std::to_string(variableMap.at(var.name)),
-             std::move(var.type)});
-    }
-    return make_shared<Forall>(newVars, expr->renameAssignments(variableMap));
-}
-
-SharedSMTRef
-Forall::mergeImplications(std::vector<SharedSMTRef> conditions) const {
-    return std::make_shared<Forall>(vars, expr->mergeImplications(conditions));
-}
-
 vector<SharedSMTRef> Forall::splitConjunctions() const {
     vector<SharedSMTRef> smtExprs = expr->splitConjunctions();
     for (auto &expr : smtExprs) {
@@ -458,6 +552,8 @@ vector<SharedSMTRef> Forall::splitConjunctions() const {
     }
     return smtExprs;
 }
+
+// Implementations of instantiateArrays
 
 SharedSMTRef SMTExpr::instantiateArrays() const { return shared_from_this(); }
 
@@ -525,70 +621,7 @@ SharedSMTRef FunDecl::instantiateArrays() const {
                                 outType->copy());
 }
 
-SExprRef FPCmp::toSExpr() const {
-    if (SMTGenerationOpts::getInstance().BitVect) {
-        logError("Floating point predicates for bitvectors are not yet "
-                 "impleneted\n");
-        exit(1);
-    } else {
-        vector<SExprRef> args;
-        args.push_back(op0->toSExpr());
-        args.push_back(op1->toSExpr());
-        switch (this->op) {
-        case Predicate::False:
-            return sexprFromString("False");
-        case Predicate::True:
-            return sexprFromString("True");
-        case Predicate::OEQ:
-        case Predicate::UEQ:
-            return std::make_unique<Apply<string>>("=", std::move(args));
-        case Predicate::OGT:
-        case Predicate::UGT:
-            return std::make_unique<Apply<string>>(">", std::move(args));
-        case Predicate::OGE:
-        case Predicate::UGE:
-            return std::make_unique<Apply<string>>(">=", std::move(args));
-        case Predicate::OLT:
-        case Predicate::ULT:
-            return std::make_unique<Apply<string>>("<", std::move(args));
-        case Predicate::OLE:
-        case Predicate::ULE:
-            return std::make_unique<Apply<string>>("<=", std::move(args));
-        case Predicate::ONE:
-        case Predicate::UNE:
-            return std::make_unique<Apply<string>>("distinct", std::move(args));
-        case Predicate::ORD:
-        case Predicate::UNO:
-            logError("Cannot check reals for orderedness\n");
-            exit(1);
-        }
-    }
-}
-
-SExprRef BinaryFPOperator::toSExpr() const {
-    if (SMTGenerationOpts::getInstance().BitVect) {
-        logError("Floating point binary operators for bitvectors are not yet "
-                 "implemented\n");
-        exit(1);
-    } else {
-        vector<SExprRef> args;
-        args.push_back(op0->toSExpr());
-        args.push_back(op1->toSExpr());
-        switch (this->op) {
-        case Opcode::FAdd:
-            return std::make_unique<Apply<string>>("+", std::move(args));
-        case Opcode::FSub:
-            return std::make_unique<Apply<string>>("-", std::move(args));
-        case Opcode::FMul:
-            return std::make_unique<Apply<string>>("*", std::move(args));
-        case Opcode::FDiv:
-            return std::make_unique<Apply<string>>("/", std::move(args));
-        case Opcode::FRem:
-            logError("SMT reals don’t support a remainder operation\n");
-            exit(1);
-        }
-    }
-}
+// Implementations of heapInfo
 
 unique_ptr<const HeapInfo> SMTExpr::heapInfo() const { return nullptr; }
 
@@ -601,49 +634,32 @@ template <> unique_ptr<const HeapInfo> Primitive<string>::heapInfo() const {
     return nullptr;
 }
 
-SharedSMTRef nestLets(SharedSMTRef clause, std::vector<Assignment> defs) {
-    SharedSMTRef lets = clause;
-    set<string> uses;
-    std::vector<Assignment> defsAccum;
-    for (auto i = defs.rbegin(), e = defs.rend(); i != e; ++i) {
-        if (uses.find(i->first) != uses.end()) {
-            lets = std::make_unique<const Let>(defsAccum, lets);
-            uses = set<string>();
-            defsAccum = std::vector<Assignment>();
-        }
-        defsAccum.insert(defsAccum.begin(), *i);
-        for (auto use : i->second->uses()) {
-            uses.insert(use);
-        }
-    }
-    if (!defsAccum.empty()) {
-        lets = std::make_unique<const Let>(defsAccum, lets);
-    }
-    return lets;
-}
+// Implementations of removeForalls
 
-SharedSMTRef makeSMTRef(SharedSMTRef arg) { return arg; }
-SharedSMTRef makeSMTRef(std::string arg) { return stringExpr(arg); }
-
-unique_ptr<const Primitive<std::string>> stringExpr(std::string name) {
-    return std::make_unique<Primitive<std::string>>(name);
-}
-
-unique_ptr<const Op> makeOp(std::string opName, std::vector<std::string> args) {
-    std::vector<SharedSMTRef> smtArgs;
-    for (auto arg : args) {
-        smtArgs.push_back(stringExpr(arg));
-    }
-    return std::make_unique<Op>(opName, smtArgs);
-}
-
-unique_ptr<const Assignment> makeAssignment(string name, SharedSMTRef val) {
-    return std::make_unique<Assignment>(name, val);
-}
-
-SharedSMTRef SMTExpr::renameDefineFuns(string /* unused */) const {
+SharedSMTRef SMTExpr::removeForalls(set<SortedVar> &introducedVariables) const {
     return shared_from_this();
 }
+SharedSMTRef Assert::removeForalls(set<SortedVar> &introducedVariables) const {
+    return make_shared<Assert>(expr->removeForalls(introducedVariables));
+}
+SharedSMTRef Forall::removeForalls(set<SortedVar> &introducedVariables) const {
+    for (const auto &var : vars) {
+        introducedVariables.insert(var);
+    }
+    return expr->removeForalls(introducedVariables);
+}
+SharedSMTRef Op::removeForalls(set<SortedVar> &introducedVariables) const {
+    vector<SharedSMTRef> newArgs;
+    for (const auto &arg : args) {
+        newArgs.push_back(arg->removeForalls(introducedVariables));
+    }
+    return make_shared<Op>(opName, newArgs, instantiate);
+}
+SharedSMTRef Let::removeForalls(set<SortedVar> &introducedVariables) const {
+    return make_shared<Let>(defs, expr->removeForalls(introducedVariables));
+}
+
+// Implementations for using the z3 API
 
 void SMTExpr::toZ3(z3::context & /* unused */, z3::solver & /* unused */,
                    std::map<std::string, z3::expr> & /* unused */,
@@ -846,80 +862,7 @@ void FunDef::toZ3(z3::context &cxt, z3::solver & /* unused */,
     defineFunMap.insert({funName, {vars, z3Body}});
 }
 
-SharedSMTRef FunDef::renameDefineFuns(string suffix) const {
-    vector<SortedVar> newArgs;
-    for (auto arg : args) {
-        newArgs.push_back(SortedVar(arg.name + suffix, std::move(arg.type)));
-    }
-    return make_shared<FunDef>(funName, newArgs, outType->copy(),
-                               body->renameDefineFuns(suffix));
-}
-
-SharedSMTRef Op::renameDefineFuns(string suffix) const {
-    std::vector<SharedSMTRef> newArgs;
-    for (const auto &arg : args) {
-        newArgs.push_back(arg->renameDefineFuns(suffix));
-    }
-    return make_shared<Op>(opName, newArgs, instantiate);
-}
-
-template <>
-SharedSMTRef
-Primitive<string>::renameAssignments(map<string, int> variableMap) const {
-    if (val == "false" || val == "true" || val.at(0) == '(' ||
-        isdigit(val.at(0))) {
-        return shared_from_this();
-    } else {
-        string name = val;
-        if (variableMap.find(val) != variableMap.end()) {
-            name += "_" + std::to_string(variableMap.at(val));
-        }
-        return make_shared<Primitive>(name);
-    }
-}
-
-template <>
-SharedSMTRef Primitive<string>::renameDefineFuns(string suffix) const {
-    if (val == "false" || val == "true" || val.at(0) == '(' ||
-        isdigit(val.at(0))) {
-        return shared_from_this();
-    } else {
-        return make_shared<Primitive>(val + suffix);
-    }
-}
-
-SharedSMTRef Forall::renameDefineFuns(std::string suffix) const {
-    vector<SortedVar> newArgs;
-    for (auto arg : vars) {
-        newArgs.push_back(SortedVar(arg.name + suffix, std::move(arg.type)));
-    }
-    return make_shared<Forall>(newArgs, expr->renameDefineFuns(suffix));
-}
-
-SharedSMTRef SMTExpr::removeForalls(set<SortedVar> &introducedVariables) const {
-    return shared_from_this();
-}
-SharedSMTRef Assert::removeForalls(set<SortedVar> &introducedVariables) const {
-    return make_shared<Assert>(expr->removeForalls(introducedVariables));
-}
-SharedSMTRef Forall::removeForalls(set<SortedVar> &introducedVariables) const {
-    for (const auto &var : vars) {
-        introducedVariables.insert(var);
-    }
-    return expr->removeForalls(introducedVariables);
-}
-SharedSMTRef Op::removeForalls(set<SortedVar> &introducedVariables) const {
-    vector<SharedSMTRef> newArgs;
-    for (const auto &arg : args) {
-        newArgs.push_back(arg->removeForalls(introducedVariables));
-    }
-    return make_shared<Op>(opName, newArgs, instantiate);
-}
-SharedSMTRef Let::removeForalls(set<SortedVar> &introducedVariables) const {
-    return make_shared<Let>(defs, expr->removeForalls(introducedVariables));
-}
-}
-
+// Non-class methods
 smt::SharedSMTRef apIntToSMT(llvm::APInt i) {
     if (SMTGenerationOpts::getInstance().BitVect) {
         unsigned bitWidth = i.getBitWidth();
@@ -932,4 +875,45 @@ smt::SharedSMTRef apIntToSMT(llvm::APInt i) {
             return smt::stringExpr(i.toString(10, true));
         }
     }
+}
+
+SharedSMTRef nestLets(SharedSMTRef clause, std::vector<Assignment> defs) {
+    SharedSMTRef lets = clause;
+    set<string> uses;
+    std::vector<Assignment> defsAccum;
+    for (auto i = defs.rbegin(), e = defs.rend(); i != e; ++i) {
+        if (uses.find(i->first) != uses.end()) {
+            lets = std::make_unique<const Let>(defsAccum, lets);
+            uses = set<string>();
+            defsAccum = std::vector<Assignment>();
+        }
+        defsAccum.insert(defsAccum.begin(), *i);
+        for (auto use : i->second->uses()) {
+            uses.insert(use);
+        }
+    }
+    if (!defsAccum.empty()) {
+        lets = std::make_unique<const Let>(defsAccum, lets);
+    }
+    return lets;
+}
+
+SharedSMTRef makeSMTRef(SharedSMTRef arg) { return arg; }
+SharedSMTRef makeSMTRef(std::string arg) { return stringExpr(arg); }
+
+unique_ptr<const Primitive<std::string>> stringExpr(std::string name) {
+    return std::make_unique<Primitive<std::string>>(name);
+}
+
+unique_ptr<const Op> makeOp(std::string opName, std::vector<std::string> args) {
+    std::vector<SharedSMTRef> smtArgs;
+    for (auto arg : args) {
+        smtArgs.push_back(stringExpr(arg));
+    }
+    return std::make_unique<Op>(opName, smtArgs);
+}
+
+unique_ptr<const Assignment> makeAssignment(string name, SharedSMTRef val) {
+    return std::make_unique<Assignment>(name, val);
+}
 }

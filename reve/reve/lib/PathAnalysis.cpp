@@ -25,6 +25,7 @@ using std::set;
 using smt::SharedSMTRef;
 using smt::SMTRef;
 using smt::SMTExpr;
+using smt::apIntToSMT;
 
 char PathAnalysis::ID = 0;
 
