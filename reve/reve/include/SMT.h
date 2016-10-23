@@ -398,7 +398,7 @@ class VarDecl : public SMTExpr {
 auto nestLets(SharedSMTRef clause, std::vector<Assignment> defs)
     -> SharedSMTRef;
 
-auto isArray(std::string) -> bool;
+bool isArray(const Type &type);
 
 auto apIntToSMT(llvm::APInt i) -> smt::SharedSMTRef;
 }

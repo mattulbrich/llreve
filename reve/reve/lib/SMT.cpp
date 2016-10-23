@@ -18,8 +18,6 @@
 #include <ctype.h>
 #include <iostream>
 
-bool isArray(const Type &type) { return type.getTag() == TypeTag::Array; }
-
 namespace smt {
 using std::map;
 using std::make_shared;
@@ -916,4 +914,5 @@ unique_ptr<const Op> makeOp(std::string opName, std::vector<std::string> args) {
 unique_ptr<const Assignment> makeAssignment(string name, SharedSMTRef val) {
     return std::make_unique<Assignment>(name, val);
 }
+bool isArray(const Type &type) { return type.getTag() == TypeTag::Array; }
 }

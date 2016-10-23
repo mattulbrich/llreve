@@ -707,7 +707,7 @@ SharedSMTRef equalInputsEqualOutputs(vector<smt::SortedVar> funArgs,
     std::sort(sortedFunArgs2.begin(), sortedFunArgs2.end());
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
         for (const auto &arg : funArgs1) {
-            if (!std::regex_match(arg.name, HEAP_REGEX)) {
+            if (!smt::isArray(*arg.type)) {
                 outArgs.push_back(arg.name);
             }
         }
@@ -717,7 +717,7 @@ SharedSMTRef equalInputsEqualOutputs(vector<smt::SortedVar> funArgs,
     }
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
         for (const auto &arg : funArgs2) {
-            if (!std::regex_match(arg.name, HEAP_REGEX)) {
+            if (!smt::isArray(*arg.type)) {
                 outArgs.push_back(arg.name);
             }
         }
