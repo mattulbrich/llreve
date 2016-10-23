@@ -25,6 +25,7 @@ z3-files:
   - libc/strncasecmp_1
 native-z3-files:
   - loop/barthe2-big
+  - float/loop
 custom-args: {}
 custom-eldarica-args:
   heap/swaparray.smt2:
