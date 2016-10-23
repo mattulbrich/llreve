@@ -235,6 +235,13 @@ class ConstantFP : public SMTExpr {
     SExprRef toSExpr() const override;
 };
 
+class ConstantInt : public SMTExpr {
+  public:
+    llvm::APInt value;
+    explicit ConstantInt(const llvm::APInt value) : value(value) {}
+    SExprRef toSExpr() const override;
+};
+
 class ConstantBool : public SMTExpr {
   public:
     bool value;
@@ -409,8 +416,6 @@ auto nestLets(SharedSMTRef clause, std::vector<Assignment> defs)
     -> SharedSMTRef;
 
 bool isArray(const Type &type);
-
-auto apIntToSMT(llvm::APInt i) -> smt::SharedSMTRef;
 
 std::unique_ptr<SMTExpr> memoryVariable(std::string name);
 }

@@ -25,7 +25,7 @@ using std::set;
 using smt::SharedSMTRef;
 using smt::SMTRef;
 using smt::SMTExpr;
-using smt::apIntToSMT;
+using smt::ConstantInt;
 
 char PathAnalysis::ID = 0;
 
@@ -199,13 +199,14 @@ SMTRef BooleanCondition::toSmt() const {
 }
 
 SMTRef SwitchCondition::toSmt() const {
-    return makeOp("=", instrNameOrVal(Cond), apIntToSMT(Val));
+    return makeOp("=", instrNameOrVal(Cond),
+                  std::make_unique<ConstantInt>(Val));
 }
 
 SMTRef SwitchDefault::toSmt() const {
     std::vector<SharedSMTRef> StringVals;
     for (auto Val : Vals) {
-        StringVals.push_back(apIntToSMT(Val));
+        StringVals.push_back(std::make_unique<ConstantInt>(Val));
     }
     StringVals.push_back(instrNameOrVal(Cond));
     return std::make_unique<Op>("distinct", StringVals);

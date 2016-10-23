@@ -22,6 +22,7 @@ using std::vector;
 using std::make_shared;
 using std::make_unique;
 using smt::ConstantBool;
+using smt::ConstantInt;
 using std::shared_ptr;
 using std::unique_ptr;
 using llvm::Instruction;
@@ -94,7 +95,8 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
     if (const auto retInst =
             llvm::dyn_cast<llvm::ReturnInst>(BB.getTerminator())) {
         // TODO (moritz): use a more clever approach for void functions
-        SharedSMTRef retName = stringExpr("0");
+        SharedSMTRef retName =
+            std::make_unique<ConstantInt>(llvm::APInt(64, 0));
         if (retInst->getReturnValue() != nullptr) {
             retName =
                 instrNameOrVal(retInst->getReturnValue(), retInst->getType());
@@ -240,12 +242,12 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             SharedSMTRef load =
                 makeOp("select", memoryVariable(heapName(progIndex)), pointer);
             for (unsigned i = 1; i < bytes; ++i) {
-                load = makeOp(
-                    "concat", load,
-                    makeOp("select", memoryVariable(heapName(progIndex)),
-                           makeOp("bvadd", pointer,
-                                  smt::makeOp("_", "bv" + std::to_string(i),
-                                              "64"))));
+                load =
+                    makeOp("concat", load,
+                           makeOp("select", memoryVariable(heapName(progIndex)),
+                                  makeOp("bvadd", pointer,
+                                         std::make_unique<ConstantInt>(
+                                             llvm::APInt(64, i)))));
             }
             return {makeAssignment(loadInst->getName(), load)};
         } else {
@@ -274,7 +276,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             for (int i = 0; i < bytes; ++i) {
                 SharedSMTRef offset =
                     makeOp("bvadd", pointer,
-                           smt::makeOp("_", "bv" + std::to_string(i), "64"));
+                           std::make_unique<ConstantInt>(llvm::APInt(64, i)));
                 SharedSMTRef elem = makeOp(
                     "(_ extract " + std::to_string(8 * (bytes - i - 1) + 7) +
                         " " + std::to_string(8 * (bytes - i - 1)) + ")",
@@ -326,8 +328,10 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             // conversion
             std::vector<SharedSMTRef> args;
             args.push_back(val);
-            args.push_back(stringExpr("1"));
-            args.push_back(stringExpr("0"));
+            args.push_back(std::make_unique<ConstantInt>(
+                llvm::APInt(retTy->getIntegerBitWidth(), 1)));
+            args.push_back(std::make_unique<ConstantInt>(
+                llvm::APInt(retTy->getIntegerBitWidth(), 0)));
             return {
                 makeAssignment(ext->getName(), make_shared<Op>("ite", args))};
         } else {
@@ -367,11 +371,12 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             typeSize(allocaInst->getAllocatedType(),
                      allocaInst->getModule()->getDataLayout());
         std::string sp = stackPointerName(progIndex);
-        return {
-            makeAssignment(sp, makeOp("-", sp, std::to_string(allocatedSize))),
-            makeAssignment(allocaInst->getName(), stringExpr(sp)),
-            makeAssignment(string(allocaInst->getName()) + "_OnStack",
-                           make_unique<ConstantBool>(true))};
+        return {makeAssignment(
+                    sp, makeOp("-", sp, std::make_unique<ConstantInt>(
+                                            llvm::APInt(64, allocatedSize)))),
+                makeAssignment(allocaInst->getName(), stringExpr(sp)),
+                makeAssignment(string(allocaInst->getName()) + "_OnStack",
+                               make_unique<ConstantBool>(true))};
     }
     logErrorData("Couldn’t convert instruction to def\n", Instr);
     return {makeAssignment("UNKNOWN INSTRUCTION", stringExpr("UNKNOWN ARGS"))};
@@ -579,11 +584,12 @@ combineOp(const llvm::BinaryOperator &Op) {
             // rounding conversion to guard for floating point errors
             uint64_t divisor =
                 static_cast<uint64_t>(pow(2, constInt->getZExtValue()) + 0.5);
-            return
-                [divisor](string opName, SMTRef firstArg, SMTRef /*unused*/) {
-                    return makeOp(opName, std::move(firstArg),
-                                  std::to_string(divisor));
-                };
+            return [divisor](string opName, SMTRef firstArg,
+                             SMTRef /*unused*/) {
+                return makeOp(
+                    opName, std::move(firstArg),
+                    std::make_unique<ConstantInt>(llvm::APInt(64, divisor)));
+            };
         } else {
             logErrorData("Only shifts by a constant are supported\n", Op);
         }
@@ -625,12 +631,14 @@ vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *callInst,
                 for (int j = 0;
                      j < typeSize(elTy, callInst->getModule()->getDataLayout());
                      ++j) {
-                    SMTRef select =
-                        makeOp("select", heapSelect,
-                               makeOp("+", basePointerSrc, std::to_string(i)));
+                    SMTRef select = makeOp("select", heapSelect,
+                                           makeOp("+", basePointerSrc,
+                                                  std::make_unique<ConstantInt>(
+                                                      llvm::APInt(64, i))));
                     const vector<SharedSMTRef> args = {
-                        heapStore,
-                        makeOp("+", basePointerDest, std::to_string(i)),
+                        heapStore, makeOp("+", basePointerDest,
+                                          std::make_unique<ConstantInt>(
+                                              llvm::APInt(64, i))),
                         std::move(select)};
                     definitions.push_back(
                         shared_ptr<const Assignment>(makeAssignment(

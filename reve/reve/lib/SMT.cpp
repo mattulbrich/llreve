@@ -15,7 +15,6 @@
 #include "Memory.h"
 #include "Opts.h"
 
-#include <ctype.h>
 #include <iostream>
 
 namespace smt {
@@ -47,6 +46,32 @@ SExprRef ConstantFP::toSExpr() const {
         this->value.toString(stringVec, 0, 500);
         string stringRepr(stringVec.begin(), stringVec.end());
         return sexprFromString(stringRepr);
+    }
+}
+
+SExprRef ConstantInt::toSExpr() const {
+    if (SMTGenerationOpts::getInstance().BitVect) {
+        // TODO we should use the sexpr machinery instead of appending strings
+        unsigned bitWidth = value.getBitWidth();
+        if (value.isNegative()) {
+            return smt::makeOp("bvneg",
+                               smt::makeOp("_",
+                                           "bv" + (-value).toString(10, true),
+                                           std::to_string(bitWidth)))
+                ->toSExpr();
+
+        } else {
+            return sexprFromString("(_ bv" + value.toString(10, true) + " " +
+                                   std::to_string(bitWidth) + ")");
+        }
+    } else {
+        if (value.isNegative()) {
+            vector<SExprRef> args;
+            args.push_back(sexprFromString((-value).toString(10, true)));
+            return make_unique<Apply<std::string>>("-", std::move(args));
+        } else {
+            return sexprFromString(value.toString(10, true));
+        }
     }
 }
 
@@ -367,7 +392,7 @@ SharedSMTRef SMTExpr::renameAssignments(map<string, int> variableMap) const {
 
 SharedSMTRef
 ConstantString::renameAssignments(map<string, int> variableMap) const {
-    if (value.at(0) == '(' || isdigit(value.at(0))) {
+    if (value.at(0) == '(') {
         return shared_from_this();
     } else {
         string name = value;
@@ -692,10 +717,6 @@ z3::expr SMTExpr::toZ3Expr(
 z3::expr ConstantString::toZ3Expr(
     z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
     const std::map<std::string, Z3DefineFun> & /* unused */) const {
-    if (!value.empty() && (isdigit(value.at(0)) || value.at(0) == '-')) {
-        return cxt.int_val(std::stoi(value));
-    }
-
     if (nameMap.count(value) == 0) {
         std::cerr << "Couldn’t find " << value << "\n";
         exit(1);
@@ -859,21 +880,6 @@ void FunDef::toZ3(z3::context &cxt, z3::solver & /* unused */,
     }
     z3::expr z3Body = body->toZ3Expr(cxt, nameMap, defineFunMap);
     defineFunMap.insert({funName, {vars, z3Body}});
-}
-
-// Non-class methods
-smt::SharedSMTRef apIntToSMT(llvm::APInt i) {
-    if (SMTGenerationOpts::getInstance().BitVect) {
-        unsigned bitWidth = i.getBitWidth();
-        return smt::stringExpr("(_ bv" + i.toString(10, true) + " " +
-                               std::to_string(bitWidth) + ")");
-    } else {
-        if (i.isNegative()) {
-            return smt::makeOp("-", (-i).toString(10, true));
-        } else {
-            return smt::stringExpr(i.toString(10, true));
-        }
-    }
 }
 
 SharedSMTRef nestLets(SharedSMTRef clause, std::vector<Assignment> defs) {

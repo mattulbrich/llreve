@@ -45,30 +45,7 @@ SMTRef instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) {
         if (apInt.isIntN(1) && ty->isIntegerTy(1)) {
             return make_unique<ConstantBool>(apInt.getBoolValue());
         }
-        if (apInt.isNegative()) {
-            if (SMTGenerationOpts::getInstance().BitVect) {
-                return smt::makeOp(
-                    "bvneg",
-                    smt::makeOp(
-                        "_",
-                        "bv" + apInt.toString(10, true).substr(1, string::npos),
-                        std::to_string(ty->getIntegerBitWidth())));
-            } else {
-                return makeOp("-", stringExpr(apInt.toString(10, true).substr(
-                                       1, string::npos)));
-            }
-        } else {
-            if (SMTGenerationOpts::getInstance().BitVect) {
-                if (ty->isVoidTy()) {
-                    return smt::makeOp("_", "bv" + apInt.toString(10, true),
-                                       std::to_string(apInt.getBitWidth()));
-                }
-                return smt::makeOp("_", "bv" + apInt.toString(10, true),
-                                   std::to_string(ty->getIntegerBitWidth()));
-            } else {
-                return stringExpr(apInt.toString(10, true));
-            }
-        }
+        return std::make_unique<smt::ConstantInt>(apInt);
     }
     if (const auto constFP = llvm::dyn_cast<llvm::ConstantFP>(val)) {
         return std::make_unique<smt::ConstantFP>(constFP->getValueAPF());
