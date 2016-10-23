@@ -190,7 +190,7 @@ llvm::BasicBlock *lastBlock(Path Path) {
 Condition::~Condition() = default;
 
 SMTRef BooleanCondition::toSmt() const {
-    SMTRef result = instrNameOrVal(Cond, Cond->getType());
+    SMTRef result = instrNameOrVal(Cond);
     if (True) {
         return result;
     }
@@ -198,7 +198,7 @@ SMTRef BooleanCondition::toSmt() const {
 }
 
 SMTRef SwitchCondition::toSmt() const {
-    return makeOp("=", instrNameOrVal(Cond, Cond->getType()), apIntToSMT(Val));
+    return makeOp("=", instrNameOrVal(Cond), apIntToSMT(Val));
 }
 
 SMTRef SwitchDefault::toSmt() const {
@@ -206,7 +206,7 @@ SMTRef SwitchDefault::toSmt() const {
     for (auto Val : Vals) {
         StringVals.push_back(apIntToSMT(Val));
     }
-    StringVals.push_back(instrNameOrVal(Cond, Cond->getType()));
+    StringVals.push_back(instrNameOrVal(Cond));
     return std::make_unique<Op>("distinct", StringVals);
 }
 

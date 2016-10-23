@@ -72,13 +72,15 @@ auto logWarningData_(Str message, A &el, const char *file, int line) -> void {
 
 auto instrLocation(const llvm::Value *val)
     -> std::unique_ptr<const smt::SMTExpr>;
+// convenience wrapper that uses the type of the passed value
+auto instrNameOrVal(const llvm::Value *val)
+    -> std::unique_ptr<const smt::SMTExpr>;
 auto instrNameOrVal(const llvm::Value *val, const llvm::Type *ty)
     -> std::unique_ptr<const smt::SMTExpr>;
 auto typeSize(llvm::Type *ty, const llvm::DataLayout &layout) -> int;
 template <typename T> std::unique_ptr<const smt::SMTExpr> resolveGEP(T &gep) {
     std::vector<smt::SharedSMTRef> args;
-    args.push_back(instrNameOrVal(gep.getPointerOperand(),
-                                  gep.getPointerOperand()->getType()));
+    args.push_back(instrNameOrVal(gep.getPointerOperand()));
     const auto type = gep.getSourceElementType();
     std::vector<llvm::Value *> indices;
     for (auto ix = gep.idx_begin(), e = gep.idx_end(); ix != e; ++ix) {
@@ -98,7 +100,7 @@ template <typename T> std::unique_ptr<const smt::SMTExpr> resolveGEP(T &gep) {
         const auto indexedType = llvm::GetElementPtrInst::getIndexedType(
             type, llvm::ArrayRef<llvm::Value *>(indices));
         const auto size = typeSize(indexedType, mod->getDataLayout());
-        auto smtIx = instrNameOrVal(*ix, (*ix)->getType());
+        auto smtIx = instrNameOrVal(*ix);
         if (SMTGenerationOpts::getInstance().BitVect) {
             smtIx = smt::makeOp(
                 "(_ sign_extend " +

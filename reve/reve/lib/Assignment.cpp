@@ -116,10 +116,8 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
         if (BinOp->getType()->isFloatingPointTy()) {
             auto op = std::make_unique<smt::BinaryFPOperator>(
                 binaryFPOpcode(BinOp->getOpcode()), llvmType(BinOp->getType()),
-                instrNameOrVal(BinOp->getOperand(0),
-                               BinOp->getOperand(0)->getType()),
-                instrNameOrVal(BinOp->getOperand(1),
-                               BinOp->getOperand(1)->getType()));
+                instrNameOrVal(BinOp->getOperand(0)),
+                instrNameOrVal(BinOp->getOperand(1)));
             return {makeAssignment(BinOp->getName(), std::move(op))};
         }
         if (SMTGenerationOpts::getInstance().NoByteHeap &&
@@ -137,8 +135,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
                     if (ConstInt->getSExtValue() == 4 && isPtrDiff(*instr)) {
                         return {makeAssignment(
                             BinOp->getName(),
-                            instrNameOrVal(BinOp->getOperand(0),
-                                           BinOp->getOperand(0)->getType()))};
+                            instrNameOrVal(BinOp->getOperand(0)))};
                     } else {
                         logWarning("Division of pointer difference by " +
                                    std::to_string(ConstInt->getSExtValue()) +
@@ -160,37 +157,29 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
         }
         return {makeAssignment(
             BinOp->getName(),
-            combineOp(*BinOp)(
-                opName(*BinOp), instrNameOrVal(BinOp->getOperand(0),
-                                               BinOp->getOperand(0)->getType()),
-                instrNameOrVal(BinOp->getOperand(1),
-                               BinOp->getOperand(1)->getType())))};
+            combineOp(*BinOp)(opName(*BinOp),
+                              instrNameOrVal(BinOp->getOperand(0)),
+                              instrNameOrVal(BinOp->getOperand(1))))};
     }
     if (const auto fcmpInst = llvm::dyn_cast<llvm::FCmpInst>(&Instr)) {
         auto cmp = std::make_unique<smt::FPCmp>(
             fpPredicate(fcmpInst->getPredicate()),
             llvmType(fcmpInst->getOperand(0)->getType()),
-            instrNameOrVal(fcmpInst->getOperand(0),
-                           fcmpInst->getOperand(0)->getType()),
-            instrNameOrVal(fcmpInst->getOperand(1),
-                           fcmpInst->getOperand(1)->getType()));
+            instrNameOrVal(fcmpInst->getOperand(0)),
+            instrNameOrVal(fcmpInst->getOperand(1)));
         return {makeAssignment(fcmpInst->getName(), std::move(cmp))};
     }
     if (const auto cmpInst = llvm::dyn_cast<llvm::CmpInst>(&Instr)) {
         auto fun = predicateFun(*cmpInst);
-        SMTRef cmp =
-            makeOp(predicateName(cmpInst->getPredicate()),
-                   fun(instrNameOrVal(cmpInst->getOperand(0),
-                                      cmpInst->getOperand(0)->getType())),
-                   fun(instrNameOrVal(cmpInst->getOperand(1),
-                                      cmpInst->getOperand(0)->getType())));
+        SMTRef cmp = makeOp(predicateName(cmpInst->getPredicate()),
+                            fun(instrNameOrVal(cmpInst->getOperand(0))),
+                            fun(instrNameOrVal(cmpInst->getOperand(1))));
         return {makeAssignment(cmpInst->getName(), std::move(cmp))};
     }
     if (const auto phiInst = llvm::dyn_cast<llvm::PHINode>(&Instr)) {
         const auto val = phiInst->getIncomingValueForBlock(prevBb);
         assert(val);
-        auto assgn = makeAssignment(phiInst->getName(),
-                                    instrNameOrVal(val, val->getType()));
+        auto assgn = makeAssignment(phiInst->getName(), instrNameOrVal(val));
         if (SMTGenerationOpts::getInstance().Stack &&
             phiInst->getType()->isPointerTy()) {
             auto locAssgn = makeAssignment(
@@ -204,18 +193,17 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
         const auto cond = selectInst->getCondition();
         const auto trueVal = selectInst->getTrueValue();
         const auto falseVal = selectInst->getFalseValue();
-        const vector<SharedSMTRef> args = {
-            instrNameOrVal(cond, cond->getType()),
-            instrNameOrVal(trueVal, trueVal->getType()),
-            instrNameOrVal(falseVal, falseVal->getType())};
+        const vector<SharedSMTRef> args = {instrNameOrVal(cond),
+                                           instrNameOrVal(trueVal),
+                                           instrNameOrVal(falseVal)};
         auto assgn = makeAssignment(selectInst->getName(),
                                     std::make_shared<class Op>("ite", args));
         if (SMTGenerationOpts::getInstance().Stack &&
             trueVal->getType()->isPointerTy()) {
             assert(falseVal->getType()->isPointerTy());
             auto location =
-                makeOp("ite", instrNameOrVal(cond, cond->getType()),
-                       instrLocation(trueVal), instrLocation(falseVal));
+                makeOp("ite", instrNameOrVal(cond), instrLocation(trueVal),
+                       instrLocation(falseVal));
             return {std::move(assgn),
                     makeAssignment(string(selectInst->getName()) + "_OnStack",
                                    std::move(location))};
@@ -242,8 +230,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
         }
     }
     if (const auto loadInst = llvm::dyn_cast<llvm::LoadInst>(&Instr)) {
-        SharedSMTRef pointer = instrNameOrVal(
-            loadInst->getOperand(0), loadInst->getOperand(0)->getType());
+        SharedSMTRef pointer = instrNameOrVal(loadInst->getOperand(0));
         if (SMTGenerationOpts::getInstance().BitVect) {
             // We load single bytes
             unsigned bytes = loadInst->getType()->getIntegerBitWidth() / 8;
@@ -271,12 +258,8 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
     }
     if (const auto storeInst = llvm::dyn_cast<llvm::StoreInst>(&Instr)) {
         string heap = heapName(progIndex);
-        SharedSMTRef pointer =
-            instrNameOrVal(storeInst->getPointerOperand(),
-                           storeInst->getPointerOperand()->getType());
-        SharedSMTRef val =
-            instrNameOrVal(storeInst->getValueOperand(),
-                           storeInst->getValueOperand()->getType());
+        SharedSMTRef pointer = instrNameOrVal(storeInst->getPointerOperand());
+        SharedSMTRef val = instrNameOrVal(storeInst->getValueOperand());
         if (SMTGenerationOpts::getInstance().BitVect) {
             int bytes =
                 storeInst->getValueOperand()->getType()->getIntegerBitWidth() /
@@ -316,12 +299,9 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
                 "(_ extract " + std::to_string(bitWidth - 1) + " 0)";
             return {makeAssignment(
                 truncInst->getName(),
-                makeOp(extract,
-                       instrNameOrVal(truncInst->getOperand(0),
-                                      truncInst->getOperand(0)->getType())))};
+                makeOp(extract, instrNameOrVal(truncInst->getOperand(0))))};
         } else {
-            SharedSMTRef val = instrNameOrVal(
-                truncInst->getOperand(0), truncInst->getOperand(0)->getType());
+            SharedSMTRef val = instrNameOrVal(truncInst->getOperand(0));
             return {makeAssignment(truncInst->getName(), val)};
         }
     }
@@ -329,7 +309,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
     if ((ext = llvm::dyn_cast<llvm::ZExtInst>(&Instr)) ||
         (ext = llvm::dyn_cast<llvm::SExtInst>(&Instr))) {
         const auto operand = ext->getOperand(0);
-        SharedSMTRef val = instrNameOrVal(operand, operand->getType());
+        SharedSMTRef val = instrNameOrVal(operand);
         const auto retTy = ext->getType();
         if (retTy->isIntegerTy() && retTy->getIntegerBitWidth() > 1 &&
             operand->getType()->isIntegerTy(1)) {
@@ -372,8 +352,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
         }
     }
     if (const auto bitCast = llvm::dyn_cast<llvm::CastInst>(&Instr)) {
-        SharedSMTRef val = instrNameOrVal(bitCast->getOperand(0),
-                                          bitCast->getOperand(0)->getType());
+        SharedSMTRef val = instrNameOrVal(bitCast->getOperand(0));
         return {makeAssignment(bitCast->getName(), val)};
     }
     if (const auto allocaInst = llvm::dyn_cast<llvm::AllocaInst>(&Instr)) {
@@ -627,11 +606,9 @@ vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *callInst,
         if (StructTy0 && StructTy1) {
             assert(StructTy0->isLayoutIdentical(StructTy1));
             SharedSMTRef basePointerDest =
-                instrNameOrVal(callInst->getArgOperand(0),
-                               callInst->getArgOperand(0)->getType());
+                instrNameOrVal(callInst->getArgOperand(0));
             SharedSMTRef basePointerSrc =
-                instrNameOrVal(callInst->getArgOperand(1),
-                               callInst->getArgOperand(1)->getType());
+                instrNameOrVal(callInst->getArgOperand(1));
             string heapNameSelect = "HEAP$" + std::to_string(program);
             string heapNameStore = "HEAP$" + std::to_string(program);
             int i = 0;

@@ -31,6 +31,10 @@ SMTRef instrLocation(const llvm::Value *val) {
     return stringExpr("UnknownLocation");
 }
 
+SMTRef instrNameOrVal(const llvm::Value *val) {
+    return instrNameOrVal(val, val->getType());
+}
+
 /// Get the name of the instruction or a string representation of the value if
 /// it's a constant
 SMTRef instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) {
@@ -82,8 +86,7 @@ SMTRef instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) {
 
     if (const auto constExpr = llvm::dyn_cast<llvm::ConstantExpr>(val)) {
         if (constExpr->getOpcode() == llvm::Instruction::IntToPtr) {
-            return instrNameOrVal(constExpr->getOperand(0),
-                                  constExpr->getOperand(0)->getType());
+            return instrNameOrVal(constExpr->getOperand(0));
         }
     }
     if (llvm::isa<llvm::GlobalValue>(val)) {
