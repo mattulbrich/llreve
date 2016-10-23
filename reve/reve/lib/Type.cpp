@@ -57,8 +57,8 @@ unique_ptr<Type> ArrayType::copy() const {
     return make_unique<ArrayType>(domain->copy(), target->copy());
 }
 
-unique_ptr<ArrayType> int64ArrayType() {
-    return make_unique<ArrayType>(int64Type(), int64Type());
+unique_ptr<ArrayType> memoryType() {
+    return make_unique<ArrayType>(int64Type(), make_unique<IntType>(8));
 }
 
 unique_ptr<IntType> int64Type() { return make_unique<IntType>(64); }
@@ -93,7 +93,7 @@ unique_ptr<Type> llvmType(const llvm::Type *type) {
 unique_ptr<Type> inferTypeByName(string arg) {
     if (std::regex_match(arg, HEAP_REGEX) || arg == "HEAP$1_res" ||
         arg == "HEAP$2_res") {
-        return int64ArrayType();
+        return memoryType();
     }
     return int64Type();
 }

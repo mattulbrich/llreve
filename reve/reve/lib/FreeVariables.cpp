@@ -139,11 +139,11 @@ static auto addMemoryArrays(vector<smt::SortedVar> vars, Program prog)
     -> vector<smt::SortedVar> {
     int index = programIndex(prog);
     if (SMTGenerationOpts::getInstance().Heap) {
-        vars.push_back(SortedVar(heapName(index), int64ArrayType()));
+        vars.push_back(SortedVar(heapName(index), memoryType()));
     }
     if (SMTGenerationOpts::getInstance().Stack) {
         vars.push_back(SortedVar(stackPointerName(index), pointerType()));
-        vars.push_back(SortedVar(stackName(index), int64ArrayType()));
+        vars.push_back(SortedVar(stackName(index), memoryType()));
     }
     return vars;
 }

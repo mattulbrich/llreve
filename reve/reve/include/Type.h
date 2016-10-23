@@ -48,7 +48,7 @@ struct ArrayType : Type {
     std::unique_ptr<Type> copy() const override;
 };
 
-auto int64ArrayType() -> std::unique_ptr<ArrayType>;
+auto memoryType() -> std::unique_ptr<ArrayType>;
 auto int64Type() -> std::unique_ptr<IntType>;
 auto boolType() -> std::unique_ptr<BoolType>;
 auto pointerType() -> std::unique_ptr<IntType>;

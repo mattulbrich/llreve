@@ -13,10 +13,12 @@
 #include "Helper.h"
 #include "Opts.h"
 
+using std::make_unique;
 using std::vector;
 using std::make_shared;
 using std::unique_ptr;
 using std::string;
+using smt::TypedVariable;
 using smt::makeOp;
 using smt::stringExpr;
 using smt::SharedSMTRef;
@@ -46,67 +48,74 @@ SMTRef invariant(Mark StartIndex, Mark EndIndex, vector<SortedVar> InputArgs,
         FilteredArgs = filterVars(2, FilteredArgs);
         FilteredEndArgs = filterVars(2, FilteredEndArgs);
     }
-    vector<string> ResultArgs;
+    vector<TypedVariable> ResultArgs;
     switch (SMTFor) {
     case ProgramSelection::First:
-        ResultArgs.push_back("result$1");
+        ResultArgs.push_back({"result$1", int64Type()});
         break;
     case ProgramSelection::Second:
-        ResultArgs.push_back("result$2");
+        ResultArgs.push_back({"result$2", int64Type()});
         break;
     case ProgramSelection::Both:
-        ResultArgs.push_back("result$1");
-        ResultArgs.push_back("result$2");
+        ResultArgs.push_back({"result$1", int64Type()});
+        ResultArgs.push_back({"result$2", int64Type()});
         break;
     }
     if (SMTGenerationOpts::getInstance().Heap) {
         switch (SMTFor) {
         case ProgramSelection::First:
-            ResultArgs.push_back("HEAP$1_res");
+            ResultArgs.push_back({"HEAP$1_res", memoryType()});
             break;
         case ProgramSelection::Second:
-            ResultArgs.push_back("HEAP$2_res");
+            ResultArgs.push_back({"HEAP$2_res", memoryType()});
             break;
         case ProgramSelection::Both:
-            ResultArgs.push_back("HEAP$1_res");
-            ResultArgs.push_back("HEAP$2_res");
+            ResultArgs.push_back({"HEAP$1_res", memoryType()});
+            ResultArgs.push_back({"HEAP$2_res", memoryType()});
             break;
         }
     }
     // Arguments passed into the current invariant
-    vector<string> EndArgsVect;
+    vector<SharedSMTRef> EndArgsVect;
     for (const auto &arg : FilteredArgs) {
-        EndArgsVect.push_back(arg.name + "_old");
+        EndArgsVect.push_back(std::make_unique<smt::TypedVariable>(
+            arg.name + "_old", arg.type->copy()));
     }
-    EndArgsVect.insert(EndArgsVect.end(), ResultArgs.begin(), ResultArgs.end());
+    for (const auto &var : ResultArgs) {
+        EndArgsVect.push_back(
+            make_unique<TypedVariable>(var.name, var.type->copy()));
+    }
     // The current invariant
-    SMTRef Clause =
-        makeOp(invariantName(StartIndex, SMTFor, FunName), EndArgsVect);
+    SMTRef Clause = std::make_unique<smt::Op>(
+        invariantName(StartIndex, SMTFor, FunName), EndArgsVect);
 
     if (EndIndex != EXIT_MARK) {
         // The result of another call is required to establish the current
         // invariant
         // so we do do that call and use the result in the current invariant
         vector<SortedVar> ForallArgs;
-        for (auto ResultArg : ResultArgs) {
+        for (const auto &ResultArg : ResultArgs) {
             ForallArgs.push_back(
-                SortedVar(ResultArg, inferTypeByName(ResultArg)));
+                SortedVar(ResultArg.name, ResultArg.type->copy()));
         }
         if (EndIndex != UNREACHABLE_MARK) {
-            vector<string> usingArgsPre;
+            vector<SharedSMTRef> usingArgsPre;
             for (const auto &arg : FilteredEndArgs) {
-                usingArgsPre.push_back(arg.name);
+                usingArgsPre.push_back(std::make_unique<smt::TypedVariable>(
+                    arg.name, arg.type->copy()));
             }
-            vector<string> usingArgs = usingArgsPre;
-            SMTRef PreInv = makeOp(
+            vector<SharedSMTRef> usingArgs = usingArgsPre;
+            SMTRef PreInv = std::make_unique<smt::Op>(
                 invariantName(EndIndex, SMTFor, FunName, InvariantAttr::PRE),
                 usingArgsPre);
-            usingArgs.insert(usingArgs.end(), ResultArgs.begin(),
-                             ResultArgs.end());
-            Clause =
-                makeOp("=>", makeOp(invariantName(EndIndex, SMTFor, FunName),
-                                    usingArgs),
-                       std::move(Clause));
+            for (const auto &var : ResultArgs) {
+                usingArgs.push_back(
+                    make_unique<TypedVariable>(var.name, var.type->copy()));
+            }
+            Clause = makeOp(
+                "=>", std::make_unique<smt::Op>(
+                          invariantName(EndIndex, SMTFor, FunName), usingArgs),
+                std::move(Clause));
             if (SMTFor == ProgramSelection::Both) {
                 Clause = makeOp("and", std::move(PreInv), std::move(Clause));
             }
@@ -118,26 +127,31 @@ SMTRef invariant(Mark StartIndex, Mark EndIndex, vector<SortedVar> InputArgs,
 
 SMTRef mainInvariant(Mark EndIndex, vector<SortedVar> FreeVars,
                      string FunName) {
-    vector<string> args;
-    for (const auto &var : FreeVars) {
-        args.push_back(var.name);
-    }
     if (EndIndex == EXIT_MARK) {
-        vector<string> Args = {"result$1", "result$2"};
-        for (const auto &arg : args) {
+        vector<SharedSMTRef> args = {smt::stringExpr("result$1"),
+                                     smt::stringExpr("result$2")};
+        for (const auto &arg : FreeVars) {
             // No stack in output
-            if (arg.compare(0, 5, "STACK") && arg.compare(0, 2, "SP")) {
-                Args.push_back(arg);
+            if (arg.name.compare(0, 5, "STACK") &&
+                arg.name.compare(0, 2, "SP")) {
+                args.push_back(std::make_unique<smt::TypedVariable>(
+                    arg.name, arg.type->copy()));
             }
         }
-        return makeOp("OUT_INV", Args);
-    }
-    if (EndIndex == UNREACHABLE_MARK) {
+        return std::make_unique<smt::Op>("OUT_INV", std::move(args));
+    } else if (EndIndex == UNREACHABLE_MARK) {
         return stringExpr("true");
+    } else {
+        vector<SharedSMTRef> args;
+        for (auto &arg : FreeVars) {
+            args.push_back(std::make_unique<smt::TypedVariable>(
+                arg.name, arg.type->copy()));
+        }
+        return std::make_unique<smt::Op>(
+            invariantName(EndIndex, ProgramSelection::Both, FunName,
+                          InvariantAttr::MAIN),
+            std::move(args));
     }
-    return makeOp(invariantName(EndIndex, ProgramSelection::Both, FunName,
-                                InvariantAttr::MAIN),
-                  args);
 }
 
 /// Declare an invariant
@@ -159,9 +173,9 @@ MonoPair<SMTRef> invariantDeclaration(Mark BlockIndex,
         args.push_back(llvmType(resultType));
     }
     if (SMTGenerationOpts::getInstance().Heap) {
-        args.push_back(int64ArrayType());
+        args.push_back(memoryType());
         if (For == ProgramSelection::Both) {
-            args.push_back(int64ArrayType());
+            args.push_back(memoryType());
         }
     }
 

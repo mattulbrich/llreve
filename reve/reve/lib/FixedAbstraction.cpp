@@ -13,6 +13,7 @@ using std::make_unique;
 using smt::makeOp;
 using smt::FunDef;
 using smt::Op;
+using smt::memoryVariable;
 using smt::SharedSMTRef;
 using smt::SMTRef;
 using smt::SortedVar;
@@ -43,20 +44,20 @@ static std::vector<SortedVar> externDeclArgs(const llvm::Function &fun1,
         args.push_back(arg);
     }
     if (SMTGenerationOpts::getInstance().Heap) {
-        args.push_back(SortedVar("HEAP$1", int64ArrayType()));
+        args.push_back(SortedVar("HEAP$1", memoryType()));
     }
     auto funArgs2 = functionArgs(fun2);
     for (auto arg : funArgs2) {
         args.push_back(arg);
     }
     if (SMTGenerationOpts::getInstance().Heap) {
-        args.push_back(SortedVar("HEAP$2", int64ArrayType()));
+        args.push_back(SortedVar("HEAP$2", memoryType()));
     }
     args.push_back(SortedVar("res1", int64Type()));
     args.push_back(SortedVar("res2", int64Type()));
     if (SMTGenerationOpts::getInstance().Heap) {
-        args.push_back(SortedVar("HEAP$1_res", int64ArrayType()));
-        args.push_back(SortedVar("HEAP$2_res", int64ArrayType()));
+        args.push_back(SortedVar("HEAP$1_res", memoryType()));
+        args.push_back(SortedVar("HEAP$2_res", memoryType()));
     }
     return args;
 }
@@ -108,7 +109,8 @@ static SMTRef equalOutputs(std::string functionName,
                            std::multimap<string, string> funCondMap) {
     SMTRef body = makeOp("=", "res1", "res2");
     if (SMTGenerationOpts::getInstance().Heap) {
-        SharedSMTRef heapOutEqual = makeOp("=", "HEAP$1_res", "HEAP$2_res");
+        SharedSMTRef heapOutEqual = makeOp("=", memoryVariable("HEAP$1_res"),
+                                           memoryVariable("HEAP$2_res"));
         body = makeOp("and", std::move(body), heapOutEqual);
     }
 
@@ -133,11 +135,15 @@ static SMTRef equalInputs(const llvm::Function &fun1,
     auto funArgs2 = functionArgs(fun2);
 
     for (auto argPair : makeZip(funArgs1, funArgs2)) {
-        equal.push_back(makeOp("=", argPair.first.name, argPair.second.name));
+        equal.push_back(makeOp(
+            "=", make_unique<smt::TypedVariable>(argPair.first.name,
+                                                 argPair.first.type->copy()),
+            make_unique<smt::TypedVariable>(argPair.second.name,
+                                            argPair.second.type->copy())));
     }
     if (SMTGenerationOpts::getInstance().Heap) {
-        std::vector<SortedVar> forallArgs = {SortedVar("i", int64Type())};
-        SharedSMTRef heapInEqual = makeOp("=", "HEAP$1", "HEAP$2");
+        SharedSMTRef heapInEqual =
+            makeOp("=", memoryVariable("HEAP$1"), memoryVariable("HEAP$2"));
         equal.push_back(heapInEqual);
     }
     return make_unique<Op>("and", equal);
@@ -198,11 +204,11 @@ std::vector<SharedSMTRef> externFunDecl(const llvm::Function &fun,
     for (auto argNum : varArgs) {
         std::vector<SortedVar> args = functionArgs(fun);
         if (SMTGenerationOpts::getInstance().Heap) {
-            args.push_back(SortedVar("HEAP", int64ArrayType()));
+            args.push_back(SortedVar("HEAP", memoryType()));
         }
         args.push_back(SortedVar("res", int64Type()));
         if (SMTGenerationOpts::getInstance().Heap) {
-            args.push_back(SortedVar("HEAP_res", int64ArrayType()));
+            args.push_back(SortedVar("HEAP_res", memoryType()));
         }
         std::string funName =
             invariantName(ENTRY_MARK, asSelection(program), fun.getName().str(),

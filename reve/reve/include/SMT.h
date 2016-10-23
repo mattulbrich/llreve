@@ -109,6 +109,22 @@ class Assert : public SMTExpr {
               std::map<std::string, Z3DefineFun> &defineFunMap) const override;
 };
 
+// TypedVariable is simply a reference to a variable with a type attached to it,
+// SortedVar is used in binders where the type should also be serialized, e.g.
+// forall
+class TypedVariable : public SMTExpr {
+  public:
+    std::string name;
+    std::unique_ptr<Type> type;
+    TypedVariable(std::string name, std::unique_ptr<Type> type)
+        : name(std::move(name)), type(std::move(type)) {}
+    std::unique_ptr<const HeapInfo> heapInfo() const override;
+    SExprRef toSExpr() const override;
+    std::set<std::string> uses() const override;
+    SharedSMTRef
+    renameAssignments(std::map<std::string, int> variableMap) const override;
+};
+
 class SortedVar {
   public:
     std::string name;
@@ -228,9 +244,6 @@ template <typename T> class Primitive : public SMTExpr {
         return std::set<std::string>();
     }
     SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
-    std::unique_ptr<const HeapInfo> heapInfo() const override {
-        return nullptr;
-    }
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) const override;
     z3::expr toZ3Expr(
@@ -400,4 +413,6 @@ auto nestLets(SharedSMTRef clause, std::vector<Assignment> defs)
 bool isArray(const Type &type);
 
 auto apIntToSMT(llvm::APInt i) -> smt::SharedSMTRef;
+
+std::unique_ptr<SMTExpr> memoryVariable(std::string name);
 }

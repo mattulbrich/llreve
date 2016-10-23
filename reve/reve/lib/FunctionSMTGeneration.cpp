@@ -23,6 +23,7 @@
 
 #include <iostream>
 
+using smt::memoryVariable;
 using llvm::CmpInst;
 using smt::Assert;
 using smt::Assignment;
@@ -40,6 +41,7 @@ using smt::stringExpr;
 using std::function;
 using std::make_pair;
 using std::make_shared;
+using std::make_unique;
 using std::map;
 using std::set;
 using std::string;
@@ -398,8 +400,9 @@ vector<AssignmentCallBlock> assignmentsOnPath(Path path, Program prog,
     // Set the new values to the initial values
     vector<DefOrCallInfo> oldDefs;
     for (auto var : filteredFreeVars) {
-        oldDefs.push_back(DefOrCallInfo(
-            make_shared<Assignment>(var.name, stringExpr(var.name + "_old"))));
+        oldDefs.push_back(DefOrCallInfo(make_shared<Assignment>(
+            var.name, make_unique<smt::TypedVariable>(var.name + "_old",
+                                                      var.type->copy()))));
     }
     allDefs.push_back(AssignmentCallBlock(oldDefs, nullptr));
 
@@ -537,8 +540,8 @@ SMTRef mutualFunctionCall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
     args.push_back(SortedVar(callPair.second.assignedTo,
                              llvmType(callPair.second.fun.getReturnType())));
     if (SMTGenerationOpts::getInstance().Heap) {
-        args.push_back(SortedVar("HEAP$1_res", int64ArrayType()));
-        args.push_back(SortedVar("HEAP$2_res", int64ArrayType()));
+        args.push_back(SortedVar("HEAP$1_res", memoryType()));
+        args.push_back(SortedVar("HEAP$2_res", memoryType()));
     }
     vector<SharedSMTRef> implArgs;
 
@@ -548,8 +551,8 @@ SMTRef mutualFunctionCall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
     implArgs.push_back(stringExpr(callPair.first.assignedTo));
     implArgs.push_back(stringExpr(callPair.second.assignedTo));
     if (SMTGenerationOpts::getInstance().Heap) {
-        implArgs.push_back(stringExpr("HEAP$1_res"));
-        implArgs.push_back(stringExpr("HEAP$2_res"));
+        implArgs.push_back(memoryVariable("HEAP$1_res"));
+        implArgs.push_back(memoryVariable("HEAP$2_res"));
     }
     SMTRef postInvariant = std::make_unique<Op>(
         invariantName(ENTRY_MARK, ProgramSelection::Both,
@@ -582,14 +585,14 @@ SMTRef nonMutualFunctionCall(SharedSMTRef clause, CallInfo call, Program prog) {
     forallArgs.push_back(SortedVar(call.assignedTo, int64Type()));
     if (SMTGenerationOpts::getInstance().Heap) {
         forallArgs.push_back(
-            SortedVar("HEAP$" + programS + "_res", int64ArrayType()));
+            SortedVar("HEAP$" + programS + "_res", memoryType()));
     }
     addMemory(implArgs)(call, progIndex);
     const vector<SharedSMTRef> preArgs = implArgs;
 
     implArgs.push_back(stringExpr(call.assignedTo));
     if (SMTGenerationOpts::getInstance().Heap) {
-        implArgs.push_back(stringExpr("HEAP$" + programS + "_res"));
+        implArgs.push_back(memoryVariable("HEAP$" + programS + "_res"));
     }
 
     const SharedSMTRef endInvariant = make_shared<Op>(
@@ -614,11 +617,12 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
                               string funName, bool main,
                               FreeVarsMap freeVarsMap) {
     vector<SortedVar> vars;
-    vector<string> preVars;
-    for (auto arg : freeVars) {
+    vector<SharedSMTRef> preVars;
+    for (const auto &arg : freeVars) {
         std::smatch matchResult;
-        vars.push_back(SortedVar(arg.name + "_old", std::move(arg.type)));
-        preVars.push_back(arg.name + "_old");
+        vars.push_back(SortedVar(arg.name + "_old", arg.type->copy()));
+        preVars.push_back(make_unique<smt::TypedVariable>(arg.name + "_old",
+                                                          arg.type->copy()));
     }
 
     if (vars.empty()) {
@@ -629,17 +633,18 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
         string opname =
             SMTGenerationOpts::getInstance().InitPredicate ? "INIT" : "IN_INV";
 
-        vector<string> args;
+        vector<SharedSMTRef> args;
         for (const auto &arg : freeVars) {
-            args.push_back(arg.name + "_old");
+            args.push_back(make_unique<smt::TypedVariable>(arg.name + "_old",
+                                                           arg.type->copy()));
         }
 
-        clause = makeOp("=>", makeOp(opname, args), clause);
+        clause = makeOp("=>", make_unique<Op>(opname, std::move(args)), clause);
 
     } else {
         InvariantAttr attr = main ? InvariantAttr::MAIN : InvariantAttr::PRE;
-        SMTRef preInv =
-            makeOp(invariantName(blockIndex, prog, funName, attr), preVars);
+        SMTRef preInv = make_unique<Op>(
+            invariantName(blockIndex, prog, funName, attr), preVars);
         clause = makeOp("=>", std::move(preInv), clause);
     }
 
@@ -654,15 +659,17 @@ SharedSMTRef makeFunArgsEqual(SharedSMTRef clause, SharedSMTRef preClause,
                               vector<smt::SortedVar> Args2) {
     assert(Args1.size() == Args2.size());
 
-    vector<string> args;
+    vector<SharedSMTRef> args;
     for (const auto &arg : Args1) {
-        args.push_back(arg.name);
+        args.push_back(
+            make_unique<smt::TypedVariable>(arg.name, arg.type->copy()));
     }
     for (const auto &arg : Args2) {
-        args.push_back(arg.name);
+        args.push_back(
+            make_unique<smt::TypedVariable>(arg.name, arg.type->copy()));
     }
 
-    auto inInv = makeOp("IN_INV", args);
+    auto inInv = make_unique<Op>("IN_INV", std::move(args));
 
     return makeOp("=>", std::move(inInv), makeOp("and", clause, preClause));
 }
@@ -675,26 +682,28 @@ SharedSMTRef equalInputsEqualOutputs(vector<smt::SortedVar> funArgs,
                                      string funName, FreeVarsMap freeVarsMap,
                                      const llvm::Type *returnType) {
     vector<SortedVar> forallArgs;
-    vector<string> args;
-    vector<string> preInvArgs;
+    vector<SharedSMTRef> args;
+    vector<SharedSMTRef> preInvArgs;
     for (const auto &arg : funArgs) {
-        args.push_back(arg.name);
+        args.push_back(
+            make_unique<smt::TypedVariable>(arg.name, arg.type->copy()));
     }
     preInvArgs = args;
 
     forallArgs.insert(forallArgs.end(), funArgs.begin(), funArgs.end());
 
-    args.push_back("result$1");
-    args.push_back("result$2");
+    args.push_back(smt::stringExpr("result$1"));
+    args.push_back(smt::stringExpr("result$2"));
     forallArgs.push_back(SortedVar("result$1", llvmType(returnType)));
     forallArgs.push_back(SortedVar("result$2", llvmType(returnType)));
     if (SMTGenerationOpts::getInstance().Heap) {
-        forallArgs.push_back(SortedVar("HEAP$1_res", int64ArrayType()));
-        forallArgs.push_back(SortedVar("HEAP$2_res", int64ArrayType()));
-        args.push_back("HEAP$1_res");
-        args.push_back("HEAP$2_res");
+        forallArgs.push_back(SortedVar("HEAP$1_res", memoryType()));
+        forallArgs.push_back(SortedVar("HEAP$2_res", memoryType()));
+        args.push_back(memoryVariable("HEAP$1_res"));
+        args.push_back(memoryVariable("HEAP$2_res"));
     }
-    vector<string> outArgs = {"result$1", "result$2"};
+    vector<SharedSMTRef> outArgs = {stringExpr("result$1"),
+                                    stringExpr("result$2")};
     vector<string> sortedFunArgs1;
     vector<string> sortedFunArgs2;
     for (const auto &arg : funArgs1) {
@@ -708,30 +717,34 @@ SharedSMTRef equalInputsEqualOutputs(vector<smt::SortedVar> funArgs,
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
         for (const auto &arg : funArgs1) {
             if (!smt::isArray(*arg.type)) {
-                outArgs.push_back(arg.name);
+                outArgs.push_back(make_unique<smt::TypedVariable>(
+                    arg.name, arg.type->copy()));
             }
         }
     }
     if (SMTGenerationOpts::getInstance().Heap) {
-        outArgs.push_back("HEAP$1_res");
+        outArgs.push_back(memoryVariable("HEAP$1_res"));
     }
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
         for (const auto &arg : funArgs2) {
             if (!smt::isArray(*arg.type)) {
-                outArgs.push_back(arg.name);
+                outArgs.push_back(make_unique<smt::TypedVariable>(
+                    arg.name, arg.type->copy()));
             }
         }
     }
     if (SMTGenerationOpts::getInstance().Heap) {
-        outArgs.push_back("HEAP$2_res");
+        outArgs.push_back(memoryVariable("HEAP$2_res"));
     }
     const SharedSMTRef equalResults = makeOp(
-        "=>", makeOp(invariantName(ENTRY_MARK, ProgramSelection::Both, funName),
-                     args),
-        makeOp("OUT_INV", outArgs));
-    SMTRef preInv = makeOp(invariantName(ENTRY_MARK, ProgramSelection::Both,
-                                         funName, InvariantAttr::PRE),
-                           preInvArgs);
+        "=>",
+        make_unique<Op>(
+            invariantName(ENTRY_MARK, ProgramSelection::Both, funName), args),
+        make_unique<Op>("OUT_INV", outArgs));
+    SMTRef preInv =
+        make_unique<Op>(invariantName(ENTRY_MARK, ProgramSelection::Both,
+                                      funName, InvariantAttr::PRE),
+                        preInvArgs);
 
     const auto equalArgs =
         makeFunArgsEqual(equalResults, std::move(preInv), funArgs1, funArgs2);
@@ -874,11 +887,11 @@ auto addMemory(vector<SharedSMTRef> &implArgs)
             implArgs.push_back(arg);
         }
         if (SMTGenerationOpts::getInstance().Heap) {
-            implArgs.push_back(stringExpr(heapName(index)));
+            implArgs.push_back(memoryVariable(heapName(index)));
         }
         if (SMTGenerationOpts::getInstance().Stack) {
-            implArgs.push_back(stringExpr(stackPointerName(index)));
-            implArgs.push_back(stringExpr(stackName(index)));
+            implArgs.push_back(memoryVariable(stackPointerName(index)));
+            implArgs.push_back(memoryVariable(stackName(index)));
         }
     };
 }

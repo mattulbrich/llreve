@@ -157,8 +157,8 @@ SMTRef select_Declaration() {
     SharedSMTRef body =
         makeOp("ite", "onStack", makeOp("select", "stack", "pointer"),
                makeOp("select", "heap", "pointer"));
-    vector<SortedVar> args = {{"heap", int64ArrayType()},
-                              {"stack", int64ArrayType()},
+    vector<SortedVar> args = {{"heap", memoryType()},
+                              {"stack", memoryType()},
                               {"pointer", int64Type()},
                               {"onStack", boolType()}};
     return make_unique<FunDef>("select_", std::move(args), int64Type(), body);
@@ -168,13 +168,12 @@ SMTRef store_Declaration() {
     SharedSMTRef body =
         makeOp("ite", "onStack", makeOp("store", "stack", "pointer", "val"),
                makeOp("store", "heap", "pointer", "val"));
-    vector<SortedVar> args = {{"heap", int64ArrayType()},
-                              {"stack", int64ArrayType()},
+    vector<SortedVar> args = {{"heap", memoryType()},
+                              {"stack", memoryType()},
                               {"pointer", int64Type()},
                               {"onStack", boolType()},
                               {"val", int64Type()}};
-    return make_unique<FunDef>("store_", std::move(args), int64ArrayType(),
-                               body);
+    return make_unique<FunDef>("store_", std::move(args), memoryType(), body);
 }
 
 vector<SharedSMTRef> globalDeclarationsForMod(int globalPointer,
@@ -284,13 +283,13 @@ shared_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
                    int index) -> vector<smt::SortedVar> {
                     if (SMTGenerationOpts::getInstance().Heap) {
                         args.push_back(
-                            SortedVar(heapName(index), int64ArrayType()));
+                            SortedVar(heapName(index), memoryType()));
                     }
                     if (SMTGenerationOpts::getInstance().Stack) {
                         args.push_back(
                             SortedVar(stackPointerName(index), pointerType()));
                         args.push_back(
-                            SortedVar(stackName(index), int64ArrayType()));
+                            SortedVar(stackName(index), memoryType()));
                     }
                     return args;
                 });
@@ -352,7 +351,7 @@ SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
         }
     }
     if (SMTGenerationOpts::getInstance().Heap) {
-        funArgs.push_back(SortedVar("HEAP$1", int64ArrayType()));
+        funArgs.push_back(SortedVar("HEAP$1", memoryType()));
     }
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
         for (auto arg : functionArgs.second) {
@@ -360,12 +359,14 @@ SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
         }
     }
     if (SMTGenerationOpts::getInstance().Heap) {
-        funArgs.push_back(SortedVar("HEAP$2", int64ArrayType()));
+        funArgs.push_back(SortedVar("HEAP$2", memoryType()));
     }
     if (body == nullptr) {
         body = makeOp("=", "result$1", "result$2");
         if (SMTGenerationOpts::getInstance().Heap) {
-            body = makeOp("and", body, makeOp("=", "HEAP$1", "HEAP$2"));
+            body =
+                makeOp("and", body, makeOp("=", smt::memoryVariable("HEAP$1"),
+                                           smt::memoryVariable("HEAP$2")));
         }
     }
 
@@ -400,8 +401,10 @@ SharedSMTRef initImplication(shared_ptr<const FunDef> funDecl) {
     vector<SortedVar> quantified_vars;
 
     for (auto var : funDecl->args) {
-        ininv_args.push_back(stringExpr(var.name));
-        init_args.push_back(stringExpr(var.name));
+        ininv_args.push_back(
+            make_unique<smt::TypedVariable>(var.name, var.type->copy()));
+        init_args.push_back(
+            make_unique<smt::TypedVariable>(var.name, var.type->copy()));
     }
 
     SharedSMTRef inAppl = std::make_shared<Op>("IN_INV", ininv_args);

@@ -27,6 +27,7 @@ using llvm::CmpInst;
 using smt::FPCmp;
 using smt::BinaryFPOperator;
 using smt::Assignment;
+using smt::memoryVariable;
 using smt::stringExpr;
 using smt::SharedSMTRef;
 using smt::SMTRef;
@@ -70,14 +71,14 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
                         definitions.push_back(DefOrCallInfo(
                             shared_ptr<const Assignment>(makeAssignment(
                                 heapName(progIndex),
-                                stringExpr(heapName(progIndex))))));
+                                memoryVariable(heapName(progIndex))))));
                     }
                     definitions.push_back(DefOrCallInfo(
                         toCallInfo(CallInst->getName(), prog, *CallInst)));
                     if (SMTGenerationOpts::getInstance().Heap) {
                         definitions.push_back(DefOrCallInfo(makeAssignment(
                             heapName(progIndex),
-                            stringExpr(heapName(progIndex) + "_res"))));
+                            memoryVariable(heapName(progIndex) + "_res"))));
                     }
                 }
             } else {
@@ -99,9 +100,9 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
         definitions.push_back(DefOrCallInfo(
             makeAssignment("result$" + std::to_string(progIndex), retName)));
         if (SMTGenerationOpts::getInstance().Heap) {
-            definitions.push_back(
-                DefOrCallInfo(makeAssignment(heapName(progIndex) + "_res",
-                                             stringExpr(heapName(progIndex)))));
+            definitions.push_back(DefOrCallInfo(
+                makeAssignment(heapName(progIndex) + "_res",
+                               memoryVariable(heapName(progIndex)))));
         }
     }
     return definitions;
@@ -234,11 +235,12 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
         if (SMTGenerationOpts::getInstance().BitVect) {
             // We load single bytes
             unsigned bytes = loadInst->getType()->getIntegerBitWidth() / 8;
-            SharedSMTRef load = makeOp("select", heapName(progIndex), pointer);
+            SharedSMTRef load =
+                makeOp("select", memoryVariable(heapName(progIndex)), pointer);
             for (unsigned i = 1; i < bytes; ++i) {
                 load = makeOp(
                     "concat", load,
-                    makeOp("select", heapName(progIndex),
+                    makeOp("select", memoryVariable(heapName(progIndex)),
                            makeOp("bvadd", pointer,
                                   smt::makeOp("_", "bv" + std::to_string(i),
                                               "64"))));
@@ -246,12 +248,14 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             return {makeAssignment(loadInst->getName(), load)};
         } else {
             if (SMTGenerationOpts::getInstance().Stack) {
-                SMTRef load = makeOp(
-                    "select_", heapName(progIndex), stackName(progIndex),
-                    pointer, instrLocation(loadInst->getPointerOperand()));
+                SMTRef load =
+                    makeOp("select_", memoryVariable(heapName(progIndex)),
+                           memoryVariable(stackName(progIndex)), pointer,
+                           instrLocation(loadInst->getPointerOperand()));
                 return {makeAssignment(loadInst->getName(), std::move(load))};
             } else {
-                SMTRef load = makeOp("select", heapName(progIndex), pointer);
+                SMTRef load = makeOp(
+                    "select", memoryVariable(heapName(progIndex)), pointer);
                 return {makeAssignment(loadInst->getName(), std::move(load))};
             }
         }
@@ -264,7 +268,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             int bytes =
                 storeInst->getValueOperand()->getType()->getIntegerBitWidth() /
                 8;
-            SharedSMTRef newHeap = stringExpr(heap);
+            SharedSMTRef newHeap = memoryVariable(heap);
             for (int i = 0; i < bytes; ++i) {
                 SharedSMTRef offset =
                     makeOp("bvadd", pointer,
@@ -280,12 +284,13 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
         } else {
             if (SMTGenerationOpts::getInstance().Stack) {
                 const std::vector<SharedSMTRef> args = {
-                    stringExpr(heap), stringExpr(stackName(progIndex)), pointer,
-                    instrLocation(storeInst->getPointerOperand()), val};
+                    memoryVariable(heap), memoryVariable(stackName(progIndex)),
+                    pointer, instrLocation(storeInst->getPointerOperand()),
+                    val};
                 const auto store = make_shared<Op>("store_", args);
                 return {makeAssignment(heapName(progIndex), store)};
             } else {
-                const std::vector<SharedSMTRef> args = {stringExpr(heap),
+                const std::vector<SharedSMTRef> args = {memoryVariable(heap),
                                                         pointer, val};
                 const auto store = make_shared<Op>("store", args);
                 return {makeAssignment(heapName(progIndex), store)};
@@ -613,8 +618,8 @@ vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *callInst,
             string heapNameStore = "HEAP$" + std::to_string(program);
             int i = 0;
             for (const auto elTy : StructTy0->elements()) {
-                SharedSMTRef heapSelect = stringExpr(heapNameSelect);
-                SharedSMTRef heapStore = stringExpr(heapNameStore);
+                SharedSMTRef heapSelect = memoryVariable(heapNameSelect);
+                SharedSMTRef heapStore = memoryVariable(heapNameStore);
                 for (int j = 0;
                      j < typeSize(elTy, callInst->getModule()->getDataLayout());
                      ++j) {

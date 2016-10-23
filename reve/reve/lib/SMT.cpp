@@ -21,6 +21,7 @@
 namespace smt {
 using std::map;
 using std::make_shared;
+using std::make_unique;
 using std::shared_ptr;
 using std::unique_ptr;
 using sexpr::Apply;
@@ -31,6 +32,8 @@ using std::string;
 using std::vector;
 
 // Implementations of toSExpr()
+
+SExprRef TypedVariable::toSExpr() const { return sexprFromString(name); }
 
 SExprRef ConstantFP::toSExpr() const {
     if (SMTGenerationOpts::getInstance().BitVect) {
@@ -297,6 +300,8 @@ template <> set<string> Primitive<string>::uses() const {
     return uses;
 }
 
+set<string> TypedVariable::uses() const { return {name}; }
+
 // Implementations of compressLets
 
 SharedSMTRef SMTExpr::compressLets(std::vector<Assignment> defs) const {
@@ -364,6 +369,15 @@ Primitive<string>::renameAssignments(map<string, int> variableMap) const {
         }
         return make_shared<Primitive>(name);
     }
+}
+
+SharedSMTRef
+TypedVariable::renameAssignments(map<string, int> variableMap) const {
+    string newName = name;
+    if (variableMap.find(newName) != variableMap.end()) {
+        newName += "_" + std::to_string(variableMap.at(newName));
+    }
+    return make_unique<TypedVariable>(name, type->copy());
 }
 
 SharedSMTRef Assert::renameAssignments(map<string, int> variableMap) const {
@@ -575,9 +589,9 @@ SharedSMTRef FunDecl::instantiateArrays() const {
 
 unique_ptr<const HeapInfo> SMTExpr::heapInfo() const { return nullptr; }
 
-template <> unique_ptr<const HeapInfo> Primitive<string>::heapInfo() const {
+unique_ptr<const HeapInfo> TypedVariable::heapInfo() const {
     std::smatch matchResult;
-    if (std::regex_match(val, matchResult, HEAP_REGEX)) {
+    if (std::regex_match(name, matchResult, HEAP_REGEX)) {
         return std::make_unique<HeapInfo>(matchResult[1], matchResult[2],
                                           matchResult[3]);
     }
@@ -907,4 +921,8 @@ unique_ptr<const Assignment> makeAssignment(string name, SharedSMTRef val) {
     return std::make_unique<Assignment>(name, val);
 }
 bool isArray(const Type &type) { return type.getTag() == TypeTag::Array; }
+
+unique_ptr<SMTExpr> memoryVariable(string name) {
+    return make_unique<TypedVariable>(name, memoryType());
+}
 }
