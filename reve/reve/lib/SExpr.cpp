@@ -73,9 +73,10 @@ void Comment::serialize(std::ostream &os, size_t /* unused */,
 
 const std::set<std::string> Apply::forceIndentOps = {"assert", "and", "rule"};
 const std::set<std::string> Apply::atomicOps = {
-    "+",     "-",     "*",        "<=",     "<",      ">",      ">=",
-    "=",     "not",   "distinct", "select", "ite",    "div",    "_",
-    "bvadd", "bvsub", "bvmul",    "store",  "store_", "select", "select_"};
+    "+",      "-",      "*",       "<=",       "<",      ">",
+    ">=",     "=",      "not",     "distinct", "select", "ite",
+    "div",    "_",      "bvadd",   "bvsub",    "bvmul",  "store",
+    "store_", "select", "select_", "Array"};
 
 SExprRef sexprFromString(string value) { return make_unique<Value>(value); }
 
