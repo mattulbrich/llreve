@@ -408,7 +408,7 @@ TypedVariable::renameAssignments(map<string, int> variableMap) const {
     if (variableMap.find(newName) != variableMap.end()) {
         newName += "_" + std::to_string(variableMap.at(newName));
     }
-    return make_unique<TypedVariable>(name, type->copy());
+    return make_unique<TypedVariable>(newName, type->copy());
 }
 
 SharedSMTRef Assert::renameAssignments(map<string, int> variableMap) const {
