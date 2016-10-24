@@ -23,6 +23,7 @@
 
 #include <iostream>
 
+using smt::TypedVariable;
 using smt::ConstantBool;
 using smt::memoryVariable;
 using llvm::CmpInst;
@@ -138,7 +139,7 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
             if (SMTGenerationOpts::getInstance().MuZ && endIndex == EXIT_MARK) {
                 endInvariant =
                     makeOp("=>", makeOp("not", std::move(endInvariant)),
-                           stringExpr("END_QUERY"));
+                           make_unique<TypedVariable>("END_QUERY", boolType()));
             }
             return endInvariant;
         });

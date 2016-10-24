@@ -38,6 +38,7 @@ using smt::SMTExpr;
 using smt::Op;
 using smt::makeOp;
 using std::string;
+using smt::TypedVariable;
 
 /// Convert a basic block to a list of assignments
 vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
@@ -374,7 +375,8 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
         return {makeAssignment(
                     sp, makeOp("-", sp, std::make_unique<ConstantInt>(
                                             llvm::APInt(64, allocatedSize)))),
-                makeAssignment(allocaInst->getName(), stringExpr(sp)),
+                makeAssignment(allocaInst->getName(),
+                               make_unique<TypedVariable>(sp, pointerType())),
                 makeAssignment(string(allocaInst->getName()) + "_OnStack",
                                make_unique<ConstantBool>(true))};
     }
