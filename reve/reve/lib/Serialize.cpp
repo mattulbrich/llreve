@@ -37,6 +37,11 @@ void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
     if (muZ) {
         set<SortedVar> introducedVariables;
         vector<SharedSMTRef> preparedSMTExprs;
+        // Explicit casts are a lot easier to debug
+        outFile << *makeOp("set-option", ":int-real-coercions",
+                           std::make_unique<smt::ConstantBool>(false))
+                        ->toSExpr()
+                << "\n";
         for (const auto &smt : smtExprs) {
             const auto splitSMTs = smt->splitConjunctions();
             for (const auto &splitSMT : splitSMTs) {
