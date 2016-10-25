@@ -45,6 +45,11 @@ SExprRef ConstantFP::toSExpr() const {
         // 500 is large enough to never use scientific notation
         this->value.toString(stringVec, 0, 500);
         string stringRepr(stringVec.begin(), stringVec.end());
+        if (this->value.isInteger()) {
+            // We need to make the literal a decimal, otherwise it will be
+            // interpreted as an Int instead of a Real
+            stringRepr = stringRepr + ".0";
+        }
         return sexprFromString(stringRepr);
     }
 }
