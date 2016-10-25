@@ -15,6 +15,7 @@
 
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/IR/Instruction.h"
 
 #include <map>
 #include <set>
@@ -338,6 +339,22 @@ class BinaryFPOperator : public SMTExpr {
     BinaryFPOperator(Opcode op, std::unique_ptr<Type> type, SharedSMTRef op0,
                      SharedSMTRef op1)
         : op(op), type(std::move(type)), op0(op0), op1(op1) {}
+    SExprRef toSExpr() const override;
+    std::set<std::string> uses() const override;
+    SharedSMTRef
+    renameAssignments(std::map<std::string, int> variableMap) const override;
+};
+
+class TypeCast : public SMTExpr {
+  public:
+    llvm::Instruction::CastOps op;
+    std::unique_ptr<Type> sourceType;
+    std::unique_ptr<Type> destType;
+    SharedSMTRef operand;
+    TypeCast(llvm::Instruction::CastOps op, std::unique_ptr<Type> sourceType,
+             std::unique_ptr<Type> destType, SharedSMTRef operand)
+        : op(op), sourceType(std::move(sourceType)),
+          destType(std::move(destType)), operand(operand) {}
     SExprRef toSExpr() const override;
     std::set<std::string> uses() const override;
     SharedSMTRef

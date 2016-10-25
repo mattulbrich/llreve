@@ -18,6 +18,7 @@ ignored-files:
   - libc/strncasecmp_1_1.c
   - redis/trace_1.c
   - misc/lookuptable_1.c
+  - float/average_1.c
 z3-files:
   - rec/rec_while
   - rec/cocome1

@@ -302,70 +302,12 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             }
         }
     }
-    if (const auto truncInst = llvm::dyn_cast<llvm::TruncInst>(&Instr)) {
-        if (SMTGenerationOpts::getInstance().BitVect) {
-            unsigned bitWidth = truncInst->getType()->getIntegerBitWidth();
-            std::string extract =
-                "(_ extract " + std::to_string(bitWidth - 1) + " 0)";
-            return {makeAssignment(
-                truncInst->getName(),
-                makeOp(extract, instrNameOrVal(truncInst->getOperand(0))))};
-        } else {
-            SharedSMTRef val = instrNameOrVal(truncInst->getOperand(0));
-            return {makeAssignment(truncInst->getName(), val)};
-        }
-    }
-    const llvm::Instruction *ext = nullptr;
-    if ((ext = llvm::dyn_cast<llvm::ZExtInst>(&Instr)) ||
-        (ext = llvm::dyn_cast<llvm::SExtInst>(&Instr))) {
-        const auto operand = ext->getOperand(0);
-        SharedSMTRef val = instrNameOrVal(operand);
-        const auto retTy = ext->getType();
-        if (retTy->isIntegerTy() && retTy->getIntegerBitWidth() > 1 &&
-            operand->getType()->isIntegerTy(1)) {
-            // Extensions are usually noops, but when we convert a boolean
-            // (1bit
-            // integer) to something bigger it needs to be an explicit
-            // conversion
-            std::vector<SharedSMTRef> args;
-            args.push_back(val);
-            args.push_back(std::make_unique<ConstantInt>(
-                llvm::APInt(retTy->getIntegerBitWidth(), 1)));
-            args.push_back(std::make_unique<ConstantInt>(
-                llvm::APInt(retTy->getIntegerBitWidth(), 0)));
-            return {
-                makeAssignment(ext->getName(), make_shared<Op>("ite", args))};
-        } else {
-            if (SMTGenerationOpts::getInstance().BitVect) {
-                if (const auto zext = llvm::dyn_cast<llvm::ZExtInst>(&Instr)) {
-                    val = smt::makeOp(
-                        "(_ zero_extend " +
-                            std::to_string(
-                                zext->getType()->getIntegerBitWidth() -
-                                zext->getOperand(0)
-                                    ->getType()
-                                    ->getIntegerBitWidth()) +
-                            ")",
-                        val);
-                } else if (const auto sext =
-                               llvm::dyn_cast<llvm::SExtInst>(&Instr)) {
-                    val = smt::makeOp(
-                        "(_ sign_extend " +
-                            std::to_string(
-                                sext->getType()->getIntegerBitWidth() -
-                                sext->getOperand(0)
-                                    ->getType()
-                                    ->getIntegerBitWidth()) +
-                            ")",
-                        val);
-                }
-            }
-            return {makeAssignment(ext->getName(), val)};
-        }
-    }
     if (const auto bitCast = llvm::dyn_cast<llvm::CastInst>(&Instr)) {
-        SharedSMTRef val = instrNameOrVal(bitCast->getOperand(0));
-        return {makeAssignment(bitCast->getName(), val)};
+        auto cast = std::make_unique<smt::TypeCast>(
+            bitCast->getOpcode(), llvmType(bitCast->getSrcTy()),
+            llvmType(bitCast->getDestTy()),
+            instrNameOrVal(bitCast->getOperand(0)));
+        return {makeAssignment(bitCast->getName(), std::move(cast))};
     }
     if (const auto allocaInst = llvm::dyn_cast<llvm::AllocaInst>(&Instr)) {
         unsigned allocatedSize =

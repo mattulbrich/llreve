@@ -270,6 +270,72 @@ SExprRef BinaryFPOperator::toSExpr() const {
     }
 }
 
+SExprRef TypeCast::toSExpr() const {
+    // Extending 1bit integers (i.e. booleans) to integers is an SMT type
+    // conversion and we have to deal with it separately
+    if (destType->getTag() == TypeTag::Int &&
+        static_cast<IntType &>(*destType).bitWidth > 1 &&
+        sourceType->getTag() == TypeTag::Int &&
+        static_cast<IntType &>(*sourceType).bitWidth == 1) {
+        unsigned destBitWidth = static_cast<IntType &>(*destType).bitWidth;
+        vector<SharedSMTRef> args = {
+            operand,
+            std::make_unique<ConstantInt>(llvm::APInt(destBitWidth, 1)),
+            std::make_unique<ConstantInt>(llvm::APInt(destBitWidth, 0))};
+        return Op("ite", std::move(args)).toSExpr();
+    }
+    if (SMTGenerationOpts::getInstance().BitVect) {
+        vector<SExprRef> args;
+        args.push_back(operand->toSExpr());
+        switch (this->op) {
+        case llvm::Instruction::Trunc: {
+            assert(destType->getTag() == TypeTag::Int);
+            IntType intDestType = static_cast<IntType &>(*destType);
+            unsigned bitWidth = intDestType.bitWidth;
+            string opName =
+                "(_ extract " + std::to_string(bitWidth - 1) + " 0)";
+            return make_unique<Apply>(opName, std::move(args));
+        }
+        case llvm::Instruction::ZExt: {
+            vector<SExprRef> args;
+            unsigned destBitWidth = static_cast<IntType &>(*destType).bitWidth;
+            unsigned sourceBitWidth =
+                static_cast<IntType &>(*sourceType).bitWidth;
+            string opName = "(_ zero_extend " +
+                            std::to_string(destBitWidth - sourceBitWidth) + ")";
+            return make_unique<Apply>(opName, std::move(args));
+        }
+        case llvm::Instruction::SExt: {
+            unsigned destBitWidth = static_cast<IntType &>(*destType).bitWidth;
+            unsigned sourceBitWidth =
+                static_cast<IntType &>(*sourceType).bitWidth;
+            string opName = "(_ sign_extend " +
+                            std::to_string(destBitWidth - sourceBitWidth) + ")";
+            return make_unique<Apply>(opName, std::move(args));
+        }
+        default:
+            logError("Unsupported cast operation in bitvector mode: " +
+                     std::to_string(this->op) + "\n");
+            exit(1);
+        }
+    } else {
+        vector<SExprRef> args;
+        args.push_back(operand->toSExpr());
+        switch (this->op) {
+        case llvm::Instruction::SExt:
+        case llvm::Instruction::ZExt:
+        case llvm::Instruction::Trunc:
+        case llvm::Instruction::BitCast:
+            return operand->toSExpr();
+        case llvm::Instruction::SIToFP:
+            return make_unique<Apply>("to_real", std::move(args));
+        default:
+            logError("Unsupported opcode: " + std::to_string(this->op) + "\n");
+            exit(1);
+        }
+    }
+}
+
 // Implementations of uses()
 
 set<string> SMTExpr::uses() const { return {}; }
@@ -327,6 +393,8 @@ set<string> BinaryFPOperator::uses() const {
     }
     return uses;
 }
+
+set<string> TypeCast::uses() const { return operand->uses(); }
 
 set<string> ConstantString::uses() const { return {value}; }
 
@@ -446,6 +514,11 @@ BinaryFPOperator::renameAssignments(map<string, int> variableMap) const {
     auto newOp0 = op0->renameAssignments(variableMap);
     auto newOp1 = op1->renameAssignments(variableMap);
     return make_shared<BinaryFPOperator>(op, type->copy(), newOp0, newOp1);
+}
+
+SharedSMTRef TypeCast::renameAssignments(map<string, int> variableMap) const {
+    return std::make_unique<TypeCast>(op, sourceType->copy(), destType->copy(),
+                                      operand->renameAssignments(variableMap));
 }
 
 SharedSMTRef Forall::renameAssignments(map<string, int> variableMap) const {
