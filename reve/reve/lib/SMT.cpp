@@ -732,6 +732,73 @@ SharedSMTRef Let::removeForalls(set<SortedVar> &introducedVariables) const {
     return make_shared<Let>(defs, expr->removeForalls(introducedVariables));
 }
 
+// Implementations of inlineLets
+
+SharedSMTRef SMTExpr::inlineLets(map<string, SharedSMTRef> assignments) const {
+    return shared_from_this();
+}
+
+SharedSMTRef Assert::inlineLets(map<string, SharedSMTRef> assignments) const {
+    return make_unique<Assert>(expr->inlineLets(assignments));
+}
+
+SharedSMTRef Let::inlineLets(map<string, SharedSMTRef> assignments) const {
+    for (const auto &def : defs) {
+        assignments[def.first] = def.second->inlineLets(assignments);
+    }
+    return expr->inlineLets(assignments);
+}
+
+SharedSMTRef Forall::inlineLets(map<string, SharedSMTRef> assignments) const {
+    for (const auto &var : vars) {
+        assignments.erase(var.name);
+    }
+    return make_unique<Forall>(vars, expr->inlineLets(assignments));
+}
+
+SharedSMTRef Op::inlineLets(map<string, SharedSMTRef> assignments) const {
+    vector<SharedSMTRef> newArgs;
+    for (const auto &arg : args) {
+        newArgs.push_back(arg->inlineLets(assignments));
+    }
+    return make_unique<Op>(opName, newArgs);
+}
+
+SharedSMTRef
+TypedVariable::inlineLets(map<string, SharedSMTRef> assignments) const {
+    auto mapIt = assignments.find(name);
+    if (mapIt == assignments.end()) {
+        return shared_from_this();
+    }
+    return mapIt->second;
+}
+
+SharedSMTRef
+ConstantString::inlineLets(map<string, SharedSMTRef> assignments) const {
+    auto mapIt = assignments.find(value);
+    if (mapIt == assignments.end()) {
+        return shared_from_this();
+    }
+    return mapIt->second;
+}
+
+SharedSMTRef TypeCast::inlineLets(map<string, SharedSMTRef> assignments) const {
+    return std::make_unique<TypeCast>(op, sourceType->copy(), destType->copy(),
+                                      operand->inlineLets(assignments));
+}
+
+SharedSMTRef
+BinaryFPOperator::inlineLets(map<string, SharedSMTRef> assignments) const {
+    return make_unique<BinaryFPOperator>(op, type->copy(),
+                                         op0->inlineLets(assignments),
+                                         op1->inlineLets(assignments));
+}
+
+SharedSMTRef FPCmp::inlineLets(map<string, SharedSMTRef> assignments) const {
+    return make_unique<FPCmp>(op, type->copy(), op0->inlineLets(assignments),
+                              op1->inlineLets(assignments));
+}
+
 // Implementations for using the z3 API
 
 void VarDecl::toZ3(z3::context &cxt, z3::solver & /* unused */,

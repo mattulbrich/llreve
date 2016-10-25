@@ -44,6 +44,10 @@ struct Z3DefineFun {
 
 class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
   public:
+    SMTExpr(const SMTExpr & /*unused*/) = default;
+    SMTExpr &operator=(SMTExpr &) = delete;
+    SMTExpr() = default;
+    virtual ~SMTExpr() = default;
     virtual SExprRef toSExpr() const = 0;
     virtual std::set<std::string> uses() const;
     virtual std::shared_ptr<const SMTExpr> compressLets(
@@ -65,10 +69,9 @@ class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
     // needed for the z3 muz format.
     virtual std::shared_ptr<const SMTExpr>
     removeForalls(std::set<SortedVar> &introducedVariables) const;
-    virtual ~SMTExpr() = default;
-    SMTExpr(const SMTExpr & /*unused*/) = default;
-    SMTExpr &operator=(SMTExpr &) = delete;
-    SMTExpr() = default;
+    virtual std::shared_ptr<const SMTExpr> inlineLets(
+        std::map<std::string, std::shared_ptr<const SMTExpr>> assignments)
+        const;
     virtual void toZ3(z3::context &cxt, z3::solver &solver,
                       std::map<std::string, z3::expr> &nameMap,
                       std::map<std::string, Z3DefineFun> &defineFunMap) const;
@@ -105,6 +108,8 @@ class Assert : public SMTExpr {
     mergeImplications(std::vector<SharedSMTRef> conditions) const override;
     std::vector<SharedSMTRef> splitConjunctions() const override;
     SharedSMTRef instantiateArrays() const override;
+    SharedSMTRef
+    inlineLets(std::map<std::string, SharedSMTRef> assignments) const override;
     void toZ3(z3::context &cxt, z3::solver &solver,
               std::map<std::string, z3::expr> &nameMap,
               std::map<std::string, Z3DefineFun> &defineFunMap) const override;
@@ -124,6 +129,8 @@ class TypedVariable : public SMTExpr {
     std::set<std::string> uses() const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) const override;
+    SharedSMTRef
+    inlineLets(std::map<std::string, SharedSMTRef> assignments) const override;
 };
 
 class SortedVar {
@@ -169,11 +176,11 @@ inline bool operator!=(const SortedVar &lhs, const SortedVar &rhs) {
 
 class Forall : public SMTExpr {
   public:
+    std::vector<SortedVar> vars;
+    SharedSMTRef expr;
     Forall(std::vector<SortedVar> vars, SharedSMTRef expr)
         : vars(std::move(vars)), expr(std::move(expr)) {}
     SExprRef toSExpr() const override;
-    std::vector<SortedVar> vars;
-    SharedSMTRef expr;
     std::set<std::string> uses() const override;
     SharedSMTRef
     removeForalls(std::set<SortedVar> &introducedVariables) const override;
@@ -184,6 +191,8 @@ class Forall : public SMTExpr {
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) const override;
     std::vector<SharedSMTRef> splitConjunctions() const override;
+    SharedSMTRef
+    inlineLets(std::map<std::string, SharedSMTRef> assignments) const override;
 };
 
 class CheckSat : public SMTExpr {
@@ -222,6 +231,8 @@ class Let : public SMTExpr {
     mergeImplications(std::vector<SharedSMTRef> conditions) const override;
     std::vector<SharedSMTRef> splitConjunctions() const override;
     SharedSMTRef instantiateArrays() const override;
+    SharedSMTRef
+    inlineLets(std::map<std::string, SharedSMTRef> assignments) const override;
     z3::expr toZ3Expr(
         z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
         const std::map<std::string, Z3DefineFun> &defineFunMap) const override;
@@ -262,6 +273,8 @@ class ConstantString : public SMTExpr {
     SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) const override;
+    SharedSMTRef
+    inlineLets(std::map<std::string, SharedSMTRef> assignments) const override;
     z3::expr toZ3Expr(
         z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
         const std::map<std::string, Z3DefineFun> &defineFunMap) const override;
@@ -288,6 +301,8 @@ class Op : public SMTExpr {
     mergeImplications(std::vector<SharedSMTRef> conditions) const override;
     std::vector<SharedSMTRef> splitConjunctions() const override;
     SharedSMTRef instantiateArrays() const override;
+    SharedSMTRef
+    inlineLets(std::map<std::string, SharedSMTRef> assignments) const override;
     z3::expr toZ3Expr(
         z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
         const std::map<std::string, Z3DefineFun> &defineFunMap) const override;
@@ -327,6 +342,8 @@ class FPCmp : public SMTExpr {
     std::set<std::string> uses() const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) const override;
+    SharedSMTRef
+    inlineLets(std::map<std::string, SharedSMTRef> assignments) const override;
 };
 
 class BinaryFPOperator : public SMTExpr {
@@ -343,6 +360,8 @@ class BinaryFPOperator : public SMTExpr {
     std::set<std::string> uses() const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) const override;
+    SharedSMTRef
+    inlineLets(std::map<std::string, SharedSMTRef> assignments) const override;
 };
 
 class TypeCast : public SMTExpr {
@@ -359,6 +378,8 @@ class TypeCast : public SMTExpr {
     std::set<std::string> uses() const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) const override;
+    SharedSMTRef
+    inlineLets(std::map<std::string, SharedSMTRef> assignments) const override;
 };
 
 class Query : public SMTExpr {

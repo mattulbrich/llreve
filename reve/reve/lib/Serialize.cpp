@@ -45,10 +45,12 @@ void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
         for (const auto &smt : smtExprs) {
             const auto splitSMTs = smt->splitConjunctions();
             for (const auto &splitSMT : splitSMTs) {
+                auto smt_ = splitSMT->compressLets()->renameAssignments({});
+                if (opts.InlineLets) {
+                    smt_ = smt->inlineLets({});
+                }
                 preparedSMTExprs.push_back(
-                    splitSMT->compressLets()
-                        ->renameAssignments({})
-                        ->removeForalls(introducedVariables)
+                    smt_->removeForalls(introducedVariables)
                         ->mergeImplications({}));
             }
         }
@@ -63,6 +65,9 @@ void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
     } else {
         for (const auto &smt : smtExprs) {
             smt::SharedSMTRef out = opts.Pretty ? smt->compressLets() : smt;
+            if (opts.InlineLets) {
+                out = out->renameAssignments({})->inlineLets({});
+            }
             if (opts.MergeImplications) {
                 out = out->mergeImplications({});
             }

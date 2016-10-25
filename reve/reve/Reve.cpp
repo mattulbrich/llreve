@@ -159,6 +159,9 @@ static llreve::cl::opt<bool>
     InitPredFlag("init-pred",
                  llreve::cl::desc("Introduce the toplevel predicate INIT"),
                  llreve::cl::cat(ReveCategory));
+static llreve::cl::opt<bool> InlineLets("inline-lets",
+                                        llreve::cl::desc("Inline lets"),
+                                        llreve::cl::cat(ReveCategory));
 
 static void printVersion() {
     std::cout << "llreve version " << g_GIT_SHA1 << "\n";
@@ -173,7 +176,7 @@ int main(int argc, const char **argv) {
                         FileName2Flag);
     FileOptions fileOpts = getFileOptions(inputOpts.FileNames);
     SerializeOpts serializeOpts(OutputFileNameFlag, DontInstantiate,
-                                BitVectFlag, true);
+                                BitVectFlag, true, InlineLets);
 
     MonoPair<shared_ptr<CodeGenAction>> acts =
         makeMonoPair(make_shared<clang::EmitLLVMOnlyAction>(),
