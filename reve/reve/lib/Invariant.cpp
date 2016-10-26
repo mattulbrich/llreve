@@ -145,8 +145,7 @@ SMTRef mainInvariant(Mark EndIndex, vector<SortedVar> FreeVars,
     } else {
         vector<SharedSMTRef> args;
         for (auto &arg : FreeVars) {
-            args.push_back(std::make_unique<smt::TypedVariable>(
-                arg.name, arg.type->copy()));
+            args.push_back(typedVariableFromSortedVar(arg));
         }
         return std::make_unique<smt::Op>(
             invariantName(EndIndex, ProgramSelection::Both, FunName,

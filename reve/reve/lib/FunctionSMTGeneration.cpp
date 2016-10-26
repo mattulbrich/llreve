@@ -663,12 +663,10 @@ SharedSMTRef makeFunArgsEqual(SharedSMTRef clause, SharedSMTRef preClause,
 
     vector<SharedSMTRef> args;
     for (const auto &arg : Args1) {
-        args.push_back(
-            make_unique<smt::TypedVariable>(arg.name, arg.type->copy()));
+        args.push_back(typedVariableFromSortedVar(arg));
     }
     for (const auto &arg : Args2) {
-        args.push_back(
-            make_unique<smt::TypedVariable>(arg.name, arg.type->copy()));
+        args.push_back(typedVariableFromSortedVar(arg));
     }
 
     auto inInv = make_unique<Op>("IN_INV", std::move(args));
@@ -687,8 +685,7 @@ SharedSMTRef equalInputsEqualOutputs(vector<smt::SortedVar> funArgs,
     vector<SharedSMTRef> args;
     vector<SharedSMTRef> preInvArgs;
     for (const auto &arg : funArgs) {
-        args.push_back(
-            make_unique<smt::TypedVariable>(arg.name, arg.type->copy()));
+        args.push_back(typedVariableFromSortedVar(arg));
     }
     preInvArgs = args;
 
@@ -719,8 +716,7 @@ SharedSMTRef equalInputsEqualOutputs(vector<smt::SortedVar> funArgs,
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
         for (const auto &arg : funArgs1) {
             if (!smt::isArray(*arg.type)) {
-                outArgs.push_back(make_unique<smt::TypedVariable>(
-                    arg.name, arg.type->copy()));
+                outArgs.push_back(typedVariableFromSortedVar(arg));
             }
         }
     }
@@ -730,8 +726,7 @@ SharedSMTRef equalInputsEqualOutputs(vector<smt::SortedVar> funArgs,
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
         for (const auto &arg : funArgs2) {
             if (!smt::isArray(*arg.type)) {
-                outArgs.push_back(make_unique<smt::TypedVariable>(
-                    arg.name, arg.type->copy()));
+                outArgs.push_back(typedVariableFromSortedVar(arg));
             }
         }
     }

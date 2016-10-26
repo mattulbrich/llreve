@@ -1070,4 +1070,8 @@ bool isArray(const Type &type) { return type.getTag() == TypeTag::Array; }
 unique_ptr<SMTExpr> memoryVariable(string name) {
     return make_unique<TypedVariable>(name, memoryType());
 }
+
+unique_ptr<TypedVariable> typedVariableFromSortedVar(const SortedVar &var) {
+    return make_unique<TypedVariable>(var.name, var.type->copy());
+}
 }

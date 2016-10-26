@@ -136,11 +136,8 @@ static SMTRef equalInputs(const llvm::Function &fun1,
     auto funArgs2 = functionArgs(fun2);
 
     for (auto argPair : makeZip(funArgs1, funArgs2)) {
-        equal.push_back(makeOp(
-            "=", make_unique<smt::TypedVariable>(argPair.first.name,
-                                                 argPair.first.type->copy()),
-            make_unique<smt::TypedVariable>(argPair.second.name,
-                                            argPair.second.type->copy())));
+        equal.push_back(makeOp("=", typedVariableFromSortedVar(argPair.first),
+                               typedVariableFromSortedVar(argPair.second)));
     }
     if (SMTGenerationOpts::getInstance().Heap) {
         SharedSMTRef heapInEqual =

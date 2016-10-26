@@ -401,10 +401,8 @@ SharedSMTRef initImplication(shared_ptr<const FunDef> funDecl) {
     vector<SortedVar> quantified_vars;
 
     for (auto var : funDecl->args) {
-        ininv_args.push_back(
-            make_unique<smt::TypedVariable>(var.name, var.type->copy()));
-        init_args.push_back(
-            make_unique<smt::TypedVariable>(var.name, var.type->copy()));
+        ininv_args.push_back(typedVariableFromSortedVar(var));
+        init_args.push_back(typedVariableFromSortedVar(var));
     }
 
     SharedSMTRef inAppl = std::make_shared<Op>("IN_INV", ininv_args);

@@ -456,4 +456,5 @@ auto nestLets(SharedSMTRef clause, std::vector<Assignment> defs)
 bool isArray(const Type &type);
 
 std::unique_ptr<SMTExpr> memoryVariable(std::string name);
+std::unique_ptr<TypedVariable> typedVariableFromSortedVar(const SortedVar &var);
 }
