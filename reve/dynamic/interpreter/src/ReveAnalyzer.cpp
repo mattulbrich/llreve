@@ -39,44 +39,56 @@ using std::map;
 
 using clang::CodeGenAction;
 
-static llvm::cl::opt<string> FileName1Flag(llvm::cl::Positional,
-                                           llvm::cl::desc("FILE1"),
-                                           llvm::cl::Required);
-static llvm::cl::opt<string> FileName2Flag(llvm::cl::Positional,
-                                           llvm::cl::desc("FILE2"),
-                                           llvm::cl::Required);
-static llvm::cl::opt<bool> CegarFlag("cegar", llvm::cl::desc("Cegar"));
-static llvm::cl::opt<string>
+static llreve::cl::opt<string> FileName1Flag(llreve::cl::Positional,
+                                             llreve::cl::desc("FILE1"),
+                                             llreve::cl::Required);
+static llreve::cl::opt<string> FileName2Flag(llreve::cl::Positional,
+                                             llreve::cl::desc("FILE2"),
+                                             llreve::cl::Required);
+static llreve::cl::opt<bool> // The parser
+    BoundedFlag("bounded", llreve::cl::desc("Use bounded integers"));
+static llreve::cl::opt<bool> HeapFlag("heap",
+                                      llreve::cl::desc("Activate heap"));
+static llreve::cl::opt<bool>
+    InstantiateFlag("instantiate", llreve::cl::desc("Instantiate arrays"));
+static llreve::cl::opt<bool>
+    InvertFlag("invert",
+               llreve::cl::desc("Check for satisfiability of negation"));
+static llreve::cl::opt<bool> CegarFlag("cegar", llreve::cl::desc("Cegar"));
+static llreve::cl::opt<string>
     PatternFileFlag("patterns",
-                    llvm::cl::desc("Path to file containing patterns"),
-                    llvm::cl::Required);
-static llvm::cl::opt<string> OutputDirectoryFlag(
+                    llreve::cl::desc("Path to file containing patterns"),
+                    llreve::cl::Required);
+static llreve::cl::opt<string> OutputDirectoryFlag(
     "output",
-    llvm::cl::desc("Directory containing the output of the interpreter"));
-static llvm::cl::list<string> IncludesFlag("I", llvm::cl::desc("Include path"));
-static llvm::cl::opt<string> ResourceDirFlag(
+    llreve::cl::desc("Directory containing the output of the interpreter"));
+static llreve::cl::list<string> IncludesFlag("I",
+                                             llreve::cl::desc("Include path"));
+static llreve::cl::opt<string> ResourceDirFlag(
     "resource-dir",
-    llvm::cl::desc("Directory containing the clang resource files, "
-                   "e.g. /usr/local/lib/clang/3.8.0"));
+    llreve::cl::desc("Directory containing the clang resource files, "
+                     "e.g. /usr/local/lib/clang/3.8.0"));
 
-static llvm::cl::opt<bool> ShowCFGFlag("show-cfg", llvm::cl::desc("Show cfg"));
-static llvm::cl::opt<bool>
+static llreve::cl::opt<bool> ShowCFGFlag("show-cfg",
+                                         llreve::cl::desc("Show cfg"));
+static llreve::cl::opt<bool>
     ShowMarkedCFGFlag("show-marked-cfg",
-                      llvm::cl::desc("Show cfg before mark removal"));
+                      llreve::cl::desc("Show cfg before mark removal"));
 
-static llvm::cl::opt<string> MainFunctionFlag(
-    "fun", llvm::cl::desc("Name of the function which should be verified"),
-    llvm::cl::Required);
+static llreve::cl::opt<string> MainFunctionFlag(
+    "fun", llreve::cl::desc("Name of the function which should be verified"),
+    llreve::cl::Required);
 // Serialize flags
-static llvm::cl::opt<string>
-    OutputFileNameFlag("o", llvm::cl::desc("SMT output filename"),
-                       llvm::cl::value_desc("filename"), llvm::cl::Required);
-static llvm::cl::opt<bool>
+static llreve::cl::opt<string>
+    OutputFileNameFlag("o", llreve::cl::desc("SMT output filename"),
+                       llreve::cl::value_desc("filename"),
+                       llreve::cl::Required);
+static llreve::cl::opt<bool>
     MergeImplications("merge-implications",
-                      llvm::cl::desc("Merge implications"));
+                      llreve::cl::desc("Merge implications"));
 
 int main(int argc, const char **argv) {
-    llvm::cl::ParseCommandLineOptions(argc, argv);
+    llreve::cl::ParseCommandLineOptions(argc, argv);
     InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,
                         FileName2Flag);
     PreprocessOpts preprocessOpts(ShowCFGFlag, ShowMarkedCFGFlag, false);
@@ -90,8 +102,15 @@ int main(int argc, const char **argv) {
     PM.add(llvm::createStripSymbolsPass(true));
     PM.run(*modules.first);
     PM.run(*modules.second);
-    vector<MonoPair<PreprocessedFunction>> preprocessedFuns =
-        preprocessFunctions(modules, preprocessOpts);
+    MonoPair<llvm::Module &> moduleRefs = {*modules.first, *modules.second};
+
+    SMTGenerationOpts::initialize(
+        findMainFunction(moduleRefs, MainFunctionFlag), HeapFlag, false, false,
+        false, false, false, false, false, false, BoundedFlag, InvertFlag,
+        false, false, {}, {}, inferCoupledFunctionsByName(moduleRefs));
+
+    AnalysisResultsMap analysisResults =
+        preprocessModules(moduleRefs, preprocessOpts);
     // fopen doesn’t signal if the path points to a directory, thus we have to
     // check for that separately and to catch the error.
     struct stat s;
@@ -121,14 +140,12 @@ int main(int argc, const char **argv) {
     FileOptions fileOpts = getFileOptions(inputOpts.FileNames);
     vector<smt::SharedSMTRef> smtExprs;
     if (CegarFlag) {
-        smtExprs = cegarDriver(modules, preprocessedFuns, MainFunctionFlag,
-                               patterns, fileOpts);
+        smtExprs = cegarDriver(moduleRefs, analysisResults, patterns, fileOpts);
     } else {
-        smtExprs = driver(modules, preprocessedFuns, MainFunctionFlag, patterns,
-                          fileOpts);
+        smtExprs = driver(moduleRefs, analysisResults, patterns, fileOpts);
     }
     serializeSMT(smtExprs, false,
-                 SerializeOpts(OutputFileNameFlag, !InstantiateStorage,
+                 SerializeOpts(OutputFileNameFlag, !InstantiateFlag,
                                MergeImplications, BoundedFlag, true));
 
     llvm::llvm_shutdown();

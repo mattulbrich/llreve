@@ -18,8 +18,6 @@
 
 #include "llvm/ADT/APInt.h"
 
-extern bool BoundedFlag;
-
 enum class IntType { Unbounded, Bounded };
 
 struct Integer {

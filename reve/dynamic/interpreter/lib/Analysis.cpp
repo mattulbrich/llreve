@@ -38,6 +38,7 @@
 using llvm::Module;
 using llvm::Optional;
 
+using std::make_unique;
 using std::make_shared;
 using std::shared_ptr;
 using std::string;
@@ -50,74 +51,50 @@ using std::set;
 using std::static_pointer_cast;
 using std::multiset;
 
-using smt::FunDef;
-using smt::SharedSMTRef;
-using smt::Op;
-using smt::makeOp;
-using smt::SortedVar;
-
+using namespace smt;
 using namespace std::placeholders;
 
-static llvm::cl::opt<bool>
-    MultinomialsFlag("multinomials", llvm::cl::desc("Use true multinomials"));
-static llvm::cl::opt<bool>
-    PrettyFlag("pretty", llvm::cl::desc("Pretty print intermediate output"));
+static std::unique_ptr<ConstantInt> smtFromMpz(unsigned bitWidth, mpz_class i) {
+    return std::make_unique<ConstantInt>(
+        llvm::APInt(bitWidth, i.get_str(), 10));
+}
+
+static llreve::cl::opt<bool>
+    MultinomialsFlag("multinomials", llreve::cl::desc("Use true multinomials"));
+static llreve::cl::opt<bool>
+    PrettyFlag("pretty", llreve::cl::desc("Pretty print intermediate output"));
 std::string InputFileFlag;
-static llvm::cl::opt<std::string, true>
+static llreve::cl::opt<std::string, true>
     InputFileFlagStorage("input",
-                         llvm::cl::desc("Use the inputs in the passed file"),
-                         llvm::cl::location(InputFileFlag));
-static llvm::cl::opt<unsigned>
-    DegreeFlag("degree", llvm::cl::desc("Degree of the polynomial invariants"),
-               llvm::cl::init(1));
-static llvm::cl::opt<bool> ImplicationsFlag(
+                         llreve::cl::desc("Use the inputs in the passed file"),
+                         llreve::cl::location(InputFileFlag));
+static llreve::cl::opt<unsigned>
+    DegreeFlag("degree",
+               llreve::cl::desc("Degree of the polynomial invariants"),
+               llreve::cl::init(1));
+static llreve::cl::opt<bool> ImplicationsFlag(
     "implications",
-    llvm::cl::desc("Add implications instead of replacing invariants"));
-static llvm::cl::opt<unsigned>
-    ThreadsFlag("j", llvm::cl::desc("The number of threads to use"),
-                llvm::cl::init(1));
-bool InstantiateStorage;
-static llvm::cl::opt<bool, true>
-    InstantiateFlag("instantiate", llvm::cl::desc("Instantiate arrays"),
-                    llvm::cl::location(InstantiateStorage));
-static llvm::cl::opt<bool> HeapFlag("heap", llvm::cl::desc("Activate heap"));
-static llvm::cl::opt<bool>
-    InvertFlag("invert",
-               llvm::cl::desc("Check for satisfiability of negation"));
+    llreve::cl::desc("Add implications instead of replacing invariants"));
+static llreve::cl::opt<unsigned>
+    ThreadsFlag("j", llreve::cl::desc("The number of threads to use"),
+                llreve::cl::init(1));
 
 vector<SharedSMTRef>
-driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
-       vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
-       string mainFunctionName,
+driver(MonoPair<llvm::Module &> modules, AnalysisResultsMap &analysisResults,
        vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
        FileOptions fileOpts) {
-    SMTGenerationOpts::getInstance().BitVect = BoundedFlag;
-    auto preprocessedFunctions =
-        findFunction(preprocessedFuns, mainFunctionName);
-    if (!preprocessedFunctions) {
-        logError("No function with the supplied name\n");
-        return {};
-    }
-    auto functions = preprocessedFunctions.getValue().map<llvm::Function *>(
-        [](PreprocessedFunction f) { return f.fun; });
+    auto functionPair = SMTGenerationOpts::getInstance().MainFunctions;
     const MonoPair<BidirBlockMarkMap> markMaps =
-        preprocessedFunctions.getValue().map<BidirBlockMarkMap>(
-            [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
+        getBlockMarkMaps(functionPair, analysisResults);
     MonoPair<BlockNameMap> nameMap = markMaps.map<BlockNameMap>(blockNameMap);
     const auto funArgsPair =
-        functionArgs(*preprocessedFunctions.getValue().first.fun,
-                     *preprocessedFunctions.getValue().second.fun);
-    const auto funArgs = funArgsPair.foldl<vector<smt::SortedVar>>(
-        {},
-        [](auto acc, auto args) {
-            acc.insert(acc.end(), args.begin(), args.end());
-            return acc;
-        });
+        getFunctionArguments(functionPair, analysisResults);
+    const auto funArgs = concat(funArgsPair);
 
     // Collect loop info
     LoopCountsAndMark loopCounts;
     iterateTracesInRange<LoopCountsAndMark>(
-        functions, -50, 50, ThreadsFlag, loopCounts, mergeLoopCounts,
+        functionPair, -50, 50, ThreadsFlag, loopCounts, mergeLoopCounts,
         [&nameMap](MonoPair<Call<const llvm::Value *>> calls,
                    LoopCountsAndMark &localLoopCounts) {
             analyzeExecution<const llvm::Value *>(
@@ -127,27 +104,24 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                                                         matchInfo);
                 });
         });
-    map<int, LoopTransformation> loopTransformations =
-        findLoopTransformations(loopCounts.loopCounts);
+    auto loopTransformations = findLoopTransformations(loopCounts.loopCounts);
     dumpLoopTransformations(loopTransformations);
 
     // Peel and unroll loops
-    applyLoopTransformation(preprocessedFunctions.getValue(),
-                            loopTransformations, markMaps);
+    applyLoopTransformation(functionPair, analysisResults, loopTransformations,
+                            markMaps);
 
     // Run the interpreter on the unrolled code
-    MergedAnalysisResults analysisResults;
+    MergedAnalysisResults dynamicAnalysisResults;
     const MonoPair<PathMap> pathMaps =
-        preprocessedFunctions.getValue().map<PathMap>(
-            [](PreprocessedFunction fun) { return fun.results.paths; });
-    smt::FreeVarsMap freeVarsMap =
-        freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
+        getPathMaps(functionPair, analysisResults);
+    FreeVarsMap freeVarsMap = getFreeVarsMap(functionPair, analysisResults);
     size_t degree = DegreeFlag;
     iterateTracesInRange<MergedAnalysisResults>(
-        functions, -50, 50, ThreadsFlag, analysisResults, mergeAnalysisResults,
-        [&nameMap, &freeVarsMap, &patterns,
-         degree](MonoPair<Call<const llvm::Value *>> calls,
-                 MergedAnalysisResults &localAnalysisResults) {
+        functionPair, -50, 50, ThreadsFlag, dynamicAnalysisResults,
+        mergeAnalysisResults, [&nameMap, &freeVarsMap, &patterns, degree](
+                                  MonoPair<Call<const llvm::Value *>> calls,
+                                  MergedAnalysisResults &localAnalysisResults) {
             analyzeExecution<const llvm::Value *>(
                 calls, nameMap,
                 [&localAnalysisResults, &freeVarsMap, degree,
@@ -164,88 +138,56 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
                 });
         });
     loopTransformations =
-        findLoopTransformations(analysisResults.loopCounts.loopCounts);
+        findLoopTransformations(dynamicAnalysisResults.loopCounts.loopCounts);
     dumpLoopTransformations(loopTransformations);
-    dumpPolynomials(analysisResults.polynomialEquations, freeVarsMap);
-    dumpHeapPatterns(analysisResults.heapPatternCandidates);
+    dumpPolynomials(dynamicAnalysisResults.polynomialEquations, freeVarsMap);
+    dumpHeapPatterns(dynamicAnalysisResults.heapPatternCandidates);
 
     auto invariantCandidates = makeInvariantDefinitions(
-        findSolutions(analysisResults.polynomialEquations),
-        analysisResults.heapPatternCandidates, freeVarsMap, DegreeFlag);
-    if (ImplicationsFlag) {
-        SMTGenerationOpts::initialize(mainFunctionName, HeapFlag, false, false,
-                                      false, false, false, false, false, false,
-                                      false, false, BoundedFlag, InvertFlag,
-                                      false, {});
-    } else {
-        SMTGenerationOpts::initialize(mainFunctionName, HeapFlag, false, false,
-                                      false, false, false, false, false, false,
-                                      false, false, BoundedFlag, InvertFlag,
-                                      false, invariantCandidates);
+        findSolutions(dynamicAnalysisResults.polynomialEquations),
+        dynamicAnalysisResults.heapPatternCandidates, freeVarsMap, DegreeFlag);
+    if (!ImplicationsFlag) {
+        SMTGenerationOpts::getInstance().Invariants = invariantCandidates;
     }
     // TODO pass all functions
     vector<SharedSMTRef> clauses =
-        generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
+        generateSMT(modules, analysisResults, fileOpts);
     // Remove check-sat and get-model
     clauses.pop_back();
     clauses.pop_back();
     if (ImplicationsFlag) {
         // Add the necessary implications
         for (auto invariantIt : invariantCandidates) {
-            auto mark = invariantIt.first;
-            if (mark < 0) {
+            Mark mark = invariantIt.first;
+            if (mark < Mark(0)) {
                 continue;
             }
             vector<SortedVar> args;
             vector<smt::SharedSMTRef> stringArgs;
 
             for (const auto &var : filterVars(1, freeVarsMap.at(mark))) {
-                if (BoundedFlag) {
-                    args.push_back(var);
-                } else {
-                    args.push_back(SortedVar(var.name, "Int"));
-                }
+                args.push_back(var);
                 stringArgs.push_back(smt::stringExpr(var.name));
             }
-            if (HeapFlag) {
-                args.push_back(SortedVar("HEAP$1", "(Array Int Int)"));
-                if (InstantiateStorage) {
-                    stringArgs.push_back(smt::stringExpr("i1"));
-                    stringArgs.push_back(makeOp("select", "HEAP$1", "i1"));
-                } else {
-                    stringArgs.push_back(smt::stringExpr("HEAP$1"));
-                }
+            if (SMTGenerationOpts::getInstance().Heap) {
+                args.push_back(SortedVar("HEAP$1", memoryType()));
+                stringArgs.push_back(smt::stringExpr("HEAP$1"));
             }
 
             for (auto var : filterVars(2, freeVarsMap.at(mark))) {
-                if (BoundedFlag) {
-                    args.push_back(var);
-                } else {
-                    args.push_back(SortedVar(var.name, "Int"));
-                }
+                args.push_back(var);
                 stringArgs.push_back(smt::stringExpr(var.name));
             }
-            if (HeapFlag) {
-                args.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
-                if (InstantiateStorage) {
-                    stringArgs.push_back(smt::stringExpr("i2"));
-                    stringArgs.push_back(makeOp("select", "HEAP$2", "i2"));
-                } else {
-                    stringArgs.push_back(smt::stringExpr("HEAP$2"));
-                }
+            if (SMTGenerationOpts::getInstance().Heap) {
+                args.push_back(SortedVar("HEAP$2", memoryType()));
+                stringArgs.push_back(smt::stringExpr("HEAP$2"));
             }
-            string invariantName = "INV_MAIN_" + std::to_string(mark);
+            string invariantName = "INV_MAIN_" + mark.toString();
             string candidateName = invariantName + "_INFERRED";
             SharedSMTRef candidate =
                 make_shared<smt::Op>(candidateName, stringArgs);
             SharedSMTRef invariant =
                 make_shared<smt::Op>(invariantName, stringArgs);
-            if (InstantiateStorage) {
-                vector<SortedVar> indices = {SortedVar("i1", "Int"),
-                                             SortedVar("i2", "Int")};
-                candidate = make_shared<smt::Forall>(indices, candidate);
-                invariant = make_shared<smt::Forall>(indices, invariant);
-            }
             SharedSMTRef impl = makeOp("=>", invariant, candidate);
             SharedSMTRef forall = make_shared<smt::Forall>(args, impl);
             clauses.push_back(invariantIt.second);
@@ -259,47 +201,27 @@ driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
 }
 
 std::vector<smt::SharedSMTRef>
-cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
-            vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
-            string mainFunctionName,
+cegarDriver(MonoPair<llvm::Module &> modules,
+            AnalysisResultsMap &analysisResults,
             vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
             FileOptions fileOpts) {
-    SMTGenerationOpts::getInstance().BitVect = BoundedFlag;
-    auto preprocessedFunctions =
-        findFunction(preprocessedFuns, mainFunctionName);
-    if (!preprocessedFunctions) {
-        logError("No function with the supplied name\n");
-        return {};
-    }
-    auto functions = preprocessedFunctions.getValue().map<llvm::Function *>(
-        [](PreprocessedFunction f) { return f.fun; });
-    const MonoPair<BidirBlockMarkMap> markMaps =
-        preprocessedFunctions.getValue().map<BidirBlockMarkMap>(
-            [](PreprocessedFunction fun) { return fun.results.blockMarkMap; });
+    auto functions = SMTGenerationOpts::getInstance().MainFunctions;
+    const auto markMaps = getBlockMarkMaps(functions, analysisResults);
     MonoPair<BlockNameMap> nameMap = markMaps.map<BlockNameMap>(blockNameMap);
-    const auto funArgsPair =
-        functionArgs(*preprocessedFunctions.getValue().first.fun,
-                     *preprocessedFunctions.getValue().second.fun);
-    const auto funArgs = funArgsPair.foldl<vector<smt::SortedVar>>(
-        {},
-        [](auto acc, auto args) {
-            acc.insert(acc.end(), args.begin(), args.end());
-            return acc;
-        });
+    const auto funArgsPair = getFunctionArguments(functions, analysisResults);
+    const auto funArgs = concat(funArgsPair);
 
     // Run the interpreter on the unrolled code
-    MergedAnalysisResults analysisResults;
-    MonoPair<PathMap> pathMaps = preprocessedFunctions.getValue().map<PathMap>(
-        [](PreprocessedFunction fun) { return fun.results.paths; });
-    smt::FreeVarsMap freeVarsMap =
-        freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
+    MergedAnalysisResults dynamicAnalysisResults;
+    MonoPair<PathMap> pathMaps = getPathMaps(functions, analysisResults);
+    FreeVarsMap freeVarsMap = getFreeVarsMap(functions, analysisResults);
     size_t degree = DegreeFlag;
     ModelValues vals = initialModelValues(functions);
     auto instrNameMap = instructionNameMap(functions);
     z3::context z3Cxt;
     z3::solver z3Solver(z3Cxt);
     do {
-        int cexMark = static_cast<int>(vals.values.at("INV_INDEX").get_si());
+        Mark cexMark(static_cast<int>(vals.values.at("INV_INDEX").get_si()));
         // reconstruct input from counterexample
         auto variableValues = getVarMapFromModel(
             instrNameMap, freeVarsMap.at(cexMark), vals.values);
@@ -336,53 +258,66 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
             getHeapBackgrounds(vals.arrays), {firstBlock, secondBlock}, 1000);
         // analyzeExecution<const llvm::Value *>(calls, nameMap, debugAnalysis);
         analyzeExecution<const llvm::Value *>(
-            calls, nameMap, [&analysisResults, &freeVarsMap, degree,
+            calls, nameMap, [&dynamicAnalysisResults, &freeVarsMap, degree,
                              &patterns](MatchInfo<const llvm::Value *> match) {
                 ExitIndex exitIndex = getExitIndex(match);
                 VarMap<const llvm::Value *> variables(
                     match.steps.first->state.variables);
                 variables.insert(match.steps.second->state.variables.begin(),
                                  match.steps.second->state.variables.end());
-                findLoopCounts<const llvm::Value *>(analysisResults.loopCounts,
-                                                    match);
-                populateEquationsMap(analysisResults.polynomialEquations,
+                findLoopCounts<const llvm::Value *>(
+                    dynamicAnalysisResults.loopCounts, match);
+                populateEquationsMap(dynamicAnalysisResults.polynomialEquations,
                                      freeVarsMap, match, exitIndex, degree);
-                populateHeapPatterns(analysisResults.heapPatternCandidates,
-                                     patterns, freeVarsMap, match, exitIndex);
+                populateHeapPatterns(
+                    dynamicAnalysisResults.heapPatternCandidates, patterns,
+                    freeVarsMap, match, exitIndex);
             });
-        map<int, LoopTransformation> loopTransformations =
-            findLoopTransformations(analysisResults.loopCounts.loopCounts);
+        auto loopTransformations = findLoopTransformations(
+            dynamicAnalysisResults.loopCounts.loopCounts);
         dumpLoopTransformations(loopTransformations);
 
         // // Peel and unroll loops
-        if (applyLoopTransformation(preprocessedFunctions.getValue(),
+        if (applyLoopTransformation(functions, analysisResults,
                                     loopTransformations, markMaps)) {
             // Reset data and start over
-            analysisResults = MergedAnalysisResults();
+            dynamicAnalysisResults = MergedAnalysisResults();
             vals = initialModelValues(functions);
             // The paths have changed so we need to update the free variables
-            pathMaps = preprocessedFunctions.getValue().map<PathMap>(
-                [](PreprocessedFunction fun) { return fun.results.paths; });
-            freeVarsMap = freeVars(pathMaps.first, pathMaps.second, funArgs, 0);
+            pathMaps = getPathMaps(functions, analysisResults);
+            freeVarsMap = mergeVectorMaps(
+                freeVars(pathMaps.first, funArgsPair.first, Program::First),
+                freeVars(pathMaps.second, funArgsPair.second, Program::Second));
             instrNameMap = instructionNameMap(functions);
             std::cerr << "Transformed program, resetting inputs\n";
             continue;
         }
 
         auto invariantCandidates = makeInvariantDefinitions(
-            findSolutions(analysisResults.polynomialEquations),
-            analysisResults.heapPatternCandidates, freeVarsMap, DegreeFlag);
+            findSolutions(dynamicAnalysisResults.polynomialEquations),
+            dynamicAnalysisResults.heapPatternCandidates, freeVarsMap,
+            DegreeFlag);
 
-        SMTGenerationOpts::initialize(mainFunctionName, HeapFlag, false, false,
-                                      false, false, false, false, false, false,
-                                      false, false, false, true, false,
-                                      invariantCandidates);
+        SMTGenerationOpts::initialize(
+            functions, SMTGenerationOpts::getInstance().Heap, false, false,
+            false, false, false, false, false, false, false, true, false, false,
+            invariantCandidates, {}, {});
         vector<SharedSMTRef> clauses =
-            generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
+            generateSMT(modules, analysisResults, fileOpts);
         z3Solver.reset();
         std::map<std::string, z3::expr> nameMap;
         std::map<std::string, smt::Z3DefineFun> defineFunMap;
+        vector<SharedSMTRef> z3Clauses;
+        set<SortedVar> introducedVariables;
         for (const auto &clause : clauses) {
+            z3Clauses.push_back(clause->removeForalls(introducedVariables));
+        }
+        VarDecl({"INV_INDEX", int64Type()})
+            .toZ3(z3Cxt, z3Solver, nameMap, defineFunMap);
+        for (const auto &var : introducedVariables) {
+            VarDecl(var).toZ3(z3Cxt, z3Solver, nameMap, defineFunMap);
+        }
+        for (const auto &clause : z3Clauses) {
             clause->toZ3(z3Cxt, z3Solver, nameMap, defineFunMap);
         }
         bool unsat = false;
@@ -405,31 +340,32 @@ cegarDriver(MonoPair<std::shared_ptr<llvm::Module>> modules,
         vals = parseZ3Model(z3Cxt, z3Model, nameMap, freeVarsMap);
     } while (1 /* sat */);
     auto invariantCandidates = makeInvariantDefinitions(
-        findSolutions(analysisResults.polynomialEquations),
-        analysisResults.heapPatternCandidates, freeVarsMap, DegreeFlag);
+        findSolutions(dynamicAnalysisResults.polynomialEquations),
+        dynamicAnalysisResults.heapPatternCandidates, freeVarsMap, DegreeFlag);
 
     SMTGenerationOpts::initialize(
-        mainFunctionName, HeapFlag, false, false, false, false, false, false,
-        false, false, false, false, false, true, false, invariantCandidates);
+        functions, SMTGenerationOpts::getInstance().Heap, false, false, false,
+        false, false, false, false, false, false, true, false, false,
+        invariantCandidates, {}, {});
     vector<SharedSMTRef> clauses =
-        generateSMT(modules, {preprocessedFunctions.getValue()}, fileOpts);
+        generateSMT(modules, analysisResults, fileOpts);
 
     return clauses;
 }
 
 ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
                          const std::map<std::string, z3::expr> &nameMap,
-                         const smt::FreeVarsMap &freeVarsMap) {
+                         const FreeVarsMap &freeVarsMap) {
     ModelValues modelValues;
 
-    int mark = model.eval(nameMap.at("INV_INDEX")).get_numeral_int();
-    modelValues.values.insert({"INV_INDEX", mark});
+    Mark mark = Mark(model.eval(nameMap.at("INV_INDEX")).get_numeral_int());
+    modelValues.values.insert({"INV_INDEX", mark.asInt()});
     for (const auto &var : freeVarsMap.at(mark)) {
         std::string stringVal = Z3_get_numeral_string(
             z3Cxt, model.eval(nameMap.at(var.name + "_old")));
         modelValues.values.insert({var.name + "_old", mpz_class(stringVal)});
     }
-    if (HeapFlag) {
+    if (SMTGenerationOpts::getInstance().Heap) {
         auto heap1Eval = model.eval(nameMap.at("HEAP$1_old"));
         auto heap2Eval = model.eval(nameMap.at("HEAP$2_old"));
         modelValues.arrays.insert(
@@ -457,8 +393,8 @@ ArrayVal getArrayVal(const z3::context &z3Cxt, z3::expr arrayExpr) {
 }
 
 bool applyLoopTransformation(
-    MonoPair<PreprocessedFunction> &functions,
-    const map<int, LoopTransformation> &loopTransformations,
+    MonoPair<llvm::Function *> &functions, AnalysisResultsMap &analysisResults,
+    const map<Mark, LoopTransformation> &loopTransformations,
     const MonoPair<BidirBlockMarkMap> &marks) {
     bool modified = false;
     for (auto mapIt : loopTransformations) {
@@ -471,22 +407,21 @@ bool applyLoopTransformation(
             switch (mapIt.second.side) {
             case LoopTransformSide::Left:
                 assert(mapIt.second.count == 1);
-                peelAtMark(*functions.first.fun, mapIt.first, marks.first, "1");
+                peelAtMark(*functions.first, mapIt.first, marks.first, "1");
                 break;
             case LoopTransformSide::Right:
-                peelAtMark(*functions.second.fun, mapIt.first, marks.second,
-                           "2");
+                peelAtMark(*functions.second, mapIt.first, marks.second, "2");
                 break;
             }
             break;
         case LoopTransformType::Unroll:
             switch (mapIt.second.side) {
             case LoopTransformSide::Left:
-                unrollAtMark(*functions.first.fun, mapIt.first, marks.first,
+                unrollAtMark(*functions.first, mapIt.first, marks.first,
                              mapIt.second.count);
                 break;
             case LoopTransformSide::Right:
-                unrollAtMark(*functions.second.fun, mapIt.first, marks.second,
+                unrollAtMark(*functions.second, mapIt.first, marks.second,
                              mapIt.second.count);
                 break;
             }
@@ -494,12 +429,13 @@ bool applyLoopTransformation(
         }
     }
     // Update path analysis
-    functions.first.results.paths = findPaths(marks.first);
-    functions.second.results.paths = findPaths(marks.second);
+    analysisResults.at(functions.first).paths = findPaths(marks.first);
+    analysisResults.at(functions.second).paths = findPaths(marks.second);
     return modified;
 }
 
-void dumpLoopTransformations(map<int, LoopTransformation> loopTransformations) {
+void dumpLoopTransformations(
+    map<Mark, LoopTransformation> loopTransformations) {
     std::cerr << "Loop transformations\n";
     for (auto mapIt : loopTransformations) {
         std::cerr << mapIt.first << ": ";
@@ -523,11 +459,11 @@ void dumpLoopTransformations(map<int, LoopTransformation> loopTransformations) {
     }
 }
 
-map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map) {
-    std::map<int, int32_t> peelCount;
-    std::map<int, float> unrollQuotients;
+map<Mark, LoopTransformation> findLoopTransformations(LoopCountMap &map) {
+    std::map<Mark, int32_t> peelCount;
+    std::map<Mark, float> unrollQuotients;
     for (auto mapIt : map) {
-        int mark = mapIt.first;
+        Mark mark = mapIt.first;
         for (auto sample : mapIt.second) {
             if (sample.first < 3 || sample.second < 3) {
                 continue;
@@ -562,9 +498,9 @@ map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map) {
             }
         }
     }
-    std::map<int, LoopTransformation> transforms;
+    std::map<Mark, LoopTransformation> transforms;
     for (auto it : peelCount) {
-        int mark = it.first;
+        Mark mark = it.first;
         if (abs(it.second) <= 4) {
             LoopTransformSide side = it.second >= 0 ? LoopTransformSide::Left
                                                     : LoopTransformSide::Right;
@@ -611,7 +547,7 @@ vector<vector<string>> polynomialTermsOfDegree(vector<smt::SortedVar> variables,
 }
 
 void populateEquationsMap(PolynomialEquations &polynomialEquations,
-                          smt::FreeVarsMap freeVarsMap,
+                          FreeVarsMap freeVarsMap,
                           MatchInfo<const llvm::Value *> match,
                           ExitIndex exitIndex, size_t degree) {
     VarMap<string> variables;
@@ -690,14 +626,12 @@ void populateEquationsMap(PolynomialEquations &polynomialEquations,
 
 ExitIndex getExitIndex(const MatchInfo<const llvm::Value *> match) {
     for (auto var : match.steps.first->state.variables) {
-        if (var.first->getName() ==
-            "exitIndex$1_" + std::to_string(match.mark)) {
+        if (var.first->getName() == "exitIndex$1_" + match.mark.toString()) {
             return unsafeIntVal(var.second).asUnbounded();
         }
     }
     for (auto var : match.steps.second->state.variables) {
-        if (var.first->getName() ==
-            "exitIndex$1_" + std::to_string(match.mark)) {
+        if (var.first->getName() == "exitIndex$1_" + match.mark.toString()) {
             return unsafeIntVal(var.second).asUnbounded();
         }
     }
@@ -707,7 +641,7 @@ ExitIndex getExitIndex(const MatchInfo<const llvm::Value *> match) {
 void populateHeapPatterns(
     HeapPatternCandidatesMap &heapPatternCandidates,
     vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
-    smt::FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match,
+    FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match,
     ExitIndex exitIndex) {
     VarMap<const llvm::Value *> variables(match.steps.first->state.variables);
     variables.insert(match.steps.second->state.variables.begin(),
@@ -810,15 +744,15 @@ BlockNameMap blockNameMap(BidirBlockMarkMap blockMap) {
     return ret;
 }
 
-Optional<MonoPair<PreprocessedFunction>>
-findFunction(const vector<MonoPair<PreprocessedFunction>> functions,
+Optional<MonoPair<llvm::Function *>>
+findFunction(const vector<MonoPair<llvm::Function *>> functions,
              string functionName) {
     for (auto &f : functions) {
-        if (f.first.fun->getName() == functionName) {
-            return Optional<MonoPair<PreprocessedFunction>>(f);
+        if (f.first->getName() == functionName) {
+            return Optional<MonoPair<llvm::Function *>>(f);
         }
     }
-    return Optional<MonoPair<PreprocessedFunction>>();
+    return Optional<MonoPair<llvm::Function *>>();
 }
 
 bool normalMarkBlock(const BlockNameMap &map, const BlockName &blockName) {
@@ -857,7 +791,7 @@ PolynomialSolutions
 findSolutions(const PolynomialEquations &polynomialEquations) {
     PolynomialSolutions map;
     for (auto eqMapIt : polynomialEquations) {
-        int mark = eqMapIt.first;
+        Mark mark = eqMapIt.first;
         for (auto exitMapIt : eqMapIt.second) {
             ExitIndex exitIndex = exitMapIt.first;
             LoopInfoData<Matrix<mpq_class>> m = LoopInfoData<Matrix<mpq_class>>(
@@ -886,7 +820,7 @@ findSolutions(const PolynomialEquations &polynomialEquations) {
 }
 
 void dumpPolynomials(const PolynomialEquations &equationsMap,
-                     const smt::FreeVarsMap &freeVarsMap) {
+                     const FreeVarsMap &freeVarsMap) {
     llvm::errs() << "------------------\n";
     PolynomialSolutions solutions = findSolutions(equationsMap);
     for (auto eqMapIt : solutions) {
@@ -962,12 +896,13 @@ SharedSMTRef makeEquation(const vector<mpz_class> &eq,
     }
     assert(polynomialTerms.size() + 1 == eq.size());
     for (size_t i = 0; i < polynomialTerms.size(); ++i) {
-        std::string mulName = BoundedFlag ? "bvmul" : "*";
+        std::string mulName =
+            SMTGenerationOpts::getInstance().BitVect ? "bvmul" : "*";
         if (eq.at(i) > 0) {
             if (eq.at(i) == 1) {
                 left.push_back(polynomialTerms.at(i));
             } else {
-                left.push_back(makeOp(mulName, intToSMT(eq.at(i).get_str(), 32),
+                left.push_back(makeOp(mulName, smtFromMpz(32, eq.at(i)),
                                       polynomialTerms.at(i)));
             }
         } else if (eq.at(i) < 0) {
@@ -975,24 +910,25 @@ SharedSMTRef makeEquation(const vector<mpz_class> &eq,
             if (inv == 1) {
                 right.push_back(polynomialTerms.at(i));
             } else {
-                right.push_back(makeOp(mulName, intToSMT(inv.get_str(), 32),
+                right.push_back(makeOp(mulName, smtFromMpz(32, inv),
                                        polynomialTerms.at(i)));
             }
         }
     }
     if (eq.back() > 0) {
-        left.push_back(intToSMT(eq.back().get_str(), 32));
+        left.push_back(std::make_unique<ConstantInt>(
+            llvm::APInt(32, eq.back().get_str(), 10)));
     } else if (eq.back() < 0) {
         mpz_class inv = -eq.back();
-        right.push_back(intToSMT(inv.get_str(), 32));
+        right.push_back(smtFromMpz(32, inv));
     }
     SharedSMTRef leftSide = nullptr;
     if (left.size() == 0) {
-        leftSide = intToSMT("0", 32);
+        leftSide = smtFromMpz(32, 0);
     } else if (left.size() == 1) {
         leftSide = left.front();
     } else {
-        if (BoundedFlag) {
+        if (SMTGenerationOpts::getInstance().BitVect) {
             leftSide = make_shared<Op>("bvadd", left);
         } else {
             leftSide = make_shared<Op>("+", left);
@@ -1000,11 +936,11 @@ SharedSMTRef makeEquation(const vector<mpz_class> &eq,
     }
     SharedSMTRef rightSide = nullptr;
     if (right.size() == 0) {
-        rightSide = intToSMT("0", 32);
+        rightSide = smtFromMpz(32, 0);
     } else if (right.size() == 1) {
         rightSide = right.front();
     } else {
-        if (BoundedFlag) {
+        if (SMTGenerationOpts::getInstance().BitVect) {
             rightSide = make_shared<Op>("bvadd", right);
         } else {
             rightSide = make_shared<Op>("+", right);
@@ -1022,15 +958,10 @@ SharedSMTRef makeInvariantDefinition(const vector<vector<mpz_class>> &solution,
         conjunction.push_back(makeEquation(vec, freeVars, degree));
     }
     for (const auto &candidate : candidates) {
-        if (InstantiateStorage) {
-            conjunction.push_back(
-                candidate->negationNormalForm()->instantiate()->toSMT());
-        } else {
-            conjunction.push_back(candidate->toSMT());
-        }
+        conjunction.push_back(candidate->toSMT());
     }
     if (conjunction.size() == 0) {
-        return smt::stringExpr("false");
+        return make_unique<ConstantBool>(false);
     } else {
         return make_shared<Op>("and", conjunction);
     }
@@ -1052,50 +983,32 @@ makeBoundsDefinitions(const map<string, Bound<Optional<VarIntVal>>> &bounds) {
     return make_shared<Op>("and", constraints);
 }
 
-map<int, SharedSMTRef>
+map<Mark, SharedSMTRef>
 makeInvariantDefinitions(const PolynomialSolutions &solutions,
                          const HeapPatternCandidatesMap &patterns,
-                         const smt::FreeVarsMap &freeVarsMap, size_t degree) {
-    map<int, SharedSMTRef> definitions;
+                         const FreeVarsMap &freeVarsMap, size_t degree) {
+    map<Mark, SharedSMTRef> definitions;
     for (auto mapIt : freeVarsMap) {
-        int mark = mapIt.first;
+        Mark mark = mapIt.first;
         vector<SortedVar> args;
         vector<string> stringArgs;
         for (const auto &var : filterVars(1, freeVarsMap.at(mark))) {
-            if (BoundedFlag) {
-                args.push_back(SortedVar(var.name, var.type));
-            } else {
-                args.push_back(SortedVar(var.name, "Int"));
-            }
+            args.push_back(SortedVar(var.name, var.type->copy()));
         }
-        if (HeapFlag) {
-            if (InstantiateStorage) {
-                args.push_back(SortedVar("i1", "Int"));
-                args.push_back(SortedVar("heap1", "Int"));
-            } else {
-                args.push_back(SortedVar("HEAP$1", "(Array Int Int)"));
-            }
+        if (SMTGenerationOpts::getInstance().Heap) {
+            args.push_back(SortedVar("HEAP$1", memoryType()));
         }
 
         for (auto var : filterVars(2, freeVarsMap.at(mark))) {
-            if (BoundedFlag) {
-                args.push_back(SortedVar(var.name, var.type));
-            } else {
-                args.push_back(SortedVar(var.name, "Int"));
-            }
+            args.push_back(SortedVar(var.name, var.type->copy()));
         }
-        if (HeapFlag) {
-            if (InstantiateStorage) {
-                args.push_back(SortedVar("i2", "Int"));
-                args.push_back(SortedVar("heap2", "Int"));
-            } else {
-                args.push_back(SortedVar("HEAP$2", "(Array Int Int)"));
-            }
+        if (SMTGenerationOpts::getInstance().Heap) {
+            args.push_back(SortedVar("HEAP$2", memoryType()));
         }
         auto solutionsMapIt = solutions.find(mark);
         vector<SharedSMTRef> exitClauses;
         if (solutionsMapIt == solutions.end()) {
-            exitClauses.push_back(smt::stringExpr("false"));
+            exitClauses.push_back(make_unique<ConstantBool>(false));
         } else {
             for (auto exitIt : solutionsMapIt->second) {
                 ExitIndex exit = exitIt.first;
@@ -1128,19 +1041,19 @@ makeInvariantDefinitions(const PolynomialSolutions &solutions,
                 // }
             }
         }
-        string invariantName = "INV_MAIN_" + std::to_string(mark);
+        string invariantName = "INV_MAIN_" + mark.toString();
         if (ImplicationsFlag) {
             invariantName += "_INFERRED";
         }
-        definitions[mark] = make_shared<FunDef>(
-            invariantName, args, "Bool", make_shared<Op>("or", exitClauses));
+        definitions[mark] =
+            make_shared<FunDef>(invariantName, args, boolType(),
+                                make_shared<Op>("or", exitClauses));
     }
     return definitions;
 }
 
-void instantiateBounds(map<int, map<string, Bound<VarIntVal>>> &boundsMap,
-                       const smt::FreeVarsMap &freeVars,
-                       MatchInfo<string> match) {
+void instantiateBounds(map<Mark, map<string, Bound<VarIntVal>>> &boundsMap,
+                       const FreeVarsMap &freeVars, MatchInfo<string> match) {
     VarMap<string> variables;
     variables.insert(match.steps.first->state.variables.begin(),
                      match.steps.first->state.variables.end());
@@ -1164,9 +1077,9 @@ void instantiateBounds(map<int, map<string, Bound<VarIntVal>>> &boundsMap,
 
 BoundsMap updateBounds(
     BoundsMap accumulator,
-    const std::map<int, std::map<std::string, Bound<VarIntVal>>> &update) {
+    const std::map<Mark, std::map<std::string, Bound<VarIntVal>>> &update) {
     for (auto updateIt : update) {
-        int mark = updateIt.first;
+        Mark mark = updateIt.first;
         for (auto varIt : updateIt.second) {
             if (accumulator[mark].find(varIt.first) ==
                 accumulator[mark].end()) {
@@ -1220,12 +1133,12 @@ void dumpBounds(const BoundsMap &bounds) {
     }
 }
 
-map<int, map<ExitIndex, LoopInfoData<set<MonoPair<string>>>>>
+map<Mark, map<ExitIndex, LoopInfoData<set<MonoPair<string>>>>>
 extractEqualities(const PolynomialEquations &polynomialEquations,
                   const vector<string> &freeVars) {
-    map<int, map<ExitIndex, LoopInfoData<set<MonoPair<string>>>>> result;
+    map<Mark, map<ExitIndex, LoopInfoData<set<MonoPair<string>>>>> result;
     for (auto mapIt : polynomialEquations) {
-        int mark = mapIt.first;
+        Mark mark = mapIt.first;
         for (auto exitIndex : mapIt.second) {
             result[mark].insert(
                 make_pair(exitIndex.first,
@@ -1290,7 +1203,8 @@ std::map<const llvm::Value *, VarVal> getVarMap(const llvm::Function *fun,
     for (size_t i = 0; i < vals.size(); ++i) {
         const llvm::Value *arg = &*argIt;
         // Pointers are always unbounded
-        if (BoundedFlag && arg->getType()->isIntegerTy()) {
+        if (SMTGenerationOpts::getInstance().BitVect &&
+            arg->getType()->isIntegerTy()) {
             variableValues.insert(
                 {arg,
                  Integer(makeBoundedInt(arg->getType()->getIntegerBitWidth(),
@@ -1359,7 +1273,7 @@ Heap getHeapFromModel(const ArrayVal &ar) {
 }
 
 MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays) {
-    if (!HeapFlag) {
+    if (!SMTGenerationOpts::getInstance().Heap) {
         return {{}, {}};
     }
     return {getHeapFromModel(arrays.at("HEAP$1_old")),
@@ -1367,7 +1281,7 @@ MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays) {
 }
 
 MonoPair<Integer> getHeapBackgrounds(std::map<std::string, ArrayVal> arrays) {
-    if (!HeapFlag) {
+    if (!SMTGenerationOpts::getInstance().Heap) {
         return {Integer(mpz_class(0)), Integer(mpz_class(0))};
     }
     return {Integer(arrays.at("HEAP$1_old").background),
@@ -1390,7 +1304,7 @@ Heap randomHeap(const llvm::Function &fun,
                 int val =
                     (rand_r(seedp) % (valUpperBound - valLowerBound + 1)) +
                     valLowerBound;
-                if (BoundedFlag) {
+                if (SMTGenerationOpts::getInstance().BitVect) {
                     heap.insert(
                         {arrayStart.asPointer() +
                              Integer(mpz_class(i)).asPointer(),
@@ -1431,7 +1345,7 @@ PolynomialEquations mergePolynomialEquations(PolynomialEquations eq1,
                                              PolynomialEquations eq2) {
     PolynomialEquations result = eq1;
     for (auto it : eq2) {
-        int mark = it.first;
+        Mark mark = it.first;
         for (auto innerIt : it.second) {
             ExitIndex exit = innerIt.first;
             for (auto &vec : innerIt.second.left) {
@@ -1467,7 +1381,7 @@ HeapPatternCandidatesMap mergeHeapPatternMaps(HeapPatternCandidatesMap cand1,
                                               HeapPatternCandidatesMap cand2) {
     HeapPatternCandidatesMap result = cand1;
     for (auto &it : result) {
-        int mark = it.first;
+        Mark mark = it.first;
         for (auto &exitIt : it.second) {
             ExitIndex exit = exitIt.first;
             if (cand2.count(mark) > 0 && cand2.at(mark).count(exit) > 0) {
@@ -1488,7 +1402,7 @@ HeapPatternCandidatesMap mergeHeapPatternMaps(HeapPatternCandidatesMap cand1,
         }
     }
     for (auto it : cand2) {
-        int mark = it.first;
+        Mark mark = it.first;
         for (auto exitIt : it.second) {
             ExitIndex exit = exitIt.first;
             if (result.count(mark) == 0 || result.at(mark).count(exit) == 0) {
@@ -1530,6 +1444,6 @@ ModelValues initialModelValues(MonoPair<const llvm::Function *> funs) {
     for (const auto &arg : funs.second->args()) {
         vals.values.insert({std::string(arg.getName()) + "_old", 5});
     }
-    vals.values.insert({"INV_INDEX", ENTRY_MARK});
+    vals.values.insert({"INV_INDEX", ENTRY_MARK.asInt()});
     return vals;
 }

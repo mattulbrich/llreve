@@ -17,8 +17,6 @@
 
 using HoleMap = std::map<size_t, mpz_class>;
 
-extern bool InstantiateStorage;
-
 enum class PatternType { Binary, Unary, HeapEquality, Range, ExprProp };
 
 enum class ExprType {
@@ -377,17 +375,7 @@ template <typename T> struct HeapEqual : public HeapPattern<T> {
         return os;
     }
     smt::SMTRef toSMT() const override {
-        if (InstantiateStorage) {
-            std::vector<smt::SortedVar> args = {
-                smt::SortedVar("heapIndex", "Int")};
-            smt::SharedSMTRef expr =
-                makeOp("=", smt::makeOp("select", "HEAP$1", "heapIndex"),
-                       smt::makeOp("select", "HEAP$2", "heapIndex"));
-
-            return std::make_unique<smt::Forall>(args, expr);
-        } else {
-            return smt::makeOp("=", "HEAP$1", "HEAP$2");
-        }
+        return smt::makeOp("=", "HEAP$1", "HEAP$2");
     }
     bool equalTo(const HeapPattern<T> &other) const override {
         return other.getType() == PatternType::HeapEquality;
@@ -955,8 +943,8 @@ template <typename T> struct RangeProp : public HeapPattern<T> {
     }
     smt::SMTRef toSMT() const override {
 
-        std::vector<smt::SortedVar> args = {
-            smt::SortedVar("boundVar_" + std::to_string(index), "Int")};
+        std::vector<smt::SortedVar> args = {smt::SortedVar(
+            "boundVar_" + std::to_string(index), smt::int64Type())};
         smt::SharedSMTRef var =
             smt::stringExpr("boundVar_" + std::to_string(index));
         smt::SharedSMTRef arg1 = bounds.first->toSMT();

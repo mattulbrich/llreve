@@ -145,8 +145,9 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
                 ProgramSelection::Both, funName, true, freeVarsMap);
             if (SMTGenerationOpts::getInstance().Invert) {
                 negations.push_back(makeOp(
-                    "and",
-                    makeOp("=", "INV_INDEX", it.first.startMark.toString()),
+                    "and", makeOp("=", "INV_INDEX",
+                                  std::make_unique<ConstantInt>(llvm::APInt(
+                                      64, it.first.startMark.toString(), 10))),
                     makeOp("not", clause)));
             } else {
                 smtExprs.push_back(make_shared<Assert>(clause));

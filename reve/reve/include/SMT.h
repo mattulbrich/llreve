@@ -131,6 +131,9 @@ class TypedVariable : public SMTExpr {
     renameAssignments(std::map<std::string, int> variableMap) const override;
     SharedSMTRef
     inlineLets(std::map<std::string, SharedSMTRef> assignments) const override;
+    z3::expr toZ3Expr(
+        z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
+        const std::map<std::string, Z3DefineFun> &defineFunMap) const override;
 };
 
 class SortedVar {
@@ -252,6 +255,9 @@ class ConstantInt : public SMTExpr {
     llvm::APInt value;
     explicit ConstantInt(const llvm::APInt value) : value(value) {}
     SExprRef toSExpr() const override;
+    z3::expr toZ3Expr(
+        z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
+        const std::map<std::string, Z3DefineFun> &defineFunMap) const override;
 };
 
 class ConstantBool : public SMTExpr {
@@ -260,6 +266,9 @@ class ConstantBool : public SMTExpr {
     explicit ConstantBool(bool value) : value(value) {}
     SExprRef toSExpr() const override;
     SharedSMTRef compressLets(std::vector<Assignment> defs) const override;
+    z3::expr toZ3Expr(
+        z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
+        const std::map<std::string, Z3DefineFun> &defineFunMap) const override;
 };
 
 // This is for constants or expressions that have not been parsed and should

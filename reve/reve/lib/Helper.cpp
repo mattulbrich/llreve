@@ -112,7 +112,8 @@ int typeSize(llvm::Type *Ty, const llvm::DataLayout &layout) {
 }
 
 /// Filter vars to only include the ones from Program
-std::vector<SortedVar> filterVars(int program, std::vector<SortedVar> vars) {
+std::vector<SortedVar> filterVars(int program,
+                                       std::vector<SortedVar> vars) {
     std::vector<SortedVar> filteredVars;
     for (const auto &var : vars) {
         if (varBelongsTo(var.name, program)) {

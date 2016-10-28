@@ -254,7 +254,7 @@ Integer Integer::xor_(const Integer &rhs) const {
 }
 
 Integer Integer::asPointer() const {
-    if (!BoundedFlag) {
+    if (!SMTGenerationOpts::getInstance().BitVect) {
         return Integer(asUnbounded());
     }
     switch (type) {

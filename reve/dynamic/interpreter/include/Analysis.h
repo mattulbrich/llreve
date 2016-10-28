@@ -59,29 +59,25 @@ void zipWith(LoopInfoData<T1> &loop1, LoopInfoData<T2> &loop2,
 
 using ExitIndex = mpz_class;
 
-using BlockNameMap = std::map<std::string, std::set<int>>;
+using BlockNameMap = std::map<std::string, std::set<Mark>>;
 using HeapPatternCandidates =
     std::list<std::shared_ptr<HeapPattern<const llvm::Value *>>>;
 using HeapPatternCandidatesMap = std::map<
-    int,
+    Mark,
     std::map<ExitIndex, LoopInfoData<llvm::Optional<HeapPatternCandidates>>>>;
 using BoundsMap =
-    std::map<int, std::map<std::string, Bound<llvm::Optional<VarIntVal>>>>;
+    std::map<Mark, std::map<std::string, Bound<llvm::Optional<VarIntVal>>>>;
 
 std::vector<smt::SharedSMTRef>
-driver(MonoPair<std::shared_ptr<llvm::Module>> modules,
-       std::vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
-       std::string mainFunctionName,
+driver(MonoPair<llvm::Module &> modules, AnalysisResultsMap &analysisResults,
        std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
        FileOptions fileopts);
 std::vector<smt::SharedSMTRef> cegarDriver(
-    MonoPair<std::shared_ptr<llvm::Module>> modules,
-    std::vector<MonoPair<PreprocessedFunction>> preprocessedFuns,
-    std::string mainFunctionName,
+    MonoPair<llvm::Module &> modules, AnalysisResultsMap &analysisResults,
     std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
     FileOptions fileopts);
-llvm::Optional<MonoPair<PreprocessedFunction>>
-findFunction(const std::vector<MonoPair<PreprocessedFunction>> functions,
+llvm::Optional<MonoPair<llvm::Function *>>
+findFunction(std::vector<MonoPair<llvm::Function *>> functions,
              std::string functionName);
 Heap randomHeap(const llvm::Function &fun,
                 const std::map<const llvm::Value *, VarVal> &variableValues,
@@ -90,13 +86,13 @@ Heap randomHeap(const llvm::Function &fun,
 
 using Equality = MonoPair<std::string>;
 using PolynomialEquations =
-    std::map<int, std::map<ExitIndex,
-                           LoopInfoData<std::vector<std::vector<mpq_class>>>>>;
+    std::map<Mark, std::map<ExitIndex,
+                            LoopInfoData<std::vector<std::vector<mpq_class>>>>>;
 using PolynomialSolutions =
-    std::map<int, std::map<ExitIndex,
-                           LoopInfoData<std::vector<std::vector<mpz_class>>>>>;
+    std::map<Mark, std::map<ExitIndex,
+                            LoopInfoData<std::vector<std::vector<mpz_class>>>>>;
 
-using LoopCountMap = std::map<int, std::vector<MonoPair<int>>>;
+using LoopCountMap = std::map<Mark, std::vector<MonoPair<int>>>;
 
 template <typename T> T identity(T x) { return x; }
 BlockNameMap blockNameMap(BidirBlockMarkMap blockMap);
@@ -116,8 +112,9 @@ struct LoopTransformation {
 template <typename T> struct MatchInfo {
     MonoPair<const BlockStep<T> *> steps;
     LoopInfo loopInfo;
-    int mark;
-    MatchInfo(MonoPair<const BlockStep<T> *> steps, LoopInfo loopInfo, int mark)
+    Mark mark;
+    MatchInfo(MonoPair<const BlockStep<T> *> steps, LoopInfo loopInfo,
+              Mark mark)
         : steps(steps), loopInfo(loopInfo), mark(mark) {}
 };
 
@@ -126,9 +123,9 @@ template <typename T> struct MatchInfo {
 bool normalMarkBlock(const BlockNameMap &map, const BlockName &blockName);
 void debugAnalysis(MatchInfo<const llvm::Value *> match);
 void dumpLoopCounts(const LoopCountMap &loopCounts);
-std::map<int, LoopTransformation> findLoopTransformations(LoopCountMap &map);
+std::map<Mark, LoopTransformation> findLoopTransformations(LoopCountMap &map);
 struct LoopCountsAndMark {
-    int mark;
+    Mark mark;
     LoopCountMap loopCounts;
     // -5 is never used as a mark so its a good default
     LoopCountsAndMark() : mark(-5) {}
@@ -163,27 +160,27 @@ void findLoopCounts(LoopCountsAndMark &loopCountsAndMark, MatchInfo<T> match) {
     }
 }
 void instantiateBounds(
-    std::map<int, std::map<std::string, Bound<VarIntVal>>> &boundsMap,
-    const smt::FreeVarsMap &freeVars, MatchInfo<std::string> match);
+    std::map<Mark, std::map<std::string, Bound<VarIntVal>>> &boundsMap,
+    const FreeVarsMap &freeVars, MatchInfo<std::string> match);
 BoundsMap updateBounds(
     BoundsMap accumulator,
-    const std::map<int, std::map<std::string, Bound<VarIntVal>>> &update);
+    const std::map<Mark, std::map<std::string, Bound<VarIntVal>>> &update);
 void populateEquationsMap(PolynomialEquations &equationsMap,
-                          smt::FreeVarsMap freeVarsMap,
+                          FreeVarsMap freeVarsMap,
                           MatchInfo<const llvm::Value *> match,
                           ExitIndex exitIndex, size_t degree);
 void populateHeapPatterns(
     HeapPatternCandidatesMap &heapPatternCandidates,
     std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
-    smt::FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match,
+    FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match,
     ExitIndex exitIndex);
 void dumpPolynomials(const PolynomialEquations &equationsMap,
-                     const smt::FreeVarsMap &freeVarsmap);
+                     const FreeVarsMap &freeVarsmap);
 void dumpHeapPatterns(const HeapPatternCandidatesMap &heapPatternsMap);
-std::map<int, smt::SharedSMTRef>
+std::map<Mark, smt::SharedSMTRef>
 makeInvariantDefinitions(const PolynomialSolutions &solutions,
                          const HeapPatternCandidatesMap &patterns,
-                         const smt::FreeVarsMap &freeVarsMap, size_t degree);
+                         const FreeVarsMap &freeVarsMap, size_t degree);
 smt::SharedSMTRef
 makeInvariantDefinition(const std::vector<std::vector<mpz_class>> &solution,
                         const HeapPatternCandidates &candidates,
@@ -197,7 +194,7 @@ smt::SharedSMTRef makeBoundsDefinitions(
 PolynomialSolutions findSolutions(const PolynomialEquations &equationsMap);
 void dumpBounds(const BoundsMap &bounds);
 
-std::map<int,
+std::map<Mark,
          std::map<ExitIndex, LoopInfoData<std::set<MonoPair<std::string>>>>>
 extractEqualities(const PolynomialEquations &equations,
                   const std::vector<std::string> &freeVars);
@@ -292,10 +289,10 @@ void iterateTracesInRange(
     }
 }
 void dumpLoopTransformations(
-    std::map<int, LoopTransformation> loopTransformations);
+    std::map<Mark, LoopTransformation> loopTransformations);
 bool applyLoopTransformation(
-    MonoPair<PreprocessedFunction> &functions,
-    const std::map<int, LoopTransformation> &loopTransformations,
+    MonoPair<llvm::Function *> &functions, AnalysisResultsMap &analysisResults,
+    const std::map<Mark, LoopTransformation> &loopTransformations,
     const MonoPair<BidirBlockMarkMap> &mark);
 std::vector<std::vector<std::string>>
 polynomialTermsOfDegree(std::vector<smt::SortedVar> variables, size_t degree);
@@ -332,9 +329,9 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
                        .size() == 1);
             // We resolve the ambiguity in the marks by hoping that for one
             // program there is only one choice
-            int mark = *intersection(nameMaps.first.at(stepsIt1->blockName),
-                                     nameMaps.second.at(stepsIt2->blockName))
-                            .begin();
+            Mark mark = *intersection(nameMaps.first.at(stepsIt1->blockName),
+                                      nameMaps.second.at(stepsIt2->blockName))
+                             .begin();
             // Perfect synchronization
             fun(MatchInfo<T>(makeMonoPair(&*stepsIt1, &*stepsIt2),
                              LoopInfo::None, mark));
@@ -370,7 +367,7 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
                 assert(intersection(nameMap.at(prevStepIt.blockName),
                                     otherNameMap.at(prevStepItOther.blockName))
                            .size() == 1);
-                int mark =
+                Mark mark =
                     *intersection(nameMap.at(prevStepIt.blockName),
                                   otherNameMap.at(prevStepItOther.blockName))
                          .begin();
@@ -430,6 +427,6 @@ ExitIndex getExitIndex(const MatchInfo<const llvm::Value *> match);
 
 ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
                          const std::map<std::string, z3::expr> &nameMap,
-                         const smt::FreeVarsMap &freeVarsMap);
+                         const FreeVarsMap &freeVarsMap);
 
 ArrayVal getArrayVal(const z3::context &z3Cxt, z3::expr arrayExpr);

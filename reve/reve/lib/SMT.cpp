@@ -845,7 +845,7 @@ void SMTExpr::toZ3(z3::context & /* unused */, z3::solver & /* unused */,
                    std::map<std::string, z3::expr> & /* unused */,
                    std::map<std::string, Z3DefineFun> &
                    /* unused */) const {
-    std::cerr << "Unsupported smt toplevel\n";
+    logError("Unsupported smt toplevel\n");
     std::cerr << *toSExpr();
     exit(1);
 }
@@ -853,19 +853,49 @@ void SMTExpr::toZ3(z3::context & /* unused */, z3::solver & /* unused */,
 z3::expr SMTExpr::toZ3Expr(
     z3::context & /* unused */, std::map<std::string, z3::expr> & /* unused */,
     const std::map<std::string, Z3DefineFun> & /* unused */) const {
-    std::cerr << "Unsupported smt expr\n";
+    logError("Unsupported smtexpr\n");
     std::cerr << *toSExpr();
     exit(1);
+}
+
+z3::expr TypedVariable::toZ3Expr(
+    z3::context &cxt, map<string, z3::expr> &nameMap,
+    const std::map<std::string, Z3DefineFun> & /* unused */) const {
+    if (nameMap.count(name) == 0) {
+        std::cerr << "Z3 serialization error: '" << name
+                  << "' not in variable map\n";
+        exit(1);
+    } else {
+        return nameMap.at(name);
+    }
 }
 
 z3::expr ConstantString::toZ3Expr(
     z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
     const std::map<std::string, Z3DefineFun> & /* unused */) const {
     if (nameMap.count(value) == 0) {
-        std::cerr << "Couldn’t find " << value << "\n";
+        std::cerr << "Z3 serialization error: '" << value
+                  << "' not in variable map\n";
         exit(1);
     } else {
         return nameMap.at(value);
+    }
+}
+
+z3::expr ConstantBool::toZ3Expr(
+    z3::context &cxt, std::map<std::string, z3::expr> & /* unused */,
+    const std::map<std::string, Z3DefineFun> & /* unused */) const {
+    return cxt.bool_val(value);
+}
+
+z3::expr
+ConstantInt::toZ3Expr(z3::context &cxt, map<string, z3::expr> & /* unused */,
+                      const map<string, Z3DefineFun> & /* unused */) const {
+    if (SMTGenerationOpts::getInstance().BitVect) {
+        logError("Bitvector serialization for z3 is not yet implemented\n");
+        exit(1);
+    } else {
+        return cxt.int_val(static_cast<__int64>(value.getSExtValue()));
     }
 }
 

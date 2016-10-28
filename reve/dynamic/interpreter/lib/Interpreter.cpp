@@ -49,15 +49,11 @@ using nlohmann::json;
 
 VarVal::VarValConcept::~VarValConcept() = default;
 
-bool BoundedFlag;
 unsigned HeapElemSizeFlag;
-static llvm::cl::opt<bool, true> // The parser
-    Bounded("bounded", llvm::cl::desc("Use bounded integers"),
-            llvm::cl::location(BoundedFlag));
-static llvm::cl::opt<unsigned, true> // The parser
+static llreve::cl::opt<unsigned, true> // The parser
     HeapElemSize("heap-elem-size",
-                 llvm::cl::desc("Size for a random heap element"),
-                 llvm::cl::location(HeapElemSizeFlag), llvm::cl::init(8));
+                 llreve::cl::desc("Size for a random heap element"),
+                 llreve::cl::location(HeapElemSizeFlag), llreve::cl::init(8));
 
 VarType getType(const VarIntVal & /* unused */) { return VarType::Int; }
 json toJSON(const VarIntVal &v) { return v.get_str(); }
@@ -214,7 +210,7 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
             // Convert a bool to an integer
             VarVal operand = state.variables.at(cast->getOperand(0));
             assert(getType(operand) == VarType::Bool);
-            if (BoundedFlag) {
+            if (SMTGenerationOpts::getInstance().BitVect) {
                 state.variables[cast] = Integer(
                     makeBoundedInt(cast->getType()->getIntegerBitWidth(),
                                    unsafeBool(operand) ? 1 : 0));
@@ -256,7 +252,7 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
             resolveValue(load->getPointerOperand(), state, load->getType());
         assert(getType(ptr) == VarType::Int);
         // This will only insert 0 if there is not already a different element
-        if (BoundedFlag) {
+        if (SMTGenerationOpts::getInstance().BitVect) {
             unsigned bytes = load->getType()->getIntegerBitWidth() / 8;
             llvm::APInt val =
                 makeBoundedInt(load->getType()->getIntegerBitWidth(), 0);
@@ -285,7 +281,7 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
         VarIntVal val =
             unsafeIntVal(resolveValue(store->getValueOperand(), state,
                                       store->getValueOperand()->getType()));
-        if (BoundedFlag) {
+        if (SMTGenerationOpts::getInstance().BitVect) {
             int bytes =
                 store->getValueOperand()->getType()->getIntegerBitWidth() / 8;
             assert(val.type == IntType::Bounded);
@@ -367,7 +363,7 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
         const VarIntVal &condVal = unsafeIntVal(cond);
         for (auto c : switchInst->cases()) {
             VarIntVal caseVal;
-            if (BoundedFlag) {
+            if (SMTGenerationOpts::getInstance().BitVect) {
                 caseVal = Integer(c.getCaseValue()->getValue());
             } else {
                 caseVal = Integer(mpz_class(c.getCaseValue()->getSExtValue()));
@@ -391,7 +387,7 @@ VarVal resolveValue(const Value *val, const FastState &state,
     } else if (const auto constInt = dyn_cast<ConstantInt>(val)) {
         if (constInt->getBitWidth() == 1) {
             return constInt->isOne();
-        } else if (!BoundedFlag) {
+        } else if (!SMTGenerationOpts::getInstance().BitVect) {
             return Integer(mpz_class(constInt->getSExtValue()));
         } else {
             return Integer(constInt->getValue());

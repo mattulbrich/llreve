@@ -33,8 +33,15 @@ struct Mark {
     inline bool operator!=(const Mark &other) const {
         return !(index == other.index);
     }
+    inline int asInt() const { return index; }
+    friend std::ostream &operator<<(std::ostream &out, const Mark &mark);
     std::string toString() const;
 };
+
+inline std::ostream &operator<<(std::ostream &out, const Mark &mark) {
+    out << mark.index;
+    return out;
+}
 
 const Mark UNREACHABLE_MARK(-3);
 const Mark EXIT_MARK(-2);
