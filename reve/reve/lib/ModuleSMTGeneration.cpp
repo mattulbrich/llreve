@@ -27,19 +27,7 @@ using std::string;
 using std::vector;
 using std::set;
 
-using smt::CheckSat;
-using smt::Forall;
-using smt::FunDef;
-using smt::GetModel;
-using smt::Op;
-using smt::Query;
-using smt::SetLogic;
-using smt::SharedSMTRef;
-using smt::SMTRef;
-using smt::SortedVar;
-using smt::VarDecl;
-using smt::makeOp;
-using smt::stringExpr;
+using namespace smt;
 
 vector<SharedSMTRef> generateSMT(MonoPair<const llvm::Module &> modules,
                                  const AnalysisResultsMap &analysisResults,

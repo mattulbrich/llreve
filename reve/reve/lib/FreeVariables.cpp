@@ -5,10 +5,11 @@
 
 #include "llvm/IR/Instructions.h"
 
-using smt::SortedVar;
 using std::map;
 using std::set;
 using std::vector;
+
+using namespace smt;
 
 struct FreeVar {
     smt::SortedVar var;

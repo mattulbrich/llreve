@@ -5,16 +5,11 @@
 #include "Invariant.h"
 
 using std::make_unique;
-using smt::ConstantBool;
-using smt::FunDef;
-using smt::makeOp;
-using smt::Op;
-using smt::SharedSMTRef;
-using smt::SortedVar;
-using smt::stringExpr;
 using std::make_shared;
 using std::string;
 using std::vector;
+
+using namespace smt;
 
 vector<SharedSMTRef>
 slicingAssertion(MonoPair<llvm::Function *> funPair,

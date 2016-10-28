@@ -12,6 +12,7 @@ using std::vector;
 using sexpr::Apply;
 using sexpr::Value;
 
+namespace smt {
 TypeTag BoolType::getTag() const { return TypeTag::Bool; }
 TypeTag IntType::getTag() const { return TypeTag::Int; }
 TypeTag FloatType::getTag() const { return TypeTag::Float; }
@@ -96,4 +97,5 @@ unique_ptr<Type> inferTypeByName(string arg) {
         return memoryType();
     }
     return int64Type();
+}
 }

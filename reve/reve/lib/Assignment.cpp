@@ -21,24 +21,13 @@
 using std::vector;
 using std::make_shared;
 using std::make_unique;
-using smt::ConstantBool;
-using smt::ConstantInt;
 using std::shared_ptr;
 using std::unique_ptr;
+using std::string;
 using llvm::Instruction;
 using llvm::CmpInst;
-using smt::FPCmp;
-using smt::BinaryFPOperator;
-using smt::Assignment;
-using smt::memoryVariable;
-using smt::stringExpr;
-using smt::SharedSMTRef;
-using smt::SMTRef;
-using smt::SMTExpr;
-using smt::Op;
-using smt::makeOp;
-using std::string;
-using smt::TypedVariable;
+
+using namespace smt;
 
 /// Convert a basic block to a list of assignments
 vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
@@ -120,7 +109,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
     const int progIndex = programIndex(prog);
     if (const auto BinOp = llvm::dyn_cast<llvm::BinaryOperator>(&Instr)) {
         if (BinOp->getType()->isFloatingPointTy()) {
-            auto op = std::make_unique<smt::BinaryFPOperator>(
+            auto op = std::make_unique<BinaryFPOperator>(
                 binaryFPOpcode(BinOp->getOpcode()), llvmType(BinOp->getType()),
                 instrNameOrVal(BinOp->getOperand(0)),
                 instrNameOrVal(BinOp->getOperand(1)));
@@ -168,7 +157,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
                               instrNameOrVal(BinOp->getOperand(1))))};
     }
     if (const auto fcmpInst = llvm::dyn_cast<llvm::FCmpInst>(&Instr)) {
-        auto cmp = std::make_unique<smt::FPCmp>(
+        auto cmp = std::make_unique<FPCmp>(
             fpPredicate(fcmpInst->getPredicate()),
             llvmType(fcmpInst->getOperand(0)->getType()),
             instrNameOrVal(fcmpInst->getOperand(0)),
@@ -303,7 +292,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
         }
     }
     if (const auto bitCast = llvm::dyn_cast<llvm::CastInst>(&Instr)) {
-        auto cast = std::make_unique<smt::TypeCast>(
+        auto cast = std::make_unique<TypeCast>(
             bitCast->getOpcode(), llvmType(bitCast->getSrcTy()),
             llvmType(bitCast->getDestTy()),
             instrNameOrVal(bitCast->getOperand(0)));

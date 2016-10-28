@@ -17,14 +17,12 @@
 #include "llvm/IR/Operator.h"
 
 using std::make_unique;
-using smt::ConstantBool;
-using smt::SharedSMTRef;
-using smt::SMTRef;
-using smt::stringExpr;
 using std::set;
 using std::string;
 using std::unique_ptr;
 using std::vector;
+
+using namespace smt;
 
 SMTRef instrLocation(const llvm::Value *val) {
     if (!val->getName().empty()) {
@@ -45,14 +43,14 @@ SMTRef instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) {
         if (apInt.isIntN(1) && ty->isIntegerTy(1)) {
             return make_unique<ConstantBool>(apInt.getBoolValue());
         }
-        return std::make_unique<smt::ConstantInt>(apInt);
+        return std::make_unique<ConstantInt>(apInt);
     }
     if (const auto constFP = llvm::dyn_cast<llvm::ConstantFP>(val)) {
-        return std::make_unique<smt::ConstantFP>(constFP->getValueAPF());
+        return std::make_unique<ConstantFP>(constFP->getValueAPF());
     }
     if (llvm::isa<llvm::ConstantPointerNull>(val)) {
         if (SMTGenerationOpts::getInstance().BitVect) {
-            return smt::makeOp("_", "bv0", "64");
+            return makeOp("_", "bv0", "64");
         } else {
             return stringExpr("0");
         }
@@ -114,9 +112,8 @@ int typeSize(llvm::Type *Ty, const llvm::DataLayout &layout) {
 }
 
 /// Filter vars to only include the ones from Program
-std::vector<smt::SortedVar> filterVars(int program,
-                                       std::vector<smt::SortedVar> vars) {
-    std::vector<smt::SortedVar> filteredVars;
+std::vector<SortedVar> filterVars(int program, std::vector<SortedVar> vars) {
+    std::vector<SortedVar> filteredVars;
     for (const auto &var : vars) {
         if (varBelongsTo(var.name, program)) {
             filteredVars.push_back(var);
@@ -131,8 +128,8 @@ bool varBelongsTo(std::string varName, int program) {
     return varName.substr(pos + 1, programName.length()) == programName;
 }
 
-smt::SortedVar llvmValToSortedVar(const llvm::Value *val) {
-    return smt::SortedVar(val->getName(), llvmType(val->getType()));
+SortedVar llvmValToSortedVar(const llvm::Value *val) {
+    return SortedVar(val->getName(), llvmType(val->getType()));
 }
 
 std::string heapName(int progIndex) {
@@ -163,8 +160,8 @@ std::vector<std::string> split(const std::string &s, char delim) {
     return elems;
 }
 
-vector<smt::SortedVar> functionArgs(const llvm::Function &fun) {
-    vector<smt::SortedVar> args;
+vector<SortedVar> functionArgs(const llvm::Function &fun) {
+    vector<SortedVar> args;
     for (auto &arg : fun.args()) {
         auto sVar = llvmValToSortedVar(&arg);
         args.push_back(sVar);

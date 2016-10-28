@@ -23,23 +23,8 @@
 
 #include <iostream>
 
-using smt::TypedVariable;
-using smt::ConstantBool;
-using smt::memoryVariable;
+using namespace smt;
 using llvm::CmpInst;
-using smt::Assert;
-using smt::Assignment;
-using smt::Comment;
-using smt::Forall;
-using smt::FunDef;
-using smt::Op;
-using smt::SMTExpr;
-using smt::SMTRef;
-using smt::SharedSMTRef;
-using smt::SortedVar;
-using smt::VarDecl;
-using smt::makeOp;
-using smt::stringExpr;
 using std::function;
 using std::make_pair;
 using std::make_shared;
@@ -344,7 +329,7 @@ offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
                         swapIndex(progIndex), freeVarsMap.at(startIndex));
                     const auto endArgs =
                         filterVars(progIndex, freeVarsMap.at(startIndex));
-                    vector<smt::SortedVar> args;
+                    vector<SortedVar> args;
                     if (prog == Program::First) {
                         for (auto arg : endArgs) {
                             args.push_back(arg);
@@ -390,7 +375,7 @@ offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
 // Functions for generating SMT for a single/mutual path
 
 vector<AssignmentCallBlock> assignmentsOnPath(Path path, Program prog,
-                                              vector<smt::SortedVar> freeVars,
+                                              vector<SortedVar> freeVars,
                                               bool toEnd) {
     const int progIndex = programIndex(prog);
     const auto filteredFreeVars = filterVars(progIndex, freeVars);
@@ -403,8 +388,8 @@ vector<AssignmentCallBlock> assignmentsOnPath(Path path, Program prog,
     vector<DefOrCallInfo> oldDefs;
     for (auto var : filteredFreeVars) {
         oldDefs.push_back(DefOrCallInfo(make_shared<Assignment>(
-            var.name, make_unique<smt::TypedVariable>(var.name + "_old",
-                                                      var.type->copy()))));
+            var.name,
+            make_unique<TypedVariable>(var.name + "_old", var.type->copy()))));
     }
     allDefs.push_back(AssignmentCallBlock(oldDefs, nullptr));
 
@@ -623,8 +608,8 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
     for (const auto &arg : freeVars) {
         std::smatch matchResult;
         vars.push_back(SortedVar(arg.name + "_old", arg.type->copy()));
-        preVars.push_back(make_unique<smt::TypedVariable>(arg.name + "_old",
-                                                          arg.type->copy()));
+        preVars.push_back(
+            make_unique<TypedVariable>(arg.name + "_old", arg.type->copy()));
     }
 
     if (vars.empty()) {
@@ -637,8 +622,8 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
 
         vector<SharedSMTRef> args;
         for (const auto &arg : freeVars) {
-            args.push_back(make_unique<smt::TypedVariable>(arg.name + "_old",
-                                                           arg.type->copy()));
+            args.push_back(make_unique<TypedVariable>(arg.name + "_old",
+                                                      arg.type->copy()));
         }
 
         clause = makeOp("=>", make_unique<Op>(opname, std::move(args)), clause);
@@ -657,8 +642,8 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
 // Functions forcing arguments to be equal
 
 SharedSMTRef makeFunArgsEqual(SharedSMTRef clause, SharedSMTRef preClause,
-                              vector<smt::SortedVar> Args1,
-                              vector<smt::SortedVar> Args2) {
+                              vector<SortedVar> Args1,
+                              vector<SortedVar> Args2) {
     assert(Args1.size() == Args2.size());
 
     vector<SharedSMTRef> args;
@@ -676,10 +661,10 @@ SharedSMTRef makeFunArgsEqual(SharedSMTRef clause, SharedSMTRef preClause,
 
 /// Create an assertion to require that if the recursive invariant holds and the
 /// arguments are equal the outputs are equal
-SharedSMTRef equalInputsEqualOutputs(vector<smt::SortedVar> funArgs,
-                                     vector<smt::SortedVar> funArgs1,
-                                     vector<smt::SortedVar> funArgs2,
-                                     string funName, FreeVarsMap freeVarsMap,
+SharedSMTRef equalInputsEqualOutputs(vector<SortedVar> funArgs,
+                                     vector<SortedVar> funArgs1,
+                                     vector<SortedVar> funArgs2, string funName,
+                                     FreeVarsMap freeVarsMap,
                                      const llvm::Type *returnType) {
     vector<SortedVar> forallArgs;
     vector<SharedSMTRef> args;
@@ -691,8 +676,8 @@ SharedSMTRef equalInputsEqualOutputs(vector<smt::SortedVar> funArgs,
 
     forallArgs.insert(forallArgs.end(), funArgs.begin(), funArgs.end());
 
-    args.push_back(smt::stringExpr("result$1"));
-    args.push_back(smt::stringExpr("result$2"));
+    args.push_back(stringExpr("result$1"));
+    args.push_back(stringExpr("result$2"));
     forallArgs.push_back(SortedVar("result$1", llvmType(returnType)));
     forallArgs.push_back(SortedVar("result$2", llvmType(returnType)));
     if (SMTGenerationOpts::getInstance().Heap) {
@@ -715,7 +700,7 @@ SharedSMTRef equalInputsEqualOutputs(vector<smt::SortedVar> funArgs,
     std::sort(sortedFunArgs2.begin(), sortedFunArgs2.end());
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
         for (const auto &arg : funArgs1) {
-            if (!smt::isArray(*arg.type)) {
+            if (!isArray(*arg.type)) {
                 outArgs.push_back(typedVariableFromSortedVar(arg));
             }
         }
@@ -725,7 +710,7 @@ SharedSMTRef equalInputsEqualOutputs(vector<smt::SortedVar> funArgs,
     }
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
         for (const auto &arg : funArgs2) {
-            if (!smt::isArray(*arg.type)) {
+            if (!isArray(*arg.type)) {
                 outArgs.push_back(typedVariableFromSortedVar(arg));
             }
         }

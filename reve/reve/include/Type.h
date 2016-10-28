@@ -4,6 +4,7 @@
 
 #include "llvm/IR/Type.h"
 
+namespace smt {
 enum class TypeTag { Bool, Int, Float, Array };
 
 struct Type {
@@ -56,3 +57,4 @@ auto pointerType() -> std::unique_ptr<IntType>;
 auto llvmType(const llvm::Type *type) -> std::unique_ptr<Type>;
 // This function needs to die
 auto inferTypeByName(std::string name) -> std::unique_ptr<Type>;
+}

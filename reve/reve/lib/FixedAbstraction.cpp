@@ -10,18 +10,11 @@
 
 using std::make_shared;
 using std::make_unique;
-using smt::makeOp;
-using smt::FunDef;
-using smt::Op;
-using smt::ConstantBool;
-using smt::memoryVariable;
-using smt::SharedSMTRef;
-using smt::SMTRef;
-using smt::SortedVar;
-using smt::stringExpr;
 using std::set;
 using std::string;
 using std::vector;
+
+using namespace smt;
 
 std::set<uint32_t> getVarArgs(const llvm::Function &fun) {
     std::set<uint32_t> varArgs;
