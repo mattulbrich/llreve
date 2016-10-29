@@ -12,7 +12,6 @@
 
 #include "Compat.h"
 #include "HeapPattern.h"
-#include "HeapPattern.h"
 #include "Interpreter.h"
 #include "Linear.h"
 #include "MarkAnalysis.h"
