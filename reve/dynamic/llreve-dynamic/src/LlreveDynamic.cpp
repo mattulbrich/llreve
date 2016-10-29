@@ -146,7 +146,7 @@ int main(int argc, const char **argv) {
     }
     serializeSMT(smtExprs, false,
                  SerializeOpts(OutputFileNameFlag, !InstantiateFlag,
-                               MergeImplications, BoundedFlag, true));
+                               MergeImplications, true, false));
 
     llvm::llvm_shutdown();
 }
