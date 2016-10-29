@@ -55,12 +55,12 @@ add_library(libreve-interpreter
   ${FLEX_PatternLexer_OUTPUTS}
   ${BISON_SMTParser_OUTPUTS}
   ${FLEX_SMTLexer_OUTPUTS})
-add_executable(reve-analyzer src/ReveAnalyzer.cpp ${headers})
+add_executable(llreve-dynamic src/ReveAnalyzer.cpp ${headers})
 
 target_link_libraries(libreve-interpreter
   libreve
 )
-target_link_libraries(reve-analyzer
+target_link_libraries(llreve-dynamic
   libreve-interpreter
   ${GMP_LIBRARIES}
   ${GMPXX_LIBRARIES}
