@@ -220,14 +220,23 @@ cegarDriver(MonoPair<llvm::Module &> modules,
     z3::context z3Cxt;
     z3::solver z3Solver(z3Cxt);
     do {
-        Mark cexMark(static_cast<int>(vals.values.at("INV_INDEX").get_si()));
+        Mark cexStartMark(
+            static_cast<int>(vals.values.at("INV_INDEX_START").get_si()));
+        Mark cexEndMark(
+            static_cast<int>(vals.values.at("INV_INDEX_END").get_si()));
+        // TODO this check needs to include more marks
+        if (cexEndMark == EXIT_MARK) {
+            std::cerr << "The programs could not be proven equivalent\n";
+            exit(1);
+        }
         // reconstruct input from counterexample
         auto variableValues = getVarMapFromModel(
-            instrNameMap, freeVarsMap.at(cexMark), vals.values);
+            instrNameMap, freeVarsMap.at(cexStartMark), vals.values);
 
         // dump new example
         std::cout << "---\nFound counterexample:\n";
-        std::cout << "at invariant: " << cexMark << "\n";
+        std::cout << "at invariant: " << cexStartMark << "\n";
+        std::cout << "to invariant: " << cexEndMark << "\n";
         for (auto it : variableValues.first) {
             llvm::errs() << it.first->getName() << " "
                          << unsafeIntVal(it.second).asUnbounded().get_str()
@@ -246,10 +255,12 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             }
         }
 
-        assert(markMaps.first.MarkToBlocksMap.at(cexMark).size() == 1);
-        assert(markMaps.second.MarkToBlocksMap.at(cexMark).size() == 1);
-        auto firstBlock = *markMaps.first.MarkToBlocksMap.at(cexMark).begin();
-        auto secondBlock = *markMaps.second.MarkToBlocksMap.at(cexMark).begin();
+        assert(markMaps.first.MarkToBlocksMap.at(cexStartMark).size() == 1);
+        assert(markMaps.second.MarkToBlocksMap.at(cexStartMark).size() == 1);
+        auto firstBlock =
+            *markMaps.first.MarkToBlocksMap.at(cexStartMark).begin();
+        auto secondBlock =
+            *markMaps.second.MarkToBlocksMap.at(cexStartMark).begin();
         std::string tmp;
 
         MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
@@ -311,7 +322,12 @@ cegarDriver(MonoPair<llvm::Module &> modules,
         for (const auto &clause : clauses) {
             z3Clauses.push_back(clause->removeForalls(introducedVariables));
         }
-        VarDecl({"INV_INDEX", int64Type()})
+
+        // these variables are not quantified otherwise so we need to add them
+        // separately
+        VarDecl({"INV_INDEX_START", int64Type()})
+            .toZ3(z3Cxt, z3Solver, nameMap, defineFunMap);
+        VarDecl({"INV_INDEX_END", int64Type()})
             .toZ3(z3Cxt, z3Solver, nameMap, defineFunMap);
         for (const auto &var : introducedVariables) {
             VarDecl(var).toZ3(z3Cxt, z3Solver, nameMap, defineFunMap);
@@ -338,6 +354,7 @@ cegarDriver(MonoPair<llvm::Module &> modules,
         z3::model z3Model = z3Solver.get_model();
         vals = parseZ3Model(z3Cxt, z3Model, nameMap, freeVarsMap);
     } while (1 /* sat */);
+    std::cerr << "The two programs have been proven equivalent\n";
     auto invariantCandidates = makeInvariantDefinitions(
         findSolutions(dynamicAnalysisResults.polynomialEquations),
         dynamicAnalysisResults.heapPatternCandidates, freeVarsMap, DegreeFlag);
@@ -357,9 +374,13 @@ ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
                          const FreeVarsMap &freeVarsMap) {
     ModelValues modelValues;
 
-    Mark mark = Mark(model.eval(nameMap.at("INV_INDEX")).get_numeral_int());
-    modelValues.values.insert({"INV_INDEX", mark.asInt()});
-    for (const auto &var : freeVarsMap.at(mark)) {
+    Mark startMark =
+        Mark(model.eval(nameMap.at("INV_INDEX_START")).get_numeral_int());
+    Mark endMark =
+        Mark(model.eval(nameMap.at("INV_INDEX_END")).get_numeral_int());
+    modelValues.values.insert({"INV_INDEX_START", startMark.asInt()});
+    modelValues.values.insert({"INV_INDEX_END", endMark.asInt()});
+    for (const auto &var : freeVarsMap.at(startMark)) {
         std::string stringVal = Z3_get_numeral_string(
             z3Cxt, model.eval(nameMap.at(var.name + "_old")));
         modelValues.values.insert({var.name + "_old", mpz_class(stringVal)});
@@ -1437,12 +1458,15 @@ ModelValues initialModelValues(MonoPair<const llvm::Function *> funs) {
     ModelValues vals;
     vals.arrays.insert({"HEAP$1_old", {0, {}}});
     vals.arrays.insert({"HEAP$2_old", {0, {}}});
+    // 5 is chosen because it usually gives us at least a few loop iterationsc
     for (const auto &arg : funs.first->args()) {
         vals.values.insert({std::string(arg.getName()) + "_old", 5});
     }
     for (const auto &arg : funs.second->args()) {
         vals.values.insert({std::string(arg.getName()) + "_old", 5});
     }
-    vals.values.insert({"INV_INDEX", ENTRY_MARK.asInt()});
+    vals.values.insert({"INV_INDEX_START", ENTRY_MARK.asInt()});
+    // Anything not negative works here
+    vals.values.insert({"INV_INDEX_END", 0});
     return vals;
 }
