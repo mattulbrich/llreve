@@ -18,6 +18,7 @@
 #include "ModuleSMTGeneration.h"
 #include "MonoPair.h"
 #include "PathAnalysis.h"
+#include "Peel.h"
 #include "Serialize.h"
 #include "SerializeTraces.h"
 #include "Unroll.h"

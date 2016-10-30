@@ -14,20 +14,5 @@
 
 #include "llvm/Analysis/LoopInfo.h"
 
-void peelAtMark(llvm::Function &f, Mark mark, const BidirBlockMarkMap &marks,
-                std::string prefix);
-
-std::set<llvm::BasicBlock *> blocksInLoop(llvm::BasicBlock *start,
-                                          const BidirBlockMarkMap &marks);
-
-llvm::BasicBlock *
-createUniqueBackedge(llvm::BasicBlock *markedBlock, llvm::BasicBlock *preHeader,
-                     const std::vector<llvm::BasicBlock *> &backedgeBlocks,
-                     llvm::Function &f);
-
-llvm::BasicBlock *
-createPreheader(llvm::BasicBlock *markedBlock,
-                const std::vector<llvm::BasicBlock *> &outsideBlocks);
-
 void unrollAtMark(llvm::Function &f, Mark mark, const BidirBlockMarkMap &marks,
                   size_t factor);
