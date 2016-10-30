@@ -243,28 +243,9 @@ cegarDriver(MonoPair<llvm::Module &> modules,
         // reconstruct input from counterexample
         auto variableValues = getVarMapFromModel(
             instrNameMap, primitiveFreeVariables, vals.values);
-        std::cout << "---\nFound counterexample:\n";
-        std::cout << "at invariant: " << cexStartMark << "\n";
-        std::cout << "to invariant: " << cexEndMark << "\n";
 
-        // dump new example
-        for (auto it : variableValues.first) {
-            llvm::errs() << it.first->getName() << " "
-                         << unsafeIntVal(it.second).asUnbounded().get_str()
-                         << "\n";
-        }
-        for (auto it : variableValues.second) {
-            llvm::errs() << it.first->getName() << " "
-                         << unsafeIntVal(it.second).asUnbounded().get_str()
-                         << "\n";
-        }
-        for (auto ar : vals.arrays) {
-            std::cout << ar.first << "\n";
-            std::cout << "background: " << ar.second.background << "\n";
-            for (auto val : ar.second.vals) {
-                std::cout << val.first << ":" << val.second << "\n";
-            }
-        }
+        dumpCounterExample(cexStartMark, cexEndMark, variableValues,
+                           vals.arrays);
 
         assert(markMaps.first.MarkToBlocksMap.at(cexStartMark).size() == 1);
         assert(markMaps.second.MarkToBlocksMap.at(cexStartMark).size() == 1);
@@ -1436,6 +1417,31 @@ vector<SortedVar> removeHeapVariables(const vector<SortedVar> &freeVariables) {
         }
     }
     return result;
+}
+
+void dumpCounterExample(Mark cexStartMark, Mark cexEndMark,
+                        MonoPair<FastVarMap> &variableValues,
+                        map<string, ArrayVal> &arrays) {
+    std::cout << "---\nFound counterexample:\n";
+    std::cout << "starting at mark " << cexStartMark << "\n";
+    std::cout << "ending at mark " << cexEndMark << "\n";
+
+    // dump new example
+    for (auto it : variableValues.first) {
+        llvm::errs() << it.first->getName() << " "
+                     << unsafeIntVal(it.second).asUnbounded().get_str() << "\n";
+    }
+    for (auto it : variableValues.second) {
+        llvm::errs() << it.first->getName() << " "
+                     << unsafeIntVal(it.second).asUnbounded().get_str() << "\n";
+    }
+    for (auto ar : arrays) {
+        std::cout << ar.first << "\n";
+        std::cout << "background: " << ar.second.background << "\n";
+        for (auto val : ar.second.vals) {
+            std::cout << val.first << ":" << val.second << "\n";
+        }
+    }
 }
 }
 }
