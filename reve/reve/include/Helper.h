@@ -159,3 +159,9 @@ auto calledFunctions(const llvm::Function &f)
     -> std::set<const llvm::Function *>;
 
 auto dropSuffixFromName(std::string) -> std::string;
+
+template <typename U, typename... T> bool oneOf(U &&u, T &&... t) {
+    bool match = false;
+    (void)std::initializer_list<bool>{(match = match || u == t)...};
+    return match;
+}

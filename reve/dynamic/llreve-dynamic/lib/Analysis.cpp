@@ -225,7 +225,7 @@ cegarDriver(MonoPair<llvm::Module &> modules,
         Mark cexEndMark(
             static_cast<int>(vals.values.at("INV_INDEX_END").get_si()));
         // TODO this check needs to include more marks
-        if (cexEndMark == EXIT_MARK) {
+        if (oneOf(cexEndMark, EXIT_MARK, FORBIDDEN_MARK)) {
             std::cerr << "The programs could not be proven equivalent\n";
             exit(1);
         }
