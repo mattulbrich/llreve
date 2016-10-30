@@ -22,7 +22,6 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 
-#include "cbor.h"
 #include "json.hpp"
 
 #include "Integer.h"
