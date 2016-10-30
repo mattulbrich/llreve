@@ -115,7 +115,7 @@ other is still allowed to loop at its block.
 auto getForbiddenPaths(MonoPair<PathMap> pathMaps,
                        MonoPair<BidirBlockMarkMap> marked,
                        FreeVarsMap freeVarsMap, std::string funName, bool main)
-    -> std::vector<smt::SharedSMTRef>;
+    -> std::map<Mark, std::vector<smt::SharedSMTRef>>;
 /// Get the assertions for a single program
 auto nonmutualPaths(PathMap pathMap, FreeVarsMap freeVarsMap, Program prog,
                     std::string funName, const llvm::Type *type)

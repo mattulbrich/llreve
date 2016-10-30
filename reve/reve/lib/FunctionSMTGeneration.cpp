@@ -71,8 +71,13 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
 
     const auto forbiddenPaths =
         getForbiddenPaths(pathMaps, marked, freeVarsMap, funName, false);
-    pathExprs.insert(pathExprs.end(), forbiddenPaths.begin(),
-                     forbiddenPaths.end());
+    for (const auto &it : forbiddenPaths) {
+        for (const auto &path : it.second) {
+            pathExprs.push_back(make_shared<Assert>(forallStartingAt(
+                path, freeVarsMap.at(it.first), it.first,
+                ProgramSelection::Both, funName, false, freeVarsMap)));
+        }
+    }
 
     if (!SMTGenerationOpts::getInstance().PerfectSync) {
         const auto offByNPaths = getOffByNPaths(pathMaps.first, pathMaps.second,
@@ -157,12 +162,30 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
             }
         }
     }
+    for (const auto &it : forbiddenPaths) {
+        for (auto &path : it.second) {
+            auto clause = forallStartingAt(path, freeVarsMap.at(it.first),
+                                           it.first, ProgramSelection::Both,
+                                           funName, true, freeVarsMap);
+            if (SMTGenerationOpts::getInstance().Invert) {
+                // TODO implement inverting of forbidden paths
+                negations.push_back(makeOp(
+                    "and", makeOp("=", "INV_INDEX_START",
+                                  std::make_unique<ConstantInt>(llvm::APInt(
+                                      64, it.first.toString(), 10))),
+                    makeOp("=", "INV_INDEX_FALSE",
+                           std::make_unique<ConstantInt>(
+                               llvm::APInt(64, FORBIDDEN_MARK.toString(), 10))),
+                    makeOp("not", clause)));
+            } else {
+                smtExprs.push_back(make_unique<Assert>(clause));
+            }
+        }
+    }
     if (SMTGenerationOpts::getInstance().Invert) {
         smtExprs.push_back(
             make_shared<Assert>(make_shared<Op>("or", negations)));
     }
-    smtExprs.insert(smtExprs.end(), forbiddenPaths.begin(),
-                    forbiddenPaths.end());
     return smtExprs;
 }
 
@@ -206,11 +229,11 @@ getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
     return clauses;
 }
 
-vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
-                                       MonoPair<BidirBlockMarkMap> marked,
-                                       FreeVarsMap freeVarsMap, string funName,
-                                       bool main) {
-    vector<SharedSMTRef> pathExprs;
+map<Mark, vector<SharedSMTRef>>
+getForbiddenPaths(MonoPair<PathMap> pathMaps,
+                  MonoPair<BidirBlockMarkMap> marked, FreeVarsMap freeVarsMap,
+                  string funName, bool main) {
+    map<Mark, vector<SharedSMTRef>> pathExprs;
     for (const auto &pathMapIt : pathMaps.first) {
         const Mark startIndex = pathMapIt.first;
         for (const auto &innerPathMapIt1 : pathMapIt.second) {
@@ -223,14 +246,15 @@ vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
                             const auto endBlocks =
                                 makeMonoPair(path1, path2)
                                     .map<llvm::BasicBlock *>(lastBlock);
-                            const auto endIndices = zipWith<BidirBlockMarkMap,
-                                                            llvm::BasicBlock *,
-                                                            set<Mark>>(
-                                marked, endBlocks,
-                                [](BidirBlockMarkMap marks,
-                                   llvm::BasicBlock *endBlock) -> set<Mark> {
-                                    return marks.BlockToMarksMap[endBlock];
-                                });
+                            const auto endIndices =
+                                zipWith<BidirBlockMarkMap, llvm::BasicBlock *,
+                                        set<Mark>>(
+                                    marked, endBlocks,
+                                    [](BidirBlockMarkMap marks,
+                                       llvm::BasicBlock *endBlock)
+                                        -> set<Mark> {
+                                        return marks.BlockToMarksMap[endBlock];
+                                    });
                             if (SMTGenerationOpts::getInstance().PerfectSync ||
                                 ((startIndex != endIndex1 && // no circles
                                   startIndex != endIndex2) &&
@@ -250,11 +274,7 @@ vector<SharedSMTRef> getForbiddenPaths(MonoPair<PathMap> pathMaps,
                                 const auto smt = interleaveAssignments(
                                     make_unique<ConstantBool>(false),
                                     makeMonoPair(smt1, smt2));
-                                pathExprs.push_back(
-                                    make_shared<Assert>(forallStartingAt(
-                                        smt, freeVarsMap.at(startIndex),
-                                        startIndex, ProgramSelection::Both,
-                                        funName, main, freeVarsMap)));
+                                pathExprs[startIndex].push_back(smt);
                             }
                         }
                     }

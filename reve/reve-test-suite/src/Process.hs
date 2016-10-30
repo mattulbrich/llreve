@@ -142,7 +142,7 @@ generateSmt path = do
       file2 = basename <> "_2" -<.> "c"
   liftIO $ createDirectoryIfMissing True (takeDirectory smtfile)
   let reveOpts =
-        [file1, file2, "-o", smtfile, "-I", "/usr/lib/clang/3.8.1/include"] ++
+        [file1, file2, "-o", smtfile, "-I", "/usr/lib/clang/3.9.0/include"] ++
         optionsFor (conf ^. cnfCustomArgs) smtfile ++
         if (relativeBasename `elem` conf ^. cnfNativeZ3Files)
           then ["-muz"]

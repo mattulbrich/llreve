@@ -46,6 +46,7 @@ inline std::ostream &operator<<(std::ostream &out, const Mark &mark) {
 const Mark UNREACHABLE_MARK(-3);
 const Mark EXIT_MARK(-2);
 const Mark ENTRY_MARK(-1);
+const Mark FORBIDDEN_MARK(-4);
 
 struct BidirBlockMarkMap {
     std::map<llvm::BasicBlock *, std::set<Mark>> BlockToMarksMap;
