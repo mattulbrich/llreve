@@ -427,5 +427,7 @@ ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
                          const FreeVarsMap &freeVarsMap);
 
 ArrayVal getArrayVal(const z3::context &z3Cxt, z3::expr arrayExpr);
+std::vector<smt::SortedVar>
+removeHeapVariables(const std::vector<smt::SortedVar> &freeVariables);
 }
 }

@@ -237,14 +237,17 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             result = LlreveResult::NotEquivalent;
             break;
         }
+
+        auto primitiveFreeVariables =
+            removeHeapVariables(freeVarsMap.at(cexStartMark));
         // reconstruct input from counterexample
         auto variableValues = getVarMapFromModel(
-            instrNameMap, freeVarsMap.at(cexStartMark), vals.values);
-
-        // dump new example
+            instrNameMap, primitiveFreeVariables, vals.values);
         std::cout << "---\nFound counterexample:\n";
         std::cout << "at invariant: " << cexStartMark << "\n";
         std::cout << "to invariant: " << cexEndMark << "\n";
+
+        // dump new example
         for (auto it : variableValues.first) {
             llvm::errs() << it.first->getName() << " "
                          << unsafeIntVal(it.second).asUnbounded().get_str()
@@ -392,7 +395,7 @@ ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
         Mark(model.eval(nameMap.at("INV_INDEX_END")).get_numeral_int());
     modelValues.values.insert({"INV_INDEX_START", startMark.asInt()});
     modelValues.values.insert({"INV_INDEX_END", endMark.asInt()});
-    for (const auto &var : freeVarsMap.at(startMark)) {
+    for (const auto &var : removeHeapVariables(freeVarsMap.at(startMark))) {
         std::string stringVal = Z3_get_numeral_string(
             z3Cxt, model.eval(nameMap.at(var.name + "_old")));
         modelValues.values.insert({var.name + "_old", mpz_class(stringVal)});
@@ -589,10 +592,11 @@ void populateEquationsMap(PolynomialEquations &polynomialEquations,
     for (auto varIt : match.steps.second->state.variables) {
         variables.insert(std::make_pair(varIt.first->getName(), varIt.second));
     }
+    vector<smt::SortedVar> primitiveVariables =
+        removeHeapVariables(freeVarsMap.at(match.mark));
     vector<mpq_class> equation;
     for (size_t i = 1; i <= degree; ++i) {
-        auto polynomialTerms =
-            polynomialTermsOfDegree(freeVarsMap.at(match.mark), i);
+        auto polynomialTerms = polynomialTermsOfDegree(primitiveVariables, i);
         for (auto term : polynomialTerms) {
             mpz_class termVal = 1;
             for (auto var : term) {
@@ -948,11 +952,9 @@ SharedSMTRef makeEquation(const vector<mpz_class> &eq,
         }
     }
     if (eq.back() > 0) {
-        left.push_back(std::make_unique<ConstantInt>(
-            llvm::APInt(32, eq.back().get_str(), 10)));
+        left.push_back(smtFromMpz(64, eq.back()));
     } else if (eq.back() < 0) {
-        mpz_class inv = -eq.back();
-        right.push_back(smtFromMpz(32, inv));
+        right.push_back(smtFromMpz(64, -eq.back()));
     }
     SharedSMTRef leftSide = nullptr;
     if (left.size() == 0) {
@@ -986,8 +988,9 @@ SharedSMTRef makeInvariantDefinition(const vector<vector<mpz_class>> &solution,
                                      const vector<SortedVar> &freeVars,
                                      size_t degree) {
     vector<SharedSMTRef> conjunction;
+    auto primitiveVariables = removeHeapVariables(freeVars);
     for (const auto &vec : solution) {
-        conjunction.push_back(makeEquation(vec, freeVars, degree));
+        conjunction.push_back(makeEquation(vec, primitiveVariables, degree));
     }
     for (const auto &candidate : candidates) {
         conjunction.push_back(candidate->toSMT());
@@ -1005,11 +1008,14 @@ makeBoundsDefinitions(const map<string, Bound<Optional<VarIntVal>>> &bounds) {
     for (auto mapIt : bounds) {
         if (mapIt.second.lower.hasValue()) {
             constraints.push_back(makeOp(
-                "<=", mapIt.second.lower.getValue().get_str(), mapIt.first));
+                "<=",
+                smtFromMpz(64, mapIt.second.lower.getValue().asUnbounded()),
+                mapIt.first));
         }
         if (mapIt.second.upper.hasValue()) {
             constraints.push_back(smt::makeOp(
-                "<=", mapIt.first, mapIt.second.upper.getValue().get_str()));
+                "<=", mapIt.first,
+                smtFromMpz(64, mapIt.second.upper.getValue().asUnbounded())));
         }
     }
     return make_shared<Op>("and", constraints);
@@ -1025,19 +1031,10 @@ makeInvariantDefinitions(const PolynomialSolutions &solutions,
         vector<SortedVar> args;
         vector<string> stringArgs;
         for (const auto &var : filterVars(1, freeVarsMap.at(mark))) {
-            args.push_back(SortedVar(var.name, var.type->copy()));
+            args.push_back(var);
         }
-        if (SMTGenerationOpts::getInstance().Heap ==
-            llreve::opts::Heap::Enabled) {
-            args.push_back(SortedVar("HEAP$1", memoryType()));
-        }
-
         for (auto var : filterVars(2, freeVarsMap.at(mark))) {
-            args.push_back(SortedVar(var.name, var.type->copy()));
-        }
-        if (SMTGenerationOpts::getInstance().Heap ==
-            llreve::opts::Heap::Enabled) {
-            args.push_back(SortedVar("HEAP$2", memoryType()));
+            args.push_back(var);
         }
         auto solutionsMapIt = solutions.find(mark);
         vector<SharedSMTRef> exitClauses;
@@ -1429,6 +1426,16 @@ ModelValues initialModelValues(MonoPair<const llvm::Function *> funs) {
     // Anything not negative works here
     vals.values.insert({"INV_INDEX_END", 0});
     return vals;
+}
+
+vector<SortedVar> removeHeapVariables(const vector<SortedVar> &freeVariables) {
+    vector<SortedVar> result;
+    for (const auto &var : freeVariables) {
+        if (!isArray(*var.type)) {
+            result.push_back(var);
+        }
+    }
+    return result;
 }
 }
 }
