@@ -389,6 +389,9 @@ class TypeCast : public SMTExpr {
     renameAssignments(std::map<std::string, int> variableMap) const override;
     SharedSMTRef
     inlineLets(std::map<std::string, SharedSMTRef> assignments) const override;
+    z3::expr
+    toZ3Expr(z3::context &cxt, std::map<std::string, z3::expr> &,
+             const std::map<std::string, Z3DefineFun> &funMap) const override;
 };
 
 class Query : public SMTExpr {

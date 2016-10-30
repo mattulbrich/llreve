@@ -864,6 +864,18 @@ z3::expr SMTExpr::toZ3Expr(
     exit(1);
 }
 
+z3::expr
+TypeCast::toZ3Expr(z3::context &cxt, map<string, z3::expr> &nameMap,
+                   const std::map<std::string, Z3DefineFun> &funMap) const {
+    if (SMTGenerationOpts::getInstance().BitVect) {
+        logError("Bitvector mode not implemented for using the Z3 API for "
+                 "typecasts\n");
+        exit(1);
+    } else {
+        return operand->toZ3Expr(cxt, nameMap, funMap);
+    }
+}
+
 z3::expr TypedVariable::toZ3Expr(
     z3::context &cxt, map<string, z3::expr> &nameMap,
     const std::map<std::string, Z3DefineFun> & /* unused */) const {
