@@ -51,7 +51,7 @@ template <typename T> struct HeapPattern {
     virtual PatternType getType() const = 0;
     std::list<std::shared_ptr<HeapPattern<const llvm::Value *>>>
     instantiate(const std::vector<smt::SortedVar> &variables,
-                const VarMap<const llvm::Value *> &variableValues,
+                const FastVarMap &variableValues,
                 const MonoPair<Heap> &heaps) const {
         size_t k = this->arguments();
         std::list<std::shared_ptr<HeapPattern<const llvm::Value *>>>
@@ -108,11 +108,10 @@ template <typename T> struct HeapPattern {
     }
     virtual std::shared_ptr<HeapPattern<const llvm::Value *>>
     distributeArguments(std::vector<const llvm::Value *> variables) const = 0;
-    virtual bool matches(const VarMap<const llvm::Value *> &variables,
+    virtual bool matches(const FastVarMap &variables,
                          const MonoPair<Heap> &heaps,
                          const HoleMap &holes) const = 0;
-    bool matches(const VarMap<const llvm::Value *> &variables,
-                 const MonoPair<Heap> &heaps) {
+    bool matches(const FastVarMap &variables, const MonoPair<Heap> &heaps) {
         const HoleMap holes;
         return this->matches(variables, heaps, holes);
     }
@@ -192,8 +191,7 @@ template <typename T> struct BinaryHeapPattern : public HeapPattern<T> {
             op, makeMonoPair(args.first->distributeArguments(argsFirst),
                              args.second->distributeArguments(argsSecond)));
     }
-    bool matches(const VarMap<const llvm::Value *> &variables,
-                 const MonoPair<Heap> &heaps,
+    bool matches(const FastVarMap &variables, const MonoPair<Heap> &heaps,
                  const HoleMap &holes) const override {
         switch (op) {
         case BinaryBooleanOp::And:
@@ -298,8 +296,7 @@ template <typename T> struct UnaryHeapPattern : public HeapPattern<T> {
         os << ")";
         return os;
     }
-    bool matches(const VarMap<const llvm::Value *> &variables,
-                 const MonoPair<Heap> &heaps,
+    bool matches(const FastVarMap &variables, const MonoPair<Heap> &heaps,
                  const HoleMap &holes) const override {
         bool argMatches = arg->matches(variables, heaps, holes);
         switch (op) {
@@ -367,8 +364,7 @@ template <typename T> struct HeapEqual : public HeapPattern<T> {
         unused(arguments);
         return std::make_shared<HeapEqual<const llvm::Value *>>();
     }
-    bool matches(const VarMap<const llvm::Value *> & /* unused */,
-                 const MonoPair<Heap> &heaps,
+    bool matches(const FastVarMap & /* unused */, const MonoPair<Heap> &heaps,
                  const HoleMap & /* unused */) const override {
         return heaps.first == heaps.second;
     }
@@ -395,7 +391,7 @@ template <typename T> struct RewrittenExpr;
 template <typename T> struct HeapExpr {
     virtual size_t arguments() const = 0;
     virtual ~HeapExpr() = default;
-    virtual mpz_class eval(const VarMap<const llvm::Value *> &variables,
+    virtual mpz_class eval(const FastVarMap &variables,
                            const MonoPair<Heap> &heaps,
                            const HoleMap &holes) const = 0;
     virtual std::shared_ptr<HeapExpr<const llvm::Value *>>
@@ -442,7 +438,7 @@ template <typename T> struct HeapIndex : public HeapExpr<T> {
         logError("Cannot distribute arguments on heap index\n");
         exit(1);
     }
-    mpz_class eval(const VarMap<const llvm::Value *> & /* unused */,
+    mpz_class eval(const FastVarMap & /* unused */,
                    const MonoPair<Heap> & /* unused */,
                    const HoleMap & /* unused */) const override {
         logError("Cannot evaluate heap index\n");
@@ -486,7 +482,7 @@ template <typename T> struct HeapValue : public HeapExpr<T> {
         logError("Cannot distribute arguments on heap value\n");
         exit(1);
     }
-    mpz_class eval(const VarMap<const llvm::Value *> & /* unused */,
+    mpz_class eval(const FastVarMap & /* unused */,
                    const MonoPair<Heap> & /* unused */,
                    const HoleMap & /* unused */) const override {
         logError("Cannot evaluate heap value\n");
@@ -545,8 +541,7 @@ template <typename T> struct HeapAccess : public HeapExpr<T> {
         return std::make_shared<HeapAccess<const llvm::Value *>>(
             programIndex, atVal->distributeArguments(variables));
     }
-    mpz_class eval(const VarMap<const llvm::Value *> &variables,
-                   const MonoPair<Heap> &heaps,
+    mpz_class eval(const FastVarMap &variables, const MonoPair<Heap> &heaps,
                    const HoleMap &holes) const override {
         mpz_class atEval = atVal->eval(variables, heaps, holes);
         switch (programIndex) {
@@ -601,7 +596,7 @@ template <typename T> struct Constant : public HeapExpr<T> {
         unused(arguments);
         return std::make_shared<Constant<const llvm::Value *>>(value);
     }
-    mpz_class eval(const VarMap<const llvm::Value *> &variables,
+    mpz_class eval(const FastVarMap &variables,
                    const MonoPair<Heap> & /* unused */,
                    const HoleMap & /* unused */) const override {
         unused(variables);
@@ -637,7 +632,7 @@ template <typename T> struct Variable : public HeapExpr<T> {
         return std::make_shared<Variable<const llvm::Value *>>(
             variables.front());
     }
-    mpz_class eval(const VarMap<const llvm::Value *> & /* unused */,
+    mpz_class eval(const FastVarMap & /* unused */,
                    const MonoPair<Heap> & /* unused */,
                    const HoleMap & /* unused */) const override {
         logError("Can only evaluate specialized version of variable\n");
@@ -677,7 +672,7 @@ template <typename T> struct Hole : public HeapExpr<T> {
         unused(variables);
         return std::make_shared<Hole<const llvm::Value *>>(index);
     }
-    mpz_class eval(const VarMap<const llvm::Value *> & /* unused */,
+    mpz_class eval(const FastVarMap & /* unused */,
                    const MonoPair<Heap> & /* unused */,
                    const HoleMap &hole) const override {
         assert(hole.count(index) == 1);
@@ -705,9 +700,9 @@ std::ostream &Variable<const llvm::Value *>::dump(std::ostream &os) const;
 template <> smt::SMTRef Variable<const llvm::Value *>::toSMT() const;
 
 template <>
-mpz_class Variable<const llvm::Value *>::eval(
-    const VarMap<const llvm::Value *> &variables, const MonoPair<Heap> &heaps,
-    const HoleMap &holes) const;
+mpz_class Variable<const llvm::Value *>::eval(const FastVarMap &variables,
+                                              const MonoPair<Heap> &heaps,
+                                              const HoleMap &holes) const;
 
 template <typename T> struct BinaryIntExpr : public HeapExpr<T> {
     BinaryIntOp op;
@@ -738,8 +733,7 @@ template <typename T> struct BinaryIntExpr : public HeapExpr<T> {
             op, makeMonoPair(args.first->distributeArguments(firstArgs),
                              args.second->distributeArguments(secondArgs)));
     }
-    mpz_class eval(const VarMap<const llvm::Value *> &variables,
-                   const MonoPair<Heap> &heaps,
+    mpz_class eval(const FastVarMap &variables, const MonoPair<Heap> &heaps,
                    const HoleMap &holes) const override {
         mpz_class val1 = args.first->eval(variables, heaps, holes);
         mpz_class val2 = args.second->eval(variables, heaps, holes);
@@ -809,8 +803,7 @@ template <typename T> struct UnaryIntExpr : public HeapExpr<T> {
         os << ")";
         return os;
     }
-    mpz_class eval(const VarMap<const llvm::Value *> &variables,
-                   const MonoPair<Heap> &heaps,
+    mpz_class eval(const FastVarMap &variables, const MonoPair<Heap> &heaps,
                    const HoleMap &holes) const override {
         mpz_class argVal = arg->eval(variables, heaps, holes);
         switch (op) {
@@ -876,8 +869,7 @@ template <typename T> struct RangeProp : public HeapPattern<T> {
                                 bounds.second->distributeArguments(secondArgs)),
             index, pat->distributeArguments(thirdArgs));
     }
-    bool matches(const VarMap<const llvm::Value *> &variables,
-                 const MonoPair<Heap> &heaps,
+    bool matches(const FastVarMap &variables, const MonoPair<Heap> &heaps,
                  const HoleMap &holes) const override {
         assert(holes.count(index) == 0);
         HoleMap newHoles = holes;
@@ -992,8 +984,7 @@ template <typename T> struct HeapExprProp : public HeapPattern<T> {
             op, makeMonoPair(args.first->distributeArguments(firstArgs),
                              args.second->distributeArguments(secondArgs)));
     }
-    bool matches(const VarMap<const llvm::Value *> &variables,
-                 const MonoPair<Heap> &heaps,
+    bool matches(const FastVarMap &variables, const MonoPair<Heap> &heaps,
                  const HoleMap &holes) const override {
         mpz_class val1 = args.first->eval(variables, heaps, holes);
         mpz_class val2 = args.second->eval(variables, heaps, holes);

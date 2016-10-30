@@ -13,9 +13,10 @@
 namespace llreve {
 namespace dynamic {
 template <>
-mpz_class Variable<const llvm::Value *>::eval(
-    const VarMap<const llvm::Value *> &variables,
-    const MonoPair<Heap> & /* unused */, const HoleMap & /* unused */) const {
+mpz_class
+Variable<const llvm::Value *>::eval(const FastVarMap &variables,
+                                    const MonoPair<Heap> & /* unused */,
+                                    const HoleMap & /* unused */) const {
     return unsafeIntValRef(variables.at(varName)).asUnbounded();
 }
 

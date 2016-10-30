@@ -84,8 +84,7 @@ std::vector<smt::SharedSMTRef> cegarDriver(
 llvm::Optional<MonoPair<llvm::Function *>>
 findFunction(std::vector<MonoPair<llvm::Function *>> functions,
              std::string functionName);
-Heap randomHeap(const llvm::Function &fun,
-                const std::map<const llvm::Value *, VarVal> &variableValues,
+Heap randomHeap(const llvm::Function &fun, const FastVarMap &variableValues,
                 int lengthBound, int valLowerBound, int valUpperBound,
                 unsigned int *seedp);
 
@@ -199,15 +198,14 @@ smt::SharedSMTRef makeBoundsDefinitions(
 PolynomialSolutions findSolutions(const PolynomialEquations &equationsMap);
 void dumpBounds(const BoundsMap &bounds);
 
-std::map<const llvm::Value *, VarVal> getVarMap(const llvm::Function *fun,
-                                                std::vector<mpz_class> vals);
+FastVarMap getVarMap(const llvm::Function *fun, std::vector<mpz_class> vals);
 
 std::map<std::string, const llvm::Value *>
 instructionNameMap(const llvm::Function *fun);
 std::map<std::string, const llvm::Value *>
 instructionNameMap(MonoPair<const llvm::Function *> funs);
 
-MonoPair<std::map<const llvm::Value *, VarVal>> getVarMapFromModel(
+MonoPair<FastVarMap> getVarMapFromModel(
     std::map<std::string, const llvm::Value *> instructionNameMap,
     std::vector<smt::SortedVar> freeVars,
     std::map<std::string, mpz_class> vals);
@@ -224,8 +222,7 @@ void workerThread(
     // Each thread has it’s own seed
     unsigned int seedp = static_cast<unsigned int>(time(NULL));
     for (WorkItem item = q.pop(); item.counter >= 0; item = q.pop()) {
-        MonoPair<std::map<const llvm::Value *, VarVal>> variableValues =
-            makeMonoPair<std::map<const llvm::Value *, VarVal>>({}, {});
+        MonoPair<FastVarMap> variableValues = makeMonoPair<FastVarMap>({}, {});
         variableValues.first = getVarMap(funs.first, item.vals.first);
         variableValues.second = getVarMap(funs.second, item.vals.second);
         if (!item.heapSet) {

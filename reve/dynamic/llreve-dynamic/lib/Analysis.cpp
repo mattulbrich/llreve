@@ -1179,9 +1179,8 @@ void dumpLoopCounts(const LoopCountMap &loopCounts) {
     std::cerr << "----------\n";
 }
 
-std::map<const llvm::Value *, VarVal> getVarMap(const llvm::Function *fun,
-                                                std::vector<mpz_class> vals) {
-    std::map<const llvm::Value *, VarVal> variableValues;
+FastVarMap getVarMap(const llvm::Function *fun, std::vector<mpz_class> vals) {
+    FastVarMap variableValues;
     auto argIt = fun->arg_begin();
     for (size_t i = 0; i < vals.size(); ++i) {
         const llvm::Value *arg = &*argIt;
@@ -1229,12 +1228,11 @@ instructionNameMap(MonoPair<const llvm::Function *> funs) {
     return nameMap;
 }
 
-MonoPair<std::map<const llvm::Value *, VarVal>> getVarMapFromModel(
+MonoPair<FastVarMap> getVarMapFromModel(
     std::map<std::string, const llvm::Value *> instructionNameMap,
     std::vector<smt::SortedVar> freeVars,
     std::map<std::string, mpz_class> vals) {
-    MonoPair<std::map<const llvm::Value *, VarVal>> variableValues =
-        makeMonoPair<std::map<const llvm::Value *, VarVal>>({}, {});
+    MonoPair<FastVarMap> variableValues = makeMonoPair<FastVarMap>({}, {});
     for (const auto &var : freeVars) {
         mpz_class val = vals.at(var.name + "_old");
         const llvm::Value *instr = instructionNameMap.at(var.name);
@@ -1271,8 +1269,7 @@ MonoPair<Integer> getHeapBackgrounds(std::map<std::string, ArrayVal> arrays) {
             Integer(arrays.at("HEAP$2_old").background)};
 }
 
-Heap randomHeap(const llvm::Function &fun,
-                const std::map<const llvm::Value *, VarVal> &variableValues,
+Heap randomHeap(const llvm::Function &fun, const FastVarMap &variableValues,
                 int lengthBound, int valLowerBound, int valUpperBound,
                 unsigned int *seedp) {
     // We place an array with a random length <= lengthBound with random values

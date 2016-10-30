@@ -80,11 +80,11 @@ const VarIntVal &unsafeIntValRef(const bool & /* unused */) {
 }
 bool unsafeBool(const bool &b) { return b; }
 
-MonoPair<FastCall>
-interpretFunctionPair(MonoPair<const Function *> funs,
-                      MonoPair<map<const llvm::Value *, VarVal>> variables,
-                      MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds,
-                      uint32_t maxSteps) {
+MonoPair<FastCall> interpretFunctionPair(MonoPair<const Function *> funs,
+                                         MonoPair<FastVarMap> variables,
+                                         MonoPair<Heap> heaps,
+                                         MonoPair<Integer> heapBackgrounds,
+                                         uint32_t maxSteps) {
     return makeMonoPair(
         interpretFunction(*funs.first, FastState(variables.first, heaps.first,
                                                  heapBackgrounds.first),
@@ -95,12 +95,10 @@ interpretFunctionPair(MonoPair<const Function *> funs,
             maxSteps));
 }
 
-MonoPair<FastCall>
-interpretFunctionPair(MonoPair<const llvm::Function *> funs,
-                      MonoPair<std::map<const llvm::Value *, VarVal>> variables,
-                      MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds,
-                      MonoPair<const llvm::BasicBlock *> startBlocks,
-                      uint32_t maxSteps) {
+MonoPair<FastCall> interpretFunctionPair(
+    MonoPair<const llvm::Function *> funs, MonoPair<FastVarMap> variables,
+    MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds,
+    MonoPair<const llvm::BasicBlock *> startBlocks, uint32_t maxSteps) {
     return makeMonoPair(
         interpretFunction(*funs.first, FastState(variables.first, heaps.first,
                                                  heapBackgrounds.first),

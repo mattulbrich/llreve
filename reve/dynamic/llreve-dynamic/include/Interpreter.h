@@ -241,17 +241,15 @@ struct TerminatorUpdate {
 
 /// The variables in the entry state will be renamed appropriately for both
 /// programs
-MonoPair<FastCall>
-interpretFunctionPair(MonoPair<const llvm::Function *> funs,
-                      MonoPair<std::map<const llvm::Value *, VarVal>> variables,
-                      MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds,
-                      uint32_t maxSteps);
-MonoPair<FastCall>
-interpretFunctionPair(MonoPair<const llvm::Function *> funs,
-                      MonoPair<std::map<const llvm::Value *, VarVal>> variables,
-                      MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds,
-                      MonoPair<const llvm::BasicBlock *> startBlocks,
-                      uint32_t maxSteps);
+MonoPair<FastCall> interpretFunctionPair(MonoPair<const llvm::Function *> funs,
+                                         MonoPair<FastVarMap> variables,
+                                         MonoPair<Heap> heaps,
+                                         MonoPair<Integer> heapBackgrounds,
+                                         uint32_t maxSteps);
+MonoPair<FastCall> interpretFunctionPair(
+    MonoPair<const llvm::Function *> funs, MonoPair<FastVarMap> variables,
+    MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds,
+    MonoPair<const llvm::BasicBlock *> startBlocks, uint32_t maxSteps);
 auto interpretFunction(const llvm::Function &fun, FastState entry,
                        uint32_t maxSteps) -> FastCall;
 auto interpretFunction(const llvm::Function &fun, FastState entry,
