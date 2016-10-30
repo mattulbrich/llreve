@@ -28,6 +28,7 @@ using llvm::Instruction;
 using llvm::CmpInst;
 
 using namespace smt;
+using namespace llreve::opts;
 
 /// Convert a basic block to a list of assignments
 vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
@@ -60,7 +61,8 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
                     definitions.insert(definitions.end(), defs.begin(),
                                        defs.end());
                 } else {
-                    if (SMTGenerationOpts::getInstance().Heap) {
+                    if (SMTGenerationOpts::getInstance().Heap ==
+                        Heap::Enabled) {
                         definitions.push_back(DefOrCallInfo(
                             shared_ptr<const Assignment>(makeAssignment(
                                 heapName(progIndex),
@@ -68,7 +70,8 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
                     }
                     definitions.push_back(DefOrCallInfo(
                         toCallInfo(CallInst->getName(), prog, *CallInst)));
-                    if (SMTGenerationOpts::getInstance().Heap) {
+                    if (SMTGenerationOpts::getInstance().Heap ==
+                        Heap::Enabled) {
                         definitions.push_back(DefOrCallInfo(makeAssignment(
                             heapName(progIndex),
                             memoryVariable(heapName(progIndex) + "_res"))));
@@ -93,7 +96,7 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
         }
         definitions.push_back(DefOrCallInfo(
             makeAssignment("result$" + std::to_string(progIndex), retName)));
-        if (SMTGenerationOpts::getInstance().Heap) {
+        if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
             definitions.push_back(DefOrCallInfo(
                 makeAssignment(heapName(progIndex) + "_res",
                                memoryVariable(heapName(progIndex)))));
@@ -115,7 +118,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
                 instrNameOrVal(BinOp->getOperand(1)));
             return {makeAssignment(BinOp->getName(), std::move(op))};
         }
-        if (SMTGenerationOpts::getInstance().NoByteHeap &&
+        if (SMTGenerationOpts::getInstance().ByteHeap == ByteHeap::Disabled &&
             BinOp->getOpcode() == Instruction::SDiv) {
             // This is a heuristic to remove divisions by 4 of pointer
             // subtractions
@@ -175,7 +178,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
         const auto val = phiInst->getIncomingValueForBlock(prevBb);
         assert(val);
         auto assgn = makeAssignment(phiInst->getName(), instrNameOrVal(val));
-        if (SMTGenerationOpts::getInstance().Stack &&
+        if (SMTGenerationOpts::getInstance().Stack == Stack::Enabled &&
             phiInst->getType()->isPointerTy()) {
             auto locAssgn = makeAssignment(
                 string(phiInst->getName()) + "_OnStack", instrLocation(val));
@@ -193,7 +196,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
                                            instrNameOrVal(falseVal)};
         auto assgn = makeAssignment(selectInst->getName(),
                                     std::make_shared<class Op>("ite", args));
-        if (SMTGenerationOpts::getInstance().Stack &&
+        if (SMTGenerationOpts::getInstance().Stack == Stack::Enabled &&
             trueVal->getType()->isPointerTy()) {
             assert(falseVal->getType()->isPointerTy());
             auto location =
@@ -215,7 +218,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             llvm::dyn_cast<llvm::GetElementPtrInst>(&Instr)) {
         auto assgn = makeAssignment(getElementPtrInst->getName(),
                                     resolveGEP(*getElementPtrInst));
-        if (SMTGenerationOpts::getInstance().Stack) {
+        if (SMTGenerationOpts::getInstance().Stack == Stack::Enabled) {
             return {std::move(assgn),
                     makeAssignment(
                         string(getElementPtrInst->getName()) + "_OnStack",
@@ -241,7 +244,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             }
             return {makeAssignment(loadInst->getName(), load)};
         } else {
-            if (SMTGenerationOpts::getInstance().Stack) {
+            if (SMTGenerationOpts::getInstance().Stack == Stack::Enabled) {
                 SMTRef load =
                     makeOp("select_", memoryVariable(heapName(progIndex)),
                            memoryVariable(stackName(progIndex)), pointer,
@@ -276,7 +279,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             }
             return {makeAssignment(heapName(progIndex), newHeap)};
         } else {
-            if (SMTGenerationOpts::getInstance().Stack) {
+            if (SMTGenerationOpts::getInstance().Stack == Stack::Enabled) {
                 const std::vector<SharedSMTRef> args = {
                     memoryVariable(heap), memoryVariable(stackName(progIndex)),
                     pointer, instrLocation(storeInst->getPointerOperand()),
@@ -605,7 +608,7 @@ std::shared_ptr<CallInfo> toCallInfo(string assignedTo, Program prog,
     for (auto &arg : callInst.arg_operands()) {
         args.push_back(instrNameOrVal(arg, funTy.getParamType(i)));
         ++suppliedArgs;
-        if (SMTGenerationOpts::getInstance().Stack &&
+        if (SMTGenerationOpts::getInstance().Stack == Stack::Enabled &&
             arg->getType()->isPointerTy()) {
             args.push_back(instrLocation(arg));
         }

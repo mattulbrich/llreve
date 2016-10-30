@@ -39,6 +39,8 @@ using std::make_shared;
 using std::string;
 using llvm::ErrorOr;
 
+using namespace llreve::opts;
+
 static void nameFunctionArguments(llvm::Function &fun, Program prog) {
     std::map<string, int> instructionNames;
     for (auto &arg : fun.args()) {
@@ -55,10 +57,10 @@ static void nameModuleGlobals(llvm::Module &module, Program prog) {
 
 static void detectMemoryOptions(MonoPair<const llvm::Module &> modules) {
     if (doesAccessHeap(modules.first) || doesAccessHeap(modules.second)) {
-        SMTGenerationOpts::getInstance().Heap = true;
+        SMTGenerationOpts::getInstance().Heap = Heap::Enabled;
     }
     if (doesAccessStack(modules.first) || doesAccessStack(modules.second)) {
-        SMTGenerationOpts::getInstance().Stack = true;
+        SMTGenerationOpts::getInstance().Stack = Stack::Enabled;
     }
 }
 AnalysisResultsMap preprocessModules(MonoPair<llvm::Module &> modules,

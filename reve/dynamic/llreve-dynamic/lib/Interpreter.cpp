@@ -47,6 +47,10 @@ using std::function;
 
 using nlohmann::json;
 
+using namespace llreve::opts;
+
+namespace llreve {
+namespace dynamic {
 VarVal::VarValConcept::~VarValConcept() = default;
 
 unsigned HeapElemSizeFlag;
@@ -573,4 +577,6 @@ json stateToJSON(State<T> state, function<string(T)> getName) {
     j["variables"] = jsonVariables;
     j["heap"] = jsonHeap;
     return j;
+}
+}
 }

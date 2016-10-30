@@ -23,6 +23,7 @@ using std::unique_ptr;
 using std::vector;
 
 using namespace smt;
+using namespace llreve::opts;
 
 SMTRef instrLocation(const llvm::Value *val) {
     if (!val->getName().empty()) {
@@ -77,7 +78,7 @@ SMTRef instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) {
 }
 
 int typeSize(llvm::Type *Ty, const llvm::DataLayout &layout) {
-    if (!SMTGenerationOpts::getInstance().NoByteHeap) {
+    if (SMTGenerationOpts::getInstance().ByteHeap == ByteHeap::Enabled) {
         return static_cast<int>(layout.getTypeAllocSize(Ty));
     }
     if (auto IntTy = llvm::dyn_cast<llvm::IntegerType>(Ty)) {
@@ -112,8 +113,7 @@ int typeSize(llvm::Type *Ty, const llvm::DataLayout &layout) {
 }
 
 /// Filter vars to only include the ones from Program
-std::vector<SortedVar> filterVars(int program,
-                                       std::vector<SortedVar> vars) {
+std::vector<SortedVar> filterVars(int program, std::vector<SortedVar> vars) {
     std::vector<SortedVar> filteredVars;
     for (const auto &var : vars) {
         if (varBelongsTo(var.name, program)) {
@@ -166,7 +166,7 @@ vector<SortedVar> functionArgs(const llvm::Function &fun) {
     for (auto &arg : fun.args()) {
         auto sVar = llvmValToSortedVar(&arg);
         args.push_back(sVar);
-        if (SMTGenerationOpts::getInstance().Stack &&
+        if (SMTGenerationOpts::getInstance().Stack == Stack::Enabled &&
             arg.getType()->isPointerTy()) {
             args.push_back({sVar.name + "_OnStack", boolType()});
         }

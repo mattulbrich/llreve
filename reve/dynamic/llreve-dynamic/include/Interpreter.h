@@ -27,6 +27,8 @@
 
 #include "Integer.h"
 
+namespace llreve {
+namespace dynamic {
 using BlockName = std::string;
 using VarName = const llvm::Value *;
 using VarIntVal = Integer;
@@ -315,3 +317,5 @@ template <typename A, typename T> VarIntVal resolveGEP(T &gep, State<A> state) {
 std::string valueName(const llvm::Value *val);
 
 extern unsigned HeapElemSizeFlag;
+}
+}

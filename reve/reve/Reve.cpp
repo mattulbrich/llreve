@@ -39,6 +39,8 @@ using std::string;
 using std::unique_ptr;
 using std::vector;
 
+using namespace llreve::opts;
+
 // Input flags
 static llreve::cl::list<string> IncludesFlag("I",
                                              llreve::cl::desc("Include path"),
@@ -186,10 +188,19 @@ int main(int argc, const char **argv) {
     MonoPair<llvm::Module &> moduleRefs = {*modules.first, *modules.second};
 
     SMTGenerationOpts::initialize(
-        findMainFunction(moduleRefs, MainFunctionFlag), HeapFlag, StackFlag,
-        GlobalConstantsFlag, OnlyRecursiveFlag, NoByteHeapFlag,
-        EverythingSignedFlag, MuZFlag, PerfectSyncFlag, PassInputThroughFlag,
-        BitVectFlag, InvertFlag, InitPredFlag, DisableAutoAbstraction, {},
+        findMainFunction(moduleRefs, MainFunctionFlag),
+        HeapFlag ? Heap::Enabled : Heap::Disabled,
+        StackFlag ? Stack::Enabled : Stack::Disabled,
+        GlobalConstantsFlag ? GlobalConstants::Enabled
+                            : GlobalConstants::Disabled,
+        OnlyRecursiveFlag ? FunctionEncoding::OnlyRecursive
+                          : FunctionEncoding::Iterative,
+        NoByteHeapFlag ? ByteHeap::Disabled : ByteHeap::Enabled,
+        EverythingSignedFlag, MuZFlag ? Z3Format::Enabled : Z3Format::Disabled,
+        PerfectSyncFlag ? PerfectSynchronization::Enabled
+                        : PerfectSynchronization::Disabled,
+        PassInputThroughFlag, BitVectFlag, InvertFlag, InitPredFlag,
+        DisableAutoAbstraction, {},
         addConstToFunctionPairSet(lookupFunctionNamePairs(
             moduleRefs, parseFunctionPairFlags(AssumeEquivalentFlags))),
         getCoupledFunctions(moduleRefs, DisableAutoCouplingFlag,
@@ -205,7 +216,9 @@ int main(int argc, const char **argv) {
     vector<SharedSMTRef> smtExprs =
         generateSMT(moduleRefs, analysisResults, fileOpts);
 
-    serializeSMT(smtExprs, SMTGenerationOpts::getInstance().MuZ, serializeOpts);
+    serializeSMT(smtExprs,
+                 SMTGenerationOpts::getInstance().MuZ == Z3Format::Enabled,
+                 serializeOpts);
 
     llvm::llvm_shutdown();
 

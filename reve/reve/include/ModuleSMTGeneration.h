@@ -20,10 +20,11 @@
 
 auto generateSMT(MonoPair<const llvm::Module &> modules,
                  const AnalysisResultsMap &analysisResults,
-                 FileOptions fileOpts) -> std::vector<smt::SharedSMTRef>;
+                 llreve::opts::FileOptions fileOpts)
+    -> std::vector<smt::SharedSMTRef>;
 auto generateSMTForMainFunctions(MonoPair<const llvm::Module &> modules,
                                  const AnalysisResultsMap &analysisResults,
-                                 FileOptions fileOpts,
+                                 llreve::opts::FileOptions fileOpts,
                                  std::vector<smt::SharedSMTRef> &assertions,
                                  std::vector<smt::SharedSMTRef> &declarations)
     -> void;

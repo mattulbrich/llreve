@@ -1,7 +1,9 @@
 %{
 #include "HeapPattern.h"
-static std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns;
 extern "C" int yylex(void);
+ using namespace llreve::dynamic;
+
+static std::vector<std::shared_ptr<llreve::dynamic::HeapPattern<llreve::dynamic::VariablePlaceholder>>> patterns;
 extern FILE* yyin;
 void yyerror(const char* s) {
      std::cerr << s << "\n";
@@ -9,9 +11,9 @@ void yyerror(const char* s) {
 %}
 %start stmts
 %union {
-  HeapPattern<VariablePlaceholder>* patternPtr;
-  HeapExpr<VariablePlaceholder>* exprPtr;
-  ProgramIndex progIndex;
+  llreve::dynamic::HeapPattern<llreve::dynamic::VariablePlaceholder>* patternPtr;
+  llreve::dynamic::HeapExpr<llreve::dynamic::VariablePlaceholder>* exprPtr;
+  llreve::dynamic::ProgramIndex progIndex;
   unsigned long constantVal;
   size_t boundVarIndex;
 }
@@ -36,13 +38,13 @@ void yyerror(const char* s) {
 %left STAR
 %%
 stmts : /* empty */ {}
-      | stmts pattern SEMICOLON {patterns.push_back(std::shared_ptr<HeapPattern<VariablePlaceholder>>($2)); }
+      | stmts pattern SEMICOLON {patterns.push_back(std::shared_ptr<HeapPattern<llreve::dynamic::VariablePlaceholder>>($2)); }
 ;
 pattern : binaryHeapPattern { $$ = $1; }
         | heapExprProp      { $$ = $1; }
         | LPAR pattern RPAR { $$ = $2; }
         | range { $$ = $1; }
-        | EQUALHEAPS { $$ = new HeapEqual<VariablePlaceholder>(); }
+        | EQUALHEAPS { $$ = new HeapEqual<llreve::dynamic::VariablePlaceholder>(); }
 ;
 
 range :
@@ -122,8 +124,12 @@ binaryIntExpr :
 ;
 %%
 
+namespace llreve {
+namespace dynamic {
 std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> parsePatterns(FILE* stream) {
     yyin = stream;
     yyparse();
     return std::move(patterns);
+}
+}
 }

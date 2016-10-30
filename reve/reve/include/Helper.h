@@ -50,7 +50,7 @@ template <typename T> std::unique_ptr<const smt::SMTExpr> resolveGEP(T &gep) {
             type, llvm::ArrayRef<llvm::Value *>(indices));
         const auto size = typeSize(indexedType, mod->getDataLayout());
         auto smtIx = instrNameOrVal(*ix);
-        if (SMTGenerationOpts::getInstance().BitVect) {
+        if (llreve::opts::SMTGenerationOpts::getInstance().BitVect) {
             smtIx = smt::makeOp(
                 "(_ sign_extend " +
                     std::to_string(64 -
@@ -61,7 +61,7 @@ template <typename T> std::unique_ptr<const smt::SMTExpr> resolveGEP(T &gep) {
         if (size == 1) {
             args.push_back(std::move(smtIx));
         } else {
-            if (SMTGenerationOpts::getInstance().BitVect) {
+            if (llreve::opts::SMTGenerationOpts::getInstance().BitVect) {
                 args.push_back(smt::makeOp(
                     "bvmul",
                     smt::stringExpr("(_ bv" + std::to_string(size) + " 64)"),
@@ -73,7 +73,7 @@ template <typename T> std::unique_ptr<const smt::SMTExpr> resolveGEP(T &gep) {
             }
         }
     }
-    if (SMTGenerationOpts::getInstance().BitVect) {
+    if (llreve::opts::SMTGenerationOpts::getInstance().BitVect) {
         return std::make_unique<smt::Op>("bvadd", args);
     } else {
         return std::make_unique<smt::Op>("+", args);

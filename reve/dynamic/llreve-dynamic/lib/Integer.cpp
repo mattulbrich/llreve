@@ -12,6 +12,8 @@
 
 #include <cassert>
 
+using namespace llreve::opts;
+
 Integer &Integer::operator=(Integer other) {
     switch (type) {
     case IntType::Unbounded:

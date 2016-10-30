@@ -30,6 +30,8 @@ using std::set;
 using std::string;
 using std::vector;
 
+using namespace llreve::opts;
+
 // Implementations of toSExpr()
 
 SExprRef TypedVariable::toSExpr() const { return sexprFromString(name); }
@@ -120,7 +122,8 @@ SExprRef Assert::toSExpr() const {
     std::vector<SExprRef> args;
     args.push_back(expr->toSExpr());
     const string keyword =
-        SMTGenerationOpts::getInstance().MuZ ? "rule" : "assert";
+        SMTGenerationOpts::getInstance().MuZ == Z3Format::Enabled ? "rule"
+                                                                  : "assert";
     return make_unique<Apply>(keyword, std::move(args));
 }
 
@@ -178,11 +181,13 @@ SExprRef FunDecl::toSExpr() const {
     std::vector<SExprRef> args;
     args.push_back(stringExpr(funName)->toSExpr());
     args.push_back(make_unique<List>(std::move(inTypeSExprs)));
-    if (!SMTGenerationOpts::getInstance().MuZ) {
+    if (SMTGenerationOpts::getInstance().MuZ == Z3Format::Disabled) {
         args.push_back(outType->toSExpr());
     }
     const string keyword =
-        SMTGenerationOpts::getInstance().MuZ ? "declare-rel" : "declare-fun";
+        SMTGenerationOpts::getInstance().MuZ == Z3Format::Enabled
+            ? "declare-rel"
+            : "declare-fun";
     return make_unique<Apply>(keyword, std::move(args));
 }
 

@@ -24,12 +24,13 @@ struct PassAnalysisResults {
 };
 
 AnalysisResultsMap preprocessModules(MonoPair<llvm::Module &> modules,
-                                     PreprocessOpts opts);
+                                     llreve::opts::PreprocessOpts opts);
 void runFunctionPasses(
-    llvm::Module &module, PreprocessOpts opts,
+    llvm::Module &module, llreve::opts::PreprocessOpts opts,
     std::map<const llvm::Function *, PassAnalysisResults> &passResults,
     Program prog);
-auto runFunctionPasses(llvm::Function &fun, Program prog, PreprocessOpts opts)
+auto runFunctionPasses(llvm::Function &fun, Program prog,
+                       llreve::opts::PreprocessOpts opts)
     -> PassAnalysisResults;
 auto runAnalyses(
     const llvm::Module &module, Program prog,

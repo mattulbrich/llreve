@@ -12,6 +12,8 @@ using std::vector;
 using sexpr::Apply;
 using sexpr::Value;
 
+using namespace llreve::opts;
+
 namespace smt {
 TypeTag BoolType::getTag() const { return TypeTag::Bool; }
 TypeTag IntType::getTag() const { return TypeTag::Int; }

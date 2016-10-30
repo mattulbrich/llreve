@@ -15,6 +15,8 @@
 #include "Permutation.h"
 #include "SerializeTraces.h"
 
+namespace llreve {
+namespace dynamic {
 using HoleMap = std::map<size_t, mpz_class>;
 
 enum class PatternType { Binary, Unary, HeapEquality, Range, ExprProp };
@@ -247,8 +249,8 @@ template <typename T> struct BinaryHeapPattern : public HeapPattern<T> {
         auto newArgs = args.template map<std::shared_ptr<HeapPattern<T>>>(
             [negate](std::shared_ptr<HeapPattern<T>> arg)
                 -> std::shared_ptr<HeapPattern<T>> {
-                    return arg->negationNormalForm(negate);
-                });
+                return arg->negationNormalForm(negate);
+            });
         if (negate) {
             assert(op != BinaryBooleanOp::Impl);
             if (op == BinaryBooleanOp::And) {
@@ -1129,4 +1131,6 @@ rewriteToImplication(RewrittenPattern<T> rewrittenPattern) {
             BinaryBooleanOp::Impl, makeMonoPair(arg2, rewrittenPattern.pat));
     }
     return rewrittenPattern.pat;
+}
+}
 }

@@ -32,6 +32,8 @@ using llvm::ErrorOr;
 using llvm::IntrusiveRefCntPtr;
 using llvm::opt::ArgStringList;
 
+using namespace llreve::opts;
+
 MonoPair<unique_ptr<llvm::Module>>
 compileToModules(const char *exeName, InputOpts &opts,
                  MonoPair<std::shared_ptr<CodeGenAction>> acts) {

@@ -23,6 +23,10 @@
 using std::vector;
 using std::string;
 
+using llreve::opts::SMTGenerationOpts;
+
+namespace llreve {
+namespace dynamic {
 vector<WorkItem> parseInput(string fileName) {
     vector<WorkItem> result;
     string line;
@@ -75,4 +79,6 @@ Heap getHeap(std::string line) {
         result.insert({Integer(index).asPointer(), intVal});
     }
     return result;
+}
+}
 }

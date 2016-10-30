@@ -19,6 +19,8 @@ using smt::VarDecl;
 using std::vector;
 using std::set;
 
+using namespace llreve::opts;
+
 void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
     // write to file or to stdout
     std::streambuf *buf;

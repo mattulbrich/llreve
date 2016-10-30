@@ -39,6 +39,9 @@ using std::map;
 
 using clang::CodeGenAction;
 
+using namespace llreve::dynamic;
+using namespace llreve::opts;
+
 static llreve::cl::opt<string> FileName1Flag(llreve::cl::Positional,
                                              llreve::cl::desc("FILE1"),
                                              llreve::cl::Required);
@@ -105,9 +108,12 @@ int main(int argc, const char **argv) {
     MonoPair<llvm::Module &> moduleRefs = {*modules.first, *modules.second};
 
     SMTGenerationOpts::initialize(
-        findMainFunction(moduleRefs, MainFunctionFlag), HeapFlag, false, false,
-        false, false, false, false, false, false, BoundedFlag, InvertFlag,
-        false, false, {}, {}, inferCoupledFunctionsByName(moduleRefs));
+        findMainFunction(moduleRefs, MainFunctionFlag),
+        HeapFlag ? llreve::opts::Heap::Enabled : llreve::opts::Heap::Disabled,
+        Stack::Disabled, GlobalConstants::Disabled, FunctionEncoding::Iterative,
+        ByteHeap::Enabled, false, Z3Format::Disabled,
+        PerfectSynchronization::Disabled, false, BoundedFlag, InvertFlag, false,
+        false, {}, {}, inferCoupledFunctionsByName(moduleRefs));
 
     AnalysisResultsMap analysisResults =
         preprocessModules(moduleRefs, preprocessOpts);

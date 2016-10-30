@@ -22,13 +22,16 @@ using std::vector;
 using smt::stringExpr;
 using smt::SharedSMTRef;
 
+namespace llreve {
+namespace opts {
 llreve::cl::OptionCategory ReveCategory("Reve options",
                                         "Options for controlling reve.");
 
 void SMTGenerationOpts::initialize(
-    MonoPair<llvm::Function *> mainFunctions, bool heap, bool stack,
-    bool globalConstants, bool onlyRecursive, bool noByteHeap,
-    bool everythingSigned, bool muZ, bool perfectSync, bool passInputThrough,
+    MonoPair<llvm::Function *> mainFunctions, enum Heap heap, enum Stack stack,
+    enum GlobalConstants globalConstants, FunctionEncoding onlyRecursive,
+    enum ByteHeap byteHeap, bool everythingSigned, Z3Format muZ,
+    enum PerfectSynchronization perfectSync, bool passInputThrough,
     bool bitVect, bool invert, bool initPredicate, bool disableAutoAbstraction,
     map<Mark, SharedSMTRef> invariants,
     set<MonoPair<const llvm::Function *>> assumeEquivalent,
@@ -39,7 +42,7 @@ void SMTGenerationOpts::initialize(
     i.Stack = stack;
     i.GlobalConstants = globalConstants;
     i.OnlyRecursive = onlyRecursive;
-    i.NoByteHeap = noByteHeap;
+    i.ByteHeap = byteHeap;
     i.EverythingSigned = everythingSigned;
     i.MuZ = muZ;
     i.PerfectSync = perfectSync;
@@ -318,4 +321,6 @@ bool hasMutualFixedAbstraction(MonoPair<const llvm::Function *> functions) {
 
 bool hasFixedAbstraction(const llvm::Function &function) {
     return function.isDeclaration();
+}
+}
 }

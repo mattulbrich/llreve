@@ -23,8 +23,8 @@
 
 #include <iostream>
 
-using namespace smt;
 using llvm::CmpInst;
+
 using std::function;
 using std::make_pair;
 using std::make_shared;
@@ -35,6 +35,9 @@ using std::string;
 using std::string;
 using std::unique_ptr;
 using std::vector;
+
+using namespace smt;
+using namespace llreve::opts;
 
 vector<SharedSMTRef>
 relationalFunctionAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
@@ -79,7 +82,8 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
         }
     }
 
-    if (!SMTGenerationOpts::getInstance().PerfectSync) {
+    if (SMTGenerationOpts::getInstance().PerfectSync ==
+        PerfectSynchronization::Disabled) {
         const auto offByNPaths = getOffByNPaths(pathMaps.first, pathMaps.second,
                                                 freeVarsMap, funName, false);
         for (const auto &it : offByNPaths) {
@@ -112,7 +116,8 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
     vector<SharedSMTRef> smtExprs;
 
     const llvm::Type *returnType = preprocessedFuns.first->getReturnType();
-    if (SMTGenerationOpts::getInstance().OnlyRecursive) {
+    if (SMTGenerationOpts::getInstance().OnlyRecursive ==
+        FunctionEncoding::OnlyRecursive) {
         smtExprs.push_back(
             equalInputsEqualOutputs(freeVarsMap.at(ENTRY_MARK),
                                     filterVars(1, freeVarsMap.at(ENTRY_MARK)),
@@ -126,7 +131,8 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
         [&freeVarsMap, funName](Mark startIndex, Mark endIndex) {
             SMTRef endInvariant =
                 mainInvariant(endIndex, freeVarsMap.at(endIndex), funName);
-            if (SMTGenerationOpts::getInstance().MuZ && endIndex == EXIT_MARK) {
+            if (SMTGenerationOpts::getInstance().MuZ == Z3Format::Enabled &&
+                endIndex == EXIT_MARK) {
                 endInvariant =
                     makeOp("=>", makeOp("not", std::move(endInvariant)),
                            make_unique<TypedVariable>("END_QUERY", boolType()));
@@ -136,7 +142,8 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
 
     const auto forbiddenPaths =
         getForbiddenPaths(pathMaps, marked, freeVarsMap, funName, true);
-    if (!SMTGenerationOpts::getInstance().PerfectSync) {
+    if (SMTGenerationOpts::getInstance().PerfectSync ==
+        PerfectSynchronization::Disabled) {
         const auto offByNPaths = getOffByNPaths(pathMaps.first, pathMaps.second,
                                                 freeVarsMap, funName, true);
         synchronizedPaths = mergeVectorMaps(synchronizedPaths, offByNPaths);
@@ -255,7 +262,8 @@ getForbiddenPaths(MonoPair<PathMap> pathMaps,
                                         -> set<Mark> {
                                         return marks.BlockToMarksMap[endBlock];
                                     });
-                            if (SMTGenerationOpts::getInstance().PerfectSync ||
+                            if (SMTGenerationOpts::getInstance().PerfectSync ==
+                                    PerfectSynchronization::Enabled ||
                                 ((startIndex != endIndex1 && // no circles
                                   startIndex != endIndex2) &&
                                  intersection(endIndices.first,
@@ -550,7 +558,7 @@ SMTRef mutualFunctionCall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
                              llvmType(callPair.first.fun.getReturnType())));
     args.push_back(SortedVar(callPair.second.assignedTo,
                              llvmType(callPair.second.fun.getReturnType())));
-    if (SMTGenerationOpts::getInstance().Heap) {
+    if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
         args.push_back(SortedVar("HEAP$1_res", memoryType()));
         args.push_back(SortedVar("HEAP$2_res", memoryType()));
     }
@@ -561,7 +569,7 @@ SMTRef mutualFunctionCall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
 
     implArgs.push_back(stringExpr(callPair.first.assignedTo));
     implArgs.push_back(stringExpr(callPair.second.assignedTo));
-    if (SMTGenerationOpts::getInstance().Heap) {
+    if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
         implArgs.push_back(memoryVariable("HEAP$1_res"));
         implArgs.push_back(memoryVariable("HEAP$2_res"));
     }
@@ -594,7 +602,7 @@ SMTRef nonMutualFunctionCall(SharedSMTRef clause, CallInfo call, Program prog) {
     const uint32_t varArgs = call.varArgs;
     // TODO figure out proper return type
     forallArgs.push_back(SortedVar(call.assignedTo, int64Type()));
-    if (SMTGenerationOpts::getInstance().Heap) {
+    if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
         forallArgs.push_back(
             SortedVar("HEAP$" + programS + "_res", memoryType()));
     }
@@ -602,7 +610,7 @@ SMTRef nonMutualFunctionCall(SharedSMTRef clause, CallInfo call, Program prog) {
     const vector<SharedSMTRef> preArgs = implArgs;
 
     implArgs.push_back(stringExpr(call.assignedTo));
-    if (SMTGenerationOpts::getInstance().Heap) {
+    if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
         implArgs.push_back(memoryVariable("HEAP$" + programS + "_res"));
     }
 
@@ -704,7 +712,7 @@ SharedSMTRef equalInputsEqualOutputs(vector<SortedVar> funArgs,
     args.push_back(stringExpr("result$2"));
     forallArgs.push_back(SortedVar("result$1", llvmType(returnType)));
     forallArgs.push_back(SortedVar("result$2", llvmType(returnType)));
-    if (SMTGenerationOpts::getInstance().Heap) {
+    if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
         forallArgs.push_back(SortedVar("HEAP$1_res", memoryType()));
         forallArgs.push_back(SortedVar("HEAP$2_res", memoryType()));
         args.push_back(memoryVariable("HEAP$1_res"));
@@ -729,7 +737,7 @@ SharedSMTRef equalInputsEqualOutputs(vector<SortedVar> funArgs,
             }
         }
     }
-    if (SMTGenerationOpts::getInstance().Heap) {
+    if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
         outArgs.push_back(memoryVariable("HEAP$1_res"));
     }
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
@@ -739,7 +747,7 @@ SharedSMTRef equalInputsEqualOutputs(vector<SortedVar> funArgs,
             }
         }
     }
-    if (SMTGenerationOpts::getInstance().Heap) {
+    if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
         outArgs.push_back(memoryVariable("HEAP$2_res"));
     }
     const SharedSMTRef equalResults = makeOp(
@@ -892,10 +900,10 @@ auto addMemory(vector<SharedSMTRef> &implArgs)
         for (auto arg : call.args) {
             implArgs.push_back(arg);
         }
-        if (SMTGenerationOpts::getInstance().Heap) {
+        if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
             implArgs.push_back(memoryVariable(heapName(index)));
         }
-        if (SMTGenerationOpts::getInstance().Stack) {
+        if (SMTGenerationOpts::getInstance().Stack == Stack::Enabled) {
             implArgs.push_back(memoryVariable(stackPointerName(index)));
             implArgs.push_back(memoryVariable(stackName(index)));
         }

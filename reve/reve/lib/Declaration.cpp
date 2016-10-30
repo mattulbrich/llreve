@@ -9,6 +9,8 @@ using smt::SMTRef;
 using std::string;
 using std::vector;
 
+using namespace llreve::opts;
+
 vector<SharedSMTRef> relationalFunctionDeclarations(
     MonoPair<const llvm::Function *> preprocessedFunctions,
     const AnalysisResultsMap &analysisResults) {

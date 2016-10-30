@@ -10,6 +10,8 @@
 
 #include "HeapPattern.h"
 
+namespace llreve {
+namespace dynamic {
 template <>
 mpz_class Variable<const llvm::Value *>::eval(
     const VarMap<const llvm::Value *> &variables,
@@ -35,4 +37,6 @@ mpz_class getHeapVal(HeapAddress addr, Heap heap) {
 
 template <> smt::SMTRef Variable<const llvm::Value *>::toSMT() const {
     return smt::stringExpr(varName->getName());
+}
+}
 }

@@ -10,6 +10,7 @@ using std::set;
 using std::vector;
 
 using namespace smt;
+using namespace llreve::opts;
 
 struct FreeVar {
     smt::SortedVar var;
@@ -129,7 +130,8 @@ static set<SortedVar> addMemoryLocations(const set<FreeVar> &freeVars) {
     set<SortedVar> newFreeVars;
     for (const auto &var : freeVars) {
         newFreeVars.insert(var.var);
-        if (SMTGenerationOpts::getInstance().Stack && var.type->isPointerTy()) {
+        if (SMTGenerationOpts::getInstance().Stack == Stack::Enabled &&
+            var.type->isPointerTy()) {
             newFreeVars.insert({var.var.name + "_OnStack", boolType()});
         }
     }
@@ -139,10 +141,10 @@ static set<SortedVar> addMemoryLocations(const set<FreeVar> &freeVars) {
 static auto addMemoryArrays(vector<smt::SortedVar> vars, Program prog)
     -> vector<smt::SortedVar> {
     int index = programIndex(prog);
-    if (SMTGenerationOpts::getInstance().Heap) {
+    if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
         vars.push_back(SortedVar(heapName(index), memoryType()));
     }
-    if (SMTGenerationOpts::getInstance().Stack) {
+    if (SMTGenerationOpts::getInstance().Stack == Stack::Enabled) {
         vars.push_back(SortedVar(stackPointerName(index), pointerType()));
         vars.push_back(SortedVar(stackName(index), memoryType()));
     }

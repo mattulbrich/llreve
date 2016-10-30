@@ -14,4 +14,4 @@
 #include "SMT.h"
 
 void serializeSMT(std::vector<smt::SharedSMTRef> smtExprs, bool muZ,
-                  SerializeOpts opts);
+                  llreve::opts::SerializeOpts opts);

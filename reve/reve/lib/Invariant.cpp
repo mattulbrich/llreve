@@ -21,6 +21,7 @@ using std::string;
 using std::map;
 
 using namespace smt;
+using namespace llreve::opts;
 
 /* -------------------------------------------------------------------------- */
 // Functions related to generating invariants
@@ -53,7 +54,7 @@ SMTRef invariant(Mark StartIndex, Mark EndIndex, vector<SortedVar> InputArgs,
         ResultArgs.push_back({"result$2", int64Type()});
         break;
     }
-    if (SMTGenerationOpts::getInstance().Heap) {
+    if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
         switch (SMTFor) {
         case ProgramSelection::First:
             ResultArgs.push_back({"HEAP$1_res", memoryType()});
@@ -163,7 +164,7 @@ MonoPair<SMTRef> invariantDeclaration(Mark BlockIndex,
     if (For == ProgramSelection::Both) {
         args.push_back(llvmType(resultType));
     }
-    if (SMTGenerationOpts::getInstance().Heap) {
+    if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
         args.push_back(memoryType());
         if (For == ProgramSelection::Both) {
             args.push_back(memoryType());
@@ -185,7 +186,7 @@ size_t invariantArgs(vector<SortedVar> freeVars, ProgramSelection prog,
         // we need result arguments
         // + 1 for each result
         numArgs += 1 + (prog == ProgramSelection::Both ? 1 : 0);
-        if (SMTGenerationOpts::getInstance().Heap) {
+        if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
             // index + value at that index
             if (prog == ProgramSelection::Both) {
                 numArgs += 2;

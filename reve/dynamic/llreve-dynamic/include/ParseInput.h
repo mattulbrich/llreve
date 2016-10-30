@@ -12,7 +12,12 @@
 
 #include "SerializeTraces.h"
 
+namespace llreve {
+namespace dynamic {
+
 std::vector<WorkItem> parseInput(std::string fileName);
 
 std::vector<mpz_class> getVariables(std::string line);
 Heap getHeap(std::string line);
+}
+}

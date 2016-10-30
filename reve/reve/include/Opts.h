@@ -19,6 +19,8 @@
 
 #include <map>
 
+namespace llreve {
+namespace opts {
 extern llreve::cl::OptionCategory ReveCategory;
 
 /// Options used for preprocessing modules
@@ -32,6 +34,18 @@ class PreprocessOpts {
           InferMarks(inferMarks) {}
 };
 
+enum class Heap { Enabled, Disabled };
+
+enum class Stack { Enabled, Disabled };
+
+enum class GlobalConstants { Enabled, Disabled };
+
+enum class FunctionEncoding { OnlyRecursive, Iterative };
+
+enum class ByteHeap { Enabled, Disabled };
+enum class Z3Format { Enabled, Disabled };
+enum class PerfectSynchronization { Enabled, Disabled };
+
 /// Singleton for the options used for SMT generation to avoid having to pass
 /// around the config object
 class SMTGenerationOpts {
@@ -42,23 +56,24 @@ class SMTGenerationOpts {
     }
     // Convenience method to make sure you don’t forget to set parameters
     static void
-    initialize(MonoPair<llvm::Function *> mainFunctions, bool heap, bool stack,
-               bool globalConstants, bool onlyRecursive, bool noByteHeap,
-               bool everythingSigned, bool muZ, bool perfectSync,
-               bool passInputThrough, bool bitvect, bool invert,
-               bool initPredicate, bool disableAutoAbstraction,
+    initialize(MonoPair<llvm::Function *> mainFunctions, Heap heap, Stack stack,
+               GlobalConstants globalConstants, FunctionEncoding onlyRecursive,
+               ByteHeap byteHeap, bool everythingSigned, Z3Format muZ,
+               PerfectSynchronization perfectSync, bool passInputThrough,
+               bool bitvect, bool invert, bool initPredicate,
+               bool disableAutoAbstraction,
                std::map<Mark, smt::SharedSMTRef> invariants,
                std::set<MonoPair<const llvm::Function *>> assumeEquivalent,
                std::set<MonoPair<llvm::Function *>> coupleFunctions);
     MonoPair<llvm::Function *> MainFunctions;
-    bool Heap;
-    bool Stack;
-    bool GlobalConstants;
-    bool OnlyRecursive;
-    bool NoByteHeap;
+    Heap Heap;
+    Stack Stack;
+    GlobalConstants GlobalConstants;
+    FunctionEncoding OnlyRecursive;
+    ByteHeap ByteHeap;
     bool EverythingSigned;
-    bool MuZ;
-    bool PerfectSync;
+    Z3Format MuZ;
+    PerfectSynchronization PerfectSync;
     bool PassInputThrough;
     bool BitVect;
     bool Invert;
@@ -171,3 +186,5 @@ bool hasFixedAbstraction(const llvm::Function &function);
 auto addConstToFunctionPairSet(
     std::set<MonoPair<llvm::Function *>> functionPairs)
     -> std::set<MonoPair<const llvm::Function *>>;
+}
+}

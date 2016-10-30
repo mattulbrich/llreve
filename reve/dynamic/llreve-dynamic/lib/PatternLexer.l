@@ -19,9 +19,9 @@ using namespace std;
 >               { return GT; }
 i_[0-9]+        { yylval.boundVarIndex = strtoul(yytext+2, NULL, 10); return BOUNDVAR; }
 heap\$(1|2)     { if (strcmp(yytext, "heap$1") == 0) {
-                      yylval.progIndex = ProgramIndex::First;
+                      yylval.progIndex = llreve::dynamic::ProgramIndex::First;
                   } else {
-                      yylval.progIndex = ProgramIndex::Second;
+                      yylval.progIndex = llreve::dynamic::ProgramIndex::Second;
                   }
                   return HEAP;
                 }

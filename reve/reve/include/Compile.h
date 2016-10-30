@@ -24,16 +24,16 @@
 /// IMPORTANT: The lifetime of the module is tied to the lifetime of the
 /// codegenactions, so make sure they stay alive if you don’t want to spend
 /// hours debugging really weird segfaults.
-auto compileToModules(const char *exeName, InputOpts &opts,
+auto compileToModules(const char *exeName, llreve::opts::InputOpts &opts,
                       MonoPair<std::shared_ptr<clang::CodeGenAction>> acts)
     -> MonoPair<std::unique_ptr<llvm::Module>>;
-auto executeCodeGenActions(const char *exeName, InputOpts &opts,
+auto executeCodeGenActions(const char *exeName, llreve::opts::InputOpts &opts,
                            MonoPair<std::shared_ptr<clang::CodeGenAction>> acts)
     -> void;
 auto executeCodeGenAction(const llvm::opt::ArgStringList &ccArgs,
                           clang::DiagnosticsEngine &diags,
                           std::shared_ptr<clang::CodeGenAction> act) -> void;
-auto initializeArgs(const char *exeName, InputOpts &opts)
+auto initializeArgs(const char *exeName, llreve::opts::InputOpts &opts)
     -> std::vector<const char *>;
 auto initializeDiagnostics(void) -> std::unique_ptr<clang::DiagnosticsEngine>;
 auto initializeDriver(clang::DiagnosticsEngine &diags)

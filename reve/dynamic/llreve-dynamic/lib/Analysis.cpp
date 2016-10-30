@@ -53,6 +53,10 @@ using std::multiset;
 
 using namespace smt;
 using namespace std::placeholders;
+using namespace llreve::opts;
+
+namespace llreve {
+namespace dynamic {
 
 static std::unique_ptr<ConstantInt> smtFromMpz(unsigned bitWidth, mpz_class i) {
     return std::make_unique<ConstantInt>(
@@ -169,7 +173,8 @@ driver(MonoPair<llvm::Module &> modules, AnalysisResultsMap &analysisResults,
                 args.push_back(var);
                 stringArgs.push_back(smt::stringExpr(var.name));
             }
-            if (SMTGenerationOpts::getInstance().Heap) {
+            if (SMTGenerationOpts::getInstance().Heap ==
+                llreve::opts::Heap::Enabled) {
                 args.push_back(SortedVar("HEAP$1", memoryType()));
                 stringArgs.push_back(smt::stringExpr("HEAP$1"));
             }
@@ -178,7 +183,8 @@ driver(MonoPair<llvm::Module &> modules, AnalysisResultsMap &analysisResults,
                 args.push_back(var);
                 stringArgs.push_back(smt::stringExpr(var.name));
             }
-            if (SMTGenerationOpts::getInstance().Heap) {
+            if (SMTGenerationOpts::getInstance().Heap ==
+                llreve::opts::Heap::Enabled) {
                 args.push_back(SortedVar("HEAP$2", memoryType()));
                 stringArgs.push_back(smt::stringExpr("HEAP$2"));
             }
@@ -310,8 +316,10 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             DegreeFlag);
 
         SMTGenerationOpts::initialize(
-            functions, SMTGenerationOpts::getInstance().Heap, false, false,
-            false, false, false, false, false, false, false, true, false, false,
+            functions, SMTGenerationOpts::getInstance().Heap, Stack::Disabled,
+            GlobalConstants::Disabled, FunctionEncoding::Iterative,
+            ByteHeap::Enabled, false, Z3Format::Disabled,
+            PerfectSynchronization::Disabled, false, false, true, false, false,
             invariantCandidates, {}, {});
         vector<SharedSMTRef> clauses =
             generateSMT(modules, analysisResults, fileOpts);
@@ -366,8 +374,10 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             DegreeFlag);
 
         SMTGenerationOpts::initialize(
-            functions, SMTGenerationOpts::getInstance().Heap, false, false,
-            false, false, false, false, false, false, false, true, false, false,
+            functions, SMTGenerationOpts::getInstance().Heap, Stack::Disabled,
+            GlobalConstants::Disabled, FunctionEncoding::Iterative,
+            ByteHeap::Enabled, false, Z3Format::Disabled,
+            PerfectSynchronization::Disabled, false, false, true, false, false,
             invariantCandidates, {}, {});
         clauses = generateSMT(modules, analysisResults, fileOpts);
         break;
@@ -397,7 +407,7 @@ ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
             z3Cxt, model.eval(nameMap.at(var.name + "_old")));
         modelValues.values.insert({var.name + "_old", mpz_class(stringVal)});
     }
-    if (SMTGenerationOpts::getInstance().Heap) {
+    if (SMTGenerationOpts::getInstance().Heap == llreve::opts::Heap::Enabled) {
         auto heap1Eval = model.eval(nameMap.at("HEAP$1_old"));
         auto heap2Eval = model.eval(nameMap.at("HEAP$2_old"));
         modelValues.arrays.insert(
@@ -1027,14 +1037,16 @@ makeInvariantDefinitions(const PolynomialSolutions &solutions,
         for (const auto &var : filterVars(1, freeVarsMap.at(mark))) {
             args.push_back(SortedVar(var.name, var.type->copy()));
         }
-        if (SMTGenerationOpts::getInstance().Heap) {
+        if (SMTGenerationOpts::getInstance().Heap ==
+            llreve::opts::Heap::Enabled) {
             args.push_back(SortedVar("HEAP$1", memoryType()));
         }
 
         for (auto var : filterVars(2, freeVarsMap.at(mark))) {
             args.push_back(SortedVar(var.name, var.type->copy()));
         }
-        if (SMTGenerationOpts::getInstance().Heap) {
+        if (SMTGenerationOpts::getInstance().Heap ==
+            llreve::opts::Heap::Enabled) {
             args.push_back(SortedVar("HEAP$2", memoryType()));
         }
         auto solutionsMapIt = solutions.find(mark);
@@ -1254,7 +1266,7 @@ Heap getHeapFromModel(const ArrayVal &ar) {
 }
 
 MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays) {
-    if (!SMTGenerationOpts::getInstance().Heap) {
+    if (SMTGenerationOpts::getInstance().Heap == llreve::opts::Heap::Disabled) {
         return {{}, {}};
     }
     return {getHeapFromModel(arrays.at("HEAP$1_old")),
@@ -1262,7 +1274,7 @@ MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays) {
 }
 
 MonoPair<Integer> getHeapBackgrounds(std::map<std::string, ArrayVal> arrays) {
-    if (!SMTGenerationOpts::getInstance().Heap) {
+    if (SMTGenerationOpts::getInstance().Heap == llreve::opts::Heap::Disabled) {
         return {Integer(mpz_class(0)), Integer(mpz_class(0))};
     }
     return {Integer(arrays.at("HEAP$1_old").background),
@@ -1430,4 +1442,6 @@ ModelValues initialModelValues(MonoPair<const llvm::Function *> funs) {
     // Anything not negative works here
     vals.values.insert({"INV_INDEX_END", 0});
     return vals;
+}
+}
 }

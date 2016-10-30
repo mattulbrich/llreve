@@ -26,6 +26,9 @@
 
 #include <thread>
 
+namespace llreve {
+namespace dynamic {
+
 extern std::string InputFileFlag;
 
 enum class LoopInfo {
@@ -73,11 +76,11 @@ using BoundsMap =
 std::vector<smt::SharedSMTRef>
 driver(MonoPair<llvm::Module &> modules, AnalysisResultsMap &analysisResults,
        std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
-       FileOptions fileopts);
+       llreve::opts::FileOptions fileopts);
 std::vector<smt::SharedSMTRef> cegarDriver(
     MonoPair<llvm::Module &> modules, AnalysisResultsMap &analysisResults,
     std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
-    FileOptions fileopts);
+    llreve::opts::FileOptions fileopts);
 llvm::Optional<MonoPair<llvm::Function *>>
 findFunction(std::vector<MonoPair<llvm::Function *>> functions,
              std::string functionName);
@@ -427,3 +430,5 @@ ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
                          const FreeVarsMap &freeVarsMap);
 
 ArrayVal getArrayVal(const z3::context &z3Cxt, z3::expr arrayExpr);
+}
+}
