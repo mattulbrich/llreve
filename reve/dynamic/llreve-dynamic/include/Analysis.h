@@ -34,6 +34,8 @@ enum class LoopInfo {
     None   // perfect synchronization
 };
 
+enum class LlreveResult { Equivalent, NotEquivalent };
+
 template <typename T> struct Bound {
     T lower;
     T upper;

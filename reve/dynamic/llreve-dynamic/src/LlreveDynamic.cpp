@@ -144,9 +144,11 @@ int main(int argc, const char **argv) {
     } else {
         smtExprs = driver(moduleRefs, analysisResults, patterns, fileOpts);
     }
-    serializeSMT(smtExprs, false,
-                 SerializeOpts(OutputFileNameFlag, !InstantiateFlag,
-                               MergeImplications, true, false));
+    if (!smtExprs.empty()) {
+        serializeSMT(smtExprs, false,
+                     SerializeOpts(OutputFileNameFlag, !InstantiateFlag,
+                                   MergeImplications, true, false));
+    }
 
     llvm::llvm_shutdown();
 }

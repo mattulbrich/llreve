@@ -220,15 +220,16 @@ cegarDriver(MonoPair<llvm::Module &> modules,
     auto instrNameMap = instructionNameMap(functions);
     z3::context z3Cxt;
     z3::solver z3Solver(z3Cxt);
+    // We start by assuming equivalence and change it to non equivalence
+    LlreveResult result = LlreveResult::Equivalent;
     do {
         Mark cexStartMark(
             static_cast<int>(vals.values.at("INV_INDEX_START").get_si()));
         Mark cexEndMark(
             static_cast<int>(vals.values.at("INV_INDEX_END").get_si()));
-        // TODO this check needs to include more marks
         if (oneOf(cexEndMark, EXIT_MARK, FORBIDDEN_MARK)) {
-            std::cerr << "The programs could not be proven equivalent\n";
-            exit(1);
+            result = LlreveResult::NotEquivalent;
+            break;
         }
         // reconstruct input from counterexample
         auto variableValues = getVarMapFromModel(
@@ -267,7 +268,6 @@ cegarDriver(MonoPair<llvm::Module &> modules,
         MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
             functions, variableValues, getHeapsFromModel(vals.arrays),
             getHeapBackgrounds(vals.arrays), {firstBlock, secondBlock}, 1000);
-        // analyzeExecution<const llvm::Value *>(calls, nameMap, debugAnalysis);
         analyzeExecution<const llvm::Value *>(
             calls, nameMap, [&dynamicAnalysisResults, &freeVarsMap, degree,
                              &patterns](MatchInfo<const llvm::Value *> match) {
@@ -355,18 +355,29 @@ cegarDriver(MonoPair<llvm::Module &> modules,
         z3::model z3Model = z3Solver.get_model();
         vals = parseZ3Model(z3Cxt, z3Model, nameMap, freeVarsMap);
     } while (1 /* sat */);
-    std::cerr << "The two programs have been proven equivalent\n";
-    auto invariantCandidates = makeInvariantDefinitions(
-        findSolutions(dynamicAnalysisResults.polynomialEquations),
-        dynamicAnalysisResults.heapPatternCandidates, freeVarsMap, DegreeFlag);
 
-    SMTGenerationOpts::initialize(
-        functions, SMTGenerationOpts::getInstance().Heap, false, false, false,
-        false, false, false, false, false, false, true, false, false,
-        invariantCandidates, {}, {});
-    vector<SharedSMTRef> clauses =
-        generateSMT(modules, analysisResults, fileOpts);
+    vector<SharedSMTRef> clauses;
+    switch (result) {
+    case LlreveResult::Equivalent: {
+        std::cerr << "The programs have been proven equivalent\n";
+        auto invariantCandidates = makeInvariantDefinitions(
+            findSolutions(dynamicAnalysisResults.polynomialEquations),
+            dynamicAnalysisResults.heapPatternCandidates, freeVarsMap,
+            DegreeFlag);
 
+        SMTGenerationOpts::initialize(
+            functions, SMTGenerationOpts::getInstance().Heap, false, false,
+            false, false, false, false, false, false, false, true, false, false,
+            invariantCandidates, {}, {});
+        clauses = generateSMT(modules, analysisResults, fileOpts);
+        break;
+    }
+    case LlreveResult::NotEquivalent: {
+        std::cerr << "The programs could not be proved equivalent\n";
+        clauses = {};
+        break;
+    }
+    }
     return clauses;
 }
 
