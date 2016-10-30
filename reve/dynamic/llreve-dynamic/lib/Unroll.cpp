@@ -501,23 +501,6 @@ set<BasicBlock *> blocksInLoop(llvm::BasicBlock *markedBlock,
     return blocks;
 }
 
-void UnrollPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
-    AU.addRequired<llvm::LoopInfoWrapperPass>();
-    AU.addRequired<llvm::DominatorTreeWrapperPass>();
-    AU.addRequired<MarkAnalysis>();
-    AU.setPreservesCFG(); // This is a horrible lie but it helps keeping the
-                          // mark analysis up2date
-}
-
-bool UnrollPass::runOnFunction(llvm::Function &f) {
-    getAnalysis<llvm::DominatorTreeWrapperPass>().getDomTree();
-    auto map = getAnalysis<MarkAnalysis>().getBlockMarkMap();
-    peelAtMark(f, Mark(2), map, "1");
-    return true;
-}
-
-char UnrollPass::ID = 0;
-
 BasicBlock *createUniqueBackedge(BasicBlock *markedBlock, BasicBlock *preHeader,
                                  const vector<BasicBlock *> &backedgeBlocks,
                                  llvm::Function &f) {

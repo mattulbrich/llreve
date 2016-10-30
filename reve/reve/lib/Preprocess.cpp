@@ -22,7 +22,6 @@
 #include "RemoveMarkRefsPass.h"
 #include "SplitEntryBlockPass.h"
 #include "UniqueNamePass.h"
-#include "Unroll.h"
 
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/LegacyPassManager.h"

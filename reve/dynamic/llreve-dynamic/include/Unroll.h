@@ -28,13 +28,6 @@ createUniqueBackedge(llvm::BasicBlock *markedBlock, llvm::BasicBlock *preHeader,
 llvm::BasicBlock *
 createPreheader(llvm::BasicBlock *markedBlock,
                 const std::vector<llvm::BasicBlock *> &outsideBlocks);
-class UnrollPass : public llvm::FunctionPass {
-  public:
-    static char ID;
-    void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
-    bool runOnFunction(llvm::Function &Fun) override;
-    UnrollPass() : llvm::FunctionPass(ID) {}
-};
 
 void unrollAtMark(llvm::Function &f, Mark mark, const BidirBlockMarkMap &marks,
                   size_t factor);
