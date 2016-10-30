@@ -67,9 +67,10 @@ template <typename T> std::unique_ptr<const smt::SMTExpr> resolveGEP(T &gep) {
                     smt::stringExpr("(_ bv" + std::to_string(size) + " 64)"),
                     std::move(smtIx)));
             } else {
-                args.push_back(
-                    smt::makeOp("*", smt::stringExpr(std::to_string(size)),
-                                std::move(smtIx)));
+                args.push_back(smt::makeOp(
+                    "*",
+                    std::make_unique<smt::ConstantInt>(llvm::APInt(64, size)),
+                    std::move(smtIx)));
             }
         }
     }
