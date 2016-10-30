@@ -9,6 +9,8 @@
  */
 #include "SExpr.h"
 
+#include <string>
+
 using namespace sexpr;
 
 using std::make_unique;
