@@ -37,14 +37,14 @@ vector<SharedSMTRef> generateSMT(MonoPair<const llvm::Module &> modules,
     std::vector<SortedVar> variableDeclarations;
     SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
 
-    if (smtOpts.MuZ == Z3Format::Enabled) {
+    if (smtOpts.OutputFormat == SMTFormat::Z3) {
         vector<std::unique_ptr<Type>> args;
         declarations.push_back(make_shared<smt::FunDecl>(
             "END_QUERY", std::move(args), boolType()));
     }
     std::vector<SharedSMTRef> assertions;
     std::vector<SharedSMTRef> smtExprs;
-    if (smtOpts.MuZ == Z3Format::Disabled && !smtOpts.Invert) {
+    if (smtOpts.OutputFormat == SMTFormat::SMTHorn && !smtOpts.Invert) {
         smtExprs.push_back(std::make_shared<SetLogic>("HORN"));
     }
 
@@ -97,7 +97,7 @@ vector<SharedSMTRef> generateSMT(MonoPair<const llvm::Module &> modules,
 
     smtExprs.insert(smtExprs.end(), declarations.begin(), declarations.end());
     smtExprs.insert(smtExprs.end(), assertions.begin(), assertions.end());
-    if (smtOpts.MuZ == Z3Format::Enabled) {
+    if (smtOpts.OutputFormat == SMTFormat::Z3) {
         smtExprs.push_back(make_shared<Query>("END_QUERY"));
     } else {
         smtExprs.push_back(make_shared<CheckSat>());

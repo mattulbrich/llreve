@@ -111,7 +111,7 @@ int main(int argc, const char **argv) {
         findMainFunction(moduleRefs, MainFunctionFlag),
         HeapFlag ? llreve::opts::Heap::Enabled : llreve::opts::Heap::Disabled,
         Stack::Disabled, GlobalConstants::Disabled, FunctionEncoding::Iterative,
-        ByteHeap::Enabled, false, Z3Format::Disabled,
+        ByteHeap::Enabled, false, SMTFormat::SMTHorn,
         PerfectSynchronization::Disabled, false, BoundedFlag, InvertFlag, false,
         false, {}, {}, inferCoupledFunctionsByName(moduleRefs));
 

@@ -131,7 +131,8 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
         [&freeVarsMap, funName](Mark startIndex, Mark endIndex) {
             SMTRef endInvariant =
                 mainInvariant(endIndex, freeVarsMap.at(endIndex), funName);
-            if (SMTGenerationOpts::getInstance().MuZ == Z3Format::Enabled &&
+            if (SMTGenerationOpts::getInstance().OutputFormat ==
+                    SMTFormat::Z3 &&
                 endIndex == EXIT_MARK) {
                 endInvariant =
                     makeOp("=>", makeOp("not", std::move(endInvariant)),

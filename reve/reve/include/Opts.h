@@ -43,7 +43,7 @@ enum class GlobalConstants { Enabled, Disabled };
 enum class FunctionEncoding { OnlyRecursive, Iterative };
 
 enum class ByteHeap { Enabled, Disabled };
-enum class Z3Format { Enabled, Disabled };
+enum class SMTFormat { Z3, SMTHorn };
 enum class PerfectSynchronization { Enabled, Disabled };
 
 /// Singleton for the options used for SMT generation to avoid having to pass
@@ -58,7 +58,7 @@ class SMTGenerationOpts {
     static void
     initialize(MonoPair<llvm::Function *> mainFunctions, Heap heap, Stack stack,
                GlobalConstants globalConstants, FunctionEncoding onlyRecursive,
-               ByteHeap byteHeap, bool everythingSigned, Z3Format muZ,
+               ByteHeap byteHeap, bool everythingSigned, SMTFormat muZ,
                PerfectSynchronization perfectSync, bool passInputThrough,
                bool bitvect, bool invert, bool initPredicate,
                bool disableAutoAbstraction,
@@ -72,7 +72,7 @@ class SMTGenerationOpts {
     FunctionEncoding OnlyRecursive;
     ByteHeap ByteHeap;
     bool EverythingSigned;
-    Z3Format MuZ;
+    SMTFormat OutputFormat;
     PerfectSynchronization PerfectSync;
     bool PassInputThrough;
     bool BitVect;

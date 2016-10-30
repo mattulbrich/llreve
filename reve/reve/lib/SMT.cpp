@@ -122,8 +122,9 @@ SExprRef Assert::toSExpr() const {
     std::vector<SExprRef> args;
     args.push_back(expr->toSExpr());
     const string keyword =
-        SMTGenerationOpts::getInstance().MuZ == Z3Format::Enabled ? "rule"
-                                                                  : "assert";
+        SMTGenerationOpts::getInstance().OutputFormat == SMTFormat::Z3
+            ? "rule"
+            : "assert";
     return make_unique<Apply>(keyword, std::move(args));
 }
 
@@ -181,11 +182,11 @@ SExprRef FunDecl::toSExpr() const {
     std::vector<SExprRef> args;
     args.push_back(stringExpr(funName)->toSExpr());
     args.push_back(make_unique<List>(std::move(inTypeSExprs)));
-    if (SMTGenerationOpts::getInstance().MuZ == Z3Format::Disabled) {
+    if (SMTGenerationOpts::getInstance().OutputFormat == SMTFormat::SMTHorn) {
         args.push_back(outType->toSExpr());
     }
     const string keyword =
-        SMTGenerationOpts::getInstance().MuZ == Z3Format::Enabled
+        SMTGenerationOpts::getInstance().OutputFormat == SMTFormat::Z3
             ? "declare-rel"
             : "declare-fun";
     return make_unique<Apply>(keyword, std::move(args));

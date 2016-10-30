@@ -30,7 +30,7 @@ llreve::cl::OptionCategory ReveCategory("Reve options",
 void SMTGenerationOpts::initialize(
     MonoPair<llvm::Function *> mainFunctions, enum Heap heap, enum Stack stack,
     enum GlobalConstants globalConstants, FunctionEncoding onlyRecursive,
-    enum ByteHeap byteHeap, bool everythingSigned, Z3Format muZ,
+    enum ByteHeap byteHeap, bool everythingSigned, SMTFormat muZ,
     enum PerfectSynchronization perfectSync, bool passInputThrough,
     bool bitVect, bool invert, bool initPredicate, bool disableAutoAbstraction,
     map<Mark, SharedSMTRef> invariants,
@@ -44,7 +44,7 @@ void SMTGenerationOpts::initialize(
     i.OnlyRecursive = onlyRecursive;
     i.ByteHeap = byteHeap;
     i.EverythingSigned = everythingSigned;
-    i.MuZ = muZ;
+    i.OutputFormat = muZ;
     i.PerfectSync = perfectSync;
     i.PassInputThrough = passInputThrough;
     i.BitVect = bitVect;

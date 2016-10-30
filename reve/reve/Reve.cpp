@@ -196,7 +196,7 @@ int main(int argc, const char **argv) {
         OnlyRecursiveFlag ? FunctionEncoding::OnlyRecursive
                           : FunctionEncoding::Iterative,
         NoByteHeapFlag ? ByteHeap::Disabled : ByteHeap::Enabled,
-        EverythingSignedFlag, MuZFlag ? Z3Format::Enabled : Z3Format::Disabled,
+        EverythingSignedFlag, MuZFlag ? SMTFormat::Z3 : SMTFormat::SMTHorn,
         PerfectSyncFlag ? PerfectSynchronization::Enabled
                         : PerfectSynchronization::Disabled,
         PassInputThroughFlag, BitVectFlag, InvertFlag, InitPredFlag,
@@ -217,7 +217,7 @@ int main(int argc, const char **argv) {
         generateSMT(moduleRefs, analysisResults, fileOpts);
 
     serializeSMT(smtExprs,
-                 SMTGenerationOpts::getInstance().MuZ == Z3Format::Enabled,
+                 SMTGenerationOpts::getInstance().OutputFormat == SMTFormat::Z3,
                  serializeOpts);
 
     llvm::llvm_shutdown();
