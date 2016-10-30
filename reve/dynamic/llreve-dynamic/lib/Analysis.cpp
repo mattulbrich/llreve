@@ -1153,57 +1153,6 @@ void dumpBounds(const BoundsMap &bounds) {
     }
 }
 
-map<Mark, map<ExitIndex, LoopInfoData<set<MonoPair<string>>>>>
-extractEqualities(const PolynomialEquations &polynomialEquations,
-                  const vector<string> &freeVars) {
-    map<Mark, map<ExitIndex, LoopInfoData<set<MonoPair<string>>>>> result;
-    for (auto mapIt : polynomialEquations) {
-        Mark mark = mapIt.first;
-        for (auto exitIndex : mapIt.second) {
-            result[mark].insert(
-                make_pair(exitIndex.first,
-                          LoopInfoData<set<MonoPair<string>>>({}, {}, {})));
-            for (size_t i = 0; i < freeVars.size(); ++i) {
-                for (size_t j = i + 1; j < freeVars.size(); ++j) {
-                    vector<mpq_class> test(freeVars.size(), 0);
-                    test.at(i) = 1;
-                    test.at(j) = -1;
-                    string firstVar = freeVars.at(i);
-                    string secondVar = freeVars.at(j);
-                    if (isZero(
-                            matrixTimesVector(exitIndex.second.left, test))) {
-                        result.at(mark)
-                            .at(exitIndex.first)
-                            .left.insert(makeMonoPair(firstVar, secondVar));
-                        result.at(mark)
-                            .at(exitIndex.first)
-                            .left.insert(makeMonoPair(secondVar, firstVar));
-                    }
-                    if (isZero(
-                            matrixTimesVector(exitIndex.second.right, test))) {
-                        result.at(mark)
-                            .at(exitIndex.first)
-                            .right.insert(makeMonoPair(firstVar, secondVar));
-                        result.at(mark)
-                            .at(exitIndex.first)
-                            .right.insert(makeMonoPair(secondVar, firstVar));
-                    }
-                    if (isZero(
-                            matrixTimesVector(exitIndex.second.none, test))) {
-                        result.at(mark)
-                            .at(exitIndex.first)
-                            .none.insert(makeMonoPair(firstVar, secondVar));
-                        result.at(mark)
-                            .at(exitIndex.first)
-                            .none.insert(makeMonoPair(secondVar, firstVar));
-                    }
-                }
-            }
-        }
-    }
-    return result;
-}
-
 void dumpLoopCounts(const LoopCountMap &loopCounts) {
     std::cerr << "----------\n";
     std::cerr << "LOOP COUNTS\n";

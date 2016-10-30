@@ -194,11 +194,6 @@ smt::SharedSMTRef makeBoundsDefinitions(
 PolynomialSolutions findSolutions(const PolynomialEquations &equationsMap);
 void dumpBounds(const BoundsMap &bounds);
 
-std::map<Mark,
-         std::map<ExitIndex, LoopInfoData<std::set<MonoPair<std::string>>>>>
-extractEqualities(const PolynomialEquations &equations,
-                  const std::vector<std::string> &freeVars);
-
 std::map<const llvm::Value *, VarVal> getVarMap(const llvm::Function *fun,
                                                 std::vector<mpz_class> vals);
 
