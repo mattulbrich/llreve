@@ -315,12 +315,7 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             dynamicAnalysisResults.heapPatternCandidates, freeVarsMap,
             DegreeFlag);
 
-        SMTGenerationOpts::initialize(
-            functions, SMTGenerationOpts::getInstance().Heap, Stack::Disabled,
-            GlobalConstants::Disabled, FunctionEncoding::Iterative,
-            ByteHeap::Enabled, false, Z3Format::Disabled,
-            PerfectSynchronization::Disabled, false, false, true, false, false,
-            invariantCandidates, {}, {});
+        SMTGenerationOpts::getInstance().Invariants = invariantCandidates;
         vector<SharedSMTRef> clauses =
             generateSMT(modules, analysisResults, fileOpts);
         z3Solver.reset();
@@ -373,12 +368,7 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             dynamicAnalysisResults.heapPatternCandidates, freeVarsMap,
             DegreeFlag);
 
-        SMTGenerationOpts::initialize(
-            functions, SMTGenerationOpts::getInstance().Heap, Stack::Disabled,
-            GlobalConstants::Disabled, FunctionEncoding::Iterative,
-            ByteHeap::Enabled, false, Z3Format::Disabled,
-            PerfectSynchronization::Disabled, false, false, true, false, false,
-            invariantCandidates, {}, {});
+        SMTGenerationOpts::getInstance().Invariants = invariantCandidates;
         clauses = generateSMT(modules, analysisResults, fileOpts);
         break;
     }
