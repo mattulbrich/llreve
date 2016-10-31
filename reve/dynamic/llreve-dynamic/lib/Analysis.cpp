@@ -262,10 +262,6 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             calls, nameMap, [&dynamicAnalysisResults, &freeVarsMap, degree,
                              &patterns](MatchInfo<const llvm::Value *> match) {
                 ExitIndex exitIndex = getExitIndex(match);
-                VarMap<const llvm::Value *> variables(
-                    match.steps.first->state.variables);
-                variables.insert(match.steps.second->state.variables.begin(),
-                                 match.steps.second->state.variables.end());
                 findLoopCounts<const llvm::Value *>(
                     dynamicAnalysisResults.loopCounts, match);
                 populateEquationsMap(dynamicAnalysisResults.polynomialEquations,
