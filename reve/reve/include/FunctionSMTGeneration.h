@@ -27,8 +27,6 @@
 #include <regex>
 #include <tuple>
 
-using FAMRef = std::shared_ptr<llvm::FunctionAnalysisManager>;
-
 auto dropTypesFreeVars(FreeVarsMap map)
     -> std::map<int, std::vector<std::string>>;
 
