@@ -314,6 +314,5 @@ auto nestLets(SharedSMTRef clause, std::vector<Assignment> defs)
 auto isArray(std::string) -> bool;
 
 auto apIntToSMT(llvm::APInt i) -> smt::SharedSMTRef;
-auto intToSMT(std::string i, unsigned bitWidth) -> smt::SharedSMTRef;
 
 auto getSMTType(std::string var) -> std::string;
