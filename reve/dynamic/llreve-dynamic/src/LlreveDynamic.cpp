@@ -107,6 +107,9 @@ int main(int argc, const char **argv) {
     PM.run(*modules.second);
     MonoPair<llvm::Module &> moduleRefs = {*modules.first, *modules.second};
 
+    if (CegarFlag) {
+        InvertFlag = true;
+    }
     SMTGenerationOpts::initialize(
         findMainFunction(moduleRefs, MainFunctionFlag),
         HeapFlag ? llreve::opts::Heap::Enabled : llreve::opts::Heap::Disabled,
