@@ -96,7 +96,14 @@ vector<SharedSMTRef> generateSMT(MonoPair<const llvm::Module &> modules,
                                    declarations);
 
     smtExprs.insert(smtExprs.end(), declarations.begin(), declarations.end());
-    smtExprs.insert(smtExprs.end(), assertions.begin(), assertions.end());
+    if (SMTGenerationOpts::getInstance().Invert) {
+        smtExprs.push_back(
+            make_unique<Assert>(make_unique<Op>("or", assertions)));
+    } else {
+        for (const auto &assertion : assertions) {
+            smtExprs.push_back(make_unique<Assert>(assertion));
+        }
+    }
     if (smtOpts.OutputFormat == SMTFormat::Z3) {
         smtExprs.push_back(make_shared<Query>("END_QUERY"));
     } else {

@@ -49,9 +49,6 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
     const auto funArgsPair =
         getFunctionArguments(preprocessedFuns, analysisResults);
     const auto freeVarsMap = getFreeVarsMap(preprocessedFuns, analysisResults);
-    vector<SharedSMTRef> smtExprs;
-    vector<SharedSMTRef> pathExprs;
-
     const auto synchronizedPaths = getSynchronizedPaths(
         pathMaps.first, pathMaps.second, freeVarsMap,
         [&freeVarsMap, funName](Mark startIndex, Mark endIndex) {
@@ -59,16 +56,19 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
                              freeVarsMap.at(endIndex), ProgramSelection::Both,
                              funName, freeVarsMap);
         });
+
+    map<MarkPair, vector<SharedSMTRef>> smtExprs;
     for (const auto &it : synchronizedPaths) {
         const SharedSMTRef endInvariant =
             invariant(it.first.startMark, it.first.endMark,
                       freeVarsMap.at(it.first.startMark),
                       freeVarsMap.at(it.first.endMark), ProgramSelection::Both,
                       funName, freeVarsMap);
-        for (const auto &clause : it.second) {
-            pathExprs.push_back(make_shared<Assert>(forallStartingAt(
-                clause, freeVarsMap.at(it.first.startMark), it.first.startMark,
-                ProgramSelection::Both, funName, false, freeVarsMap)));
+        for (const auto &path : it.second) {
+            auto clause = forallStartingAt(
+                path, freeVarsMap.at(it.first.startMark), it.first.startMark,
+                ProgramSelection::Both, funName, false, freeVarsMap);
+            smtExprs[it.first].push_back(clause);
         }
     }
 
@@ -76,9 +76,10 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
         getForbiddenPaths(pathMaps, marked, freeVarsMap, funName, false);
     for (const auto &it : forbiddenPaths) {
         for (const auto &path : it.second) {
-            pathExprs.push_back(make_shared<Assert>(forallStartingAt(
-                path, freeVarsMap.at(it.first), it.first,
-                ProgramSelection::Both, funName, false, freeVarsMap)));
+            auto clause = forallStartingAt(path, freeVarsMap.at(it.first),
+                                           it.first, ProgramSelection::Both,
+                                           funName, false, freeVarsMap);
+            smtExprs[{it.first, FORBIDDEN_MARK}].push_back(clause);
         }
     }
 
@@ -87,21 +88,22 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
         const auto offByNPaths = getOffByNPaths(pathMaps.first, pathMaps.second,
                                                 freeVarsMap, funName, false);
         for (const auto &it : offByNPaths) {
-            for (const auto &clause : it.second) {
-                pathExprs.push_back(make_shared<Assert>(
-                    forallStartingAt(clause, freeVarsMap.at(it.first.startMark),
+            for (const auto &path : it.second) {
+                auto clause =
+                    forallStartingAt(path, freeVarsMap.at(it.first.startMark),
                                      it.first.startMark, ProgramSelection::Both,
-                                     funName, false, freeVarsMap)));
+                                     funName, false, freeVarsMap);
+                smtExprs[{it.first.startMark, it.first.startMark}].push_back(
+                    clause);
             }
         }
     }
 
-    smtExprs.insert(smtExprs.end(), pathExprs.begin(), pathExprs.end());
-
-    return smtExprs;
+    return clauseMapToClauseVector(smtExprs);
 }
 
-// the main function that we want to check doesn’t need the output parameters in
+// the main function that we want to check doesn’t need the output
+// parameters in
 // the assertions since it is never called
 vector<SharedSMTRef>
 relationalIterativeAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
@@ -150,24 +152,13 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
         synchronizedPaths = mergeVectorMaps(synchronizedPaths, offByNPaths);
     }
 
-    vector<SharedSMTRef> negations;
+    map<MarkPair, vector<SharedSMTRef>> clauses;
     for (const auto &it : synchronizedPaths) {
         for (auto &path : it.second) {
             auto clause = forallStartingAt(
                 path, freeVarsMap.at(it.first.startMark), it.first.startMark,
                 ProgramSelection::Both, funName, true, freeVarsMap);
-            if (SMTGenerationOpts::getInstance().Invert) {
-                negations.push_back(makeOp(
-                    "and", makeOp("=", "INV_INDEX_START",
-                                  std::make_unique<ConstantInt>(llvm::APInt(
-                                      64, it.first.startMark.toString(), 10))),
-                    makeOp("=", "INV_INDEX_END",
-                           std::make_unique<ConstantInt>(llvm::APInt(
-                               64, it.first.endMark.toString(), 10))),
-                    makeOp("not", clause)));
-            } else {
-                smtExprs.push_back(make_shared<Assert>(clause));
-            }
+            clauses[it.first].push_back(clause);
         }
     }
     for (const auto &it : forbiddenPaths) {
@@ -175,29 +166,15 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
             auto clause = forallStartingAt(path, freeVarsMap.at(it.first),
                                            it.first, ProgramSelection::Both,
                                            funName, true, freeVarsMap);
-            if (SMTGenerationOpts::getInstance().Invert) {
-                // TODO implement inverting of forbidden paths
-                negations.push_back(makeOp(
-                    "and", makeOp("=", "INV_INDEX_START",
-                                  std::make_unique<ConstantInt>(llvm::APInt(
-                                      64, it.first.toString(), 10))),
-                    makeOp("=", "INV_INDEX_FALSE",
-                           std::make_unique<ConstantInt>(
-                               llvm::APInt(64, FORBIDDEN_MARK.toString(), 10))),
-                    makeOp("not", clause)));
-            } else {
-                smtExprs.push_back(make_unique<Assert>(clause));
-            }
+            clauses[{it.first, FORBIDDEN_MARK}].push_back(clause);
         }
     }
-    if (SMTGenerationOpts::getInstance().Invert) {
-        smtExprs.push_back(
-            make_shared<Assert>(make_shared<Op>("or", negations)));
-    }
-    return smtExprs;
+
+    return clauseMapToClauseVector(clauses);
 }
 
-/* -------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------
+ */
 // Generate SMT for all paths
 
 map<MarkPair, vector<SharedSMTRef>>
@@ -278,7 +255,8 @@ getForbiddenPaths(MonoPair<PathMap> pathMaps,
                                     path1, Program::First,
                                     freeVarsMap.at(startIndex),
                                     endIndex1 == EXIT_MARK);
-                                // We need to interleave here, because otherwise
+                                // We need to interleave here, because
+                                // otherwise
                                 // extern functions are not matched
                                 const auto smt = interleaveAssignments(
                                     make_unique<ConstantBool>(false),
@@ -308,7 +286,7 @@ functionalFunctionAssertions(const llvm::Function *f,
 vector<SharedSMTRef> nonmutualPaths(PathMap pathMap, FreeVarsMap freeVarsMap,
                                     Program prog, string funName,
                                     const llvm::Type *returnType) {
-    vector<SharedSMTRef> smtExprs;
+    map<MarkPair, vector<SharedSMTRef>> smtExprs;
     const int progIndex = programIndex(prog);
     for (const auto &pathMapIt : pathMap) {
         const Mark startIndex = pathMapIt.first;
@@ -322,15 +300,16 @@ vector<SharedSMTRef> nonmutualPaths(PathMap pathMap, FreeVarsMap freeVarsMap,
                 const auto defs =
                     assignmentsOnPath(path, prog, freeVarsMap.at(startIndex),
                                       endIndex == EXIT_MARK);
-                smtExprs.push_back(make_shared<Assert>(forallStartingAt(
+                auto clause = forallStartingAt(
                     nonmutualSMT(std::move(endInvariant1), defs, prog),
                     filterVars(progIndex, freeVarsMap.at(startIndex)),
-                    startIndex, asSelection(prog), funName, false,
-                    freeVarsMap)));
+                    startIndex, asSelection(prog), funName, false, freeVarsMap);
+                smtExprs[{startIndex, endIndex}].push_back(clause);
             }
         }
     }
-    return smtExprs;
+
+    return clauseMapToClauseVector(smtExprs);
 }
 
 map<MarkPair, vector<SharedSMTRef>> getOffByNPaths(PathMap pathMap1,
@@ -404,7 +383,8 @@ offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
     return clauses;
 }
 
-/* -------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------
+ */
 // Functions for generating SMT for a single/mutual path
 
 vector<AssignmentCallBlock> assignmentsOnPath(Path path, Program prog,
@@ -671,7 +651,8 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
     return std::make_unique<Forall>(vars, clause);
 }
 
-/* -------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------
+ */
 // Functions forcing arguments to be equal
 
 SharedSMTRef makeFunArgsEqual(SharedSMTRef clause, SharedSMTRef preClause,
@@ -692,7 +673,8 @@ SharedSMTRef makeFunArgsEqual(SharedSMTRef clause, SharedSMTRef preClause,
     return makeOp("=>", std::move(inInv), makeOp("and", clause, preClause));
 }
 
-/// Create an assertion to require that if the recursive invariant holds and the
+/// Create an assertion to require that if the recursive invariant holds and
+/// the
 /// arguments are equal the outputs are equal
 SharedSMTRef equalInputsEqualOutputs(vector<SortedVar> funArgs,
                                      vector<SortedVar> funArgs1,
@@ -951,4 +933,34 @@ void generateRelationalIterativeSMT(
                       newAssertions.end());
     declarations.insert(declarations.end(), newDeclarations.begin(),
                         newDeclarations.end());
+}
+
+vector<SharedSMTRef>
+clauseMapToClauseVector(const map<MarkPair, vector<SharedSMTRef>> &clauseMap) {
+    if (SMTGenerationOpts::getInstance().Invert) {
+        vector<SharedSMTRef> clauses;
+        for (const auto it : clauseMap) {
+            vector<SharedSMTRef> clausesForMark;
+            for (const auto &path : it.second) {
+                clausesForMark.push_back(makeOp("not", path));
+            }
+            clauses.push_back(makeOp(
+                "and", makeOp("=", "INV_INDEX_START",
+                              std::make_unique<ConstantInt>(llvm::APInt(
+                                  64, it.first.startMark.toString(), 10))),
+                makeOp("=", "INV_INDEX_FALSE",
+                       std::make_unique<ConstantInt>(
+                           llvm::APInt(64, it.first.endMark.toString(), 10))),
+                make_unique<Op>("or", clausesForMark)));
+        }
+        return clauses;
+    } else {
+        vector<SharedSMTRef> clauses;
+        for (const auto it : clauseMap) {
+            for (const auto &clause : it.second) {
+                clauses.push_back(clause);
+            }
+        }
+        return clauses;
+    }
 }

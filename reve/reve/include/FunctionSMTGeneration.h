@@ -213,3 +213,7 @@ auto generateRelationalIterativeSMT(
     const AnalysisResultsMap &analysisResults,
     std::vector<smt::SharedSMTRef> &assertions,
     std::vector<smt::SharedSMTRef> &declarations) -> void;
+
+auto clauseMapToClauseVector(
+    const std::map<MarkPair, std::vector<smt::SharedSMTRef>> &clauseMap)
+    -> std::vector<smt::SharedSMTRef>;
