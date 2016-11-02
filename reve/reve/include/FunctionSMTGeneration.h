@@ -116,7 +116,8 @@ auto getForbiddenPaths(MonoPair<PathMap> pathMaps,
     -> std::map<Mark, std::vector<smt::SharedSMTRef>>;
 /// Get the assertions for a single program
 auto nonmutualPaths(PathMap pathMap, FreeVarsMap freeVarsMap, Program prog,
-                    std::string funName, const llvm::Type *type)
+                    std::string funName, const llvm::Type *type,
+                    std::vector<smt::SharedSMTRef> functionNumeralConstraints)
     -> std::vector<smt::SharedSMTRef>;
 auto getOffByNPaths(PathMap pathMap1, PathMap pathMap2, FreeVarsMap freeVarsMap,
                     std::string funName, bool main)
@@ -214,6 +215,12 @@ auto generateRelationalIterativeSMT(
     std::vector<smt::SharedSMTRef> &assertions,
     std::vector<smt::SharedSMTRef> &declarations) -> void;
 
+auto getFunctionNumeralConstraints(const llvm::Function *f, Program prog)
+    -> std::vector<smt::SharedSMTRef>;
+auto getFunctionNumeralConstraints(MonoPair<const llvm::Function *> functions)
+    -> std::vector<smt::SharedSMTRef>;
 auto clauseMapToClauseVector(
-    const std::map<MarkPair, std::vector<smt::SharedSMTRef>> &clauseMap)
+    const std::map<MarkPair, std::vector<smt::SharedSMTRef>> &clauseMap,
+    bool main, ProgramSelection programSelection,
+    std::vector<smt::SharedSMTRef> functionNumeralConstraints)
     -> std::vector<smt::SharedSMTRef>;

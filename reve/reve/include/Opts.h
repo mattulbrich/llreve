@@ -64,7 +64,8 @@ class SMTGenerationOpts {
                bool disableAutoAbstraction,
                std::map<Mark, smt::SharedSMTRef> invariants,
                std::set<MonoPair<const llvm::Function *>> assumeEquivalent,
-               std::set<MonoPair<llvm::Function *>> coupleFunctions);
+               std::set<MonoPair<llvm::Function *>> coupleFunctions,
+               std::map<const llvm::Function *, int> functionNumerals);
     MonoPair<llvm::Function *> MainFunctions;
     Heap Heap;
     Stack Stack;
@@ -86,6 +87,9 @@ class SMTGenerationOpts {
     // The order in the pairs is normalized so that the first function is always
     // in the first module.
     std::set<MonoPair<llvm::Function *>> CoupledFunctions;
+    // This map is used when serializing in inverted mode to identify which
+    // functions a clause belongs to
+    std::map<const llvm::Function *, int> FunctionNumerals;
 
   private:
     SMTGenerationOpts() : MainFunctions({nullptr, nullptr}) {}
@@ -186,5 +190,10 @@ bool hasFixedAbstraction(const llvm::Function &function);
 auto addConstToFunctionPairSet(
     std::set<MonoPair<llvm::Function *>> functionPairs)
     -> std::set<MonoPair<const llvm::Function *>>;
+
+// These maps are needed when serializing in inverted mode to mark the functions
+// a clause belongs to
+auto generateFunctionMap(MonoPair<const llvm::Module &> modules)
+    -> std::map<const llvm::Function *, int>;
 }
 }

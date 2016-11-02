@@ -40,15 +40,14 @@ using namespace smt;
 using namespace llreve::opts;
 
 vector<SharedSMTRef>
-relationalFunctionAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
+relationalFunctionAssertions(MonoPair<const llvm::Function *> functions,
                              const AnalysisResultsMap &analysisResults) {
-    const auto pathMaps = getPathMaps(preprocessedFuns, analysisResults);
+    const auto pathMaps = getPathMaps(functions, analysisResults);
     checkPathMaps(pathMaps.first, pathMaps.second);
-    const auto marked = getBlockMarkMaps(preprocessedFuns, analysisResults);
-    const string funName = getFunctionName(preprocessedFuns);
-    const auto funArgsPair =
-        getFunctionArguments(preprocessedFuns, analysisResults);
-    const auto freeVarsMap = getFreeVarsMap(preprocessedFuns, analysisResults);
+    const auto marked = getBlockMarkMaps(functions, analysisResults);
+    const string funName = getFunctionName(functions);
+    const auto funArgsPair = getFunctionArguments(functions, analysisResults);
+    const auto freeVarsMap = getFreeVarsMap(functions, analysisResults);
     const auto synchronizedPaths = getSynchronizedPaths(
         pathMaps.first, pathMaps.second, freeVarsMap,
         [&freeVarsMap, funName](Mark startIndex, Mark endIndex) {
@@ -99,25 +98,25 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
         }
     }
 
-    return clauseMapToClauseVector(smtExprs);
+    return clauseMapToClauseVector(smtExprs, false, ProgramSelection::Both,
+                                   getFunctionNumeralConstraints(functions));
 }
 
 // the main function that we want to check doesn’t need the output
 // parameters in
 // the assertions since it is never called
 vector<SharedSMTRef>
-relationalIterativeAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
+relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
                               const AnalysisResultsMap &analysisResults) {
-    const auto pathMaps = getPathMaps(preprocessedFuns, analysisResults);
+    const auto pathMaps = getPathMaps(functions, analysisResults);
     checkPathMaps(pathMaps.first, pathMaps.second);
-    const auto marked = getBlockMarkMaps(preprocessedFuns, analysisResults);
-    const string funName = getFunctionName(preprocessedFuns);
-    const auto funArgsPair =
-        getFunctionArguments(preprocessedFuns, analysisResults);
-    const auto freeVarsMap = getFreeVarsMap(preprocessedFuns, analysisResults);
+    const auto marked = getBlockMarkMaps(functions, analysisResults);
+    const string funName = getFunctionName(functions);
+    const auto funArgsPair = getFunctionArguments(functions, analysisResults);
+    const auto freeVarsMap = getFreeVarsMap(functions, analysisResults);
     vector<SharedSMTRef> smtExprs;
 
-    const llvm::Type *returnType = preprocessedFuns.first->getReturnType();
+    const llvm::Type *returnType = functions.first->getReturnType();
     if (SMTGenerationOpts::getInstance().OnlyRecursive ==
         FunctionEncoding::OnlyRecursive) {
         smtExprs.push_back(
@@ -170,7 +169,8 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> preprocessedFuns,
         }
     }
 
-    return clauseMapToClauseVector(clauses);
+    return clauseMapToClauseVector(clauses, true, ProgramSelection::Both,
+                                   getFunctionNumeralConstraints(functions));
 }
 
 /* --------------------------------------------------------------------------
@@ -281,11 +281,13 @@ functionalFunctionAssertions(const llvm::Function *f,
     const auto returnType = f->getReturnType();
     const auto funArgs = analysisResults.at(f).functionArguments;
     const auto freeVarsMap = analysisResults.at(f).freeVariables;
-    return nonmutualPaths(pathMap, freeVarsMap, prog, funName, returnType);
+    return nonmutualPaths(pathMap, freeVarsMap, prog, funName, returnType,
+                          getFunctionNumeralConstraints(f, prog));
 }
-vector<SharedSMTRef> nonmutualPaths(PathMap pathMap, FreeVarsMap freeVarsMap,
-                                    Program prog, string funName,
-                                    const llvm::Type *returnType) {
+vector<SharedSMTRef>
+nonmutualPaths(PathMap pathMap, FreeVarsMap freeVarsMap, Program prog,
+               string funName, const llvm::Type *returnType,
+               vector<SharedSMTRef> functionNumeralConstraints) {
     map<MarkPair, vector<SharedSMTRef>> smtExprs;
     const int progIndex = programIndex(prog);
     for (const auto &pathMapIt : pathMap) {
@@ -309,7 +311,8 @@ vector<SharedSMTRef> nonmutualPaths(PathMap pathMap, FreeVarsMap freeVarsMap,
         }
     }
 
-    return clauseMapToClauseVector(smtExprs);
+    return clauseMapToClauseVector(smtExprs, false, asSelection(prog),
+                                   functionNumeralConstraints);
 }
 
 map<MarkPair, vector<SharedSMTRef>> getOffByNPaths(PathMap pathMap1,
@@ -936,22 +939,37 @@ void generateRelationalIterativeSMT(
 }
 
 vector<SharedSMTRef>
-clauseMapToClauseVector(const map<MarkPair, vector<SharedSMTRef>> &clauseMap) {
+clauseMapToClauseVector(const map<MarkPair, vector<SharedSMTRef>> &clauseMap,
+                        bool main, ProgramSelection programSelection,
+                        vector<SharedSMTRef> functionNumeralConstraints) {
     if (SMTGenerationOpts::getInstance().Invert) {
+        bool program1 = oneOf(programSelection, ProgramSelection::First,
+                              ProgramSelection::Both);
+        bool program2 = oneOf(programSelection, ProgramSelection::Second,
+                              ProgramSelection::Both);
         vector<SharedSMTRef> clauses;
         for (const auto it : clauseMap) {
             vector<SharedSMTRef> clausesForMark;
             for (const auto &path : it.second) {
                 clausesForMark.push_back(makeOp("not", path));
             }
-            clauses.push_back(makeOp(
-                "and", makeOp("=", "INV_INDEX_START",
-                              std::make_unique<ConstantInt>(llvm::APInt(
-                                  64, it.first.startMark.toString(), 10))),
+            vector<SharedSMTRef> conjuncts = functionNumeralConstraints;
+            conjuncts.push_back(
+                makeOp("=", "INV_INDEX_START",
+                       std::make_unique<ConstantInt>(llvm::APInt(
+                           64, it.first.startMark.toString(), 10))));
+            conjuncts.push_back(
                 makeOp("=", "INV_INDEX_FALSE",
                        std::make_unique<ConstantInt>(
-                           llvm::APInt(64, it.first.endMark.toString(), 10))),
-                make_unique<Op>("or", clausesForMark)));
+                           llvm::APInt(64, it.first.endMark.toString(), 10))));
+            conjuncts.push_back(
+                makeOp("=", "MAIN", std::make_unique<ConstantBool>(main)));
+            conjuncts.push_back(makeOp(
+                "=", "PROGRAM_1", std::make_unique<ConstantBool>(program1)));
+            conjuncts.push_back(makeOp(
+                "=", "PROGRAM_2", std::make_unique<ConstantBool>(program2)));
+            conjuncts.push_back(make_unique<Op>("or", clausesForMark));
+            clauses.push_back(make_unique<Op>("and", conjuncts));
         }
         return clauses;
     } else {
@@ -963,4 +981,25 @@ clauseMapToClauseVector(const map<MarkPair, vector<SharedSMTRef>> &clauseMap) {
         }
         return clauses;
     }
+}
+
+vector<SharedSMTRef> getFunctionNumeralConstraints(const llvm::Function *f,
+                                                   Program prog) {
+    string name = prog == Program::First ? "FUNCTION_1" : "FUNCTION_2";
+    return {makeOp(
+        "=", name,
+        std::make_unique<ConstantInt>(llvm::APInt(
+            64, SMTGenerationOpts::getInstance().FunctionNumerals.at(f))))};
+}
+
+vector<SharedSMTRef>
+getFunctionNumeralConstraints(MonoPair<const llvm::Function *> functions) {
+    return {makeOp("=", "FUNCTION_1",
+                   std::make_unique<ConstantInt>(llvm::APInt(
+                       64, SMTGenerationOpts::getInstance().FunctionNumerals.at(
+                               functions.first)))),
+            makeOp("=", "FUNCTIONS_2",
+                   std::make_unique<ConstantInt>(llvm::APInt(
+                       64, SMTGenerationOpts::getInstance().FunctionNumerals.at(
+                               functions.second))))};
 }

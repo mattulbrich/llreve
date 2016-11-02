@@ -204,7 +204,8 @@ int main(int argc, const char **argv) {
         addConstToFunctionPairSet(lookupFunctionNamePairs(
             moduleRefs, parseFunctionPairFlags(AssumeEquivalentFlags))),
         getCoupledFunctions(moduleRefs, DisableAutoCouplingFlag,
-                            parseFunctionPairFlags(CoupleFunctionsFlag)));
+                            parseFunctionPairFlags(CoupleFunctionsFlag)),
+        generateFunctionMap(moduleRefs));
 
     llvm::legacy::PassManager PM;
     PM.add(llvm::createStripSymbolsPass(true));

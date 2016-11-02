@@ -35,7 +35,8 @@ void SMTGenerationOpts::initialize(
     bool bitVect, bool invert, bool initPredicate, bool disableAutoAbstraction,
     map<Mark, SharedSMTRef> invariants,
     set<MonoPair<const llvm::Function *>> assumeEquivalent,
-    set<MonoPair<llvm::Function *>> coupledFunctions) {
+    set<MonoPair<llvm::Function *>> coupledFunctions,
+    map<const llvm::Function *, int> functionNumerals) {
     SMTGenerationOpts &i = getInstance();
     i.MainFunctions = mainFunctions;
     i.Heap = heap;
@@ -54,6 +55,7 @@ void SMTGenerationOpts::initialize(
     i.Invert = invert;
     i.AssumeEquivalent = assumeEquivalent;
     i.CoupledFunctions = coupledFunctions;
+    i.FunctionNumerals = functionNumerals;
 }
 
 void parseCommandLineArguments(int argc, const char **argv) {
@@ -321,6 +323,22 @@ bool hasMutualFixedAbstraction(MonoPair<const llvm::Function *> functions) {
 
 bool hasFixedAbstraction(const llvm::Function &function) {
     return function.isDeclaration();
+}
+
+map<const llvm::Function *, int>
+generateFunctionMap(MonoPair<const llvm::Module &> modules) {
+    map<const llvm::Function *, int> functionNumerals;
+    unsigned i = 0;
+    for (const auto &function : modules.first) {
+        functionNumerals.insert({&function, i});
+        ++i;
+    }
+    i = 0;
+    for (const auto &function : modules.second) {
+        functionNumerals.insert({&function, i});
+        ++i;
+    }
+    return functionNumerals;
 }
 }
 }
