@@ -823,8 +823,14 @@ void VarDecl::toZ3(z3::context &cxt, z3::solver & /* unused */,
         if (!it.second) {
             it.first->second = c;
         }
+    } else if (var.type->getTag() == TypeTag::Bool) {
+        z3::expr c = cxt.bool_const(var.name.c_str());
+        auto it = nameMap.insert({var.name, c});
+        if (!it.second) {
+            it.first->second = c;
+        }
     } else {
-        std::cerr << "Unsupported type\n";
+        logError("Unsupported type\n");
         exit(1);
     }
 }

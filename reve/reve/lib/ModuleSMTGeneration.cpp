@@ -98,6 +98,19 @@ vector<SharedSMTRef> generateSMT(MonoPair<const llvm::Module &> modules,
     smtExprs.insert(smtExprs.end(), declarations.begin(), declarations.end());
     if (SMTGenerationOpts::getInstance().Invert) {
         smtExprs.push_back(
+            make_unique<VarDecl>(SortedVar("INV_INDEX_START", int64Type())));
+        smtExprs.push_back(
+            make_unique<VarDecl>(SortedVar("INV_INDEX_END", int64Type())));
+        smtExprs.push_back(
+            make_unique<VarDecl>(SortedVar("FUNCTION_1", int64Type())));
+        smtExprs.push_back(
+            make_unique<VarDecl>(SortedVar("FUNCTION_2", int64Type())));
+        smtExprs.push_back(make_unique<VarDecl>(SortedVar("MAIN", boolType())));
+        smtExprs.push_back(
+            make_unique<VarDecl>(SortedVar("PROGRAM_1", boolType())));
+        smtExprs.push_back(
+            make_unique<VarDecl>(SortedVar("PROGRAM_2", boolType())));
+        smtExprs.push_back(
             make_unique<Assert>(make_unique<Op>("or", assertions)));
     } else {
         for (const auto &assertion : assertions) {

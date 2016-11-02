@@ -307,12 +307,6 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             z3Clauses.push_back(clause->removeForalls(introducedVariables));
         }
 
-        // these variables are not quantified otherwise so we need to add them
-        // separately
-        VarDecl({"INV_INDEX_START", int64Type()})
-            .toZ3(z3Cxt, z3Solver, nameMap, defineFunMap);
-        VarDecl({"INV_INDEX_END", int64Type()})
-            .toZ3(z3Cxt, z3Solver, nameMap, defineFunMap);
         for (const auto &var : introducedVariables) {
             VarDecl(var).toZ3(z3Cxt, z3Solver, nameMap, defineFunMap);
         }

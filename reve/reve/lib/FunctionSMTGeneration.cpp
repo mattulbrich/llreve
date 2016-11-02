@@ -959,7 +959,7 @@ clauseMapToClauseVector(const map<MarkPair, vector<SharedSMTRef>> &clauseMap,
                        std::make_unique<ConstantInt>(llvm::APInt(
                            64, it.first.startMark.toString(), 10))));
             conjuncts.push_back(
-                makeOp("=", "INV_INDEX_FALSE",
+                makeOp("=", "INV_INDEX_END",
                        std::make_unique<ConstantInt>(
                            llvm::APInt(64, it.first.endMark.toString(), 10))));
             conjuncts.push_back(
@@ -998,7 +998,7 @@ getFunctionNumeralConstraints(MonoPair<const llvm::Function *> functions) {
                    std::make_unique<ConstantInt>(llvm::APInt(
                        64, SMTGenerationOpts::getInstance().FunctionNumerals.at(
                                functions.first)))),
-            makeOp("=", "FUNCTIONS_2",
+            makeOp("=", "FUNCTION_2",
                    std::make_unique<ConstantInt>(llvm::APInt(
                        64, SMTGenerationOpts::getInstance().FunctionNumerals.at(
                                functions.second))))};
