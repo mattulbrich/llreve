@@ -151,7 +151,8 @@ driver(MonoPair<llvm::Module &> modules, AnalysisResultsMap &analysisResults,
         findSolutions(dynamicAnalysisResults.polynomialEquations),
         dynamicAnalysisResults.heapPatternCandidates, freeVarsMap, DegreeFlag);
     if (!ImplicationsFlag) {
-        SMTGenerationOpts::getInstance().Invariants = invariantCandidates;
+        SMTGenerationOpts::getInstance().IterativeRelationalInvariants =
+            invariantCandidates;
     }
     // TODO pass all functions
     vector<SharedSMTRef> clauses =
@@ -295,7 +296,8 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             dynamicAnalysisResults.heapPatternCandidates, freeVarsMap,
             DegreeFlag);
 
-        SMTGenerationOpts::getInstance().Invariants = invariantCandidates;
+        SMTGenerationOpts::getInstance().IterativeRelationalInvariants =
+            invariantCandidates;
         vector<SharedSMTRef> clauses =
             generateSMT(modules, analysisResults, fileOpts);
         z3Solver.reset();
@@ -342,7 +344,8 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             dynamicAnalysisResults.heapPatternCandidates, freeVarsMap,
             DegreeFlag);
 
-        SMTGenerationOpts::getInstance().Invariants = invariantCandidates;
+        SMTGenerationOpts::getInstance().IterativeRelationalInvariants =
+            invariantCandidates;
         clauses = generateSMT(modules, analysisResults, fileOpts);
         break;
     }

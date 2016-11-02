@@ -33,7 +33,11 @@ void SMTGenerationOpts::initialize(
     enum ByteHeap byteHeap, bool everythingSigned, SMTFormat muZ,
     enum PerfectSynchronization perfectSync, bool passInputThrough,
     bool bitVect, bool invert, bool initPredicate, bool disableAutoAbstraction,
-    map<Mark, SharedSMTRef> invariants,
+    map<Mark, SharedSMTRef> iterativeRelationalInvariants,
+    map<const llvm::Function *, map<Mark, FunctionalInvariant>>
+        functionalFunctionalInvariants,
+    map<MonoPair<const llvm::Function *>, map<Mark, FunctionalInvariant>>
+        functionalRelationalInvariants,
     set<MonoPair<const llvm::Function *>> assumeEquivalent,
     set<MonoPair<llvm::Function *>> coupledFunctions,
     map<const llvm::Function *, int> functionNumerals) {
@@ -51,7 +55,9 @@ void SMTGenerationOpts::initialize(
     i.BitVect = bitVect;
     i.InitPredicate = initPredicate;
     i.DisableAutoAbstraction = disableAutoAbstraction;
-    i.Invariants = invariants;
+    i.IterativeRelationalInvariants = iterativeRelationalInvariants;
+    i.FunctionalFunctionalInvariants = functionalFunctionalInvariants;
+    i.FunctionalRelationalInvariants = functionalRelationalInvariants;
     i.Invert = invert;
     i.AssumeEquivalent = assumeEquivalent;
     i.CoupledFunctions = coupledFunctions;

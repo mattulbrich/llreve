@@ -166,3 +166,39 @@ template <typename U, typename... T> bool oneOf(U &&u, T &&... t) {
     (void)std::initializer_list<bool>{(match = match || u == t)...};
     return match;
 }
+
+template <typename K1, typename K2, typename V>
+void nestedLookup(
+    std::map<K1, std::map<K2, V>> map, const K1 &key1, const K2 &key2,
+    std::function<void(typename std::map<K2, V>::iterator)> ifTrue,
+    std::function<void(void)> ifFalse) {
+    auto outerFound = map.find(key1);
+    if (outerFound == map.end()) {
+        return ifFalse();
+    } else {
+        auto innerFound = outerFound->second.find(key2);
+        if (innerFound == outerFound->second.end()) {
+            return ifFalse();
+        } else {
+            return ifTrue(innerFound);
+        }
+    }
+}
+
+template <typename K1, typename K2, typename V, typename R>
+void nestedLookup(std::map<K1, std::map<K2, V>> map, const K1 &key1,
+                  const K2 &key2,
+                  std::function<R(typename std::map<K2, V>::iterator)> ifTrue,
+                  std::function<R(void)> ifFalse) {
+    auto outerFound = map.find(key1);
+    if (outerFound == map.end()) {
+        return ifFalse();
+    } else {
+        auto innerFound = outerFound->second.find(key2);
+        if (innerFound == outerFound->second.end()) {
+            return ifFalse();
+        } else {
+            return ifTrue(innerFound);
+        }
+    }
+}

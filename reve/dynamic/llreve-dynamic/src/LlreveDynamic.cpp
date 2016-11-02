@@ -117,7 +117,7 @@ int main(int argc, const char **argv) {
         Stack::Disabled, GlobalConstants::Disabled, FunctionEncoding::Iterative,
         ByteHeap::Enabled, false, SMTFormat::SMTHorn,
         PerfectSynchronization::Disabled, false, BoundedFlag, InvertFlag, false,
-        false, {}, {}, inferCoupledFunctionsByName(moduleRefs),
+        false, {}, {}, {}, {}, inferCoupledFunctionsByName(moduleRefs),
         generateFunctionMap(moduleRefs));
 
     AnalysisResultsMap analysisResults =

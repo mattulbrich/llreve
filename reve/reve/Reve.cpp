@@ -200,7 +200,7 @@ int main(int argc, const char **argv) {
         PerfectSyncFlag ? PerfectSynchronization::Enabled
                         : PerfectSynchronization::Disabled,
         PassInputThroughFlag, BitVectFlag, InvertFlag, InitPredFlag,
-        DisableAutoAbstraction, {},
+        DisableAutoAbstraction, {}, {}, {},
         addConstToFunctionPairSet(lookupFunctionNamePairs(
             moduleRefs, parseFunctionPairFlags(AssumeEquivalentFlags))),
         getCoupledFunctions(moduleRefs, DisableAutoCouplingFlag,
