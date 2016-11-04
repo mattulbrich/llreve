@@ -154,8 +154,6 @@ void dumpPolynomials(
     const IterativeInvariantMap<PolynomialEquations> &equationsMap,
     const FreeVarsMap &freeVarsmap);
 void dumpHeapPatterns(const HeapPatternCandidatesMap &heapPatternsMap);
-PolynomialSolutions
-findSolutions(const IterativeInvariantMap<PolynomialEquations> &equationsMap);
 void dumpBounds(const BoundsMap &bounds);
 
 FastVarMap getVarMap(const llvm::Function *fun, std::vector<mpz_class> vals);

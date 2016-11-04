@@ -1,6 +1,7 @@
 #include "llreve/dynamic/Invariant.h"
 
 #include "llreve/dynamic/Interpreter.h"
+#include "llreve/dynamic/Linear.h"
 #include "llreve/dynamic/Util.h"
 
 using std::map;
@@ -23,10 +24,11 @@ static std::unique_ptr<ConstantInt> smtFromMpz(unsigned bitWidth, mpz_class i) {
         llvm::APInt(bitWidth, i.get_str(), 10));
 }
 
-map<Mark, SharedSMTRef>
-makeInvariantDefinitions(const PolynomialSolutions &solutions,
-                         const HeapPatternCandidatesMap &patterns,
-                         const FreeVarsMap &freeVarsMap, size_t degree) {
+map<Mark, SharedSMTRef> makeInvariantDefinitions(
+    const IterativeInvariantMap<PolynomialEquations> &equations,
+    const HeapPatternCandidatesMap &patterns, const FreeVarsMap &freeVarsMap,
+    size_t degree) {
+    const auto solutions = findSolutions(equations);
     map<Mark, SharedSMTRef> definitions;
     for (auto mapIt : freeVarsMap) {
         Mark mark = mapIt.first;
@@ -196,6 +198,38 @@ SharedSMTRef makeEquation(const vector<mpz_class> &eq,
         }
     }
     return makeOp("=", leftSide, rightSide);
+}
+
+PolynomialSolutions findSolutions(
+    const IterativeInvariantMap<PolynomialEquations> &polynomialEquations) {
+    PolynomialSolutions map;
+    for (auto eqMapIt : polynomialEquations) {
+        Mark mark = eqMapIt.first;
+        for (auto exitMapIt : eqMapIt.second) {
+            ExitIndex exitIndex = exitMapIt.first;
+            LoopInfoData<Matrix<mpq_class>> m = LoopInfoData<Matrix<mpq_class>>(
+                nullSpace(exitMapIt.second.left),
+                nullSpace(exitMapIt.second.right),
+                nullSpace(exitMapIt.second.none));
+
+            Matrix<mpz_class> nLeft(m.left.size());
+            Matrix<mpz_class> nRight(m.right.size());
+            Matrix<mpz_class> nNone(m.none.size());
+            LoopInfoData<Matrix<mpz_class>> n =
+                LoopInfoData<Matrix<mpz_class>>(nLeft, nRight, nNone);
+            for (size_t i = 0; i < n.left.size(); ++i) {
+                n.left.at(i) = ratToInt(m.left.at(i));
+            }
+            for (size_t i = 0; i < n.right.size(); ++i) {
+                n.right.at(i) = ratToInt(m.right.at(i));
+            }
+            for (size_t i = 0; i < n.none.size(); ++i) {
+                n.none.at(i) = ratToInt(m.none.at(i));
+            }
+            map[mark].insert(make_pair(exitMapIt.first, n));
+        }
+    }
+    return map;
 }
 }
 }
