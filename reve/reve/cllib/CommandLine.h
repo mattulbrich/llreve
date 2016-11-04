@@ -1151,13 +1151,14 @@ template <> struct applicator<MiscFlags> {
 };
 
 // apply method - Apply modifiers to an option in a type safe way.
+// The underscore is only here to prevent name clashes with llvm
 template <class Opt, class Mod, class... Mods>
-void apply(Opt *O, const Mod &M, const Mods &... Ms) {
+void apply_(Opt *O, const Mod &M, const Mods &... Ms) {
     applicator<Mod>::opt(M, *O);
-    apply(O, Ms...);
+    apply_(O, Ms...);
 }
 
-template <class Opt, class Mod> void apply(Opt *O, const Mod &M) {
+template <class Opt, class Mod> void apply_(Opt *O, const Mod &M) {
     applicator<Mod>::opt(M, *O);
 }
 
@@ -1328,7 +1329,7 @@ class opt : public Option,
     template <class... Mods>
     explicit opt(const Mods &... Ms)
         : Option(Optional, NotHidden), Parser(*this) {
-        apply(this, Ms...);
+        llreve::cl::apply_(this, Ms...);
         done();
     }
 };
@@ -1498,7 +1499,7 @@ class list : public Option, public list_storage<DataType, StorageClass> {
     template <class... Mods>
     explicit list(const Mods &... Ms)
         : Option(ZeroOrMore, NotHidden), Parser(*this) {
-        apply(this, Ms...);
+        apply_(this, Ms...);
         done();
     }
 };
