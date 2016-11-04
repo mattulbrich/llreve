@@ -32,3 +32,12 @@ Program asProgram(ProgramSelection prog) {
         return Program::First;
     }
 }
+
+std::string resultName(Program prog) {
+    switch (prog) {
+    case Program::First:
+        return "result$1";
+    case Program::Second:
+        return "result$2";
+    }
+}

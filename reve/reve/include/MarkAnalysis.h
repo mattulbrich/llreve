@@ -36,6 +36,7 @@ struct Mark {
     inline int asInt() const { return index; }
     friend std::ostream &operator<<(std::ostream &out, const Mark &mark);
     std::string toString() const;
+    bool hasInvariant() const;
 };
 
 inline std::ostream &operator<<(std::ostream &out, const Mark &mark) {

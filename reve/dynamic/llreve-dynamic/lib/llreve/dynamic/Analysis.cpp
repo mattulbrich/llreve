@@ -292,9 +292,19 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             dynamicAnalysisResults.polynomialEquations,
             dynamicAnalysisResults.heapPatternCandidates, freeVarsMap,
             DegreeFlag);
+        // TODO actually pass equations here
+        auto relationalFunctionInvariantCandidates =
+            makeRelationalFunctionInvariantDefinitions({}, analysisResults,
+                                                       DegreeFlag);
+        auto functionInvariantCandidates = makeFunctionInvariantDefinitions(
+            modules, {}, analysisResults, DegreeFlag);
 
         SMTGenerationOpts::getInstance().IterativeRelationalInvariants =
             invariantCandidates;
+        SMTGenerationOpts::getInstance().FunctionalRelationalInvariants =
+            relationalFunctionInvariantCandidates;
+        SMTGenerationOpts::getInstance().FunctionalFunctionalInvariants =
+            functionInvariantCandidates;
         vector<SharedSMTRef> clauses =
             generateSMT(modules, analysisResults, fileOpts);
         z3Solver.reset();
@@ -322,7 +332,7 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             std::cout << "Sat\n";
             break;
         case z3::unknown:
-            std::cout << "Fuck why is this unknown\n";
+            std::cout << "Why is this unknown :(\n";
             exit(1);
         }
         if (unsat) {

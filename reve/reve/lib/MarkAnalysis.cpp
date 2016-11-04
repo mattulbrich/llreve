@@ -10,6 +10,8 @@
 
 #include "MarkAnalysis.h"
 
+#include "Helper.h"
+
 #include <iostream>
 
 #include "llvm/Analysis/LoopInfo.h"
@@ -21,6 +23,10 @@ using std::make_pair;
 using std::set;
 
 std::string Mark::toString() const { return std::to_string(index); }
+
+bool Mark::hasInvariant() const {
+    return noneOf(*this, EXIT_MARK, UNREACHABLE_MARK, FORBIDDEN_MARK);
+}
 
 char MarkAnalysis::ID = 0;
 

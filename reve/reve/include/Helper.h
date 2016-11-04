@@ -167,6 +167,12 @@ template <typename U, typename... T> bool oneOf(U &&u, T &&... t) {
     return match;
 }
 
+template <typename U, typename... T> bool noneOf(U &&u, T &&... t) {
+    bool match = true;
+    (void)std::initializer_list<bool>{(match = match && u != t)...};
+    return match;
+}
+
 template <typename K1, typename K2, typename V>
 void nestedLookup(
     std::map<K1, std::map<K2, V>> map, const K1 &key1, const K2 &key2,

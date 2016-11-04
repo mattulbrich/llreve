@@ -1,5 +1,6 @@
 #include "llreve/dynamic/Invariant.h"
 
+#include "Invariant.h"
 #include "llreve/dynamic/Interpreter.h"
 #include "llreve/dynamic/Linear.h"
 #include "llreve/dynamic/Util.h"
@@ -33,7 +34,6 @@ map<Mark, SharedSMTRef> makeIterativeInvariantDefinitions(
     for (auto mapIt : freeVarsMap) {
         Mark mark = mapIt.first;
         vector<SortedVar> args;
-        vector<string> stringArgs;
         for (const auto &var : filterVars(1, freeVarsMap.at(mark))) {
             args.push_back(var);
         }
@@ -83,6 +83,106 @@ map<Mark, SharedSMTRef> makeIterativeInvariantDefinitions(
         definitions[mark] =
             make_shared<FunDef>(invariantName, args, boolType(),
                                 make_shared<Op>("or", exitClauses));
+    }
+    return definitions;
+}
+
+RelationalFunctionInvariantMap<FunctionalInvariant>
+makeRelationalFunctionInvariantDefinitions(
+    const RelationalFunctionInvariantMap<PolynomialEquations> &equations,
+    const AnalysisResultsMap &analysisResults, size_t degree) {
+    RelationalFunctionInvariantMap<FunctionalInvariant> definitions;
+    for (const auto &coupledFunctions :
+         SMTGenerationOpts::getInstance().CoupledFunctions) {
+        // Taking the intersection of the freevars maps would be the correct
+        // thing to do here but defining too many functions does no harm and
+        // intersecting maps is a pain in the ass in c++
+        for (const auto mapIt :
+             analysisResults.at(coupledFunctions.first).freeVariables) {
+            const AnalysisResults &analysisResults1 =
+                analysisResults.at(coupledFunctions.first);
+            const AnalysisResults &analysisResults2 =
+                analysisResults.at(coupledFunctions.second);
+            Mark mark = mapIt.first;
+            if (!mark.hasInvariant()) {
+                continue;
+            }
+            vector<SortedVar> invariantArgsPost;
+            vector<SortedVar> invariantArgsPre;
+            invariantArgsPost.insert(
+                invariantArgsPost.end(),
+                analysisResults1.freeVariables.at(mark).begin(),
+                analysisResults1.freeVariables.at(mark).end());
+            invariantArgsPost.insert(
+                invariantArgsPost.end(),
+                analysisResults2.freeVariables.at(mark).begin(),
+                analysisResults2.freeVariables.at(mark).end());
+            invariantArgsPre = invariantArgsPost;
+            invariantArgsPost.push_back({"result$1", int64Type()});
+            invariantArgsPost.push_back({"result$2", int64Type()});
+            string preName = invariantName(mark, ProgramSelection::Both,
+                                           getFunctionName(coupledFunctions),
+                                           InvariantAttr::PRE);
+            string postName = invariantName(mark, ProgramSelection::Both,
+                                            getFunctionName(coupledFunctions));
+            auto preInv =
+                make_shared<FunDef>(preName, invariantArgsPre, boolType(),
+                                    make_unique<ConstantBool>(false));
+            auto postInv =
+                make_shared<FunDef>(postName, invariantArgsPost, boolType(),
+                                    make_unique<ConstantBool>(false));
+            definitions[coupledFunctions].insert({mark, {preInv, postInv}});
+        }
+    }
+    return definitions;
+}
+
+FunctionInvariantMap<FunctionalInvariant> makeFunctionInvariantDefinitions(
+    MonoPair<const llvm::Module &> modules,
+    const FunctionInvariantMap<PolynomialEquations> &equations,
+    const AnalysisResultsMap &analysisResults, size_t degree) {
+    auto invariants = makeFunctionInvariantDefinitions(
+        modules.first, equations, analysisResults, Program::First, degree);
+    auto invariants2 = makeFunctionInvariantDefinitions(
+        modules.second, equations, analysisResults, Program::Second, degree);
+    invariants.insert(invariants2.begin(), invariants2.end());
+    return invariants;
+}
+
+FunctionInvariantMap<FunctionalInvariant> makeFunctionInvariantDefinitions(
+    const llvm::Module &module,
+    const FunctionInvariantMap<PolynomialEquations> &equations,
+    const AnalysisResultsMap &analysisResults, Program prog, size_t degree) {
+    FunctionInvariantMap<FunctionalInvariant> definitions;
+    for (const auto &function : module) {
+        if (hasFixedAbstraction(function)) {
+            continue;
+        }
+        for (const auto mapIt : analysisResults.at(&function).freeVariables) {
+            const Mark mark = mapIt.first;
+            if (!mark.hasInvariant()) {
+                continue;
+            }
+            vector<SortedVar> invariantArgsPost;
+            vector<SortedVar> invariantArgsPre;
+            invariantArgsPost.insert(invariantArgsPost.end(),
+                                     mapIt.second.begin(), mapIt.second.end());
+            invariantArgsPre = invariantArgsPost;
+            invariantArgsPost.push_back({resultName(prog), int64Type()});
+            string preName =
+                invariantName(mark, asSelection(prog), function.getName(),
+                              InvariantAttr::PRE);
+            string postName =
+                invariantName(mark, asSelection(prog), function.getName());
+            auto preInv =
+                make_unique<FunDef>(preName, invariantArgsPre, boolType(),
+                                    make_unique<ConstantBool>(false));
+            auto postInv =
+                make_unique<FunDef>(postName, invariantArgsPost, boolType(),
+                                    make_unique<ConstantBool>(false));
+            definitions[&function].insert(
+                {mark, {std::move(preInv), std::move(postInv)}});
+        }
     }
     return definitions;
 }
