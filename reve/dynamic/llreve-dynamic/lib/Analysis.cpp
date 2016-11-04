@@ -555,10 +555,10 @@ vector<vector<string>> polynomialTermsOfDegree(vector<smt::SortedVar> variables,
     }
 }
 
-void populateEquationsMap(PolynomialEquations &polynomialEquations,
-                          FreeVarsMap freeVarsMap,
-                          MatchInfo<const llvm::Value *> match,
-                          ExitIndex exitIndex, size_t degree) {
+void populateEquationsMap(
+    IterativeInvariantMap<PolynomialEquations> &polynomialEquations,
+    FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match,
+    ExitIndex exitIndex, size_t degree) {
     VarMap<string> variables;
     for (auto varIt : match.steps.first->state.variables) {
         variables.insert(std::make_pair(varIt.first->getName(), varIt.second));
@@ -797,8 +797,8 @@ void debugAnalysis(MatchInfo<const llvm::Value *> match) {
     std::cerr << std::endl << std::endl;
 }
 
-PolynomialSolutions
-findSolutions(const PolynomialEquations &polynomialEquations) {
+PolynomialSolutions findSolutions(
+    const IterativeInvariantMap<PolynomialEquations> &polynomialEquations) {
     PolynomialSolutions map;
     for (auto eqMapIt : polynomialEquations) {
         Mark mark = eqMapIt.first;
@@ -829,8 +829,9 @@ findSolutions(const PolynomialEquations &polynomialEquations) {
     return map;
 }
 
-void dumpPolynomials(const PolynomialEquations &equationsMap,
-                     const FreeVarsMap &freeVarsMap) {
+void dumpPolynomials(
+    const IterativeInvariantMap<PolynomialEquations> &equationsMap,
+    const FreeVarsMap &freeVarsMap) {
     llvm::errs() << "------------------\n";
     PolynomialSolutions solutions = findSolutions(equationsMap);
     for (auto eqMapIt : solutions) {
@@ -1292,9 +1293,10 @@ MergedAnalysisResults mergeAnalysisResults(MergedAnalysisResults res1,
     return result;
 }
 
-PolynomialEquations mergePolynomialEquations(PolynomialEquations eq1,
-                                             PolynomialEquations eq2) {
-    PolynomialEquations result = eq1;
+IterativeInvariantMap<PolynomialEquations>
+mergePolynomialEquations(IterativeInvariantMap<PolynomialEquations> eq1,
+                         IterativeInvariantMap<PolynomialEquations> eq2) {
+    IterativeInvariantMap<PolynomialEquations> result = eq1;
     for (auto it : eq2) {
         Mark mark = it.first;
         for (auto innerIt : it.second) {

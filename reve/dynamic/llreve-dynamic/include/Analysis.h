@@ -89,12 +89,17 @@ Heap randomHeap(const llvm::Function &fun, const FastVarMap &variableValues,
                 unsigned int *seedp);
 
 using Equality = MonoPair<std::string>;
-using PolynomialEquations =
-    std::map<Mark, std::map<ExitIndex,
-                            LoopInfoData<std::vector<std::vector<mpq_class>>>>>;
+template <typename V>
+using IterativeInvariantMap = std::map<Mark, std::map<ExitIndex, V>>;
+template <typename V>
+using RelationalFunctionInvariantMap =
+    std::map<MonoPair<const llvm::Function *>, std::map<Mark, V>>;
+template <typename V>
+using FunctionInvariantMap =
+    std::map<MonoPair<const llvm::Function *>, std::map<Mark, V>>;
+using PolynomialEquations = LoopInfoData<std::vector<std::vector<mpq_class>>>;
 using PolynomialSolutions =
-    std::map<Mark, std::map<ExitIndex,
-                            LoopInfoData<std::vector<std::vector<mpz_class>>>>>;
+    IterativeInvariantMap<LoopInfoData<std::vector<std::vector<mpz_class>>>>;
 
 using LoopCountMap = std::map<Mark, std::vector<MonoPair<int>>>;
 
@@ -169,17 +174,18 @@ void instantiateBounds(
 BoundsMap updateBounds(
     BoundsMap accumulator,
     const std::map<Mark, std::map<std::string, Bound<VarIntVal>>> &update);
-void populateEquationsMap(PolynomialEquations &equationsMap,
-                          FreeVarsMap freeVarsMap,
-                          MatchInfo<const llvm::Value *> match,
-                          ExitIndex exitIndex, size_t degree);
+void populateEquationsMap(
+    IterativeInvariantMap<PolynomialEquations> &equationsMap,
+    FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match,
+    ExitIndex exitIndex, size_t degree);
 void populateHeapPatterns(
     HeapPatternCandidatesMap &heapPatternCandidates,
     std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
     FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match,
     ExitIndex exitIndex);
-void dumpPolynomials(const PolynomialEquations &equationsMap,
-                     const FreeVarsMap &freeVarsmap);
+void dumpPolynomials(
+    const IterativeInvariantMap<PolynomialEquations> &equationsMap,
+    const FreeVarsMap &freeVarsmap);
 void dumpHeapPatterns(const HeapPatternCandidatesMap &heapPatternsMap);
 std::map<Mark, smt::SharedSMTRef>
 makeInvariantDefinitions(const PolynomialSolutions &solutions,
@@ -195,7 +201,8 @@ smt::SharedSMTRef makeEquation(const std::vector<mpz_class> &eq,
                                size_t degree);
 smt::SharedSMTRef makeBoundsDefinitions(
     const std::map<std::string, Bound<llvm::Optional<VarIntVal>>> &bounds);
-PolynomialSolutions findSolutions(const PolynomialEquations &equationsMap);
+PolynomialSolutions
+findSolutions(const IterativeInvariantMap<PolynomialEquations> &equationsMap);
 void dumpBounds(const BoundsMap &bounds);
 
 FastVarMap getVarMap(const llvm::Function *fun, std::vector<mpz_class> vals);
@@ -401,11 +408,12 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
 
 LoopCountsAndMark mergeLoopCounts(LoopCountsAndMark counts1,
                                   LoopCountsAndMark counts2);
-PolynomialEquations mergePolynomialEquations(PolynomialEquations eq1,
-                                             PolynomialEquations eq2);
+IterativeInvariantMap<PolynomialEquations>
+mergePolynomialEquations(IterativeInvariantMap<PolynomialEquations> eq1,
+                         IterativeInvariantMap<PolynomialEquations> eq2);
 struct MergedAnalysisResults {
     LoopCountsAndMark loopCounts;
-    PolynomialEquations polynomialEquations;
+    IterativeInvariantMap<PolynomialEquations> polynomialEquations;
     HeapPatternCandidatesMap heapPatternCandidates;
 };
 
