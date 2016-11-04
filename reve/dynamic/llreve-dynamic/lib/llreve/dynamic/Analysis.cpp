@@ -8,20 +8,20 @@
  * See LICENSE (distributed with this file) for details.
  */
 
-#include "Analysis.h"
+#include "llreve/dynamic/Analysis.h"
 
 #include "Compat.h"
-#include "HeapPattern.h"
-#include "Interpreter.h"
-#include "Linear.h"
 #include "MarkAnalysis.h"
 #include "ModuleSMTGeneration.h"
 #include "MonoPair.h"
 #include "PathAnalysis.h"
-#include "Peel.h"
 #include "Serialize.h"
-#include "SerializeTraces.h"
-#include "Unroll.h"
+#include "llreve/dynamic/HeapPattern.h"
+#include "llreve/dynamic/Interpreter.h"
+#include "llreve/dynamic/Linear.h"
+#include "llreve/dynamic/Peel.h"
+#include "llreve/dynamic/SerializeTraces.h"
+#include "llreve/dynamic/Unroll.h"
 
 #include <fstream>
 #include <iostream>

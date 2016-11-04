@@ -8,7 +8,7 @@
  * See LICENSE (distributed with this file) for details.
  */
 
-#include "Model.h"
+#include "llreve/dynamic/Model.h"
 
 #include "Helper.h"
 

@@ -1,5 +1,5 @@
 %{
-#include "HeapPattern.h"
+#include "llreve/dynamic/HeapPattern.h"
 extern "C" int yylex(void);
  using namespace llreve::dynamic;
 

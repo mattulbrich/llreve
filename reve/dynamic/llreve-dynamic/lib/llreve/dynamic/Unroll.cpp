@@ -8,14 +8,14 @@
  * See LICENSE (distributed with this file) for details.
  */
 
-#include "Unroll.h"
+#include "llreve/dynamic/Unroll.h"
 
 #include <iostream>
 #include <queue>
 #include <set>
 
 #include "MonoPair.h"
-#include "Transform.h"
+#include "llreve/dynamic/Transform.h"
 
 #include "llvm/Analysis/LoopIterator.h"
 #include "llvm/IR/IRBuilder.h"

@@ -8,7 +8,7 @@
  * See LICENSE (distributed with this file) for details.
  */
 
-#include "Integer.h"
+#include "llreve/dynamic/Integer.h"
 
 #include <cassert>
 

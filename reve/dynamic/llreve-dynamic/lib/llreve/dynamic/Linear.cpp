@@ -8,7 +8,7 @@
  * See LICENSE (distributed with this file) for details.
  */
 
-#include "Linear.h"
+#include "llreve/dynamic/Linear.h"
 
 #include <gmpxx.h>
 

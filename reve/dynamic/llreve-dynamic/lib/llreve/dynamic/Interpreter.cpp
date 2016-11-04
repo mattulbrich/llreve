@@ -8,7 +8,7 @@
  * See LICENSE (distributed with this file) for details.
  */
 
-#include "Interpreter.h"
+#include "llreve/dynamic/Interpreter.h"
 
 #include "Compat.h"
 #include "Helper.h"

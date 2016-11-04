@@ -25,21 +25,21 @@ find_package(GMP)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
-include_directories(include ${CMAKE_CURRENT_SOURCE_DIR}/../../reve/include ${LLVM_INCLUDE_DIRS} ${GMP_INCLUDE_DIR} ${Z3_INCLUDE_DIR})
+include_directories(include ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../../reve/include ${LLVM_INCLUDE_DIRS} ${GMP_INCLUDE_DIR} ${Z3_INCLUDE_DIR})
 add_definitions(${LLVM_DEFINITIONS})
 
 find_package(BISON)
 find_package(FLEX)
 
-file(GLOB sources lib/*.cpp)
-file(GLOB headers include/*.h)
+file(GLOB sources lib/llreve/dynamic/*.cpp)
+file(GLOB headers include/llreve/dynamic/*.h)
 
-BISON_TARGET(PatternParser lib/PatternParser.y ${CMAKE_CURRENT_BINARY_DIR}/PatternParser.cpp)
-FLEX_TARGET(PatternLexer lib/PatternLexer.l  ${CMAKE_CURRENT_BINARY_DIR}/PatternLexer.cpp)
+BISON_TARGET(PatternParser lib/llreve/dynamic/PatternParser.y ${CMAKE_CURRENT_BINARY_DIR}/llreve/dynamic/PatternParser.cpp)
+FLEX_TARGET(PatternLexer lib/llreve/dynamic/PatternLexer.l  ${CMAKE_CURRENT_BINARY_DIR}/llreve/dynamic/PatternLexer.cpp)
 ADD_FLEX_BISON_DEPENDENCY(PatternLexer PatternParser)
 
-BISON_TARGET(SMTParser lib/SMTParser.y ${CMAKE_CURRENT_BINARY_DIR}/SMTParser.cpp)
-FLEX_TARGET(SMTLexer lib/SMTLexer.l  ${CMAKE_CURRENT_BINARY_DIR}/SMTLexer.cpp)
+BISON_TARGET(SMTParser lib/llreve/dynamic/SMTParser.y ${CMAKE_CURRENT_BINARY_DIR}/llreve/dynamic/SMTParser.cpp)
+FLEX_TARGET(SMTLexer lib/llreve/dynamic/SMTLexer.l  ${CMAKE_CURRENT_BINARY_DIR}/llreve/dynamic/SMTLexer.cpp)
 ADD_FLEX_BISON_DEPENDENCY(SMTLexer SMTParser)
 
 set_source_files_properties(${BISON_PatternParser_OUTPUTS} PROPERTIES COMPILE_FLAGS "-Wno-everything")

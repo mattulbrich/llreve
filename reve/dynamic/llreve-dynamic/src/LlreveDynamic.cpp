@@ -12,15 +12,15 @@
 #include <string>
 #include <vector>
 
-#include "Analysis.h"
 #include "Compat.h"
 #include "Compile.h"
-#include "Model.h"
 #include "ModuleSMTGeneration.h"
 #include "Opts.h"
 #include "Preprocess.h"
 #include "Serialize.h"
-#include "SerializeTraces.h"
+#include "llreve/dynamic/Analysis.h"
+#include "llreve/dynamic/Model.h"
+#include "llreve/dynamic/SerializeTraces.h"
 
 #include "clang/Driver/Compilation.h"
 

@@ -8,10 +8,10 @@
  * See LICENSE (distributed with this file) for details.
  */
 
-#include "SerializeTraces.h"
+#include "llreve/dynamic/SerializeTraces.h"
 
-#include "Interpreter.h"
-#include "ThreadSafeQueue.h"
+#include "llreve/dynamic/Interpreter.h"
+#include "llreve/dynamic/ThreadSafeQueue.h"
 
 #include <fstream>
 #include <iostream>

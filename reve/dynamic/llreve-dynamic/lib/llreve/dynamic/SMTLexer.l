@@ -2,8 +2,8 @@
 %option prefix="smt"
 %{
 #include <iostream>
-#include "Model.h"
-#include "SMTParser.hpp"
+#include "llreve/dynamic/Model.h"
+#include "llreve/dynamic/SMTParser.hpp"
 extern "C" {
 int smtlex(void);
 }

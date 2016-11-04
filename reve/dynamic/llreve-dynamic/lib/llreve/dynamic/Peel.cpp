@@ -1,4 +1,4 @@
-#include "Peel.h"
+#include "llreve/dynamic/Peel.h"
 
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CFG.h"
@@ -9,7 +9,7 @@
 #include "llvm/Transforms/Utils/SSAUpdater.h"
 
 #include "MonoPair.h"
-#include "Transform.h"
+#include "llreve/dynamic/Transform.h"
 
 using std::set;
 using std::vector;

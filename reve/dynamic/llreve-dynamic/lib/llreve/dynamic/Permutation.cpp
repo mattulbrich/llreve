@@ -8,7 +8,7 @@
  * See LICENSE (distributed with this file) for details.
  */
 
-#include "Permutation.h"
+#include "llreve/dynamic/Permutation.h"
 
 #include <set>
 #include <vector>

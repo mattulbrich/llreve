@@ -8,7 +8,7 @@
  * See LICENSE (distributed with this file) for details.
  */
 
-#include "HeapPattern.h"
+#include "llreve/dynamic/HeapPattern.h"
 
 namespace llreve {
 namespace dynamic {

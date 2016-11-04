@@ -1,8 +1,8 @@
 %option noyywrap
 %{
 #include <iostream>
-#include "HeapPattern.h"
-#include "PatternParser.hpp"
+#include "llreve/dynamic/HeapPattern.h"
+#include "llreve/dynamic/PatternParser.hpp"
 extern "C" {
 int yylex(void);
 }

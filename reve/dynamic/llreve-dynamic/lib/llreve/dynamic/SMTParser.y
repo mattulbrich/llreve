@@ -1,7 +1,7 @@
 %define api.prefix {smt}
 %define parse.error verbose
 %{
-#include "Model.h"
+#include "llreve/dynamic/Model.h"
 #include <iostream>
 static std::shared_ptr<Result> result;
 extern "C" int smtlex(void);

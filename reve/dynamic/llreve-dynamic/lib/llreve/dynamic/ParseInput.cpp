@@ -8,7 +8,7 @@
  * See LICENSE (distributed with this file) for details.
  */
 
-#include "ParseInput.h"
+#include "llreve/dynamic/ParseInput.h"
 
 #include <fstream>
 
