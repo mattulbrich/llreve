@@ -22,6 +22,8 @@
 #include "Permutation.h"
 #include "Preprocess.h"
 
+#include "llreve/dynamic/Invariant.h"
+
 #include "llvm/IR/Module.h"
 
 #include <thread>
@@ -39,21 +41,6 @@ enum class LoopInfo {
 
 enum class LlreveResult { Equivalent, NotEquivalent };
 
-template <typename T> struct Bound {
-    T lower;
-    T upper;
-    Bound(T lower, T upper) : lower(lower), upper(upper) {}
-};
-
-template <typename T> struct LoopInfoData {
-    T left;
-    T right;
-    T none;
-    LoopInfoData() = default;
-    LoopInfoData(T left, T right, T none)
-        : left(left), right(right), none(none) {}
-};
-
 template <typename T1, typename T2>
 void zipWith(LoopInfoData<T1> &loop1, LoopInfoData<T2> &loop2,
              std::function<void(T1 &, T2 &)> f) {
@@ -62,16 +49,7 @@ void zipWith(LoopInfoData<T1> &loop1, LoopInfoData<T2> &loop2,
     f(loop1.none, loop2.none);
 }
 
-using ExitIndex = mpz_class;
-
 using BlockNameMap = std::map<std::string, std::set<Mark>>;
-using HeapPatternCandidates =
-    std::list<std::shared_ptr<HeapPattern<const llvm::Value *>>>;
-using HeapPatternCandidatesMap = std::map<
-    Mark,
-    std::map<ExitIndex, LoopInfoData<llvm::Optional<HeapPatternCandidates>>>>;
-using BoundsMap =
-    std::map<Mark, std::map<std::string, Bound<llvm::Optional<VarIntVal>>>>;
 
 std::vector<smt::SharedSMTRef>
 driver(MonoPair<llvm::Module &> modules, AnalysisResultsMap &analysisResults,
@@ -89,17 +67,6 @@ Heap randomHeap(const llvm::Function &fun, const FastVarMap &variableValues,
                 unsigned int *seedp);
 
 using Equality = MonoPair<std::string>;
-template <typename V>
-using IterativeInvariantMap = std::map<Mark, std::map<ExitIndex, V>>;
-template <typename V>
-using RelationalFunctionInvariantMap =
-    std::map<MonoPair<const llvm::Function *>, std::map<Mark, V>>;
-template <typename V>
-using FunctionInvariantMap =
-    std::map<MonoPair<const llvm::Function *>, std::map<Mark, V>>;
-using PolynomialEquations = LoopInfoData<std::vector<std::vector<mpq_class>>>;
-using PolynomialSolutions =
-    IterativeInvariantMap<LoopInfoData<std::vector<std::vector<mpz_class>>>>;
 
 using LoopCountMap = std::map<Mark, std::vector<MonoPair<int>>>;
 
@@ -187,20 +154,6 @@ void dumpPolynomials(
     const IterativeInvariantMap<PolynomialEquations> &equationsMap,
     const FreeVarsMap &freeVarsmap);
 void dumpHeapPatterns(const HeapPatternCandidatesMap &heapPatternsMap);
-std::map<Mark, smt::SharedSMTRef>
-makeInvariantDefinitions(const PolynomialSolutions &solutions,
-                         const HeapPatternCandidatesMap &patterns,
-                         const FreeVarsMap &freeVarsMap, size_t degree);
-smt::SharedSMTRef
-makeInvariantDefinition(const std::vector<std::vector<mpz_class>> &solution,
-                        const HeapPatternCandidates &candidates,
-                        const std::vector<smt::SortedVar> &freeVars,
-                        size_t degree);
-smt::SharedSMTRef makeEquation(const std::vector<mpz_class> &eq,
-                               const std::vector<smt::SortedVar> &freeVars,
-                               size_t degree);
-smt::SharedSMTRef makeBoundsDefinitions(
-    const std::map<std::string, Bound<llvm::Optional<VarIntVal>>> &bounds);
 PolynomialSolutions
 findSolutions(const IterativeInvariantMap<PolynomialEquations> &equationsMap);
 void dumpBounds(const BoundsMap &bounds);
@@ -298,8 +251,6 @@ bool applyLoopTransformation(
     MonoPair<llvm::Function *> &functions, AnalysisResultsMap &analysisResults,
     const std::map<Mark, LoopTransformation> &loopTransformations,
     const MonoPair<BidirBlockMarkMap> &mark);
-std::vector<std::vector<std::string>>
-polynomialTermsOfDegree(std::vector<smt::SortedVar> variables, size_t degree);
 
 template <typename T>
 void analyzeExecution(const MonoPair<Call<T>> &calls,
@@ -435,8 +386,6 @@ ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
                          const FreeVarsMap &freeVarsMap);
 
 ArrayVal getArrayVal(const z3::context &z3Cxt, z3::expr arrayExpr);
-std::vector<smt::SortedVar>
-removeHeapVariables(const std::vector<smt::SortedVar> &freeVariables);
 
 void dumpCounterExample(Mark cexStart, Mark cexEndMark,
                         MonoPair<FastVarMap> &variableValues,
