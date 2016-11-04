@@ -24,7 +24,7 @@ static std::unique_ptr<ConstantInt> smtFromMpz(unsigned bitWidth, mpz_class i) {
         llvm::APInt(bitWidth, i.get_str(), 10));
 }
 
-map<Mark, SharedSMTRef> makeInvariantDefinitions(
+map<Mark, SharedSMTRef> makeIterativeInvariantDefinitions(
     const IterativeInvariantMap<PolynomialEquations> &equations,
     const HeapPatternCandidatesMap &patterns, const FreeVarsMap &freeVarsMap,
     size_t degree) {

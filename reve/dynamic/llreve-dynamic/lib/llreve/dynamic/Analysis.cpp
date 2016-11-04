@@ -144,7 +144,7 @@ driver(MonoPair<llvm::Module &> modules, AnalysisResultsMap &analysisResults,
     dumpPolynomials(dynamicAnalysisResults.polynomialEquations, freeVarsMap);
     dumpHeapPatterns(dynamicAnalysisResults.heapPatternCandidates);
 
-    auto invariantCandidates = makeInvariantDefinitions(
+    auto invariantCandidates = makeIterativeInvariantDefinitions(
         dynamicAnalysisResults.polynomialEquations,
         dynamicAnalysisResults.heapPatternCandidates, freeVarsMap, DegreeFlag);
     if (!ImplicationsFlag) {
@@ -288,7 +288,7 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             continue;
         }
 
-        auto invariantCandidates = makeInvariantDefinitions(
+        auto invariantCandidates = makeIterativeInvariantDefinitions(
             dynamicAnalysisResults.polynomialEquations,
             dynamicAnalysisResults.heapPatternCandidates, freeVarsMap,
             DegreeFlag);
@@ -336,7 +336,7 @@ cegarDriver(MonoPair<llvm::Module &> modules,
     switch (result) {
     case LlreveResult::Equivalent: {
         std::cerr << "The programs have been proven equivalent\n";
-        auto invariantCandidates = makeInvariantDefinitions(
+        auto invariantCandidates = makeIterativeInvariantDefinitions(
             dynamicAnalysisResults.polynomialEquations,
             dynamicAnalysisResults.heapPatternCandidates, freeVarsMap,
             DegreeFlag);

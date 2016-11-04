@@ -46,7 +46,7 @@ using HeapPatternCandidatesMap = std::map<
 using BoundsMap =
     std::map<Mark, std::map<std::string, Bound<llvm::Optional<VarIntVal>>>>;
 
-std::map<Mark, smt::SharedSMTRef> makeInvariantDefinitions(
+std::map<Mark, smt::SharedSMTRef> makeIterativeInvariantDefinitions(
     const IterativeInvariantMap<PolynomialEquations> &solutions,
     const HeapPatternCandidatesMap &patterns, const FreeVarsMap &freeVarsMap,
     size_t degree);
