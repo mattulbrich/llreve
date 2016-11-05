@@ -150,11 +150,7 @@ int main(int argc, const char **argv) {
 
     FileOptions fileOpts = getFileOptions(inputOpts.FileNames);
     vector<smt::SharedSMTRef> smtExprs;
-    if (CegarFlag) {
-        smtExprs = cegarDriver(moduleRefs, analysisResults, patterns, fileOpts);
-    } else {
-        smtExprs = driver(moduleRefs, analysisResults, patterns, fileOpts);
-    }
+    smtExprs = cegarDriver(moduleRefs, analysisResults, patterns, fileOpts);
     if (!smtExprs.empty()) {
         serializeSMT(smtExprs, false,
                      SerializeOpts(OutputFileNameFlag, !InstantiateFlag,

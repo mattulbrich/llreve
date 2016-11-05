@@ -51,10 +51,6 @@ void zipWith(LoopInfoData<T1> &loop1, LoopInfoData<T2> &loop2,
 
 using BlockNameMap = std::map<std::string, std::set<Mark>>;
 
-std::vector<smt::SharedSMTRef>
-driver(MonoPair<llvm::Module &> modules, AnalysisResultsMap &analysisResults,
-       std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
-       llreve::opts::FileOptions fileopts);
 std::vector<smt::SharedSMTRef> cegarDriver(
     MonoPair<llvm::Module &> modules, AnalysisResultsMap &analysisResults,
     std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
