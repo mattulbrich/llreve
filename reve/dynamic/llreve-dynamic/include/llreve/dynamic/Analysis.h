@@ -94,8 +94,6 @@ template <typename T> struct MatchInfo {
         : steps(steps), loopInfo(loopInfo), mark(mark) {}
 };
 
-// Walks through the two calls and calls the function for every pair of matching
-// marks
 bool normalMarkBlock(const BlockNameMap &map, const BlockName &blockName);
 void debugAnalysis(MatchInfo<const llvm::Value *> match);
 void dumpLoopCounts(const LoopCountMap &loopCounts);
@@ -250,102 +248,115 @@ bool applyLoopTransformation(
     const std::map<Mark, LoopTransformation> &loopTransformations,
     const MonoPair<BidirBlockMarkMap> &mark);
 
+// This represents the states along the way from one mark to the next
+template <typename T> struct PathStep { std::vector<BlockStep<T>> steps; };
+
+template <typename T> struct SplitCall {
+    std::string functionName;
+    State<T> entryState;
+    State<T> returnState;
+    std::vector<PathStep<T>> steps;
+};
+
+template <typename T>
+auto splitCallAtMarks(const Call<T> &call, BlockNameMap nameMap)
+    -> SplitCall<T> {
+    std::vector<PathStep<T>> pathSteps;
+    std::vector<BlockStep<T>> blockSteps;
+    for (const auto &step : call.steps) {
+        if (normalMarkBlock(nameMap, step.blockName)) {
+            pathSteps.push_back({blockSteps});
+            blockSteps.clear();
+        }
+        blockSteps.push_back(step);
+    }
+    assert(blockSteps.size() == 1);
+    pathSteps.push_back({blockSteps});
+    // We should have at least one entry and one exit node
+    assert(pathSteps.size() >= 2);
+    return {call.functionName, call.entryState, call.returnState, pathSteps};
+}
+
 template <typename T>
 void analyzeExecution(const MonoPair<Call<T>> &calls,
                       MonoPair<BlockNameMap> nameMaps,
                       std::function<void(MatchInfo<T>)> fun) {
-    const std::vector<BlockStep<T>> &steps1 = calls.first.steps;
-    const std::vector<BlockStep<T>> &steps2 = calls.second.steps;
-    auto stepsIt1 = steps1.begin();
-    auto stepsIt2 = steps2.begin();
-    auto prevStepIt1 = *stepsIt1;
-    auto prevStepIt2 = *stepsIt2;
-    while (stepsIt1 != steps1.end() && stepsIt2 != steps2.end()) {
-        // Advance until a mark is reached
-        while (stepsIt1 != steps1.end() &&
-               !normalMarkBlock(nameMaps.first, stepsIt1->blockName)) {
-            stepsIt1++;
-        }
-        while (stepsIt2 != steps2.end() &&
-               !normalMarkBlock(nameMaps.second, stepsIt2->blockName)) {
-            stepsIt2++;
-        }
-        if (stepsIt1 == steps1.end() && stepsIt2 == steps2.end()) {
-            break;
-        }
-        // Check marks
-        if (!intersection(nameMaps.first.at(stepsIt1->blockName),
-                          nameMaps.second.at(stepsIt2->blockName))
-                 .empty()) {
-            assert(intersection(nameMaps.first.at(stepsIt1->blockName),
-                                nameMaps.second.at(stepsIt2->blockName))
-                       .size() == 1);
-            // We resolve the ambiguity in the marks by hoping that for one
-            // program there is only one choice
-            Mark mark = *intersection(nameMaps.first.at(stepsIt1->blockName),
-                                      nameMaps.second.at(stepsIt2->blockName))
-                             .begin();
-            // Perfect synchronization
-            fun(MatchInfo<T>(makeMonoPair(&*stepsIt1, &*stepsIt2),
+    const auto call1 = splitCallAtMarks(calls.first, nameMaps.first);
+    const auto call2 = splitCallAtMarks(calls.second, nameMaps.second);
+    auto stepsIt1 = call1.steps.begin();
+    auto stepsIt2 = call2.steps.begin();
+    auto prevStepsIt1 = *stepsIt1;
+    auto prevStepsIt2 = *stepsIt2;
+    // The first pathstep is at an entry node and is thus not interesting to
+    // us so we can start by moving to the next pathstep
+    ++stepsIt1;
+    ++stepsIt2;
+    while (stepsIt1 != call1.steps.end() && stepsIt2 != call2.steps.end()) {
+        // There are two cases to consider, either both programs are at the same
+        // mark or they are at different marks. The latter case can occur when
+        // one program is waiting for the other to finish its loops
+        auto blockNameIntersection =
+            intersection(nameMaps.first.at(stepsIt1->steps.front().blockName),
+                         nameMaps.second.at(stepsIt2->steps.front().blockName));
+        if (!blockNameIntersection.empty()) {
+            // The flexible coupling is not yet supported so we should the
+            // intersection should contain exactly one block
+            assert(blockNameIntersection.size() == 1);
+            Mark mark = *blockNameIntersection.begin();
+            fun(MatchInfo<T>(makeMonoPair(&stepsIt1->steps.front(),
+                                          &stepsIt2->steps.front()),
                              LoopInfo::None, mark));
-            prevStepIt1 = *stepsIt1;
-            prevStepIt2 = *stepsIt2;
+            prevStepsIt1 = *stepsIt1;
+            prevStepsIt2 = *stepsIt2;
             ++stepsIt1;
             ++stepsIt2;
         } else {
-            // In the first round this is not true, but we should never fall in
-            // this case in the first round
-            assert(&prevStepIt1 != &*stepsIt1);
-            assert(&prevStepIt2 != &*stepsIt2);
-
-            // One side has to wait for the other to finish its loop
+            // In this case one program should have stayed at the same mark
             LoopInfo loop = LoopInfo::Left;
             auto stepsIt = stepsIt1;
-            auto prevStepIt = prevStepIt1;
-            auto prevStepItOther = prevStepIt2;
-            auto end = steps1.end();
+            auto prevStepIt = prevStepsIt1;
+            auto prevStepItOther = prevStepsIt2;
+            auto end = call1.steps.end();
             auto nameMap = nameMaps.first;
             auto otherNameMap = nameMaps.second;
-            if (stepsIt2->blockName == prevStepIt2.blockName) {
+            if (stepsIt2->steps.front().blockName ==
+                prevStepsIt2.steps.front().blockName) {
                 loop = LoopInfo::Right;
                 stepsIt = stepsIt2;
-                prevStepIt = prevStepIt2;
-                prevStepItOther = prevStepIt1;
-                end = steps2.end();
+                prevStepIt = prevStepsIt2;
+                prevStepItOther = prevStepsIt1;
+                end = call2.steps.end();
                 nameMap = nameMaps.second;
                 otherNameMap = nameMaps.first;
             }
             // Keep looping one program until it moves on
             do {
-                assert(intersection(nameMap.at(prevStepIt.blockName),
-                                    otherNameMap.at(prevStepItOther.blockName))
-                           .size() == 1);
-                Mark mark =
-                    *intersection(nameMap.at(prevStepIt.blockName),
-                                  otherNameMap.at(prevStepItOther.blockName))
-                         .begin();
+                const auto blockNameIntersection = intersection(
+                    nameMap.at(prevStepIt.steps.front().blockName),
+                    otherNameMap.at(prevStepItOther.steps.front().blockName));
+                assert(blockNameIntersection.size() == 1);
+                Mark mark = *blockNameIntersection.begin();
                 // Make sure the first program is always the first argument
                 if (loop == LoopInfo::Left) {
-                    const BlockStep<T> *firstStep = &*stepsIt;
-                    const BlockStep<T> *secondStep = &prevStepItOther;
+                    const BlockStep<T> *firstStep = &stepsIt->steps.front();
+                    const BlockStep<T> *secondStep =
+                        &prevStepItOther.steps.front();
                     fun(MatchInfo<T>(makeMonoPair(firstStep, secondStep), loop,
                                      mark));
                 } else {
-                    const BlockStep<T> *secondStep = &*stepsIt;
-                    const BlockStep<T> *firstStep = &prevStepItOther;
+                    const BlockStep<T> *secondStep = &stepsIt->steps.front();
+                    const BlockStep<T> *firstStep =
+                        &prevStepItOther.steps.front();
                     fun(MatchInfo<T>(makeMonoPair(firstStep, secondStep), loop,
                                      mark));
                 }
                 // Go to the next mark
-                do {
-                    stepsIt++;
-                } while (stepsIt != end &&
-                         !normalMarkBlock(nameMap, stepsIt->blockName));
+                ++stepsIt;
                 // Did we return to the same mark?
             } while (stepsIt != end &&
-                     stepsIt->blockName == prevStepIt.blockName);
-            // Getting a reference to the iterator and modifying that doesn't
-            // seem to work so we copy it and set it again
+                     stepsIt->steps.front().blockName ==
+                         prevStepIt.steps.front().blockName);
+            // Copy the iterator values back to the corresponding terator
             if (loop == LoopInfo::Left) {
                 stepsIt1 = stepsIt;
             } else {
@@ -363,6 +374,9 @@ mergePolynomialEquations(IterativeInvariantMap<PolynomialEquations> eq1,
 struct MergedAnalysisResults {
     LoopCountsAndMark loopCounts;
     IterativeInvariantMap<PolynomialEquations> polynomialEquations;
+    RelationalFunctionInvariantMap<PolynomialEquations>
+        relationalFunctionPolynomialEquations;
+    FunctionInvariantMap<PolynomialEquations> functionPolynomialEquations;
     HeapPatternCandidatesMap heapPatternCandidates;
 };
 

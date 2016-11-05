@@ -292,12 +292,13 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             dynamicAnalysisResults.polynomialEquations,
             dynamicAnalysisResults.heapPatternCandidates, freeVarsMap,
             DegreeFlag);
-        // TODO actually pass equations here
         auto relationalFunctionInvariantCandidates =
-            makeRelationalFunctionInvariantDefinitions({}, analysisResults,
-                                                       DegreeFlag);
+            makeRelationalFunctionInvariantDefinitions(
+                dynamicAnalysisResults.relationalFunctionPolynomialEquations,
+                analysisResults, DegreeFlag);
         auto functionInvariantCandidates = makeFunctionInvariantDefinitions(
-            modules, {}, analysisResults, DegreeFlag);
+            modules, dynamicAnalysisResults.functionPolynomialEquations,
+            analysisResults, DegreeFlag);
 
         SMTGenerationOpts::getInstance().IterativeRelationalInvariants =
             invariantCandidates;
