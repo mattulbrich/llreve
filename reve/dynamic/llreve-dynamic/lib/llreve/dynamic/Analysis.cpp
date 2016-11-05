@@ -133,8 +133,9 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             functions, variableValues, getHeapsFromModel(vals.arrays),
             getHeapBackgrounds(vals.arrays), {firstBlock, secondBlock}, 1000);
         analyzeExecution<const llvm::Value *>(
-            calls, nameMap, [&dynamicAnalysisResults, &freeVarsMap, degree,
-                             &patterns](MatchInfo<const llvm::Value *> match) {
+            calls, nameMap,
+            [&dynamicAnalysisResults, &freeVarsMap, degree,
+             &patterns](MatchInfo<const llvm::Value *> match) {
                 ExitIndex exitIndex = getExitIndex(match);
                 findLoopCounts<const llvm::Value *>(
                     dynamicAnalysisResults.loopCounts, match);
@@ -143,7 +144,9 @@ cegarDriver(MonoPair<llvm::Module &> modules,
                 populateHeapPatterns(
                     dynamicAnalysisResults.heapPatternCandidates, patterns,
                     freeVarsMap, match, exitIndex);
-            });
+            },
+            [](CoupledCallInfo<const llvm::Value *> match) {},
+            [](UncoupledCallInfo<const llvm::Value *> match) {});
         auto loopTransformations = findLoopTransformations(
             dynamicAnalysisResults.loopCounts.loopCounts);
         dumpLoopTransformations(loopTransformations);

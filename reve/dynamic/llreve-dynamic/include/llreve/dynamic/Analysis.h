@@ -90,6 +90,19 @@ template <typename T> struct MatchInfo {
         : steps(steps), loopInfo(loopInfo), mark(mark) {}
 };
 
+template <typename T> struct CoupledCallInfo {
+    MonoPair<const BlockStep<T> *> steps;
+    MonoPair<VarIntVal> returnValues;
+    Mark mark;
+};
+
+template <typename T> struct UncoupledCallInfo {
+    const BlockStep<T> *step;
+    VarIntVal returnValue;
+    Mark mark;
+    Program prog;
+};
+
 bool normalMarkBlock(const BlockNameMap &map, const BlockName &blockName);
 void debugAnalysis(MatchInfo<const llvm::Value *> match);
 void dumpLoopCounts(const LoopCountMap &loopCounts);
@@ -274,9 +287,36 @@ auto splitCallAtMarks(const Call<T> &call, BlockNameMap nameMap)
 }
 
 template <typename T>
-void analyzeExecution(const MonoPair<Call<T>> &calls,
-                      MonoPair<BlockNameMap> nameMaps,
-                      std::function<void(MatchInfo<T>)> fun) {
+auto extractCalls(const PathStep<T> &path) -> std::vector<Call<T>> {
+    std::vector<Call<T>> calls;
+    for (const auto &step : path.steps) {
+        calls.insert(calls.end(), step.calls.begin(), step.calls.end());
+    }
+    return calls;
+}
+
+template <typename T>
+bool coupledCalls(const Call<T> &call1, const Call<T> &call2) {
+    // TODO maybe don’t use names here but whatever
+    return call1.functionName == call2.functionName;
+};
+
+template <typename T>
+void analyzeCallsOnPaths(
+    const PathStep<T> &path1, const PathStep<T> &path2,
+    std::function<void(CoupledCallInfo<T>)> relationalCallMatch,
+    std::function<void(UncoupledCallInfo<T>)> functionalCallMatch) {
+    auto calls1 = extractCalls(path1);
+    auto calls2 = extractCalls(path2);
+    auto coupleSteps = matchFunCalls(calls1, calls2, coupledCalls<T>);
+}
+
+template <typename T>
+void analyzeExecution(
+    const MonoPair<Call<T>> &calls, MonoPair<BlockNameMap> nameMaps,
+    std::function<void(MatchInfo<T>)> iterativeMatch,
+    std::function<void(CoupledCallInfo<T>)> relationalCallMatch,
+    std::function<void(UncoupledCallInfo<T>)> functionalCallMatch) {
     const auto call1 = splitCallAtMarks(calls.first, nameMaps.first);
     const auto call2 = splitCallAtMarks(calls.second, nameMaps.second);
     auto stepsIt1 = call1.steps.begin();
@@ -285,6 +325,8 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
     auto prevStepsIt2 = *stepsIt2;
     // The first pathstep is at an entry node and is thus not interesting to
     // us so we can start by moving to the next pathstep
+    analyzeCallsOnPaths(*stepsIt1, *stepsIt2, relationalCallMatch,
+                        functionalCallMatch);
     ++stepsIt1;
     ++stepsIt2;
     while (stepsIt1 != call1.steps.end() && stepsIt2 != call2.steps.end()) {
@@ -295,13 +337,15 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
             intersection(nameMaps.first.at(stepsIt1->steps.front().blockName),
                          nameMaps.second.at(stepsIt2->steps.front().blockName));
         if (!blockNameIntersection.empty()) {
+            analyzeCallsOnPaths(*stepsIt1, *stepsIt2, relationalCallMatch,
+                                functionalCallMatch);
             // The flexible coupling is not yet supported so we should the
             // intersection should contain exactly one block
             assert(blockNameIntersection.size() == 1);
             Mark mark = *blockNameIntersection.begin();
-            fun(MatchInfo<T>(makeMonoPair(&stepsIt1->steps.front(),
-                                          &stepsIt2->steps.front()),
-                             LoopInfo::None, mark));
+            iterativeMatch(MatchInfo<T>(makeMonoPair(&stepsIt1->steps.front(),
+                                                     &stepsIt2->steps.front()),
+                                        LoopInfo::None, mark));
             prevStepsIt1 = *stepsIt1;
             prevStepsIt2 = *stepsIt2;
             ++stepsIt1;
@@ -337,14 +381,14 @@ void analyzeExecution(const MonoPair<Call<T>> &calls,
                     const BlockStep<T> *firstStep = &stepsIt->steps.front();
                     const BlockStep<T> *secondStep =
                         &prevStepItOther.steps.front();
-                    fun(MatchInfo<T>(makeMonoPair(firstStep, secondStep), loop,
-                                     mark));
+                    iterativeMatch(MatchInfo<T>(
+                        makeMonoPair(firstStep, secondStep), loop, mark));
                 } else {
                     const BlockStep<T> *secondStep = &stepsIt->steps.front();
                     const BlockStep<T> *firstStep =
                         &prevStepItOther.steps.front();
-                    fun(MatchInfo<T>(makeMonoPair(firstStep, secondStep), loop,
-                                     mark));
+                    iterativeMatch(MatchInfo<T>(
+                        makeMonoPair(firstStep, secondStep), loop, mark));
                 }
                 // Go to the next mark
                 ++stepsIt;
