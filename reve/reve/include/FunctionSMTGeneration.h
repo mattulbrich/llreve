@@ -178,9 +178,6 @@ struct SplitAssignments {
 auto splitAssignmentsFromCalls(std::vector<AssignmentCallBlock>)
     -> SplitAssignments;
 
-auto matchFunCalls(std::vector<CallInfo> callInfos1,
-                   std::vector<CallInfo> callInfos2)
-    -> std::vector<InterleaveStep>;
 auto checkPathMaps(PathMap map1, PathMap map2) -> void;
 auto mapSubset(PathMap map1, PathMap map2) -> bool;
 auto getDontLoopInvariant(smt::SMTRef endClause, Mark startIndex,
@@ -224,3 +221,58 @@ auto clauseMapToClauseVector(
     bool main, ProgramSelection programSelection,
     std::vector<smt::SharedSMTRef> functionNumeralConstraints)
     -> std::vector<smt::SharedSMTRef>;
+
+template <typename T>
+std::vector<InterleaveStep> matchFunCalls(
+    const std::vector<T> &callInfos1, const std::vector<T> &callInfos2,
+    std::function<bool(typename std::add_lvalue_reference<const T>::type,
+
+                       typename std::add_lvalue_reference<const T>::type)>
+        areCallsCoupled) {
+    // This is just a basic edit distance algorithm
+    std::vector<std::vector<size_t>> table(
+        callInfos1.size() + 1, std::vector<size_t>(callInfos2.size() + 1, 0));
+    for (uint32_t i = 0; i <= callInfos1.size(); ++i) {
+        table[i][0] = i;
+    }
+    for (uint32_t j = 0; j <= callInfos2.size(); ++j) {
+        table[0][j] = j;
+    }
+    for (uint32_t i = 1; i <= callInfos1.size(); ++i) {
+        for (uint32_t j = 1; j <= callInfos2.size(); ++j) {
+            if (areCallsCoupled(callInfos1[i - 1], callInfos2[j - 1])) {
+                table[i][j] = table[i - 1][j - 1];
+            } else {
+                table[i][j] =
+                    std::min(table[i - 1][j] + 1, table[i][j - 1] + 1);
+            }
+        }
+    }
+    std::vector<InterleaveStep> interleaveSteps;
+    uint64_t i = callInfos1.size(), j = callInfos2.size();
+    while (i > 0 && j > 0) {
+        if (areCallsCoupled(callInfos1[i - 1], callInfos2[j - 1])) {
+            interleaveSteps.push_back(InterleaveStep::StepBoth);
+            --i;
+            --j;
+        } else {
+            if (table[i - 1][j] <= table[i][j - 1]) {
+                interleaveSteps.push_back(InterleaveStep::StepFirst);
+                --i;
+            } else {
+                interleaveSteps.push_back(InterleaveStep::StepSecond);
+                --j;
+            }
+        }
+    }
+    while (i > 0) {
+        interleaveSteps.push_back(InterleaveStep::StepFirst);
+        --i;
+    }
+    while (j > 0) {
+        interleaveSteps.push_back(InterleaveStep::StepSecond);
+        --j;
+    }
+    std::reverse(interleaveSteps.begin(), interleaveSteps.end());
+    return interleaveSteps;
+}

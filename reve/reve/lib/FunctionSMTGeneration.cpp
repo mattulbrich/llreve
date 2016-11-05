@@ -454,7 +454,8 @@ SharedSMTRef interleaveAssignments(
     const auto callInfo1 = splitAssignments.first.callInfos;
     const auto callInfo2 = splitAssignments.second.callInfos;
 
-    const auto interleaveSteps = matchFunCalls(callInfo1, callInfo2);
+    const auto interleaveSteps =
+        matchFunCalls(callInfo1, callInfo2, coupledCalls);
 
     assert(assignmentBlocks1.size() == callInfo1.size() + 1);
     assert(assignmentBlocks2.size() == callInfo2.size() + 1);
@@ -785,56 +786,6 @@ splitAssignmentsFromCalls(vector<AssignmentCallBlock> assignmentCallBlocks) {
     }
     assignmentBlocks.push_back(currentAssignmentsList);
     return {assignmentBlocks, callInfos};
-}
-
-vector<InterleaveStep> matchFunCalls(vector<CallInfo> callInfos1,
-                                     vector<CallInfo> callInfos2) {
-    // This is just a basic edit distance algorithm
-    vector<vector<size_t>> table(callInfos1.size() + 1,
-                                 vector<size_t>(callInfos2.size() + 1, 0));
-    for (uint32_t i = 0; i <= callInfos1.size(); ++i) {
-        table[i][0] = i;
-    }
-    for (uint32_t j = 0; j <= callInfos2.size(); ++j) {
-        table[0][j] = j;
-    }
-    for (uint32_t i = 1; i <= callInfos1.size(); ++i) {
-        for (uint32_t j = 1; j <= callInfos2.size(); ++j) {
-            if (coupledCalls(callInfos1[i - 1], callInfos2[j - 1])) {
-                table[i][j] = table[i - 1][j - 1];
-            } else {
-                table[i][j] =
-                    std::min(table[i - 1][j] + 1, table[i][j - 1] + 1);
-            }
-        }
-    }
-    vector<InterleaveStep> interleaveSteps;
-    uint64_t i = callInfos1.size(), j = callInfos2.size();
-    while (i > 0 && j > 0) {
-        if (coupledCalls(callInfos1[i - 1], callInfos2[j - 1])) {
-            interleaveSteps.push_back(InterleaveStep::StepBoth);
-            --i;
-            --j;
-        } else {
-            if (table[i - 1][j] <= table[i][j - 1]) {
-                interleaveSteps.push_back(InterleaveStep::StepFirst);
-                --i;
-            } else {
-                interleaveSteps.push_back(InterleaveStep::StepSecond);
-                --j;
-            }
-        }
-    }
-    while (i > 0) {
-        interleaveSteps.push_back(InterleaveStep::StepFirst);
-        --i;
-    }
-    while (j > 0) {
-        interleaveSteps.push_back(InterleaveStep::StepSecond);
-        --j;
-    }
-    std::reverse(interleaveSteps.begin(), interleaveSteps.end());
-    return interleaveSteps;
 }
 
 /// Check if the marks match
