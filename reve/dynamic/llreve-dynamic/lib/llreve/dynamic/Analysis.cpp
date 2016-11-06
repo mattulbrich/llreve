@@ -650,11 +650,25 @@ void debugAnalysis(MatchInfo<const llvm::Value *> match) {
     }
     std::cerr << std::endl;
     std::cerr << "First state:" << std::endl;
-    std::cerr << match.steps.first->toJSON([](auto x) { return x->getName(); })
+    std::cerr << match.steps.first
+                     ->toJSON([](auto x) -> std::string {
+                         if (x == ReturnName) {
+                             return "RETURN_VALUE";
+                         } else {
+                             return x->getName().str();
+                         }
+                     })
                      .dump(4)
               << std::endl;
     std::cerr << "Second state:" << std::endl;
-    std::cerr << match.steps.second->toJSON([](auto x) { return x->getName(); })
+    std::cerr << match.steps.second
+                     ->toJSON([](auto x) -> std::string {
+                         if (x == ReturnName) {
+                             return "RETURN_VALUE";
+                         } else {
+                             return x->getName();
+                         }
+                     })
                      .dump(4)
               << std::endl;
     std::cerr << std::endl << std::endl;
