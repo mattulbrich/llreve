@@ -167,7 +167,7 @@ BlockUpdate<const llvm::Value *> interpretBlock(const BasicBlock &block,
     // Handle non phi instructions
     for (; &*instrIterator != terminator; ++instrIterator) {
         if (const auto call = dyn_cast<llvm::CallInst>(&*instrIterator)) {
-            const Function *fun = call->getFunction();
+            const Function *fun = call->getCalledFunction();
             FastVarMap args;
             auto argIt = fun->getArgumentList().begin();
             for (const auto &arg : call->arg_operands()) {
