@@ -87,7 +87,7 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             FileOptions fileOpts) {
     auto functions = SMTGenerationOpts::getInstance().MainFunctions;
     const auto markMaps = getBlockMarkMaps(functions, analysisResults);
-    MonoPair<BlockNameMap> nameMap = markMaps.map<BlockNameMap>(blockNameMap);
+    MonoPair<BlockNameMap> nameMap = getBlockNameMaps(analysisResults);
     const auto funArgsPair = getFunctionArguments(functions, analysisResults);
     const auto funArgs = concat(funArgsPair);
 
@@ -147,6 +147,15 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             },
             [](CoupledCallInfo<const llvm::Value *> match) {},
             [](UncoupledCallInfo<const llvm::Value *> match) {});
+        analyzeExecution<const llvm::Value *>(
+            calls, nameMap, debugAnalysis,
+            [](CoupledCallInfo<const llvm::Value *> match) {
+                std::cerr << "coupled call\n";
+                std::cerr << "return values " << match.returnValues << "\n";
+            },
+            [](UncoupledCallInfo<const llvm::Value *> match) {
+                std::cerr << "uncoupled call\n";
+            });
         auto loopTransformations = findLoopTransformations(
             dynamicAnalysisResults.loopCounts.loopCounts);
         dumpLoopTransformations(loopTransformations);
@@ -609,12 +618,25 @@ void populateHeapPatterns(
     }
 }
 
-BlockNameMap blockNameMap(BidirBlockMarkMap blockMap) {
-    BlockNameMap ret;
+void insertInBlockNameMap(BlockNameMap &nameMap,
+                          const BidirBlockMarkMap &blockMap) {
     for (auto it : blockMap.BlockToMarksMap) {
-        ret[it.first->getName()] = it.second;
+        nameMap[it.first->getName()] = it.second;
     }
-    return ret;
+}
+
+MonoPair<BlockNameMap>
+getBlockNameMaps(const AnalysisResultsMap &analysisResults) {
+    BlockNameMap first;
+    BlockNameMap second;
+    for (const auto &funPair :
+         SMTGenerationOpts::getInstance().CoupledFunctions) {
+        insertInBlockNameMap(first,
+                             analysisResults.at(funPair.first).blockMarkMap);
+        insertInBlockNameMap(second,
+                             analysisResults.at(funPair.second).blockMarkMap);
+    }
+    return {first, second};
 }
 
 Optional<MonoPair<llvm::Function *>>

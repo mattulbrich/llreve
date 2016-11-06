@@ -67,7 +67,10 @@ using Equality = MonoPair<std::string>;
 using LoopCountMap = std::map<Mark, std::vector<MonoPair<int>>>;
 
 template <typename T> T identity(T x) { return x; }
-BlockNameMap blockNameMap(BidirBlockMarkMap blockMap);
+void insertInblockNameMap(BlockNameMap &nameMap,
+                          const BidirBlockMarkMap &blockMap);
+MonoPair<BlockNameMap>
+getBlockNameMaps(const AnalysisResultsMap &analysisResults);
 
 enum class LoopTransformType { Unroll, Peel };
 enum class LoopTransformSide { Left, Right };
@@ -93,7 +96,13 @@ template <typename T> struct MatchInfo {
 template <typename T> struct CoupledCallInfo {
     MonoPair<const BlockStep<T> *> steps;
     MonoPair<VarIntVal> returnValues;
+    LoopInfo loopInfo;
     Mark mark;
+    CoupledCallInfo(MonoPair<const BlockStep<T> *> steps,
+                    MonoPair<VarIntVal> returnValues, LoopInfo loopInfo,
+                    Mark mark)
+        : steps(steps), returnValues(returnValues), loopInfo(loopInfo),
+          mark(mark) {}
 };
 
 template <typename T> struct UncoupledCallInfo {
@@ -101,7 +110,20 @@ template <typename T> struct UncoupledCallInfo {
     VarIntVal returnValue;
     Mark mark;
     Program prog;
+    UncoupledCallInfo(const BlockStep<T> *step, VarIntVal returnValue,
+                      Mark mark, Program prog)
+        : step(step), returnValue(returnValue), mark(mark), prog(prog) {}
 };
+
+template <typename T> VarIntVal getReturnValue(const Call<T> &call) {
+    // Non int return values should not exist so this is safe
+    return unsafeIntVal(call.returnState.variables.at(ReturnName));
+}
+template <typename T>
+MonoPair<VarIntVal> getReturnValues(const Call<T> &call1,
+                                    const Call<T> &call2) {
+    return {getReturnValue(call1), getReturnValue(call2)};
+}
 
 bool normalMarkBlock(const BlockNameMap &map, const BlockName &blockName);
 void debugAnalysis(MatchInfo<const llvm::Value *> match);
@@ -198,8 +220,9 @@ void workerThread(
         }
         MonoPair<Integer> heapBackgrounds = item.heapBackgrounds.map<Integer>(
             [](auto b) { return Integer(b); });
-        MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
-            funs, std::move(variableValues), item.heaps, heapBackgrounds, 1000);
+        MonoPair<Call<const llvm::Value *>> calls =
+            interpretFunctionPair(funs, std::move(variableValues), item.heaps,
+                                  heapBackgrounds, 10000);
         callback(std::move(calls), state);
     }
 }
@@ -258,7 +281,9 @@ bool applyLoopTransformation(
     const MonoPair<BidirBlockMarkMap> &mark);
 
 // This represents the states along the way from one mark to the next
-template <typename T> struct PathStep { std::vector<BlockStep<T>> steps; };
+template <typename T> struct PathStep {
+    std::vector<BlockStep<T>> stepsOnPath;
+};
 
 template <typename T> struct SplitCall {
     std::string functionName;
@@ -289,7 +314,7 @@ auto splitCallAtMarks(const Call<T> &call, BlockNameMap nameMap)
 template <typename T>
 auto extractCalls(const PathStep<T> &path) -> std::vector<Call<T>> {
     std::vector<Call<T>> calls;
-    for (const auto &step : path.steps) {
+    for (const auto &step : path.stepsOnPath) {
         calls.insert(calls.end(), step.calls.begin(), step.calls.end());
     }
     return calls;
@@ -304,11 +329,161 @@ bool coupledCalls(const Call<T> &call1, const Call<T> &call2) {
 template <typename T>
 void analyzeCallsOnPaths(
     const PathStep<T> &path1, const PathStep<T> &path2,
+    const MonoPair<BlockNameMap> &nameMaps,
     std::function<void(CoupledCallInfo<T>)> relationalCallMatch,
     std::function<void(UncoupledCallInfo<T>)> functionalCallMatch) {
     auto calls1 = extractCalls(path1);
     auto calls2 = extractCalls(path2);
     auto coupleSteps = matchFunCalls(calls1, calls2, coupledCalls<T>);
+    auto callIt1 = calls1.begin();
+    auto callIt2 = calls2.begin();
+    for (const auto step : coupleSteps) {
+        switch (step) {
+        case InterleaveStep::StepBoth:
+            analyzeCoupledCalls(*callIt1, *callIt2, nameMaps,
+                                relationalCallMatch, functionalCallMatch);
+            ++callIt1;
+            ++callIt2;
+            break;
+        case InterleaveStep::StepFirst:
+            analyzeUncoupledCall(*callIt1, nameMaps.first, Program::First,
+                                 functionalCallMatch);
+            ++callIt1;
+            break;
+        case InterleaveStep::StepSecond:
+            analyzeUncoupledCall(*callIt2, nameMaps.second, Program::Second,
+                                 functionalCallMatch);
+            ++callIt2;
+            break;
+        }
+    }
+    assert(callIt1 == calls1.end());
+    assert(callIt2 == calls2.end());
+}
+
+// TODO this is only a slight variation of analyzeExecution, it might make sense
+// to unify those two
+template <typename T>
+void analyzeCoupledCalls(
+    const Call<T> &call1_, const Call<T> &call2_,
+    const MonoPair<BlockNameMap> &nameMaps,
+    std::function<void(CoupledCallInfo<T>)> relationalCallMatch,
+    std::function<void(UncoupledCallInfo<T>)> functionalCallMatch) {
+    const auto returnValues = getReturnValues(call1_, call2_);
+    const auto call1 = splitCallAtMarks(call1_, nameMaps.first);
+    const auto call2 = splitCallAtMarks(call2_, nameMaps.second);
+    auto stepsIt1 = call1.steps.begin();
+    auto stepsIt2 = call2.steps.begin();
+    auto prevStepsIt1 = stepsIt1;
+    auto prevStepsIt2 = stepsIt2;
+    while (stepsIt1 != call1.steps.end() && stepsIt2 != call2.steps.end()) {
+        // There are two cases to consider, either both programs are at the same
+        // mark or they are at different marks. The latter case can occur when
+        // one program is waiting for the other to finish its loops
+        auto blockNameIntersection = intersection(
+            nameMaps.first.at(stepsIt1->stepsOnPath.front().blockName),
+            nameMaps.second.at(stepsIt2->stepsOnPath.front().blockName));
+        if (!blockNameIntersection.empty()) {
+            if (stepsIt1 != prevStepsIt1 && stepsIt2 != prevStepsIt2) {
+                // We can only start analyzing calls if we already moved away
+                // from the start
+                analyzeCallsOnPaths(*prevStepsIt1, *prevStepsIt2, nameMaps,
+                                    relationalCallMatch, functionalCallMatch);
+            }
+            // The flexible coupling is not yet supported so we should the
+            // intersection should contain exactly one block
+            assert(blockNameIntersection.size() == 1);
+            Mark mark = *blockNameIntersection.begin();
+            relationalCallMatch(
+                CoupledCallInfo<T>({&stepsIt1->stepsOnPath.front(),
+                                    &stepsIt2->stepsOnPath.front()},
+                                   returnValues, LoopInfo::None, mark));
+            prevStepsIt1 = stepsIt1;
+            prevStepsIt2 = stepsIt2;
+            ++stepsIt1;
+            ++stepsIt2;
+        } else {
+            // In this case one program should have stayed at the same mark
+            LoopInfo loop = LoopInfo::Left;
+            Program prog = Program::First;
+            auto stepsIt = stepsIt1;
+            auto prevStepIt = prevStepsIt1;
+            auto prevStepItOther = prevStepsIt2;
+            auto end = call1.steps.end();
+            auto nameMap = nameMaps.first;
+            auto otherNameMap = nameMaps.second;
+            if (stepsIt2->stepsOnPath.front().blockName ==
+                prevStepsIt2->stepsOnPath.front().blockName) {
+                loop = LoopInfo::Right;
+                prog = Program::Second;
+                stepsIt = stepsIt2;
+                prevStepIt = prevStepsIt2;
+                prevStepItOther = prevStepsIt1;
+                end = call2.steps.end();
+                nameMap = nameMaps.second;
+                otherNameMap = nameMaps.first;
+            }
+            // Keep looping one program until it moves on
+            do {
+                analyzeUncoupledPath(*prevStepIt, nameMap, prog,
+                                     functionalCallMatch);
+                const auto blockNameIntersection = intersection(
+                    nameMap.at(prevStepIt->stepsOnPath.front().blockName),
+                    otherNameMap.at(
+                        prevStepItOther->stepsOnPath.front().blockName));
+                assert(blockNameIntersection.size() == 1);
+                Mark mark = *blockNameIntersection.begin();
+                // Make sure the first program is always the first argument
+                if (loop == LoopInfo::Left) {
+                    const BlockStep<T> *firstStep =
+                        &stepsIt->stepsOnPath.front();
+                    const BlockStep<T> *secondStep =
+                        &prevStepItOther->stepsOnPath.front();
+                    relationalCallMatch(CoupledCallInfo<T>(
+                        {firstStep, secondStep}, returnValues, loop, mark));
+                } else {
+                    const BlockStep<T> *secondStep =
+                        &stepsIt->stepsOnPath.front();
+                    const BlockStep<T> *firstStep =
+                        &prevStepItOther->stepsOnPath.front();
+                    relationalCallMatch(CoupledCallInfo<T>(
+                        {firstStep, secondStep}, returnValues, loop, mark));
+                }
+                // Go to the next mark
+                ++stepsIt;
+                // Did we return to the same mark?
+            } while (stepsIt != end &&
+                     stepsIt->stepsOnPath.front().blockName ==
+                         prevStepIt->stepsOnPath.front().blockName);
+            // Copy the iterator values back to the corresponding terator
+            if (loop == LoopInfo::Left) {
+                stepsIt1 = stepsIt;
+            } else {
+                stepsIt2 = stepsIt;
+            }
+        }
+    }
+}
+
+template <typename T>
+void analyzeUncoupledPath(
+    const PathStep<T> &path, const BlockNameMap &nameMap, Program prog,
+    std::function<void(UncoupledCallInfo<T>)> functionCallMatch) {}
+
+template <typename T>
+void analyzeUncoupledCall(
+    const Call<T> &call_, const BlockNameMap &nameMap, Program prog,
+    std::function<void(UncoupledCallInfo<T>)> functionCallMatch) {
+    const auto returnValue = getReturnValue(call_);
+    auto call = splitCallAtMarks(call_, nameMap);
+    for (const auto &step : call.steps) {
+        auto markSet = nameMap.at(step.stepsOnPath.front().blockName);
+        assert(markSet.size() == 1);
+        auto mark = *markSet.begin();
+        functionCallMatch(UncoupledCallInfo<T>(&step.stepsOnPath.front(),
+                                               returnValue, mark, prog));
+        analyzeUncoupledPath(step, nameMap, prog, functionCallMatch);
+    }
 }
 
 template <typename T>
@@ -324,28 +499,28 @@ void analyzeExecution(
     auto prevStepsIt1 = *stepsIt1;
     auto prevStepsIt2 = *stepsIt2;
     // The first pathstep is at an entry node and is thus not interesting to
-    // us so we can start by moving to the next pathstep
-    analyzeCallsOnPaths(*stepsIt1, *stepsIt2, relationalCallMatch,
-                        functionalCallMatch);
+    // us so we can start by moving to the next pathstep.
     ++stepsIt1;
     ++stepsIt2;
     while (stepsIt1 != call1.steps.end() && stepsIt2 != call2.steps.end()) {
         // There are two cases to consider, either both programs are at the same
         // mark or they are at different marks. The latter case can occur when
         // one program is waiting for the other to finish its loops
-        auto blockNameIntersection =
-            intersection(nameMaps.first.at(stepsIt1->steps.front().blockName),
-                         nameMaps.second.at(stepsIt2->steps.front().blockName));
+        auto blockNameIntersection = intersection(
+            nameMaps.first.at(stepsIt1->stepsOnPath.front().blockName),
+            nameMaps.second.at(stepsIt2->stepsOnPath.front().blockName));
         if (!blockNameIntersection.empty()) {
-            analyzeCallsOnPaths(*stepsIt1, *stepsIt2, relationalCallMatch,
-                                functionalCallMatch);
+            // We want to match calls on the paths that led us here
+            analyzeCallsOnPaths(prevStepsIt1, prevStepsIt2, nameMaps,
+                                relationalCallMatch, functionalCallMatch);
             // The flexible coupling is not yet supported so we should the
             // intersection should contain exactly one block
             assert(blockNameIntersection.size() == 1);
             Mark mark = *blockNameIntersection.begin();
-            iterativeMatch(MatchInfo<T>(makeMonoPair(&stepsIt1->steps.front(),
-                                                     &stepsIt2->steps.front()),
-                                        LoopInfo::None, mark));
+            iterativeMatch(
+                MatchInfo<T>(makeMonoPair(&stepsIt1->stepsOnPath.front(),
+                                          &stepsIt2->stepsOnPath.front()),
+                             LoopInfo::None, mark));
             prevStepsIt1 = *stepsIt1;
             prevStepsIt2 = *stepsIt2;
             ++stepsIt1;
@@ -353,15 +528,17 @@ void analyzeExecution(
         } else {
             // In this case one program should have stayed at the same mark
             LoopInfo loop = LoopInfo::Left;
+            Program prog = Program::First;
             auto stepsIt = stepsIt1;
             auto prevStepIt = prevStepsIt1;
             auto prevStepItOther = prevStepsIt2;
             auto end = call1.steps.end();
             auto nameMap = nameMaps.first;
             auto otherNameMap = nameMaps.second;
-            if (stepsIt2->steps.front().blockName ==
-                prevStepsIt2.steps.front().blockName) {
+            if (stepsIt2->stepsOnPath.front().blockName ==
+                prevStepsIt2.stepsOnPath.front().blockName) {
                 loop = LoopInfo::Right;
+                prog = Program::Second;
                 stepsIt = stepsIt2;
                 prevStepIt = prevStepsIt2;
                 prevStepItOther = prevStepsIt1;
@@ -371,22 +548,27 @@ void analyzeExecution(
             }
             // Keep looping one program until it moves on
             do {
+                analyzeUncoupledPath(prevStepIt, nameMap, prog,
+                                     functionalCallMatch);
                 const auto blockNameIntersection = intersection(
-                    nameMap.at(prevStepIt.steps.front().blockName),
-                    otherNameMap.at(prevStepItOther.steps.front().blockName));
+                    nameMap.at(prevStepIt.stepsOnPath.front().blockName),
+                    otherNameMap.at(
+                        prevStepItOther.stepsOnPath.front().blockName));
                 assert(blockNameIntersection.size() == 1);
                 Mark mark = *blockNameIntersection.begin();
                 // Make sure the first program is always the first argument
                 if (loop == LoopInfo::Left) {
-                    const BlockStep<T> *firstStep = &stepsIt->steps.front();
+                    const BlockStep<T> *firstStep =
+                        &stepsIt->stepsOnPath.front();
                     const BlockStep<T> *secondStep =
-                        &prevStepItOther.steps.front();
+                        &prevStepItOther.stepsOnPath.front();
                     iterativeMatch(MatchInfo<T>(
                         makeMonoPair(firstStep, secondStep), loop, mark));
                 } else {
-                    const BlockStep<T> *secondStep = &stepsIt->steps.front();
+                    const BlockStep<T> *secondStep =
+                        &stepsIt->stepsOnPath.front();
                     const BlockStep<T> *firstStep =
-                        &prevStepItOther.steps.front();
+                        &prevStepItOther.stepsOnPath.front();
                     iterativeMatch(MatchInfo<T>(
                         makeMonoPair(firstStep, secondStep), loop, mark));
                 }
@@ -394,8 +576,8 @@ void analyzeExecution(
                 ++stepsIt;
                 // Did we return to the same mark?
             } while (stepsIt != end &&
-                     stepsIt->steps.front().blockName ==
-                         prevStepIt.steps.front().blockName);
+                     stepsIt->stepsOnPath.front().blockName ==
+                         prevStepIt.stepsOnPath.front().blockName);
             // Copy the iterator values back to the corresponding terator
             if (loop == LoopInfo::Left) {
                 stepsIt1 = stepsIt;
@@ -404,6 +586,12 @@ void analyzeExecution(
             }
         }
     }
+    // There can be calls on the way to the return block which we need to take a
+    // look at here
+    analyzeCallsOnPaths(prevStepsIt1, prevStepsIt2, nameMaps,
+                        relationalCallMatch, functionalCallMatch);
+    assert(stepsIt1 == call1.steps.end());
+    assert(stepsIt2 == call2.steps.end());
 }
 
 LoopCountsAndMark mergeLoopCounts(LoopCountsAndMark counts1,
