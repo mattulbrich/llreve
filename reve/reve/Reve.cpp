@@ -187,6 +187,11 @@ int main(int argc, const char **argv) {
         compileToModules(argv[0], inputOpts, acts);
     MonoPair<llvm::Module &> moduleRefs = {*modules.first, *modules.second};
 
+    std::map<const llvm::Function *, int> functionNumerals;
+    MonoPair<std::map<int, const llvm::Function *>> reversedFunctionNumerals = {
+        {}, {}};
+    std::tie(functionNumerals, reversedFunctionNumerals) =
+        generateFunctionMap(moduleRefs);
     SMTGenerationOpts::initialize(
         findMainFunction(moduleRefs, MainFunctionFlag),
         HeapFlag ? Heap::Enabled : Heap::Disabled,
@@ -205,7 +210,7 @@ int main(int argc, const char **argv) {
             moduleRefs, parseFunctionPairFlags(AssumeEquivalentFlags))),
         getCoupledFunctions(moduleRefs, DisableAutoCouplingFlag,
                             parseFunctionPairFlags(CoupleFunctionsFlag)),
-        generateFunctionMap(moduleRefs));
+        functionNumerals, reversedFunctionNumerals);
 
     llvm::legacy::PassManager PM;
     PM.add(llvm::createStripSymbolsPass(true));

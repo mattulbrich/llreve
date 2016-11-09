@@ -74,8 +74,10 @@ class SMTGenerationOpts {
             functionalRelationalInvariants,
         std::set<MonoPair<const llvm::Function *>> assumeEquivalent,
         std::set<MonoPair<llvm::Function *>> coupleFunctions,
-        std::map<const llvm::Function *, int> functionNumerals);
-    MonoPair<llvm::Function *> MainFunctions;
+        std::map<const llvm::Function *, int> functionNumerals,
+        MonoPair<std::map<int, const llvm::Function *>>
+            reversedFunctionNumerals);
+    MonoPair<llvm::Function *> MainFunctions = {nullptr, nullptr};
     Heap Heap;
     Stack Stack;
     GlobalConstants GlobalConstants;
@@ -106,9 +108,12 @@ class SMTGenerationOpts {
     // This map is used when serializing in inverted mode to identify which
     // functions a clause belongs to
     std::map<const llvm::Function *, int> FunctionNumerals;
+    // This is just a reversed version of the above map separated by module
+    MonoPair<std::map<int, const llvm::Function *>> ReversedFunctionNumerals = {
+        {}, {}};
 
   private:
-    SMTGenerationOpts() : MainFunctions({nullptr, nullptr}) {}
+    SMTGenerationOpts() = default;
     SMTGenerationOpts(SMTGenerationOpts const &) = delete;
     void operator=(SMTGenerationOpts const &) = delete;
 };
@@ -210,6 +215,7 @@ auto addConstToFunctionPairSet(
 // These maps are needed when serializing in inverted mode to mark the functions
 // a clause belongs to
 auto generateFunctionMap(MonoPair<const llvm::Module &> modules)
-    -> std::map<const llvm::Function *, int>;
+    -> std::pair<std::map<const llvm::Function *, int>,
+                 MonoPair<std::map<int, const llvm::Function *>>>;
 }
 }

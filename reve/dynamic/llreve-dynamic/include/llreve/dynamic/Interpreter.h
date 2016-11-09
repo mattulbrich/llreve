@@ -155,18 +155,17 @@ template <typename T> struct Step {
 template <typename T> struct BlockStep;
 
 template <typename T> struct Call : Step<T> {
-    std::string functionName;
+    const llvm::Function *function;
     State<T> entryState;
     State<T> returnState;
     std::vector<BlockStep<T>> steps;
     // Did we exit because we ran out of steps?
     bool earlyExit;
     uint32_t blocksVisited;
-    Call(std::string functionName, State<T> entryState, State<T> returnState,
-         std::vector<BlockStep<T>> steps, bool earlyExit,
+    Call(const llvm::Function *function, State<T> entryState,
+         State<T> returnState, std::vector<BlockStep<T>> steps, bool earlyExit,
          uint32_t blocksVisited)
-        : functionName(std::move(functionName)),
-          entryState(std::move(entryState)),
+        : function(std::move(function)), entryState(std::move(entryState)),
           returnState(std::move(returnState)), steps(std::move(steps)),
           earlyExit(std::move(earlyExit)),
           blocksVisited(std::move(blocksVisited)) {}

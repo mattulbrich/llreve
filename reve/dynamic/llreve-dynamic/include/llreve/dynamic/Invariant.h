@@ -4,6 +4,7 @@
 #include "FreeVariables.h"
 
 #include "llreve/dynamic/HeapPattern.h"
+#include "llreve/dynamic/Linear.h"
 
 #include <gmpxx.h>
 
@@ -37,6 +38,8 @@ template <typename V>
 using FunctionInvariantMap =
     std::map<const llvm::Function *, std::map<Mark, V>>;
 using PolynomialEquations = LoopInfoData<std::vector<std::vector<mpq_class>>>;
+using FunctionPolynomialEquations =
+    LoopInfoData<MonoPair<std::vector<std::vector<mpq_class>>>>;
 using PolynomialSolutions =
     IterativeInvariantMap<LoopInfoData<std::vector<std::vector<mpz_class>>>>;
 using HeapPatternCandidates =
@@ -53,19 +56,20 @@ std::map<Mark, smt::SharedSMTRef> makeIterativeInvariantDefinitions(
     size_t degree);
 RelationalFunctionInvariantMap<llreve::opts::FunctionalInvariant>
 makeRelationalFunctionInvariantDefinitions(
-    const RelationalFunctionInvariantMap<PolynomialEquations> &equations,
+    const RelationalFunctionInvariantMap<FunctionPolynomialEquations>
+        &equations,
     const AnalysisResultsMap &analysisResults, size_t degree);
 FunctionInvariantMap<llreve::opts::FunctionalInvariant>
 makeFunctionInvariantDefinitions(
     const llvm::Module &module,
-    const FunctionInvariantMap<PolynomialEquations> &equations,
+    const FunctionInvariantMap<FunctionPolynomialEquations> &equations,
     const AnalysisResultsMap &analysisResults, Program prog, size_t degree);
 FunctionInvariantMap<llreve::opts::FunctionalInvariant>
 makeFunctionInvariantDefinitions(
     MonoPair<const llvm::Module &> modules,
-    const FunctionInvariantMap<PolynomialEquations> &equations,
+    const FunctionInvariantMap<FunctionPolynomialEquations> &equations,
     const AnalysisResultsMap &analysisResults, size_t degree);
-
+Matrix<mpz_class> findSolutions(Matrix<mpq_class> equations);
 PolynomialSolutions
 findSolutions(const IterativeInvariantMap<PolynomialEquations> &equationsMap);
 smt::SharedSMTRef

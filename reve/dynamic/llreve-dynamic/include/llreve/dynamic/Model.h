@@ -16,14 +16,30 @@
 #include <set>
 #include <vector>
 
+#include <llvm/IR/Function.h>
+
+#include "MonoPair.h"
+#include "Program.h"
+
 struct ArrayVal {
     mpz_class background;
     std::map<mpz_class, mpz_class> vals;
 };
 
 struct ModelValues {
+    ModelValues(std::map<std::string, ArrayVal> arrays,
+                std::map<std::string, mpz_class> values, bool main,
+                ProgramSelection programSelection,
+                MonoPair<const llvm::Function *> functions)
+        : arrays(std::move(arrays)), values(std::move(values)),
+          main(std::move(main)), programSelection(std::move(programSelection)),
+          functions(std::move(functions)) {}
     std::map<std::string, ArrayVal> arrays;
     std::map<std::string, mpz_class> values;
+    bool main;
+    ProgramSelection programSelection;
+    // depending on programSelection one of these functions can be nullptr
+    MonoPair<const llvm::Function *> functions;
 };
 
 struct SMTExpr {
@@ -113,8 +129,6 @@ struct Model {
     std::vector<std::shared_ptr<TopLevelExpr>> exprs;
     Model(std::vector<std::shared_ptr<TopLevelExpr>> exprs) : exprs(exprs) {}
 };
-
-ModelValues parseValues(Model model);
 
 struct Result {
     virtual bool isSat() const = 0;

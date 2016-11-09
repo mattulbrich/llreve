@@ -94,15 +94,17 @@ template <typename T> struct MatchInfo {
 };
 
 template <typename T> struct CoupledCallInfo {
+    MonoPair<const llvm::Function *> functions;
     MonoPair<const BlockStep<T> *> steps;
     MonoPair<VarIntVal> returnValues;
     LoopInfo loopInfo;
     Mark mark;
-    CoupledCallInfo(MonoPair<const BlockStep<T> *> steps,
+    CoupledCallInfo(MonoPair<const llvm::Function *> functions,
+                    MonoPair<const BlockStep<T> *> steps,
                     MonoPair<VarIntVal> returnValues, LoopInfo loopInfo,
                     Mark mark)
-        : steps(steps), returnValues(returnValues), loopInfo(loopInfo),
-          mark(mark) {}
+        : functions(functions), steps(steps), returnValues(returnValues),
+          loopInfo(loopInfo), mark(mark) {}
 };
 
 template <typename T> struct UncoupledCallInfo {
@@ -174,6 +176,10 @@ void populateEquationsMap(
     IterativeInvariantMap<PolynomialEquations> &equationsMap,
     FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match,
     ExitIndex exitIndex, size_t degree);
+void populateEquationsMap(
+    RelationalFunctionInvariantMap<FunctionPolynomialEquations> &equationsMap,
+    FreeVarsMap freeVarsMap, CoupledCallInfo<const llvm::Value *> match,
+    size_t degree);
 void populateHeapPatterns(
     HeapPatternCandidatesMap &heapPatternCandidates,
     std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
@@ -286,7 +292,7 @@ template <typename T> struct PathStep {
 };
 
 template <typename T> struct SplitCall {
-    std::string functionName;
+    const llvm::Function *function;
     State<T> entryState;
     State<T> returnState;
     std::vector<PathStep<T>> steps;
@@ -308,7 +314,7 @@ auto splitCallAtMarks(const Call<T> &call, BlockNameMap nameMap)
     pathSteps.push_back({blockSteps});
     // We should have at least one entry and one exit node
     assert(pathSteps.size() >= 2);
-    return {call.functionName, call.entryState, call.returnState, pathSteps};
+    return {call.function, call.entryState, call.returnState, pathSteps};
 }
 
 template <typename T>
@@ -323,7 +329,7 @@ auto extractCalls(const PathStep<T> &path) -> std::vector<Call<T>> {
 template <typename T>
 bool coupledCalls(const Call<T> &call1, const Call<T> &call2) {
     // TODO maybe don’t use names here but whatever
-    return call1.functionName == call2.functionName;
+    return call1.function->getName() == call2.function->getName();
 };
 
 template <typename T>
@@ -369,6 +375,8 @@ void analyzeCoupledCalls(
     const MonoPair<BlockNameMap> &nameMaps,
     std::function<void(CoupledCallInfo<T>)> relationalCallMatch,
     std::function<void(UncoupledCallInfo<T>)> functionalCallMatch) {
+    MonoPair<const llvm::Function *> functions = {call1_.function,
+                                                  call2_.function};
     const auto returnValues = getReturnValues(call1_, call2_);
     const auto call1 = splitCallAtMarks(call1_, nameMaps.first);
     const auto call2 = splitCallAtMarks(call2_, nameMaps.second);
@@ -395,8 +403,8 @@ void analyzeCoupledCalls(
             assert(blockNameIntersection.size() == 1);
             Mark mark = *blockNameIntersection.begin();
             relationalCallMatch(
-                CoupledCallInfo<T>({&stepsIt1->stepsOnPath.front(),
-                                    &stepsIt2->stepsOnPath.front()},
+                CoupledCallInfo<T>(functions, {&stepsIt1->stepsOnPath.front(),
+                                               &stepsIt2->stepsOnPath.front()},
                                    returnValues, LoopInfo::None, mark));
             prevStepsIt1 = stepsIt1;
             prevStepsIt2 = stepsIt2;
@@ -439,15 +447,17 @@ void analyzeCoupledCalls(
                         &stepsIt->stepsOnPath.front();
                     const BlockStep<T> *secondStep =
                         &prevStepItOther->stepsOnPath.front();
-                    relationalCallMatch(CoupledCallInfo<T>(
-                        {firstStep, secondStep}, returnValues, loop, mark));
+                    relationalCallMatch(
+                        CoupledCallInfo<T>(functions, {firstStep, secondStep},
+                                           returnValues, loop, mark));
                 } else {
                     const BlockStep<T> *secondStep =
                         &stepsIt->stepsOnPath.front();
                     const BlockStep<T> *firstStep =
                         &prevStepItOther->stepsOnPath.front();
-                    relationalCallMatch(CoupledCallInfo<T>(
-                        {firstStep, secondStep}, returnValues, loop, mark));
+                    relationalCallMatch(
+                        CoupledCallInfo<T>(functions, {firstStep, secondStep},
+                                           returnValues, loop, mark));
                 }
                 // Go to the next mark
                 ++stepsIt;
@@ -602,9 +612,10 @@ mergePolynomialEquations(IterativeInvariantMap<PolynomialEquations> eq1,
 struct MergedAnalysisResults {
     LoopCountsAndMark loopCounts;
     IterativeInvariantMap<PolynomialEquations> polynomialEquations;
-    RelationalFunctionInvariantMap<PolynomialEquations>
+    RelationalFunctionInvariantMap<FunctionPolynomialEquations>
         relationalFunctionPolynomialEquations;
-    FunctionInvariantMap<PolynomialEquations> functionPolynomialEquations;
+    FunctionInvariantMap<FunctionPolynomialEquations>
+        functionPolynomialEquations;
     HeapPatternCandidatesMap heapPatternCandidates;
 };
 

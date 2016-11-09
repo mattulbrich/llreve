@@ -111,6 +111,12 @@ int main(int argc, const char **argv) {
         InvertFlag = true;
     }
 
+    std::map<const llvm::Function *, int> functionNumerals;
+    MonoPair<std::map<int, const llvm::Function *>> reversedFunctionNumerals = {
+        {}, {}};
+    std::tie(functionNumerals, reversedFunctionNumerals) =
+        generateFunctionMap(moduleRefs);
+
     SMTGenerationOpts::initialize(
         findMainFunction(moduleRefs, MainFunctionFlag),
         HeapFlag ? llreve::opts::Heap::Enabled : llreve::opts::Heap::Disabled,
@@ -118,7 +124,7 @@ int main(int argc, const char **argv) {
         ByteHeap::Enabled, false, SMTFormat::SMTHorn,
         PerfectSynchronization::Disabled, false, BoundedFlag, InvertFlag, false,
         false, {}, {}, {}, {}, inferCoupledFunctionsByName(moduleRefs),
-        generateFunctionMap(moduleRefs));
+        functionNumerals, reversedFunctionNumerals);
 
     AnalysisResultsMap analysisResults =
         preprocessModules(moduleRefs, preprocessOpts);

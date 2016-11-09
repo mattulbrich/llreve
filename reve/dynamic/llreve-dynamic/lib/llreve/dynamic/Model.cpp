@@ -15,6 +15,7 @@
 #include <cassert>
 
 using std::set;
+using std::map;
 using std::string;
 
 TopLevelExpr::~TopLevelExpr() = default;
@@ -93,26 +94,6 @@ ArrayVal ITE::getArrayVal() const {
 }
 
 set<string> Identifier::references() const { return {name}; }
-
-ModelValues parseValues(Model model) {
-    ModelValues modelValues;
-    std::map<std::string, ArrayVal> functions;
-    for (const auto &expr : model.exprs) {
-        if (expr->type() == Type::Int) {
-            modelValues.values.insert({expr->getName(), expr->getVal()});
-        } else if (expr->type() == Type::IntFun) {
-            functions.insert({expr->getName(), expr->getArrayVal()});
-        }
-    }
-    for (const auto &expr : model.exprs) {
-        if (expr->type() == Type::IntArray) {
-            assert(expr->references().size() == 1);
-            modelValues.arrays.insert(
-                {expr->getName(), functions.at(*expr->references().begin())});
-        }
-    }
-    return modelValues;
-}
 
 Result::~Result() = default;
 

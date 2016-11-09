@@ -130,12 +130,11 @@ FastCall interpretFunction(const Function &fun, FastState entry,
         prevBlock = currentBlock;
         currentBlock = update.nextBlock;
         if (blocksVisited > maxSteps || update.earlyExit) {
-            return FastCall(fun.getName(), std::move(entry),
-                            std::move(currentState), std::move(steps), true,
-                            blocksVisited);
+            return FastCall(&fun, std::move(entry), std::move(currentState),
+                            std::move(steps), true, blocksVisited);
         }
     } while (currentBlock != nullptr);
-    return FastCall(fun.getName(), std::move(entry), std::move(currentState),
+    return FastCall(&fun, std::move(entry), std::move(currentState),
                     std::move(steps), false, blocksVisited);
 }
 

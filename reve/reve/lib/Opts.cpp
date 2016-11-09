@@ -40,7 +40,8 @@ void SMTGenerationOpts::initialize(
         functionalRelationalInvariants,
     set<MonoPair<const llvm::Function *>> assumeEquivalent,
     set<MonoPair<llvm::Function *>> coupledFunctions,
-    map<const llvm::Function *, int> functionNumerals) {
+    map<const llvm::Function *, int> functionNumerals,
+    MonoPair<map<int, const llvm::Function *>> reversedFunctionNumerals) {
     SMTGenerationOpts &i = getInstance();
     i.MainFunctions = mainFunctions;
     i.Heap = heap;
@@ -62,6 +63,7 @@ void SMTGenerationOpts::initialize(
     i.AssumeEquivalent = assumeEquivalent;
     i.CoupledFunctions = coupledFunctions;
     i.FunctionNumerals = functionNumerals;
+    i.ReversedFunctionNumerals = reversedFunctionNumerals;
 }
 
 void parseCommandLineArguments(int argc, const char **argv) {
@@ -331,20 +333,24 @@ bool hasFixedAbstraction(const llvm::Function &function) {
     return function.isDeclaration();
 }
 
-map<const llvm::Function *, int>
+std::pair<map<const llvm::Function *, int>,
+          MonoPair<map<int, const llvm::Function *>>>
 generateFunctionMap(MonoPair<const llvm::Module &> modules) {
     map<const llvm::Function *, int> functionNumerals;
+    MonoPair<map<int, const llvm::Function *>> reversedNumerals = {{}, {}};
     unsigned i = 0;
     for (const auto &function : modules.first) {
         functionNumerals.insert({&function, i});
+        reversedNumerals.first.insert({i, &function});
         ++i;
     }
     i = 0;
     for (const auto &function : modules.second) {
         functionNumerals.insert({&function, i});
+        reversedNumerals.second.insert({i, &function});
         ++i;
     }
-    return functionNumerals;
+    return {functionNumerals, reversedNumerals};
 }
 }
 }

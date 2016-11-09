@@ -107,10 +107,24 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             static_cast<int>(vals.values.at("INV_INDEX_START").get_si()));
         Mark cexEndMark(
             static_cast<int>(vals.values.at("INV_INDEX_END").get_si()));
-        if (oneOf(cexEndMark, EXIT_MARK, FORBIDDEN_MARK)) {
-            result = LlreveResult::NotEquivalent;
-            break;
-        }
+        std::cout << "MAIN: " << vals.main << "\n";
+        std::cout << "startMark: " << cexStartMark << "\n";
+        std::cout << "endMark: " << cexEndMark << "\n";
+        std::cout << "function 1: " << vals.functions.first->getName().str()
+                  << "\n";
+        std::cout << "function 2: " << vals.functions.second->getName().str()
+                  << "\n";
+        // TODO we can’t stop if there is a function call on this path so for
+        // now we disable this
+        // if ((vals.main && cexEndMark == EXIT_MARK) ||
+        //     cexEndMark == FORBIDDEN_MARK) {
+        //     // There are two cases in which no invariant refinement is
+        //     possible:
+        //     // we can’t refine the fixed exit relation and we can’t refine
+        //     // anything if the programs diverge
+        //     result = LlreveResult::NotEquivalent;
+        //     break;
+        // }
 
         auto primitiveFreeVariables =
             removeHeapVariables(freeVarsMap.at(cexStartMark));
@@ -120,6 +134,11 @@ cegarDriver(MonoPair<llvm::Module &> modules,
 
         dumpCounterExample(cexStartMark, cexEndMark, variableValues,
                            vals.arrays);
+        {
+            // This is only here for debugging purposes
+            string line;
+            std::getline(std::cin, line);
+        }
 
         assert(markMaps.first.MarkToBlocksMap.at(cexStartMark).size() == 1);
         assert(markMaps.second.MarkToBlocksMap.at(cexStartMark).size() == 1);
@@ -145,13 +164,13 @@ cegarDriver(MonoPair<llvm::Module &> modules,
                     dynamicAnalysisResults.heapPatternCandidates, patterns,
                     freeVarsMap, match, exitIndex);
             },
-            [](CoupledCallInfo<const llvm::Value *> match) {},
-            [](UncoupledCallInfo<const llvm::Value *> match) {});
-        analyzeExecution<const llvm::Value *>(
-            calls, nameMap, debugAnalysis,
-            [](CoupledCallInfo<const llvm::Value *> match) {
-                std::cerr << "coupled call\n";
-                std::cerr << "return values " << match.returnValues << "\n";
+            [&dynamicAnalysisResults, &analysisResults,
+             degree](CoupledCallInfo<const llvm::Value *> match) {
+                populateEquationsMap(
+                    dynamicAnalysisResults
+                        .relationalFunctionPolynomialEquations,
+                    getFreeVarsMap(match.functions, analysisResults), match,
+                    degree);
             },
             [](UncoupledCallInfo<const llvm::Value *> match) {
                 std::cerr << "uncoupled call\n";
@@ -196,6 +215,8 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             functionInvariantCandidates;
         vector<SharedSMTRef> clauses =
             generateSMT(modules, analysisResults, fileOpts);
+        serializeSMT(clauses, false,
+                     SerializeOpts("out.smt2", false, false, true, false));
         z3Solver.reset();
         std::map<std::string, z3::expr> nameMap;
         std::map<std::string, smt::Z3DefineFun> defineFunMap;
@@ -254,31 +275,62 @@ cegarDriver(MonoPair<llvm::Module &> modules,
     return clauses;
 }
 
+static ProgramSelection toSelection(bool program1, bool program2) {
+    if (program1 && program2) {
+        return ProgramSelection::Both;
+    }
+    if (program1 && !program2) {
+        return ProgramSelection::First;
+    }
+    if (!program1 && program2) {
+        return ProgramSelection::Second;
+    }
+    logError("Inverted smt output is invalid\n");
+    exit(1);
+}
+
 ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
                          const std::map<std::string, z3::expr> &nameMap,
                          const FreeVarsMap &freeVarsMap) {
-    ModelValues modelValues;
+    map<string, ArrayVal> arrays;
+    map<string, mpz_class> values;
 
     Mark startMark =
         Mark(model.eval(nameMap.at("INV_INDEX_START")).get_numeral_int());
     Mark endMark =
         Mark(model.eval(nameMap.at("INV_INDEX_END")).get_numeral_int());
-    modelValues.values.insert({"INV_INDEX_START", startMark.asInt()});
-    modelValues.values.insert({"INV_INDEX_END", endMark.asInt()});
+    values.insert({"INV_INDEX_START", startMark.asInt()});
+    values.insert({"INV_INDEX_END", endMark.asInt()});
     for (const auto &var : removeHeapVariables(freeVarsMap.at(startMark))) {
         std::string stringVal = Z3_get_numeral_string(
             z3Cxt, model.eval(nameMap.at(var.name + "_old")));
-        modelValues.values.insert({var.name + "_old", mpz_class(stringVal)});
+        values.insert({var.name + "_old", mpz_class(stringVal)});
     }
     if (SMTGenerationOpts::getInstance().Heap == llreve::opts::Heap::Enabled) {
         auto heap1Eval = model.eval(nameMap.at("HEAP$1_old"));
         auto heap2Eval = model.eval(nameMap.at("HEAP$2_old"));
-        modelValues.arrays.insert(
-            {"HEAP$1_old", getArrayVal(z3Cxt, heap1Eval)});
-        modelValues.arrays.insert(
-            {"HEAP$2_old", getArrayVal(z3Cxt, heap2Eval)});
+        arrays.insert({"HEAP$1_old", getArrayVal(z3Cxt, heap1Eval)});
+        arrays.insert({"HEAP$2_old", getArrayVal(z3Cxt, heap2Eval)});
     }
-    return modelValues;
+    bool main = Z3_get_bool_value(z3Cxt, model.eval(nameMap.at("MAIN")));
+    bool program1 =
+        Z3_get_bool_value(z3Cxt, model.eval(nameMap.at("PROGRAM_1")));
+    bool program2 =
+        Z3_get_bool_value(z3Cxt, model.eval(nameMap.at("PROGRAM_2")));
+    const llvm::Function *function1 = nullptr;
+    const llvm::Function *function2 = nullptr;
+    if (program1) {
+        function1 =
+            SMTGenerationOpts::getInstance().ReversedFunctionNumerals.first.at(
+                model.eval(nameMap.at("FUNCTION_1")).get_numeral_int64());
+    }
+    if (program2) {
+        function2 =
+            SMTGenerationOpts::getInstance().ReversedFunctionNumerals.first.at(
+                model.eval(nameMap.at("FUNCTION_2")).get_numeral_int64());
+    }
+    return ModelValues(arrays, values, main, toSelection(program1, program2),
+                       {function1, function2});
 }
 
 ArrayVal getArrayVal(const z3::context &z3Cxt, z3::expr arrayExpr) {
@@ -502,6 +554,92 @@ void populateEquationsMap(
                 .at(exitIndex)
                 .none.push_back(equation);
             break;
+        }
+    }
+}
+
+void populateEquationsMap(
+    RelationalFunctionInvariantMap<FunctionPolynomialEquations> &equationsMap,
+    FreeVarsMap freeVarsMap, CoupledCallInfo<const llvm::Value *> match,
+    size_t degree) {
+    auto &polynomialEquations = equationsMap[match.functions];
+    VarMap<string> variables;
+    for (auto varIt : match.steps.first->state.variables) {
+        variables.insert(std::make_pair(varIt.first->getName(), varIt.second));
+    }
+    for (auto varIt : match.steps.second->state.variables) {
+        variables.insert(std::make_pair(varIt.first->getName(), varIt.second));
+    }
+    variables.insert({resultName(Program::First), match.returnValues.first});
+    variables.insert({resultName(Program::Second), match.returnValues.second});
+    vector<smt::SortedVar> preVariables =
+        removeHeapVariables(freeVarsMap.at(match.mark));
+    vector<smt::SortedVar> postVariables = preVariables;
+    postVariables.emplace_back(resultName(Program::First), int64Type());
+    postVariables.emplace_back(resultName(Program::Second), int64Type());
+    vector<mpq_class> preEquation;
+    vector<mpq_class> postEquation;
+    for (size_t i = 1; i <= degree; ++i) {
+        auto prePolynomialTerms = polynomialTermsOfDegree(preVariables, i);
+        auto postPolynomialTerms = polynomialTermsOfDegree(postVariables, i);
+        for (auto term : prePolynomialTerms) {
+            mpz_class termVal = 1;
+            for (auto var : term) {
+                termVal *= unsafeIntVal(variables.at(var)).asUnbounded();
+            }
+            preEquation.push_back(termVal);
+        }
+        for (auto term : postPolynomialTerms) {
+            mpz_class termVal = 1;
+            for (auto var : term) {
+                termVal *= unsafeIntVal(variables.at(var)).asUnbounded();
+            }
+            postEquation.push_back(termVal);
+        }
+    }
+    // Add a constant at the end of each vector
+    preEquation.push_back(1);
+    postEquation.push_back(1);
+    if (polynomialEquations.count(match.mark) == 0) {
+        polynomialEquations.insert(
+            {match.mark, LoopInfoData<MonoPair<vector<vector<mpq_class>>>>(
+                             {{}, {}}, {{}, {}}, {{}, {}})});
+        switch (match.loopInfo) {
+        case LoopInfo::Left:
+            polynomialEquations.at(match.mark).left = {{preEquation},
+                                                       {postEquation}};
+            break;
+        case LoopInfo::Right:
+            polynomialEquations.at(match.mark).right = {{preEquation},
+                                                        {postEquation}};
+            break;
+        case LoopInfo::None:
+            polynomialEquations.at(match.mark).none = {{preEquation},
+                                                       {postEquation}};
+            break;
+        }
+    } else {
+        MonoPair<vector<vector<mpq_class>>> *vecsRef;
+        switch (match.loopInfo) {
+        case LoopInfo::Left:
+            vecsRef = &polynomialEquations.at(match.mark).left;
+            break;
+        case LoopInfo::Right:
+            vecsRef = &polynomialEquations.at(match.mark).right;
+            break;
+        case LoopInfo::None:
+            vecsRef = &polynomialEquations.at(match.mark).none;
+            break;
+        }
+        auto preVecs = vecsRef->first;
+        auto postVecs = vecsRef->second;
+        preVecs.push_back(preEquation);
+        postVecs.push_back(postEquation);
+        if (linearlyIndependent(preVecs)) {
+            vecsRef->first = preVecs;
+        }
+        if (linearlyIndependent(postVecs)) {
+            vecsRef->second = postVecs;
         }
     }
 }
@@ -1079,20 +1217,21 @@ mergeHeapPatternCandidates(HeapPatternCandidates candidates1,
 }
 
 ModelValues initialModelValues(MonoPair<const llvm::Function *> funs) {
-    ModelValues vals;
-    vals.arrays.insert({"HEAP$1_old", {0, {}}});
-    vals.arrays.insert({"HEAP$2_old", {0, {}}});
+    map<string, ArrayVal> arrays;
+    map<string, mpz_class> values;
+    arrays.insert({"HEAP$1_old", {0, {}}});
+    arrays.insert({"HEAP$2_old", {0, {}}});
     // 5 is chosen because it usually gives us at least a few loop iterationsc
     for (const auto &arg : funs.first->args()) {
-        vals.values.insert({std::string(arg.getName()) + "_old", 5});
+        values.insert({std::string(arg.getName()) + "_old", 5});
     }
     for (const auto &arg : funs.second->args()) {
-        vals.values.insert({std::string(arg.getName()) + "_old", 5});
+        values.insert({std::string(arg.getName()) + "_old", 5});
     }
-    vals.values.insert({"INV_INDEX_START", ENTRY_MARK.asInt()});
+    values.insert({"INV_INDEX_START", ENTRY_MARK.asInt()});
     // Anything not negative works here
-    vals.values.insert({"INV_INDEX_END", 0});
-    return vals;
+    values.insert({"INV_INDEX_END", 0});
+    return ModelValues(arrays, values, true, ProgramSelection::Both, funs);
 }
 
 void dumpCounterExample(Mark cexStartMark, Mark cexEndMark,

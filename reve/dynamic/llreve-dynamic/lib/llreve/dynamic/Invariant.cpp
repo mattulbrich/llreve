@@ -89,7 +89,8 @@ map<Mark, SharedSMTRef> makeIterativeInvariantDefinitions(
 
 RelationalFunctionInvariantMap<FunctionalInvariant>
 makeRelationalFunctionInvariantDefinitions(
-    const RelationalFunctionInvariantMap<PolynomialEquations> &equations,
+    const RelationalFunctionInvariantMap<FunctionPolynomialEquations>
+        &equations,
     const AnalysisResultsMap &analysisResults, size_t degree) {
     RelationalFunctionInvariantMap<FunctionalInvariant> definitions;
     for (const auto &coupledFunctions :
@@ -118,19 +119,33 @@ makeRelationalFunctionInvariantDefinitions(
                 analysisResults2.freeVariables.at(mark).begin(),
                 analysisResults2.freeVariables.at(mark).end());
             invariantArgsPre = invariantArgsPost;
-            invariantArgsPost.push_back({"result$1", int64Type()});
-            invariantArgsPost.push_back({"result$2", int64Type()});
+            invariantArgsPost.push_back(
+                {resultName(Program::First), int64Type()});
+            invariantArgsPost.push_back(
+                {resultName(Program::Second), int64Type()});
             string preName = invariantName(mark, ProgramSelection::Both,
                                            getFunctionName(coupledFunctions),
                                            InvariantAttr::PRE);
             string postName = invariantName(mark, ProgramSelection::Both,
                                             getFunctionName(coupledFunctions));
-            auto preInv =
-                make_shared<FunDef>(preName, invariantArgsPre, boolType(),
-                                    make_unique<ConstantBool>(false));
-            auto postInv =
-                make_shared<FunDef>(postName, invariantArgsPost, boolType(),
-                                    make_unique<ConstantBool>(false));
+            SharedSMTRef preInvBody = make_unique<ConstantBool>(false);
+            SharedSMTRef postInvBody = make_unique<ConstantBool>(false);
+            auto equationsIt = equations.find(coupledFunctions);
+            if (equationsIt != equations.end()) {
+                auto markIt = equationsIt->second.find(mark);
+                if (markIt != equationsIt->second.end()) {
+                    preInvBody = makeInvariantDefinition(
+                        findSolutions(markIt->second.none.first), {},
+                        invariantArgsPre, degree);
+                    postInvBody = makeInvariantDefinition(
+                        findSolutions(markIt->second.none.second), {},
+                        invariantArgsPost, degree);
+                }
+            }
+            auto preInv = make_shared<FunDef>(preName, invariantArgsPre,
+                                              boolType(), preInvBody);
+            auto postInv = make_shared<FunDef>(postName, invariantArgsPost,
+                                               boolType(), postInvBody);
             definitions[coupledFunctions].insert({mark, {preInv, postInv}});
         }
     }
@@ -139,7 +154,7 @@ makeRelationalFunctionInvariantDefinitions(
 
 FunctionInvariantMap<FunctionalInvariant> makeFunctionInvariantDefinitions(
     MonoPair<const llvm::Module &> modules,
-    const FunctionInvariantMap<PolynomialEquations> &equations,
+    const FunctionInvariantMap<FunctionPolynomialEquations> &equations,
     const AnalysisResultsMap &analysisResults, size_t degree) {
     auto invariants = makeFunctionInvariantDefinitions(
         modules.first, equations, analysisResults, Program::First, degree);
@@ -151,7 +166,7 @@ FunctionInvariantMap<FunctionalInvariant> makeFunctionInvariantDefinitions(
 
 FunctionInvariantMap<FunctionalInvariant> makeFunctionInvariantDefinitions(
     const llvm::Module &module,
-    const FunctionInvariantMap<PolynomialEquations> &equations,
+    const FunctionInvariantMap<FunctionPolynomialEquations> &equations,
     const AnalysisResultsMap &analysisResults, Program prog, size_t degree) {
     FunctionInvariantMap<FunctionalInvariant> definitions;
     for (const auto &function : module) {
@@ -300,6 +315,14 @@ SharedSMTRef makeEquation(const vector<mpz_class> &eq,
     return makeOp("=", leftSide, rightSide);
 }
 
+Matrix<mpz_class> findSolutions(Matrix<mpq_class> equations) {
+    Matrix<mpq_class> solution = nullSpace(equations);
+    Matrix<mpz_class> integerSolution(solution.size());
+    for (size_t i = 0; i < solution.size(); ++i) {
+        integerSolution.at(i) = ratToInt(solution.at(i));
+    }
+    return integerSolution;
+}
 PolynomialSolutions findSolutions(
     const IterativeInvariantMap<PolynomialEquations> &polynomialEquations) {
     PolynomialSolutions map;
@@ -307,25 +330,10 @@ PolynomialSolutions findSolutions(
         Mark mark = eqMapIt.first;
         for (auto exitMapIt : eqMapIt.second) {
             ExitIndex exitIndex = exitMapIt.first;
-            LoopInfoData<Matrix<mpq_class>> m = LoopInfoData<Matrix<mpq_class>>(
-                nullSpace(exitMapIt.second.left),
-                nullSpace(exitMapIt.second.right),
-                nullSpace(exitMapIt.second.none));
-
-            Matrix<mpz_class> nLeft(m.left.size());
-            Matrix<mpz_class> nRight(m.right.size());
-            Matrix<mpz_class> nNone(m.none.size());
-            LoopInfoData<Matrix<mpz_class>> n =
-                LoopInfoData<Matrix<mpz_class>>(nLeft, nRight, nNone);
-            for (size_t i = 0; i < n.left.size(); ++i) {
-                n.left.at(i) = ratToInt(m.left.at(i));
-            }
-            for (size_t i = 0; i < n.right.size(); ++i) {
-                n.right.at(i) = ratToInt(m.right.at(i));
-            }
-            for (size_t i = 0; i < n.none.size(); ++i) {
-                n.none.at(i) = ratToInt(m.none.at(i));
-            }
+            LoopInfoData<Matrix<mpz_class>> n = {
+                findSolutions(exitMapIt.second.left),
+                findSolutions(exitMapIt.second.right),
+                findSolutions(exitMapIt.second.none)};
             map[mark].insert(make_pair(exitMapIt.first, n));
         }
     }
