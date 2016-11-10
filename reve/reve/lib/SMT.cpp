@@ -58,19 +58,16 @@ SExprRef ConstantFP::toSExpr() const {
 
 SExprRef ConstantInt::toSExpr() const {
     if (SMTGenerationOpts::getInstance().BitVect) {
-        // TODO we should use the sexpr machinery instead of appending strings
         unsigned bitWidth = value.getBitWidth();
-        if (value.isNegative()) {
-            return smt::makeOp("bvneg",
-                               smt::makeOp("_",
-                                           "bv" + (-value).toString(10, true),
-                                           std::to_string(bitWidth)))
-                ->toSExpr();
-
-        } else {
-            return sexprFromString("(_ bv" + value.toString(10, true) + " " +
-                                   std::to_string(bitWidth) + ")");
+        unsigned hexWidth = bitWidth / 4;
+        string hexValue = value.toString(16, false);
+        unsigned unpaddedHexWidth = hexValue.size();
+        // Pad the string with 0s
+        for (int i = 0; i < hexWidth - unpaddedHexWidth; ++i) {
+            hexValue = '0' + hexValue;
         }
+        assert(bitWidth == 4 * hexValue.size());
+        return sexprFromString("#x" + hexValue);
     } else {
         if (value.isNegative()) {
             vector<SExprRef> args;
