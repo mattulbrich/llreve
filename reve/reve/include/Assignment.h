@@ -37,15 +37,15 @@ auto coupledCalls(const CallInfo &call1, const CallInfo &call2) -> bool;
 enum class DefOrCallInfoTag { Call, Def };
 
 struct DefOrCallInfo {
-    std::shared_ptr<const smt::Assignment> definition;
-    std::shared_ptr<CallInfo> callInfo;
+    std::unique_ptr<const smt::Assignment> definition;
+    std::unique_ptr<CallInfo> callInfo;
     DefOrCallInfoTag tag;
-    DefOrCallInfo(std::shared_ptr<const smt::Assignment> definition)
-        : definition(definition), callInfo(nullptr),
+    DefOrCallInfo(std::unique_ptr<const smt::Assignment> definition)
+        : definition(std::move(definition)), callInfo(nullptr),
           tag(DefOrCallInfoTag::Def) {}
-    DefOrCallInfo(std::shared_ptr<struct CallInfo> callInfo)
-        : definition(nullptr), callInfo(callInfo), tag(DefOrCallInfoTag::Call) {
-    }
+    DefOrCallInfo(std::unique_ptr<struct CallInfo> callInfo)
+        : definition(nullptr), callInfo(std::move(callInfo)),
+          tag(DefOrCallInfoTag::Call) {}
 };
 
 auto blockAssignments(const llvm::BasicBlock &bb,
@@ -53,18 +53,17 @@ auto blockAssignments(const llvm::BasicBlock &bb,
                       Program prog) -> std::vector<DefOrCallInfo>;
 auto instrAssignment(const llvm::Instruction &instr,
                      const llvm::BasicBlock *prevBb, Program prog)
-    -> std::vector<std::shared_ptr<const smt::Assignment>>;
+    -> llvm::SmallVector<std::unique_ptr<const smt::Assignment>, 1>;
 auto predicateName(const llvm::CmpInst::Predicate pred) -> std::string;
-auto predicateFun(const llvm::CmpInst &pred)
-    -> std::function<smt::SMTRef(smt::SMTRef)>;
+auto predicateFun(const llvm::CmpInst &pred, smt::SMTRef) -> smt::SMTRef;
 auto fpPredicate(const llvm::CmpInst::Predicate pred) -> smt::FPCmp::Predicate;
 auto binaryFPOpcode(const llvm::Instruction::BinaryOps op)
     -> smt::BinaryFPOperator::Opcode;
 auto opName(const llvm::BinaryOperator &op) -> std::string;
-auto combineOp(const llvm::BinaryOperator &op)
-    -> std::function<smt::SMTRef(std::string, smt::SMTRef, smt::SMTRef)>;
+auto combineOp(const llvm::BinaryOperator &op, std::string opName,
+               smt::SMTRef firstArg, smt::SMTRef secondArg) -> smt::SMTRef;
 auto memcpyIntrinsic(const llvm::CallInst *callInst, Program prog)
     -> std::vector<DefOrCallInfo>;
 auto toCallInfo(std::string assignedTo, Program prog,
-                const llvm::CallInst &callInst) -> std::shared_ptr<CallInfo>;
+                const llvm::CallInst &callInst) -> std::unique_ptr<CallInfo>;
 auto isPtrDiff(const llvm::Instruction &instr) -> bool;

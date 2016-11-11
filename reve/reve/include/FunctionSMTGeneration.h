@@ -37,7 +37,8 @@ struct AssignmentCallBlock {
     smt::SharedSMTRef condition;
     AssignmentCallBlock(std::vector<DefOrCallInfo> definitions,
                         smt::SharedSMTRef condition)
-        : definitions(definitions), condition(condition) {}
+        : definitions(std::move(definitions)), condition(std::move(condition)) {
+    }
 };
 
 struct AssignmentBlock {
@@ -45,7 +46,8 @@ struct AssignmentBlock {
     smt::SharedSMTRef condition;
     AssignmentBlock(std::vector<smt::Assignment> definitions,
                     smt::SharedSMTRef condition)
-        : definitions(definitions), condition(condition) {}
+        : definitions(std::move(definitions)), condition(std::move(condition)) {
+    }
 };
 
 /// Create the mutual assertions for the passed function.
@@ -133,12 +135,12 @@ auto offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
 auto assignmentsOnPath(const Path &path, Program prog,
                        const std::vector<smt::SortedVar> &freeVars, bool toEnd)
     -> std::vector<AssignmentCallBlock>;
-auto interleaveAssignments(
-    smt::SharedSMTRef endClause,
-    const MonoPair<std::vector<AssignmentCallBlock>> &assignments)
+auto interleaveAssignments(smt::SharedSMTRef endClause,
+                           llvm::ArrayRef<AssignmentCallBlock> assignment1,
+                           llvm::ArrayRef<AssignmentCallBlock> assignment2)
     -> smt::SharedSMTRef;
 auto nonmutualSMT(smt::SharedSMTRef endClause,
-                  std::vector<AssignmentCallBlock> assignments, Program prog)
+                  llvm::ArrayRef<AssignmentCallBlock> assignments, Program prog)
     -> smt::SharedSMTRef;
 
 /* -------------------------------------------------------------------------- */

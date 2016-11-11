@@ -192,18 +192,16 @@ getSynchronizedPaths(const PathMap &pathMap1, const PathMap &pathMap2,
                 for (const auto &path1 : innerPathMapIt.second) {
                     for (const auto &path2 : paths) {
                         bool returnPath = endIndex == EXIT_MARK;
-                        const auto defs =
-                            makeMonoPair<vector<AssignmentCallBlock>>(
-                                assignmentsOnPath(path1, Program::First,
-                                                  freeVarsMap.at(startIndex),
-                                                  returnPath),
-                                assignmentsOnPath(path2, Program::Second,
-                                                  freeVarsMap.at(startIndex),
-                                                  returnPath));
+                        const auto assignments1 = assignmentsOnPath(
+                            path1, Program::First, freeVarsMap.at(startIndex),
+                            returnPath);
+                        const auto assignments2 = assignmentsOnPath(
+                            path2, Program::Second, freeVarsMap.at(startIndex),
+                            returnPath);
                         clauses[{startIndex, endIndex}].push_back(
                             interleaveAssignments(
                                 generateReturnInvariant(startIndex, endIndex),
-                                defs));
+                                assignments1, assignments2));
                     }
                 }
             }
@@ -258,8 +256,8 @@ getForbiddenPaths(MonoPair<PathMap> pathMaps,
                                 // otherwise
                                 // extern functions are not matched
                                 const auto smt = interleaveAssignments(
-                                    make_unique<ConstantBool>(false),
-                                    makeMonoPair(smt1, smt2));
+                                    make_unique<ConstantBool>(false), smt1,
+                                    smt2);
                                 pathExprs[startIndex].push_back(smt);
                             }
                         }
@@ -402,17 +400,17 @@ vector<AssignmentCallBlock> assignmentsOnPath(const Path &path, Program prog,
     // Set the new values to the initial values
     vector<DefOrCallInfo> oldDefs;
     for (const auto &var : filteredFreeVars) {
-        oldDefs.push_back(DefOrCallInfo(make_shared<Assignment>(
+        oldDefs.push_back(DefOrCallInfo(make_unique<Assignment>(
             var.name,
             make_unique<TypedVariable>(var.name + "_old", var.type->copy()))));
     }
-    allDefs.push_back(AssignmentCallBlock(oldDefs, nullptr));
+    allDefs.push_back(AssignmentCallBlock(std::move(oldDefs), nullptr));
 
     // First block of path, this is special, because we don’t have a
     // previous
     // block so we can’t resolve phi nodes
-    const auto startDefs = blockAssignments(*path.Start, nullptr, false, prog);
-    allDefs.push_back(AssignmentCallBlock(std::move(startDefs), nullptr));
+    allDefs.push_back(AssignmentCallBlock(
+        blockAssignments(*path.Start, nullptr, false, prog), nullptr));
 
     auto prev = path.Start;
 
@@ -421,10 +419,8 @@ vector<AssignmentCallBlock> assignmentsOnPath(const Path &path, Program prog,
     for (const auto &edge : path.Edges) {
         i++;
         const bool last = i == path.Edges.size();
-        const auto defs =
-            blockAssignments(*edge.Block, prev, last && !toEnd, prog);
         allDefs.push_back(AssignmentCallBlock(
-            std::move(defs),
+            blockAssignments(*edge.Block, prev, last && !toEnd, prog),
             edge.Cond == nullptr ? nullptr : edge.Cond->toSmt()));
         prev = edge.Block;
     }
@@ -436,7 +432,7 @@ SharedSMTRef addAssignments(const SharedSMTRef end,
     SharedSMTRef clause = end;
     for (auto assgnIt = assignments.rbegin(); assgnIt != assignments.rend();
          ++assgnIt) {
-        clause = nestLets(clause, assgnIt->definitions);
+        clause = nestLets(std::move(clause), assgnIt->definitions);
         if (assgnIt->condition) {
             clause = makeOp("=>", assgnIt->condition, std::move(clause));
         }
@@ -446,12 +442,13 @@ SharedSMTRef addAssignments(const SharedSMTRef end,
 
 SharedSMTRef interleaveAssignments(
     SharedSMTRef endClause,
-    const MonoPair<vector<AssignmentCallBlock>> &AssignmentCallBlocks) {
+    llvm::ArrayRef<AssignmentCallBlock> assignmentCallBlocks1,
+    llvm::ArrayRef<AssignmentCallBlock> assignmentCallBlocks2) {
     SharedSMTRef clause = endClause;
     const auto splitAssignments1 =
-        splitAssignmentsFromCalls(AssignmentCallBlocks.first);
+        splitAssignmentsFromCalls(assignmentCallBlocks1);
     const auto splitAssignments2 =
-        splitAssignmentsFromCalls(AssignmentCallBlocks.second);
+        splitAssignmentsFromCalls(assignmentCallBlocks2);
     const auto &assignmentBlocks1 = splitAssignments1.assignments;
     const auto &assignmentBlocks2 = splitAssignments2.assignments;
     const auto &callInfo1 = splitAssignments1.callInfos;
@@ -462,8 +459,8 @@ SharedSMTRef interleaveAssignments(
 
     assert(assignmentBlocks1.size() == callInfo1.size() + 1);
     assert(assignmentBlocks2.size() == callInfo2.size() + 1);
-    assert(AssignmentCallBlocks.first.size() >= 1);
-    assert(AssignmentCallBlocks.second.size() >= 1);
+    assert(assignmentCallBlocks1.size() >= 1);
+    assert(assignmentCallBlocks2.size() >= 1);
 
     auto callIt1 = callInfo1.rbegin();
     auto callIt2 = callInfo2.rbegin();
@@ -516,9 +513,10 @@ SharedSMTRef interleaveAssignments(
     return clause;
 }
 
-SharedSMTRef nonmutualSMT(SharedSMTRef endClause,
-                          vector<AssignmentCallBlock> assignmentCallBlocks,
-                          Program prog) {
+SharedSMTRef
+nonmutualSMT(SharedSMTRef endClause,
+             llvm::ArrayRef<AssignmentCallBlock> assignmentCallBlocks,
+             Program prog) {
     SharedSMTRef clause = endClause;
     const auto splitAssignments =
         splitAssignmentsFromCalls(assignmentCallBlocks);
@@ -788,7 +786,7 @@ SplitAssignments splitAssignmentsFromCalls(
             AssignmentBlock(currentDefinitions, condition));
     }
     assignmentBlocks.push_back(currentAssignmentsList);
-    return {assignmentBlocks, callInfos};
+    return {std::move(assignmentBlocks), std::move(callInfos)};
 }
 
 /// Check if the marks match

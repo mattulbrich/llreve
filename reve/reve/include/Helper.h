@@ -208,3 +208,10 @@ void nestedLookup(std::map<K1, std::map<K2, V>> map, const K1 &key1,
         }
     }
 }
+
+// This function exists only because initializer lists don’t work for unique_ptrs
+template <typename V> auto vecSingleton(V x) -> llvm::SmallVector<V, 1> {
+    llvm::SmallVector<V, 1> result;
+    result.push_back(std::move(x));
+    return result;
+}

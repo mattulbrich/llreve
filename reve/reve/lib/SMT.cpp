@@ -343,67 +343,63 @@ SExprRef TypeCast::toSExpr() const {
 
 // Implementations of uses()
 
-set<string> SMTExpr::uses() const { return {}; }
+llvm::StringSet<> SMTExpr::uses() const { return {}; }
 
-set<string> Assert::uses() const { return expr->uses(); }
+llvm::StringSet<> Assert::uses() const { return expr->uses(); }
 
-set<string> Forall::uses() const { return expr->uses(); }
+llvm::StringSet<> Forall::uses() const { return expr->uses(); }
 
-set<string> SortedVar::uses() const {
-    set<string> uses = {name};
-    return uses;
-}
+llvm::StringSet<> SortedVar::uses() const { return {name}; }
 
-set<string> Let::uses() const {
-    set<string> uses;
+llvm::StringSet<> Let::uses() const {
+    llvm::StringSet<> uses;
     for (auto def : defs) {
-        for (auto use : def.second->uses()) {
-            uses.insert(use);
+        const auto defUses = def.second->uses();
+        for (const auto &use : defUses) {
+            uses.insert(use.getKey());
         }
     }
-    for (auto use : expr->uses()) {
-        uses.insert(use);
+    const auto exprUses = expr->uses();
+    for (const auto &use : exprUses) {
+        uses.insert(use.getKey());
     }
     return uses;
 }
 
-set<string> Op::uses() const {
-    set<string> uses;
-    for (auto arg : args) {
-        for (auto use : arg->uses()) {
-            uses.insert(use);
+llvm::StringSet<> Op::uses() const {
+    llvm::StringSet<> uses;
+    for (const auto &arg : args) {
+        auto argUses = arg->uses();
+        for (const auto &use : argUses) {
+            uses.insert(use.getKey());
         }
     }
     return uses;
 }
 
-set<string> FPCmp::uses() const {
-    set<string> uses;
-    for (auto use : op0->uses()) {
-        uses.insert(use);
-    }
-    for (auto use : op1->uses()) {
-        uses.insert(use);
+llvm::StringSet<> FPCmp::uses() const {
+    llvm::StringSet<> uses = op0->uses();
+    llvm::StringSet<> op1Uses = op1->uses();
+    for (const auto &use : op1Uses) {
+        uses.insert(use.getKey());
     }
     return uses;
 }
 
-set<string> BinaryFPOperator::uses() const {
-    set<string> uses;
-    for (auto use : op0->uses()) {
-        uses.insert(use);
-    }
-    for (auto use : op1->uses()) {
-        uses.insert(use);
+llvm::StringSet<> BinaryFPOperator::uses() const {
+    auto uses = op0->uses();
+    auto op1Uses = op1->uses();
+    for (const auto &use : op1Uses) {
+        uses.insert(use.getKey());
     }
     return uses;
 }
 
-set<string> TypeCast::uses() const { return operand->uses(); }
+llvm::StringSet<> TypeCast::uses() const { return operand->uses(); }
 
-set<string> ConstantString::uses() const { return {value}; }
+llvm::StringSet<> ConstantString::uses() const { return {value}; }
 
-set<string> TypedVariable::uses() const { return {name}; }
+llvm::StringSet<> TypedVariable::uses() const { return {name}; }
 
 // Implementations of compressLets
 
@@ -491,9 +487,9 @@ SharedSMTRef Assert::renameAssignments(map<string, int> variableMap) const {
 }
 
 SharedSMTRef Let::renameAssignments(map<string, int> variableMap) const {
-    vector<Assignment> newDefs;
+    AssignmentVec newDefs;
     auto newVariableMap = variableMap;
-    for (auto assgn : defs) {
+    for (const auto &assgn : defs) {
         int newIndex = ++newVariableMap[assgn.first];
         newDefs.push_back({assgn.first + "_" + std::to_string(newIndex),
                            assgn.second->renameAssignments(variableMap)});
@@ -1078,21 +1074,25 @@ void FunDef::toZ3(z3::context &cxt, z3::solver & /* unused */,
 }
 
 SharedSMTRef nestLets(SharedSMTRef clause, llvm::ArrayRef<Assignment> defs) {
-    SharedSMTRef lets = clause;
-    set<string> uses;
-    std::vector<Assignment> defsAccum;
+    SharedSMTRef lets = std::move(clause);
+    llvm::StringSet<> uses;
+    AssignmentVec defsAccum;
     for (auto i = defs.rbegin(), e = defs.rend(); i != e; ++i) {
         if (uses.find(i->first) != uses.end()) {
-            lets = make_unique<Let>(defsAccum, std::move(lets));
-            uses = set<string>();
+            std::reverse(defsAccum.begin(), defsAccum.end());
+            lets = std::make_unique<Let>(std::move(defsAccum), std::move(lets));
+            uses = llvm::StringSet<>();
             defsAccum.clear();
         }
-        defsAccum.insert(defsAccum.begin(), *i);
-        set<string> usesForExpr = i->second->uses();
-        uses.insert(usesForExpr.begin(), usesForExpr.end());
+        defsAccum.push_back(*i);
+        llvm::StringSet<> usesForExpr = i->second->uses();
+        for (const auto &use : usesForExpr) {
+            uses.insert(use.getKey());
+        }
     }
     if (!defsAccum.empty()) {
-        lets = make_unique<Let>(defsAccum, lets);
+        std::reverse(defsAccum.begin(), defsAccum.end());
+        lets = std::make_unique<Let>(defsAccum, std::move(lets));
     }
     return lets;
 }
@@ -1100,8 +1100,8 @@ SharedSMTRef nestLets(SharedSMTRef clause, llvm::ArrayRef<Assignment> defs) {
 SharedSMTRef makeSMTRef(SharedSMTRef arg) { return arg; }
 SharedSMTRef makeSMTRef(std::string arg) { return stringExpr(arg); }
 
-unique_ptr<ConstantString> stringExpr(std::string name) {
-    return make_unique<ConstantString>(name);
+unique_ptr<ConstantString> stringExpr(llvm::StringRef name) {
+    return std::make_unique<ConstantString>(name);
 }
 
 unique_ptr<const Op> makeOp(std::string opName, std::vector<std::string> args) {

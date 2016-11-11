@@ -54,7 +54,7 @@ class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
     SMTExpr() = default;
     virtual ~SMTExpr() = default;
     virtual sexpr::SExprRef toSExpr() const = 0;
-    virtual std::set<std::string> uses() const;
+    virtual llvm::StringSet<> uses() const;
     virtual SharedSMTRef compressLets(AssignmentVec defs = {}) const;
     virtual std::vector<SharedSMTRef> splitConjunctions() const;
     // Rename assignments to unique names. This allows moving things around as
@@ -95,7 +95,7 @@ class Assert : public SMTExpr {
     explicit Assert(SharedSMTRef expr) : expr(std::move(expr)) {}
     SharedSMTRef expr;
     sexpr::SExprRef toSExpr() const override;
-    std::set<std::string> uses() const override;
+    llvm::StringSet<> uses() const override;
     SharedSMTRef
     removeForalls(std::set<SortedVar> &introducedVariables) const override;
     SharedSMTRef compressLets(AssignmentVec defs) const override;
@@ -123,7 +123,7 @@ class TypedVariable : public SMTExpr {
         : name(std::move(name)), type(std::move(type)) {}
     std::unique_ptr<const HeapInfo> heapInfo() const override;
     sexpr::SExprRef toSExpr() const override;
-    std::set<std::string> uses() const override;
+    llvm::StringSet<> uses() const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) const override;
     SharedSMTRef
@@ -140,7 +140,7 @@ class SortedVar {
     SortedVar(std::string name, std::unique_ptr<Type> type)
         : name(std::move(name)), type(std::move(type)) {}
     sexpr::SExprRef toSExpr() const;
-    std::set<std::string> uses() const;
+    llvm::StringSet<> uses() const;
     SortedVar &operator=(const SortedVar &other) {
         name = other.name;
         type = other.type->copy();
@@ -181,7 +181,7 @@ class Forall : public SMTExpr {
     Forall(std::vector<SortedVar> vars, SharedSMTRef expr)
         : vars(std::move(vars)), expr(std::move(expr)) {}
     sexpr::SExprRef toSExpr() const override;
-    std::set<std::string> uses() const override;
+    llvm::StringSet<> uses() const override;
     SharedSMTRef
     removeForalls(std::set<SortedVar> &introducedVariables) const override;
     SharedSMTRef compressLets(AssignmentVec defs) const override;
@@ -215,14 +215,14 @@ class GetModel : public SMTExpr {
 
 class Let : public SMTExpr {
   public:
-    std::vector<Assignment> defs;
+    AssignmentVec defs;
     SharedSMTRef expr;
-    Let(std::vector<Assignment> defs, SharedSMTRef expr)
+    Let(AssignmentVec defs, SharedSMTRef expr)
         : defs(std::move(defs)), expr(std::move(expr)) {}
     sexpr::SExprRef toSExpr() const override;
     SharedSMTRef
     removeForalls(std::set<SortedVar> &introducedVariables) const override;
-    std::set<std::string> uses() const override;
+    llvm::StringSet<> uses() const override;
     SharedSMTRef compressLets(AssignmentVec passedDefs) const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) const override;
@@ -274,7 +274,7 @@ class ConstantString : public SMTExpr {
     std::string value;
     explicit ConstantString(std::string value) : value(value) {}
     sexpr::SExprRef toSExpr() const override; //  {
-    std::set<std::string> uses() const override;
+    llvm::StringSet<> uses() const override;
     SharedSMTRef compressLets(AssignmentVec defs) const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) const override;
@@ -298,7 +298,7 @@ class Op : public SMTExpr {
     sexpr::SExprRef toSExpr() const override;
     SharedSMTRef
     removeForalls(std::set<SortedVar> &introducedVariables) const override;
-    std::set<std::string> uses() const override;
+    llvm::StringSet<> uses() const override;
     SharedSMTRef compressLets(AssignmentVec defs) const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) const override;
@@ -344,7 +344,7 @@ class FPCmp : public SMTExpr {
           SharedSMTRef op1)
         : op(op), type(std::move(type)), op0(op0), op1(op1) {}
     sexpr::SExprRef toSExpr() const override;
-    std::set<std::string> uses() const override;
+    llvm::StringSet<> uses() const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) const override;
     SharedSMTRef
@@ -362,7 +362,7 @@ class BinaryFPOperator : public SMTExpr {
                      SharedSMTRef op1)
         : op(op), type(std::move(type)), op0(op0), op1(op1) {}
     sexpr::SExprRef toSExpr() const override;
-    std::set<std::string> uses() const override;
+    llvm::StringSet<> uses() const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) const override;
     SharedSMTRef
@@ -380,7 +380,7 @@ class TypeCast : public SMTExpr {
         : op(op), sourceType(std::move(sourceType)),
           destType(std::move(destType)), operand(operand) {}
     sexpr::SExprRef toSExpr() const override;
-    std::set<std::string> uses() const override;
+    llvm::StringSet<> uses() const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) const override;
     SharedSMTRef
@@ -397,7 +397,7 @@ class Query : public SMTExpr {
     sexpr::SExprRef toSExpr() const override;
 };
 
-auto stringExpr(std::string name) -> std::unique_ptr<ConstantString>;
+auto stringExpr(llvm::StringRef name) -> std::unique_ptr<ConstantString>;
 
 auto makeSMTRef(SharedSMTRef arg) -> SharedSMTRef;
 auto makeSMTRef(std::string arg) -> SharedSMTRef;
