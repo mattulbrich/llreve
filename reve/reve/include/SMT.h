@@ -28,6 +28,11 @@ namespace smt {
 
 // forward declare
 class SortedVar;
+class SMTExpr;
+using SharedSMTRef = std::shared_ptr<const SMTExpr>;
+
+using Assignment = std::pair<std::string, SharedSMTRef>;
+using AssignmentVec = llvm::SmallVector<Assignment, 3>;
 
 struct HeapInfo {
     std::string arrayName;
@@ -48,29 +53,24 @@ class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
     SMTExpr &operator=(SMTExpr &) = delete;
     SMTExpr() = default;
     virtual ~SMTExpr() = default;
-    virtual SExprRef toSExpr() const = 0;
+    virtual sexpr::SExprRef toSExpr() const = 0;
     virtual std::set<std::string> uses() const;
-    virtual std::shared_ptr<const SMTExpr>
-    compressLets(llvm::SmallVector<
-                     std::pair<std::string, std::shared_ptr<const SMTExpr>>, 3>
-                     defs = {}) const;
-    virtual std::vector<std::shared_ptr<const SMTExpr>>
-    splitConjunctions() const;
+    virtual SharedSMTRef compressLets(AssignmentVec defs = {}) const;
+    virtual std::vector<SharedSMTRef> splitConjunctions() const;
     // Rename assignments to unique names. This allows moving things around as
     // done by mergeImplications.
-    virtual std::shared_ptr<const SMTExpr>
+    virtual SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) const;
-    virtual std::shared_ptr<const SMTExpr> mergeImplications(
-        std::vector<std::shared_ptr<const SMTExpr>> conditions) const;
-    virtual std::shared_ptr<const SMTExpr> instantiateArrays() const;
+    virtual SharedSMTRef
+    mergeImplications(std::vector<SharedSMTRef> conditions) const;
+    virtual SharedSMTRef instantiateArrays() const;
     virtual std::unique_ptr<const HeapInfo> heapInfo() const;
     // This removes foralls and declares them as global variables. This is
     // needed for the z3 muz format.
-    virtual std::shared_ptr<const SMTExpr>
+    virtual SharedSMTRef
     removeForalls(std::set<SortedVar> &introducedVariables) const;
-    virtual std::shared_ptr<const SMTExpr> inlineLets(
-        std::map<std::string, std::shared_ptr<const SMTExpr>> assignments)
-        const;
+    virtual SharedSMTRef
+    inlineLets(std::map<std::string, SharedSMTRef> assignments) const;
     virtual void toZ3(z3::context &cxt, z3::solver &solver,
                       std::map<std::string, z3::expr> &nameMap,
                       std::map<std::string, Z3DefineFun> &defineFunMap) const;
@@ -79,17 +79,14 @@ class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
              const std::map<std::string, Z3DefineFun> &defineFunMap) const;
 };
 
-using SharedSMTRef = std::shared_ptr<const SMTExpr>;
 using SMTRef = std::unique_ptr<const SMTExpr>;
-using Assignment = std::pair<std::string, SharedSMTRef>;
-using AssignmentVec = llvm::SmallVector<Assignment, 3>;
 auto makeAssignment(std::string name, SharedSMTRef val)
     -> std::unique_ptr<const Assignment>;
 
 class SetLogic : public SMTExpr {
   public:
     explicit SetLogic(std::string logic) : logic(std::move(logic)) {}
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
     std::string logic;
 };
 
@@ -97,7 +94,7 @@ class Assert : public SMTExpr {
   public:
     explicit Assert(SharedSMTRef expr) : expr(std::move(expr)) {}
     SharedSMTRef expr;
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
     std::set<std::string> uses() const override;
     SharedSMTRef
     removeForalls(std::set<SortedVar> &introducedVariables) const override;
@@ -125,7 +122,7 @@ class TypedVariable : public SMTExpr {
     TypedVariable(std::string name, std::unique_ptr<Type> type)
         : name(std::move(name)), type(std::move(type)) {}
     std::unique_ptr<const HeapInfo> heapInfo() const override;
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
     std::set<std::string> uses() const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) const override;
@@ -142,7 +139,7 @@ class SortedVar {
     std::unique_ptr<Type> type;
     SortedVar(std::string name, std::unique_ptr<Type> type)
         : name(std::move(name)), type(std::move(type)) {}
-    SExprRef toSExpr() const;
+    sexpr::SExprRef toSExpr() const;
     std::set<std::string> uses() const;
     SortedVar &operator=(const SortedVar &other) {
         name = other.name;
@@ -183,7 +180,7 @@ class Forall : public SMTExpr {
     SharedSMTRef expr;
     Forall(std::vector<SortedVar> vars, SharedSMTRef expr)
         : vars(std::move(vars)), expr(std::move(expr)) {}
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
     std::set<std::string> uses() const override;
     SharedSMTRef
     removeForalls(std::set<SortedVar> &introducedVariables) const override;
@@ -200,7 +197,7 @@ class Forall : public SMTExpr {
 
 class CheckSat : public SMTExpr {
   public:
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
     SharedSMTRef compressLets(AssignmentVec defs) const override;
     void toZ3(z3::context &cxt, z3::solver &solver,
               std::map<std::string, z3::expr> &nameMap,
@@ -209,7 +206,7 @@ class CheckSat : public SMTExpr {
 
 class GetModel : public SMTExpr {
   public:
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
     SharedSMTRef compressLets(AssignmentVec defs) const override;
     void toZ3(z3::context &cxt, z3::solver &solver,
               std::map<std::string, z3::expr> &nameMap,
@@ -222,7 +219,7 @@ class Let : public SMTExpr {
     SharedSMTRef expr;
     Let(std::vector<Assignment> defs, SharedSMTRef expr)
         : defs(std::move(defs)), expr(std::move(expr)) {}
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
     SharedSMTRef
     removeForalls(std::set<SortedVar> &introducedVariables) const override;
     std::set<std::string> uses() const override;
@@ -246,14 +243,14 @@ class ConstantFP : public SMTExpr {
   public:
     llvm::APFloat value;
     explicit ConstantFP(const llvm::APFloat value) : value(value) {}
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
 };
 
 class ConstantInt : public SMTExpr {
   public:
     llvm::APInt value;
     explicit ConstantInt(const llvm::APInt value) : value(value) {}
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
     z3::expr toZ3Expr(
         z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
         const std::map<std::string, Z3DefineFun> &defineFunMap) const override;
@@ -263,7 +260,7 @@ class ConstantBool : public SMTExpr {
   public:
     bool value;
     explicit ConstantBool(bool value) : value(value) {}
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
     SharedSMTRef compressLets(AssignmentVec defs) const override;
     z3::expr toZ3Expr(
         z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
@@ -276,7 +273,7 @@ class ConstantString : public SMTExpr {
   public:
     std::string value;
     explicit ConstantString(std::string value) : value(value) {}
-    SExprRef toSExpr() const override; //  {
+    sexpr::SExprRef toSExpr() const override; //  {
     std::set<std::string> uses() const override;
     SharedSMTRef compressLets(AssignmentVec defs) const override;
     SharedSMTRef
@@ -298,7 +295,7 @@ class Op : public SMTExpr {
     std::string opName;
     std::vector<SharedSMTRef> args;
     bool instantiate;
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
     SharedSMTRef
     removeForalls(std::set<SortedVar> &introducedVariables) const override;
     std::set<std::string> uses() const override;
@@ -346,7 +343,7 @@ class FPCmp : public SMTExpr {
     FPCmp(Predicate op, std::unique_ptr<Type> type, SharedSMTRef op0,
           SharedSMTRef op1)
         : op(op), type(std::move(type)), op0(op0), op1(op1) {}
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
     std::set<std::string> uses() const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) const override;
@@ -364,7 +361,7 @@ class BinaryFPOperator : public SMTExpr {
     BinaryFPOperator(Opcode op, std::unique_ptr<Type> type, SharedSMTRef op0,
                      SharedSMTRef op1)
         : op(op), type(std::move(type)), op0(op0), op1(op1) {}
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
     std::set<std::string> uses() const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) const override;
@@ -382,7 +379,7 @@ class TypeCast : public SMTExpr {
              std::unique_ptr<Type> destType, SharedSMTRef operand)
         : op(op), sourceType(std::move(sourceType)),
           destType(std::move(destType)), operand(operand) {}
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
     std::set<std::string> uses() const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) const override;
@@ -397,7 +394,7 @@ class Query : public SMTExpr {
   public:
     Query(std::string queryName) : queryName(std::move(queryName)) {}
     std::string queryName;
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
 };
 
 auto stringExpr(std::string name) -> std::unique_ptr<ConstantString>;
@@ -423,7 +420,7 @@ class FunDecl : public SMTExpr {
     std::string funName;
     std::vector<std::unique_ptr<Type>> inTypes;
     std::unique_ptr<Type> outType;
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
     SharedSMTRef instantiateArrays() const override;
 };
 
@@ -437,7 +434,7 @@ class FunDef : public SMTExpr {
     std::vector<SortedVar> args;
     std::unique_ptr<Type> outType;
     SharedSMTRef body;
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
     SharedSMTRef instantiateArrays() const override;
     void toZ3(z3::context &cxt, z3::solver &solver,
               std::map<std::string, z3::expr> &nameMap,
@@ -448,14 +445,14 @@ class Comment : public SMTExpr {
   public:
     Comment(std::string val) : val(std::move(val)) {}
     std::string val;
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
 };
 
 class VarDecl : public SMTExpr {
   public:
     VarDecl(SortedVar var) : var(std::move(var)) {}
     SortedVar var;
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
     void toZ3(z3::context &cxt, z3::solver &solver,
               std::map<std::string, z3::expr> &nameMap,
               std::map<std::string, Z3DefineFun> &defineFunMap) const override;

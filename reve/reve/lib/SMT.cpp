@@ -23,6 +23,7 @@ using std::make_shared;
 using std::make_unique;
 using std::shared_ptr;
 using std::unique_ptr;
+using sexpr::SExprRef;
 using sexpr::Apply;
 using sexpr::Value;
 using sexpr::List;
@@ -146,16 +147,15 @@ SExprRef SortedVar::toSExpr() const {
 }
 
 SExprRef Let::toSExpr() const {
-    std::vector<SExprRef> args;
-    std::vector<SExprRef> defSExprs;
-    for (auto &def : defs) {
-        std::vector<SExprRef> argSExprs;
-        argSExprs.push_back(def.second->toSExpr());
-        defSExprs.push_back(
-            make_unique<Apply>(def.first, std::move(argSExprs)));
+    std::vector<SExprRef> defSExprs(defs.size());
+    for (size_t i = 0; i < defs.size(); ++i) {
+        std::vector<SExprRef> argSExprs(1);
+        argSExprs[0] = defs[i].second->toSExpr();
+        defSExprs[i] = make_unique<Apply>(defs[i].first, std::move(argSExprs));
     }
-    args.push_back(make_unique<List>(std::move(defSExprs)));
-    args.push_back(expr->toSExpr());
+    std::vector<SExprRef> args(2);
+    args[0] = make_unique<List>(std::move(defSExprs));
+    args[1] = expr->toSExpr();
     return make_unique<Apply>("let", std::move(args));
 }
 

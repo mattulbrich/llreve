@@ -10,13 +10,13 @@ enum class TypeTag { Bool, Int, Float, Array };
 struct Type {
     // Used for safe casting without rtti
     virtual TypeTag getTag() const = 0;
-    virtual SExprRef toSExpr() const = 0;
+    virtual sexpr::SExprRef toSExpr() const = 0;
     virtual std::unique_ptr<Type> copy() const = 0;
 };
 
 struct BoolType : Type {
     TypeTag getTag() const override;
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
     std::unique_ptr<Type> copy() const override;
 };
 
@@ -24,7 +24,7 @@ struct IntType : Type {
     unsigned bitWidth;
     explicit IntType(unsigned bitWidth) : bitWidth(bitWidth) {}
     TypeTag getTag() const override;
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
     std::unique_ptr<Type> copy() const override;
 };
 
@@ -34,7 +34,7 @@ struct FloatType : Type {
     explicit FloatType(unsigned exponentWidth, unsigned significandWidth)
         : exponentWidth(exponentWidth), significandWidth(significandWidth) {}
     TypeTag getTag() const override;
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
     std::unique_ptr<Type> copy() const override;
 };
 
@@ -45,7 +45,7 @@ struct ArrayType : Type {
                        std::unique_ptr<Type> target)
         : domain(std::move(domain)), target(std::move(target)) {}
     TypeTag getTag() const override;
-    SExprRef toSExpr() const override;
+    sexpr::SExprRef toSExpr() const override;
     std::unique_ptr<Type> copy() const override;
 };
 

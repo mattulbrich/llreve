@@ -175,7 +175,8 @@ struct SplitAssignments {
     std::vector<CallInfo> callInfos;
 };
 
-auto splitAssignmentsFromCalls(const std::vector<AssignmentCallBlock> &)
+auto splitAssignmentsFromCalls(
+    llvm::ArrayRef<AssignmentCallBlock> assignmentCallBlocks)
     -> SplitAssignments;
 
 auto checkPathMaps(PathMap map1, PathMap map2) -> void;
@@ -184,7 +185,7 @@ auto getDontLoopInvariant(smt::SMTRef endClause, Mark startIndex,
                           PathMap pathMap, FreeVarsMap freeVarsMap,
                           Program prog) -> smt::SMTRef;
 auto addAssignments(const smt::SharedSMTRef end,
-                    const std::vector<AssignmentBlock> &assignments)
+                    llvm::ArrayRef<AssignmentBlock> assignments)
     -> smt::SharedSMTRef;
 auto addMemory(std::vector<smt::SharedSMTRef> &implArgs)
     -> std::function<void(CallInfo call, int index)>;

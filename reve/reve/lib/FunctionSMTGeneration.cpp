@@ -432,7 +432,7 @@ vector<AssignmentCallBlock> assignmentsOnPath(const Path &path, Program prog,
 }
 
 SharedSMTRef addAssignments(const SharedSMTRef end,
-                            const vector<AssignmentBlock> &assignments) {
+                            llvm::ArrayRef<AssignmentBlock> assignments) {
     SharedSMTRef clause = end;
     for (auto assgnIt = assignments.rbegin(); assgnIt != assignments.rend();
          ++assgnIt) {
@@ -764,7 +764,7 @@ int swapIndex(int I) {
 
 /// Split the assignment blocks on each call
 SplitAssignments splitAssignmentsFromCalls(
-    const vector<AssignmentCallBlock> &assignmentCallBlocks) {
+    llvm::ArrayRef<AssignmentCallBlock> assignmentCallBlocks) {
     vector<vector<AssignmentBlock>> assignmentBlocks;
     vector<CallInfo> callInfos;
     vector<struct AssignmentBlock> currentAssignmentsList;

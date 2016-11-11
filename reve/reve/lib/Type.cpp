@@ -11,6 +11,7 @@ using std::vector;
 
 using sexpr::Apply;
 using sexpr::Value;
+using sexpr::SExprRef;
 
 using namespace llreve::opts;
 

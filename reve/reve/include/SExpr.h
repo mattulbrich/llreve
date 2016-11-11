@@ -20,6 +20,9 @@
 
 namespace sexpr {
 
+class SExpr;
+using SExprRef = std::unique_ptr<const sexpr::SExpr>;
+
 class SExpr {
   public:
     virtual void serialize(std::ostream &os, size_t indent,
@@ -40,21 +43,21 @@ class Value : public SExpr {
 class Apply : public SExpr {
   public:
     std::string fun;
-    std::vector<std::unique_ptr<const SExpr>> args;
+    std::vector<SExprRef> args;
     const static llvm::StringSet<> atomicOps;
     const static llvm::StringSet<> forceIndentOps;
-    Apply(std::string fun, std::vector<std::unique_ptr<const SExpr>> args)
+    Apply(std::string fun, std::vector<SExprRef> args)
         : fun(std::move(fun)), args(std::move(args)) {}
     void serialize(std::ostream &os, size_t indent, bool pretty) const override;
 };
 
 class List : public SExpr {
   public:
-    explicit List(std::vector<std::unique_ptr<const SExpr>> elements)
+    explicit List(std::vector<SExprRef> elements)
         : elements(std::move(elements)) {}
     void serialize(std::ostream &os, size_t indent, bool pretty) const override;
     std::string fun;
-    std::vector<std::unique_ptr<const SExpr>> elements;
+    std::vector<SExprRef> elements;
 };
 
 class Comment : public SExpr {
@@ -68,5 +71,4 @@ class Comment : public SExpr {
 std::ostream &operator<<(std::ostream &os, const SExpr &val);
 } // namespace sexpr
 
-using SExprRef = std::unique_ptr<const sexpr::SExpr>;
-SExprRef sexprFromString(std::string value);
+sexpr::SExprRef sexprFromString(std::string value);
