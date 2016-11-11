@@ -16,6 +16,8 @@
 #include <set>
 #include <vector>
 
+#include <llvm/ADT/StringSet.h>
+
 namespace sexpr {
 
 class SExpr {
@@ -39,8 +41,8 @@ class Apply : public SExpr {
   public:
     std::string fun;
     std::vector<std::unique_ptr<const SExpr>> args;
-    const static std::set<std::string> atomicOps;
-    const static std::set<std::string> forceIndentOps;
+    const static llvm::StringSet<> atomicOps;
+    const static llvm::StringSet<> forceIndentOps;
     Apply(std::string fun, std::vector<std::unique_ptr<const SExpr>> args)
         : fun(std::move(fun)), args(std::move(args)) {}
     void serialize(std::ostream &os, size_t indent, bool pretty) const override;

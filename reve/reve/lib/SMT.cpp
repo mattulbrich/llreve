@@ -410,52 +410,53 @@ set<string> TypedVariable::uses() const { return {name}; }
 
 // Implementations of compressLets
 
-SharedSMTRef SMTExpr::compressLets(std::vector<Assignment> defs) const {
+SharedSMTRef SMTExpr::compressLets(AssignmentVec defs) const {
     assert(defs.empty());
     unused(defs);
     return shared_from_this();
 }
 
-SharedSMTRef Assert::compressLets(std::vector<Assignment> defs) const {
+SharedSMTRef Assert::compressLets(AssignmentVec defs) const {
     assert(defs.empty());
     unused(defs);
     return make_shared<Assert>(expr->compressLets());
 }
 
-SharedSMTRef Forall::compressLets(std::vector<Assignment> defs) const {
+SharedSMTRef Forall::compressLets(AssignmentVec defs) const {
     return nestLets(make_shared<Forall>(vars, expr->compressLets()), defs);
 }
 
-SharedSMTRef CheckSat::compressLets(std::vector<Assignment> defs) const {
+SharedSMTRef CheckSat::compressLets(AssignmentVec defs) const {
     assert(defs.empty());
     unused(defs);
     return shared_from_this();
 }
 
-SharedSMTRef GetModel::compressLets(std::vector<Assignment> defs) const {
+SharedSMTRef GetModel::compressLets(AssignmentVec defs) const {
     assert(defs.empty());
     unused(defs);
     return shared_from_this();
 }
 
-SharedSMTRef Let::compressLets(std::vector<Assignment> passedDefs) const {
+SharedSMTRef Let::compressLets(AssignmentVec passedDefs) const {
     passedDefs.insert(passedDefs.end(), defs.begin(), defs.end());
-    return expr->compressLets(passedDefs);
+    return expr->compressLets(std::move(passedDefs));
 }
 
-SharedSMTRef Op::compressLets(std::vector<Assignment> defs) const {
-    std::vector<SharedSMTRef> compressedArgs;
-    for (auto arg : args) {
-        compressedArgs.push_back(arg->compressLets());
+SharedSMTRef Op::compressLets(AssignmentVec defs) const {
+    std::vector<SharedSMTRef> compressedArgs(args.size());
+    for (size_t i = 0; i < args.size(); ++i) {
+        compressedArgs.at(i) = args.at(i)->compressLets();
     }
-    return nestLets(make_shared<Op>(opName, compressedArgs, instantiate), defs);
+    return nestLets(
+        make_shared<Op>(opName, std::move(compressedArgs), instantiate), defs);
 }
 
-SharedSMTRef ConstantString::compressLets(std::vector<Assignment> defs) const {
+SharedSMTRef ConstantString::compressLets(AssignmentVec defs) const {
     return nestLets(shared_from_this(), defs);
 }
 
-SharedSMTRef ConstantBool::compressLets(std::vector<Assignment> defs) const {
+SharedSMTRef ConstantBool::compressLets(AssignmentVec defs) const {
     return nestLets(shared_from_this(), defs);
 }
 
@@ -555,19 +556,20 @@ SMTExpr::mergeImplications(std::vector<SharedSMTRef> conditions) const {
 SharedSMTRef
 Assert::mergeImplications(std::vector<SharedSMTRef> conditions) const {
     assert(conditions.empty());
-    return make_shared<Assert>(expr->mergeImplications(conditions));
+    return make_shared<Assert>(expr->mergeImplications(std::move(conditions)));
 }
 
 SharedSMTRef
 Let::mergeImplications(std::vector<SharedSMTRef> conditions) const {
-    return make_shared<Let>(defs, expr->mergeImplications(conditions));
+    return make_shared<Let>(defs,
+                            expr->mergeImplications(std::move(conditions)));
 }
 
 SharedSMTRef Op::mergeImplications(std::vector<SharedSMTRef> conditions) const {
     if (opName == "=>") {
         assert(args.size() == 2);
         conditions.push_back(args.at(0));
-        return args.at(1)->mergeImplications(conditions);
+        return args.at(1)->mergeImplications(std::move(conditions));
     } else {
         return makeOp("=>", make_shared<Op>("and", conditions),
                       shared_from_this());
@@ -576,7 +578,8 @@ SharedSMTRef Op::mergeImplications(std::vector<SharedSMTRef> conditions) const {
 
 SharedSMTRef
 Forall::mergeImplications(std::vector<SharedSMTRef> conditions) const {
-    return std::make_shared<Forall>(vars, expr->mergeImplications(conditions));
+    return std::make_shared<Forall>(
+        vars, expr->mergeImplications(std::move(conditions)));
 }
 
 // Implementations of splitConjunctions()
@@ -1077,20 +1080,19 @@ void FunDef::toZ3(z3::context &cxt, z3::solver & /* unused */,
     defineFunMap.insert({funName, {vars, z3Body}});
 }
 
-SharedSMTRef nestLets(SharedSMTRef clause, std::vector<Assignment> defs) {
+SharedSMTRef nestLets(SharedSMTRef clause, llvm::ArrayRef<Assignment> defs) {
     SharedSMTRef lets = clause;
     set<string> uses;
     std::vector<Assignment> defsAccum;
     for (auto i = defs.rbegin(), e = defs.rend(); i != e; ++i) {
         if (uses.find(i->first) != uses.end()) {
-            lets = make_unique<Let>(defsAccum, lets);
+            lets = make_unique<Let>(defsAccum, std::move(lets));
             uses = set<string>();
-            defsAccum = std::vector<Assignment>();
+            defsAccum.clear();
         }
         defsAccum.insert(defsAccum.begin(), *i);
-        for (auto use : i->second->uses()) {
-            uses.insert(use);
-        }
+        set<string> usesForExpr = i->second->uses();
+        uses.insert(usesForExpr.begin(), usesForExpr.end());
     }
     if (!defsAccum.empty()) {
         lets = make_unique<Let>(defsAccum, lets);

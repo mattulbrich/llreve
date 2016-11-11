@@ -24,11 +24,9 @@ void Value::serialize(std::ostream &os, size_t /* unused */,
 void Apply::serialize(std::ostream &os, size_t indent, bool pretty) const {
     os << "(" << fun;
     if (pretty) {
-        bool atomicOp = std::find(atomicOps.begin(), atomicOps.end(), fun) !=
-                        atomicOps.end();
+        bool atomicOp = atomicOps.find(fun) != atomicOps.end();
         bool simpleOp = args.size() <= 1 &&
-                        std::find(forceIndentOps.begin(), forceIndentOps.end(),
-                                  fun) == forceIndentOps.end();
+                        forceIndentOps.find(fun) == forceIndentOps.end();
         bool inv = fun.substr(0, 3) == "INV" || fun == "OUT_INV" ||
                    fun == "IN_INV" || fun == "INIT";
         if (atomicOp || simpleOp || inv) {
@@ -38,7 +36,7 @@ void Apply::serialize(std::ostream &os, size_t indent, bool pretty) const {
             }
         } else {
             for (auto &arg : args) {
-                os << std::endl;
+                os << "\n";
                 os << std::string(indent + 3, ' ');
                 arg->serialize(os, indent + 3, pretty);
             }
@@ -60,7 +58,7 @@ void List::serialize(std::ostream &os, size_t indent, bool pretty) const {
         (*it)->serialize(os, indent + 1, pretty);
         ++it;
         for (; it != e; ++it) {
-            os << std::endl;
+            os << "\n";
             os << std::string(indent + 1, ' ');
             (*it)->serialize(os, indent + 1, pretty);
         }
@@ -73,8 +71,8 @@ void Comment::serialize(std::ostream &os, size_t /* unused */,
     os << "; " << val;
 }
 
-const std::set<std::string> Apply::forceIndentOps = {"assert", "and", "rule"};
-const std::set<std::string> Apply::atomicOps = {
+const llvm::StringSet<> Apply::forceIndentOps = {"assert", "and", "rule"};
+const llvm::StringSet<> Apply::atomicOps = {
     "+",      "-",      "*",       "<=",       "<",      ">",
     ">=",     "=",      "not",     "distinct", "select", "ite",
     "div",    "_",      "bvadd",   "bvsub",    "bvmul",  "store",

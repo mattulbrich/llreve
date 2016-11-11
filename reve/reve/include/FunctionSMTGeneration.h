@@ -130,12 +130,12 @@ auto offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
 /* -------------------------------------------------------------------------- */
 // Functions for generating SMT for a single/mutual path
 
-auto assignmentsOnPath(Path path, Program prog,
-                       std::vector<smt::SortedVar> freeVars, bool toEnd)
+auto assignmentsOnPath(const Path &path, Program prog,
+                       const std::vector<smt::SortedVar> &freeVars, bool toEnd)
     -> std::vector<AssignmentCallBlock>;
 auto interleaveAssignments(
     smt::SharedSMTRef endClause,
-    MonoPair<std::vector<AssignmentCallBlock>> assignments)
+    const MonoPair<std::vector<AssignmentCallBlock>> &assignments)
     -> smt::SharedSMTRef;
 auto nonmutualSMT(smt::SharedSMTRef endClause,
                   std::vector<AssignmentCallBlock> assignments, Program prog)
@@ -175,7 +175,7 @@ struct SplitAssignments {
     std::vector<CallInfo> callInfos;
 };
 
-auto splitAssignmentsFromCalls(std::vector<AssignmentCallBlock>)
+auto splitAssignmentsFromCalls(const std::vector<AssignmentCallBlock> &)
     -> SplitAssignments;
 
 auto checkPathMaps(PathMap map1, PathMap map2) -> void;
@@ -184,7 +184,7 @@ auto getDontLoopInvariant(smt::SMTRef endClause, Mark startIndex,
                           PathMap pathMap, FreeVarsMap freeVarsMap,
                           Program prog) -> smt::SMTRef;
 auto addAssignments(const smt::SharedSMTRef end,
-                    std::vector<AssignmentBlock> assignments)
+                    const std::vector<AssignmentBlock> &assignments)
     -> smt::SharedSMTRef;
 auto addMemory(std::vector<smt::SharedSMTRef> &implArgs)
     -> std::function<void(CallInfo call, int index)>;
