@@ -40,24 +40,24 @@ class Value : public SExpr {
                    bool /* unused */) const override;
 };
 
+using SExprVec = llvm::SmallVector<SExprRef, 3>;
 class Apply : public SExpr {
   public:
     std::string fun;
-    std::vector<SExprRef> args;
+    SExprVec args;
     const static llvm::StringSet<> atomicOps;
     const static llvm::StringSet<> forceIndentOps;
-    Apply(std::string fun, std::vector<SExprRef> args)
+    Apply(std::string fun, SExprVec args)
         : fun(std::move(fun)), args(std::move(args)) {}
     void serialize(std::ostream &os, size_t indent, bool pretty) const override;
 };
 
 class List : public SExpr {
   public:
-    explicit List(std::vector<SExprRef> elements)
-        : elements(std::move(elements)) {}
+    explicit List(SExprVec elements) : elements(std::move(elements)) {}
     void serialize(std::ostream &os, size_t indent, bool pretty) const override;
     std::string fun;
-    std::vector<SExprRef> elements;
+    SExprVec elements;
 };
 
 class Comment : public SExpr {

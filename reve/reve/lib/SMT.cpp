@@ -23,15 +23,12 @@ using std::make_shared;
 using std::make_unique;
 using std::shared_ptr;
 using std::unique_ptr;
-using sexpr::SExprRef;
-using sexpr::Apply;
-using sexpr::Value;
-using sexpr::List;
 using std::set;
 using std::string;
 using std::vector;
 
 using namespace llreve::opts;
+using namespace sexpr;
 
 // Implementations of toSExpr()
 
@@ -71,9 +68,9 @@ SExprRef ConstantInt::toSExpr() const {
         return sexprFromString("#x" + hexValue);
     } else {
         if (value.isNegative()) {
-            vector<SExprRef> args;
+            SExprVec args;
             args.push_back(sexprFromString((-value).toString(10, true)));
-            return make_unique<Apply>("-", std::move(args));
+            return std::make_unique<Apply>("-", std::move(args));
         } else {
             return sexprFromString(value.toString(10, true));
         }
@@ -91,76 +88,77 @@ SExprRef ConstantBool::toSExpr() const {
 SExprRef ConstantString::toSExpr() const { return sexprFromString(value); }
 
 SExprRef SetLogic::toSExpr() const {
-    std::vector<SExprRef> args;
+    SExprVec args;
     SExprRef logicPtr = make_unique<Value>(logic);
 
     args.push_back(std::move(logicPtr));
-    return make_unique<Apply>("set-logic", std::move(args));
+    return std::make_unique<Apply>("set-logic", std::move(args));
 }
 
 SExprRef CheckSat::toSExpr() const {
-    std::vector<SExprRef> args;
-    return make_unique<Apply>("check-sat", std::move(args));
+    SExprVec args;
+    return std::make_unique<Apply>("check-sat", std::move(args));
 }
 
 SExprRef Query::toSExpr() const {
-    std::vector<SExprRef> args;
+    SExprVec args;
     args.push_back(make_unique<Value>(queryName));
     args.push_back(make_unique<Value>(":print-certificate"));
     args.push_back(make_unique<Value>("true"));
-    return make_unique<Apply>("query", std::move(args));
+    return std::make_unique<Apply>("query", std::move(args));
 }
 
 SExprRef GetModel::toSExpr() const {
-    std::vector<SExprRef> args;
-    return make_unique<Apply>("get-model", std::move(args));
+    SExprVec args;
+    return std::make_unique<Apply>("get-model", std::move(args));
 }
 
 SExprRef Assert::toSExpr() const {
-    std::vector<SExprRef> args;
+    SExprVec args;
     args.push_back(expr->toSExpr());
     const string keyword =
         SMTGenerationOpts::getInstance().OutputFormat == SMTFormat::Z3
             ? "rule"
             : "assert";
-    return make_unique<Apply>(keyword, std::move(args));
+    return std::make_unique<Apply>(keyword, std::move(args));
 }
 
 SExprRef Forall::toSExpr() const {
     if (vars.empty()) {
         return expr->toSExpr();
     }
-    std::vector<SExprRef> args;
-    std::vector<SExprRef> sortedVars;
+    SExprVec args;
+    SExprVec sortedVars;
     for (auto &sortedVar : vars) {
         sortedVars.push_back(sortedVar.toSExpr());
     }
-    args.push_back(make_unique<List>(std::move(sortedVars)));
+    args.push_back(std::make_unique<List>(std::move(sortedVars)));
     args.push_back(expr->toSExpr());
-    return make_unique<Apply>("forall", std::move(args));
+    return std::make_unique<Apply>("forall", std::move(args));
 }
 
 SExprRef SortedVar::toSExpr() const {
-    std::vector<SExprRef> typeSExpr;
+    SExprVec typeSExpr;
     typeSExpr.push_back(type->toSExpr());
-    return make_unique<Apply>(name, std::move(typeSExpr));
+    return std::make_unique<Apply>(name, std::move(typeSExpr));
 }
 
 SExprRef Let::toSExpr() const {
-    std::vector<SExprRef> defSExprs(defs.size());
-    for (size_t i = 0; i < defs.size(); ++i) {
-        std::vector<SExprRef> argSExprs(1);
-        argSExprs[0] = defs[i].second->toSExpr();
-        defSExprs[i] = make_unique<Apply>(defs[i].first, std::move(argSExprs));
+    SExprVec defSExprs;
+    for (const auto &def : defs) {
+        SExprVec argSExprs;
+        argSExprs.push_back(def.second->toSExpr());
+        defSExprs.push_back(
+            std::make_unique<Apply>(def.first, std::move(argSExprs)));
     }
-    std::vector<SExprRef> args(2);
-    args[0] = make_unique<List>(std::move(defSExprs));
-    args[1] = expr->toSExpr();
-    return make_unique<Apply>("let", std::move(args));
+    SExprVec args;
+    args.push_back(std::make_unique<List>(std::move(defSExprs)));
+    args.push_back(expr->toSExpr());
+    return std::make_unique<Apply>("let", std::move(args));
 }
 
 SExprRef Op::toSExpr() const {
-    std::vector<SExprRef> argSExprs;
+    SExprVec argSExprs;
     // Special case for emty and
     if (opName == "and" && args.empty()) {
         return make_unique<Value>("true");
@@ -168,17 +166,17 @@ SExprRef Op::toSExpr() const {
     for (auto &arg : args) {
         argSExprs.push_back(arg->toSExpr());
     }
-    return make_unique<Apply>(opName, std::move(argSExprs));
+    return std::make_unique<Apply>(opName, std::move(argSExprs));
 }
 
 SExprRef FunDecl::toSExpr() const {
-    std::vector<SExprRef> inTypeSExprs;
+    SExprVec inTypeSExprs;
     for (const auto &inType : inTypes) {
         inTypeSExprs.push_back(inType->toSExpr());
     }
-    std::vector<SExprRef> args;
+    SExprVec args;
     args.push_back(stringExpr(funName)->toSExpr());
-    args.push_back(make_unique<List>(std::move(inTypeSExprs)));
+    args.push_back(std::make_unique<List>(std::move(inTypeSExprs)));
     if (SMTGenerationOpts::getInstance().OutputFormat == SMTFormat::SMTHorn) {
         args.push_back(outType->toSExpr());
     }
@@ -186,20 +184,20 @@ SExprRef FunDecl::toSExpr() const {
         SMTGenerationOpts::getInstance().OutputFormat == SMTFormat::Z3
             ? "declare-rel"
             : "declare-fun";
-    return make_unique<Apply>(keyword, std::move(args));
+    return std::make_unique<Apply>(keyword, std::move(args));
 }
 
 SExprRef FunDef::toSExpr() const {
-    std::vector<SExprRef> argSExprs;
+    SExprVec argSExprs;
     for (auto arg : args) {
         argSExprs.push_back(arg.toSExpr());
     }
-    std::vector<SExprRef> args;
+    SExprVec args;
     args.push_back(stringExpr(funName)->toSExpr());
-    args.push_back(make_unique<List>(std::move(argSExprs)));
+    args.push_back(std::make_unique<List>(std::move(argSExprs)));
     args.push_back(outType->toSExpr());
     args.push_back(body->toSExpr());
-    return make_unique<Apply>("define-fun", std::move(args));
+    return std::make_unique<Apply>("define-fun", std::move(args));
 }
 
 SExprRef Comment::toSExpr() const {
@@ -207,10 +205,10 @@ SExprRef Comment::toSExpr() const {
 }
 
 SExprRef VarDecl::toSExpr() const {
-    vector<SExprRef> args;
+    SExprVec args;
     args.push_back(stringExpr(var.name)->toSExpr());
     args.push_back(var.type->toSExpr());
-    return make_unique<Apply>("declare-var", std::move(args));
+    return std::make_unique<Apply>("declare-var", std::move(args));
 }
 
 SExprRef FPCmp::toSExpr() const {
@@ -219,7 +217,7 @@ SExprRef FPCmp::toSExpr() const {
                  "impleneted\n");
         exit(1);
     } else {
-        vector<SExprRef> args;
+        SExprVec args;
         args.push_back(op0->toSExpr());
         args.push_back(op1->toSExpr());
         switch (this->op) {
@@ -229,22 +227,22 @@ SExprRef FPCmp::toSExpr() const {
             return sexprFromString("true");
         case Predicate::OEQ:
         case Predicate::UEQ:
-            return make_unique<Apply>("=", std::move(args));
+            return std::make_unique<Apply>("=", std::move(args));
         case Predicate::OGT:
         case Predicate::UGT:
-            return make_unique<Apply>(">", std::move(args));
+            return std::make_unique<Apply>(">", std::move(args));
         case Predicate::OGE:
         case Predicate::UGE:
-            return make_unique<Apply>(">=", std::move(args));
+            return std::make_unique<Apply>(">=", std::move(args));
         case Predicate::OLT:
         case Predicate::ULT:
-            return make_unique<Apply>("<", std::move(args));
+            return std::make_unique<Apply>("<", std::move(args));
         case Predicate::OLE:
         case Predicate::ULE:
-            return make_unique<Apply>("<=", std::move(args));
+            return std::make_unique<Apply>("<=", std::move(args));
         case Predicate::ONE:
         case Predicate::UNE:
-            return make_unique<Apply>("distinct", std::move(args));
+            return std::make_unique<Apply>("distinct", std::move(args));
         case Predicate::ORD:
         case Predicate::UNO:
             logError("Cannot check reals for orderedness\n");
@@ -259,18 +257,18 @@ SExprRef BinaryFPOperator::toSExpr() const {
                  "implemented\n");
         exit(1);
     } else {
-        vector<SExprRef> args;
+        SExprVec args;
         args.push_back(op0->toSExpr());
         args.push_back(op1->toSExpr());
         switch (this->op) {
         case Opcode::FAdd:
-            return make_unique<Apply>("+", std::move(args));
+            return std::make_unique<Apply>("+", std::move(args));
         case Opcode::FSub:
-            return make_unique<Apply>("-", std::move(args));
+            return std::make_unique<Apply>("-", std::move(args));
         case Opcode::FMul:
-            return make_unique<Apply>("*", std::move(args));
+            return std::make_unique<Apply>("*", std::move(args));
         case Opcode::FDiv:
-            return make_unique<Apply>("/", std::move(args));
+            return std::make_unique<Apply>("/", std::move(args));
         case Opcode::FRem:
             logError("SMT reals don’t support a remainder operation\n");
             exit(1);
@@ -293,7 +291,7 @@ SExprRef TypeCast::toSExpr() const {
         return Op("ite", std::move(args)).toSExpr();
     }
     if (SMTGenerationOpts::getInstance().BitVect) {
-        vector<SExprRef> args;
+        SExprVec args;
         args.push_back(operand->toSExpr());
         switch (this->op) {
         case llvm::Instruction::Trunc: {
@@ -302,16 +300,15 @@ SExprRef TypeCast::toSExpr() const {
             unsigned bitWidth = intDestType.bitWidth;
             string opName =
                 "(_ extract " + std::to_string(bitWidth - 1) + " 0)";
-            return make_unique<Apply>(opName, std::move(args));
+            return std::make_unique<Apply>(opName, std::move(args));
         }
         case llvm::Instruction::ZExt: {
-            vector<SExprRef> args;
             unsigned destBitWidth = static_cast<IntType &>(*destType).bitWidth;
             unsigned sourceBitWidth =
                 static_cast<IntType &>(*sourceType).bitWidth;
             string opName = "(_ zero_extend " +
                             std::to_string(destBitWidth - sourceBitWidth) + ")";
-            return make_unique<Apply>(opName, std::move(args));
+            return std::make_unique<Apply>(opName, std::move(args));
         }
         case llvm::Instruction::SExt: {
             unsigned destBitWidth = static_cast<IntType &>(*destType).bitWidth;
@@ -319,7 +316,7 @@ SExprRef TypeCast::toSExpr() const {
                 static_cast<IntType &>(*sourceType).bitWidth;
             string opName = "(_ sign_extend " +
                             std::to_string(destBitWidth - sourceBitWidth) + ")";
-            return make_unique<Apply>(opName, std::move(args));
+            return std::make_unique<Apply>(opName, std::move(args));
         }
         default:
             logError("Unsupported cast operation in bitvector mode: " +
@@ -327,7 +324,7 @@ SExprRef TypeCast::toSExpr() const {
             exit(1);
         }
     } else {
-        vector<SExprRef> args;
+        SExprVec args;
         args.push_back(operand->toSExpr());
         switch (this->op) {
         case llvm::Instruction::SExt:
@@ -336,7 +333,7 @@ SExprRef TypeCast::toSExpr() const {
         case llvm::Instruction::BitCast:
             return operand->toSExpr();
         case llvm::Instruction::SIToFP:
-            return make_unique<Apply>("to_real", std::move(args));
+            return std::make_unique<Apply>("to_real", std::move(args));
         default:
             logError("Unsupported opcode: " + std::to_string(this->op) + "\n");
             exit(1);

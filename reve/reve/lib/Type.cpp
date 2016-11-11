@@ -9,10 +9,7 @@ using std::string;
 using std::unique_ptr;
 using std::vector;
 
-using sexpr::Apply;
-using sexpr::Value;
-using sexpr::SExprRef;
-
+using namespace sexpr;
 using namespace llreve::opts;
 
 namespace smt {
@@ -24,30 +21,30 @@ TypeTag ArrayType::getTag() const { return TypeTag::Array; }
 SExprRef BoolType::toSExpr() const { return sexprFromString("Bool"); }
 SExprRef IntType::toSExpr() const {
     if (SMTGenerationOpts::getInstance().BitVect) {
-        vector<SExprRef> args;
+        SExprVec args;
         args.push_back(sexprFromString("BitVec"));
         args.push_back(sexprFromString(std::to_string(this->bitWidth)));
-        return make_unique<Apply>("_", std::move(args));
+        return std::make_unique<Apply>("_", std::move(args));
     } else {
         return sexprFromString("Int");
     }
 }
 SExprRef FloatType::toSExpr() const {
     if (SMTGenerationOpts::getInstance().BitVect) {
-        vector<SExprRef> args;
+        SExprVec args;
         args.push_back(sexprFromString("FloatingPoint"));
         args.push_back(sexprFromString(std::to_string(this->exponentWidth)));
         args.push_back(sexprFromString(std::to_string(this->significandWidth)));
-        return make_unique<Apply>("_", std::move(args));
+        return std::make_unique<Apply>("_", std::move(args));
     } else {
         return sexprFromString("Real");
     }
 }
 SExprRef ArrayType::toSExpr() const {
-    vector<SExprRef> args;
+    SExprVec args;
     args.push_back(domain->toSExpr());
     args.push_back(target->toSExpr());
-    return make_unique<Apply>("Array", std::move(args));
+    return std::make_unique<Apply>("Array", std::move(args));
 }
 
 unique_ptr<Type> BoolType::copy() const { return make_unique<BoolType>(); }
