@@ -178,8 +178,8 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
 // Generate SMT for all paths
 
 map<MarkPair, vector<SharedSMTRef>>
-getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
-                     FreeVarsMap freeVarsMap,
+getSynchronizedPaths(const PathMap &pathMap1, const PathMap &pathMap2,
+                     const FreeVarsMap &freeVarsMap,
                      ReturnInvariantGenerator generateReturnInvariant) {
     map<MarkPair, vector<SharedSMTRef>> clauses;
     for (const auto &pathMapIt : pathMap1) {

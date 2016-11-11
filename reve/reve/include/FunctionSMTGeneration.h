@@ -98,8 +98,8 @@ inline bool operator<(const MarkPair &lhs, const MarkPair &rhs) {
     return lhs.startMark < rhs.startMark;
 }
 
-auto getSynchronizedPaths(PathMap pathMap1, PathMap pathMap2,
-                          FreeVarsMap freeVarsMap,
+auto getSynchronizedPaths(const PathMap &pathMap1, const PathMap &pathMap2,
+                          const FreeVarsMap &freeVarsMap,
                           ReturnInvariantGenerator generateReturnInvariant)
     -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
 
