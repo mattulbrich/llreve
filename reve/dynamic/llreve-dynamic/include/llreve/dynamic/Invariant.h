@@ -23,6 +23,24 @@ template <typename T> struct LoopInfoData {
         : left(left), right(right), none(none) {}
 };
 
+enum class LoopInfo {
+    Left,  // The left call is looping alone
+    Right, // The right call is looping alone
+    None   // perfect synchronization
+};
+
+template <typename T>
+auto getDataForLoopInfo(LoopInfoData<T> &data, LoopInfo position) -> T & {
+    switch (position) {
+    case LoopInfo::Left:
+        return data.left;
+    case LoopInfo::Right:
+        return data.right;
+    case LoopInfo::None:
+        return data.none;
+    }
+}
+
 template <typename T> struct Bound {
     T lower;
     T upper;

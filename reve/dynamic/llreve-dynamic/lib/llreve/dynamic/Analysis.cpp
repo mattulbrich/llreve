@@ -514,51 +514,18 @@ void populateEquationsMap(
         polynomialEquations.at(match.mark)
             .insert(make_pair(exitIndex,
                               LoopInfoData<Matrix<mpq_class>>({}, {}, {})));
-        switch (match.loopInfo) {
-        case LoopInfo::Left:
-            polynomialEquations.at(match.mark).at(exitIndex).left = {equation};
-            break;
-        case LoopInfo::Right:
-            polynomialEquations.at(match.mark).at(exitIndex).right = {equation};
-            break;
-        case LoopInfo::None:
-            polynomialEquations.at(match.mark).at(exitIndex).none = {equation};
-            break;
-        }
+        getDataForLoopInfo(polynomialEquations.at(match.mark).at(exitIndex),
+                           match.loopInfo) = {equation};
     } else {
-        Matrix<mpq_class> vecs;
-        switch (match.loopInfo) {
-        case LoopInfo::Left:
-            vecs = polynomialEquations.at(match.mark).at(exitIndex).left;
-            break;
-        case LoopInfo::Right:
-            vecs = polynomialEquations.at(match.mark).at(exitIndex).right;
-            break;
-        case LoopInfo::None:
-            vecs = polynomialEquations.at(match.mark).at(exitIndex).none;
-            break;
-        }
+        Matrix<mpq_class> vecs = getDataForLoopInfo(
+            polynomialEquations.at(match.mark).at(exitIndex), match.loopInfo);
         vecs.push_back(equation);
         if (!linearlyIndependent(vecs)) {
             return;
         }
-        switch (match.loopInfo) {
-        case LoopInfo::Left:
-            polynomialEquations.at(match.mark)
-                .at(exitIndex)
-                .left.push_back(equation);
-            break;
-        case LoopInfo::Right:
-            polynomialEquations.at(match.mark)
-                .at(exitIndex)
-                .right.push_back(equation);
-            break;
-        case LoopInfo::None:
-            polynomialEquations.at(match.mark)
-                .at(exitIndex)
-                .none.push_back(equation);
-            break;
-        }
+        getDataForLoopInfo(polynomialEquations.at(match.mark).at(exitIndex),
+                           match.loopInfo)
+            .push_back(equation);
     }
 }
 
@@ -608,42 +575,20 @@ void populateEquationsMap(
     if (polynomialEquations.count(match.mark) == 0) {
         polynomialEquations.insert(
             {match.mark, {{{}, {}}, {{}, {}}, {{}, {}}}});
-        switch (match.loopInfo) {
-        case LoopInfo::Left:
-            polynomialEquations.at(match.mark).left = {{preEquation},
-                                                       {postEquation}};
-            break;
-        case LoopInfo::Right:
-            polynomialEquations.at(match.mark).right = {{preEquation},
-                                                        {postEquation}};
-            break;
-        case LoopInfo::None:
-            polynomialEquations.at(match.mark).none = {{preEquation},
-                                                       {postEquation}};
-            break;
-        }
+        getDataForLoopInfo(polynomialEquations.at(match.mark),
+                           match.loopInfo) = {{preEquation}, {postEquation}};
     } else {
-        FunctionInvariant<Matrix<mpq_class>> *vecsRef;
-        switch (match.loopInfo) {
-        case LoopInfo::Left:
-            vecsRef = &polynomialEquations.at(match.mark).left;
-            break;
-        case LoopInfo::Right:
-            vecsRef = &polynomialEquations.at(match.mark).right;
-            break;
-        case LoopInfo::None:
-            vecsRef = &polynomialEquations.at(match.mark).none;
-            break;
-        }
-        auto preVecs = vecsRef->preCondition;
-        auto postVecs = vecsRef->postCondition;
+        auto &vecsRef = getDataForLoopInfo(polynomialEquations.at(match.mark),
+                                           match.loopInfo);
+        auto preVecs = vecsRef.preCondition;
+        auto postVecs = vecsRef.postCondition;
         preVecs.push_back(preEquation);
         postVecs.push_back(postEquation);
         if (linearlyIndependent(preVecs)) {
-            vecsRef->preCondition = preVecs;
+            vecsRef.preCondition = preVecs;
         }
         if (linearlyIndependent(postVecs)) {
-            vecsRef->postCondition = postVecs;
+            vecsRef.postCondition = postVecs;
         }
     }
 }

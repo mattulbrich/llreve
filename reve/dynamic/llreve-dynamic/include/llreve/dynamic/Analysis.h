@@ -33,12 +33,6 @@ namespace dynamic {
 
 extern std::string InputFileFlag;
 
-enum class LoopInfo {
-    Left,  // The left call is looping alone
-    Right, // The right call is looping alone
-    None   // perfect synchronization
-};
-
 enum class LlreveResult { Equivalent, NotEquivalent };
 
 template <typename T1, typename T2>
