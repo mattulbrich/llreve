@@ -34,9 +34,10 @@ void SMTGenerationOpts::initialize(
     enum PerfectSynchronization perfectSync, bool passInputThrough,
     bool bitVect, bool invert, bool initPredicate, bool disableAutoAbstraction,
     map<Mark, SharedSMTRef> iterativeRelationalInvariants,
-    map<const llvm::Function *, map<Mark, FunctionalInvariant>>
+    map<const llvm::Function *, map<Mark, FunctionInvariant<SharedSMTRef>>>
         functionalFunctionalInvariants,
-    map<MonoPair<const llvm::Function *>, map<Mark, FunctionalInvariant>>
+    map<MonoPair<const llvm::Function *>,
+        map<Mark, FunctionInvariant<SharedSMTRef>>>
         functionalRelationalInvariants,
     set<MonoPair<const llvm::Function *>> assumeEquivalent,
     set<MonoPair<llvm::Function *>> coupledFunctions,

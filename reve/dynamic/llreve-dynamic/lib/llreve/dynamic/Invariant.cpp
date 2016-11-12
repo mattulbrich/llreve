@@ -87,12 +87,13 @@ map<Mark, SharedSMTRef> makeIterativeInvariantDefinitions(
     return definitions;
 }
 
-RelationalFunctionInvariantMap<FunctionalInvariant>
+RelationalFunctionInvariantMap<FunctionInvariant<smt::SharedSMTRef>>
 makeRelationalFunctionInvariantDefinitions(
-    const RelationalFunctionInvariantMap<FunctionPolynomialEquations>
-        &equations,
+    const RelationalFunctionInvariantMap<
+        LoopInfoData<FunctionInvariant<Matrix<mpq_class>>>> &equations,
     const AnalysisResultsMap &analysisResults, size_t degree) {
-    RelationalFunctionInvariantMap<FunctionalInvariant> definitions;
+    RelationalFunctionInvariantMap<FunctionInvariant<smt::SharedSMTRef>>
+        definitions;
     for (const auto &coupledFunctions :
          SMTGenerationOpts::getInstance().CoupledFunctions) {
         // Taking the intersection of the freevars maps would be the correct
@@ -135,10 +136,10 @@ makeRelationalFunctionInvariantDefinitions(
                 auto markIt = equationsIt->second.find(mark);
                 if (markIt != equationsIt->second.end()) {
                     preInvBody = makeInvariantDefinition(
-                        findSolutions(markIt->second.none.first), {},
+                        findSolutions(markIt->second.none.preCondition), {},
                         invariantArgsPre, degree);
                     postInvBody = makeInvariantDefinition(
-                        findSolutions(markIt->second.none.second), {},
+                        findSolutions(markIt->second.none.postCondition), {},
                         invariantArgsPost, degree);
                 }
             }
@@ -152,9 +153,9 @@ makeRelationalFunctionInvariantDefinitions(
     return definitions;
 }
 
-FunctionInvariantMap<FunctionalInvariant> makeFunctionInvariantDefinitions(
+FunctionInvariantMap<smt::SharedSMTRef> makeFunctionInvariantDefinitions(
     MonoPair<const llvm::Module &> modules,
-    const FunctionInvariantMap<FunctionPolynomialEquations> &equations,
+    const FunctionInvariantMap<Matrix<mpq_class>> &equations,
     const AnalysisResultsMap &analysisResults, size_t degree) {
     auto invariants = makeFunctionInvariantDefinitions(
         modules.first, equations, analysisResults, Program::First, degree);
@@ -164,11 +165,11 @@ FunctionInvariantMap<FunctionalInvariant> makeFunctionInvariantDefinitions(
     return invariants;
 }
 
-FunctionInvariantMap<FunctionalInvariant> makeFunctionInvariantDefinitions(
+FunctionInvariantMap<smt::SharedSMTRef> makeFunctionInvariantDefinitions(
     const llvm::Module &module,
-    const FunctionInvariantMap<FunctionPolynomialEquations> &equations,
+    const FunctionInvariantMap<Matrix<mpq_class>> &equations,
     const AnalysisResultsMap &analysisResults, Program prog, size_t degree) {
-    FunctionInvariantMap<FunctionalInvariant> definitions;
+    FunctionInvariantMap<smt::SharedSMTRef> definitions;
     for (const auto &function : module) {
         if (hasFixedAbstraction(function)) {
             continue;

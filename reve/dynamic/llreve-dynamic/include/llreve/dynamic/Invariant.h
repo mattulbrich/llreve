@@ -36,12 +36,10 @@ using RelationalFunctionInvariantMap =
     std::map<MonoPair<const llvm::Function *>, std::map<Mark, V>>;
 template <typename V>
 using FunctionInvariantMap =
-    std::map<const llvm::Function *, std::map<Mark, V>>;
-using PolynomialEquations = LoopInfoData<std::vector<std::vector<mpq_class>>>;
-using FunctionPolynomialEquations =
-    LoopInfoData<MonoPair<std::vector<std::vector<mpq_class>>>>;
+    std::map<const llvm::Function *, std::map<Mark, FunctionInvariant<V>>>;
+using PolynomialEquations = LoopInfoData<Matrix<mpq_class>>;
 using PolynomialSolutions =
-    IterativeInvariantMap<LoopInfoData<std::vector<std::vector<mpz_class>>>>;
+    IterativeInvariantMap<LoopInfoData<Matrix<mpz_class>>>;
 using HeapPatternCandidates =
     std::list<std::shared_ptr<HeapPattern<const llvm::Value *>>>;
 using HeapPatternCandidatesMap = std::map<
@@ -54,20 +52,18 @@ std::map<Mark, smt::SharedSMTRef> makeIterativeInvariantDefinitions(
     const IterativeInvariantMap<PolynomialEquations> &equations,
     const HeapPatternCandidatesMap &patterns, const FreeVarsMap &freeVarsMap,
     size_t degree);
-RelationalFunctionInvariantMap<llreve::opts::FunctionalInvariant>
+RelationalFunctionInvariantMap<FunctionInvariant<smt::SharedSMTRef>>
 makeRelationalFunctionInvariantDefinitions(
-    const RelationalFunctionInvariantMap<FunctionPolynomialEquations>
-        &equations,
+    const RelationalFunctionInvariantMap<
+        LoopInfoData<FunctionInvariant<Matrix<mpq_class>>>> &equations,
     const AnalysisResultsMap &analysisResults, size_t degree);
-FunctionInvariantMap<llreve::opts::FunctionalInvariant>
-makeFunctionInvariantDefinitions(
+FunctionInvariantMap<smt::SharedSMTRef> makeFunctionInvariantDefinitions(
     const llvm::Module &module,
-    const FunctionInvariantMap<FunctionPolynomialEquations> &equations,
+    const FunctionInvariantMap<Matrix<mpq_class>> &equations,
     const AnalysisResultsMap &analysisResults, Program prog, size_t degree);
-FunctionInvariantMap<llreve::opts::FunctionalInvariant>
-makeFunctionInvariantDefinitions(
+FunctionInvariantMap<smt::SharedSMTRef> makeFunctionInvariantDefinitions(
     MonoPair<const llvm::Module &> modules,
-    const FunctionInvariantMap<FunctionPolynomialEquations> &equations,
+    const FunctionInvariantMap<Matrix<mpq_class>> &equations,
     const AnalysisResultsMap &analysisResults, size_t degree);
 Matrix<mpz_class> findSolutions(Matrix<mpq_class> equations);
 PolynomialSolutions

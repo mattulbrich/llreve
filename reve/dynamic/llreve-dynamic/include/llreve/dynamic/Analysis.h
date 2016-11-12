@@ -108,13 +108,15 @@ template <typename T> struct CoupledCallInfo {
 };
 
 template <typename T> struct UncoupledCallInfo {
+    const llvm::Function *function;
     const BlockStep<T> *step;
     VarIntVal returnValue;
     Mark mark;
     Program prog;
-    UncoupledCallInfo(const BlockStep<T> *step, VarIntVal returnValue,
-                      Mark mark, Program prog)
-        : step(step), returnValue(returnValue), mark(mark), prog(prog) {}
+    UncoupledCallInfo(const llvm::Function *function, const BlockStep<T> *step,
+                      VarIntVal returnValue, Mark mark, Program prog)
+        : function(function), step(step), returnValue(returnValue), mark(mark),
+          prog(prog) {}
 };
 
 template <typename T> VarIntVal getReturnValue(const Call<T> &call) {
@@ -177,9 +179,14 @@ void populateEquationsMap(
     FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match,
     ExitIndex exitIndex, size_t degree);
 void populateEquationsMap(
-    RelationalFunctionInvariantMap<FunctionPolynomialEquations> &equationsMap,
+    RelationalFunctionInvariantMap<
+        LoopInfoData<FunctionInvariant<Matrix<mpq_class>>>> &equationsMap,
     FreeVarsMap freeVarsMap, CoupledCallInfo<const llvm::Value *> match,
     size_t degree);
+void populateEquationsMap(FunctionInvariantMap<Matrix<mpq_class>> &equationsMap,
+                          FreeVarsMap freeVarsMap,
+                          UncoupledCallInfo<const llvm::Value *> match,
+                          size_t degree);
 void populateHeapPatterns(
     HeapPatternCandidatesMap &heapPatternCandidates,
     std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
@@ -490,7 +497,8 @@ void analyzeUncoupledCall(
         auto markSet = nameMap.at(step.stepsOnPath.front().blockName);
         assert(markSet.size() == 1);
         auto mark = *markSet.begin();
-        functionCallMatch(UncoupledCallInfo<T>(&step.stepsOnPath.front(),
+        functionCallMatch(UncoupledCallInfo<T>(call_.function,
+                                               &step.stepsOnPath.front(),
                                                returnValue, mark, prog));
         analyzeUncoupledPath(step, nameMap, prog, functionCallMatch);
     }
@@ -612,10 +620,10 @@ mergePolynomialEquations(IterativeInvariantMap<PolynomialEquations> eq1,
 struct MergedAnalysisResults {
     LoopCountsAndMark loopCounts;
     IterativeInvariantMap<PolynomialEquations> polynomialEquations;
-    RelationalFunctionInvariantMap<FunctionPolynomialEquations>
+    RelationalFunctionInvariantMap<
+        LoopInfoData<FunctionInvariant<Matrix<mpq_class>>>>
         relationalFunctionPolynomialEquations;
-    FunctionInvariantMap<FunctionPolynomialEquations>
-        functionPolynomialEquations;
+    FunctionInvariantMap<Matrix<mpq_class>> functionPolynomialEquations;
     HeapPatternCandidatesMap heapPatternCandidates;
 };
 

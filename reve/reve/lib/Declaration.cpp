@@ -29,8 +29,8 @@ relationalFunctionDeclarations(MonoPair<const llvm::Function *> functions,
             SMTGenerationOpts::getInstance().FunctionalRelationalInvariants;
         nestedLookup(fixedInvariants, functions, startIndex,
                      [&declarations](auto it) {
-                         declarations.push_back(it->second.preInv);
-                         declarations.push_back(it->second.postInv);
+                         declarations.push_back(it->second.preCondition);
+                         declarations.push_back(it->second.postCondition);
                      },
                      [&declarations, startIndex, &freeVarsMap, functionName,
                       &returnType]() {
@@ -62,8 +62,8 @@ functionalFunctionDeclarations(const llvm::Function *function,
             SMTGenerationOpts::getInstance().FunctionalFunctionalInvariants;
         nestedLookup(fixedInvariants, function, startIndex,
                      [&declarations](auto it) {
-                         declarations.push_back(it->second.preInv);
-                         declarations.push_back(it->second.postInv);
+                         declarations.push_back(it->second.preCondition);
+                         declarations.push_back(it->second.postCondition);
                      },
                      [startIndex, prog, functionName, &returnType, &freeVarsMap,
                       &declarations]() {

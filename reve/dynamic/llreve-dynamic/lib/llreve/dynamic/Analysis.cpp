@@ -172,7 +172,12 @@ cegarDriver(MonoPair<llvm::Module &> modules,
                     getFreeVarsMap(match.functions, analysisResults), match,
                     degree);
             },
-            [](UncoupledCallInfo<const llvm::Value *> match) {
+            [&dynamicAnalysisResults, &analysisResults,
+             degree](UncoupledCallInfo<const llvm::Value *> match) {
+                populateEquationsMap(
+                    dynamicAnalysisResults.functionPolynomialEquations,
+                    analysisResults.at(match.function).freeVariables, match,
+                    degree);
                 std::cerr << "uncoupled call\n";
             });
         auto loopTransformations = findLoopTransformations(
@@ -507,9 +512,8 @@ void populateEquationsMap(
     equation.push_back(1);
     if (polynomialEquations[match.mark].count(exitIndex) == 0) {
         polynomialEquations.at(match.mark)
-            .insert(
-                make_pair(exitIndex,
-                          LoopInfoData<vector<vector<mpq_class>>>({}, {}, {})));
+            .insert(make_pair(exitIndex,
+                              LoopInfoData<Matrix<mpq_class>>({}, {}, {})));
         switch (match.loopInfo) {
         case LoopInfo::Left:
             polynomialEquations.at(match.mark).at(exitIndex).left = {equation};
@@ -522,7 +526,7 @@ void populateEquationsMap(
             break;
         }
     } else {
-        vector<vector<mpq_class>> vecs;
+        Matrix<mpq_class> vecs;
         switch (match.loopInfo) {
         case LoopInfo::Left:
             vecs = polynomialEquations.at(match.mark).at(exitIndex).left;
@@ -559,7 +563,8 @@ void populateEquationsMap(
 }
 
 void populateEquationsMap(
-    RelationalFunctionInvariantMap<FunctionPolynomialEquations> &equationsMap,
+    RelationalFunctionInvariantMap<
+        LoopInfoData<FunctionInvariant<Matrix<mpq_class>>>> &equationsMap,
     FreeVarsMap freeVarsMap, CoupledCallInfo<const llvm::Value *> match,
     size_t degree) {
     auto &polynomialEquations = equationsMap[match.functions];
@@ -602,8 +607,7 @@ void populateEquationsMap(
     postEquation.push_back(1);
     if (polynomialEquations.count(match.mark) == 0) {
         polynomialEquations.insert(
-            {match.mark, LoopInfoData<MonoPair<vector<vector<mpq_class>>>>(
-                             {{}, {}}, {{}, {}}, {{}, {}})});
+            {match.mark, {{{}, {}}, {{}, {}}, {{}, {}}}});
         switch (match.loopInfo) {
         case LoopInfo::Left:
             polynomialEquations.at(match.mark).left = {{preEquation},
@@ -619,7 +623,7 @@ void populateEquationsMap(
             break;
         }
     } else {
-        MonoPair<vector<vector<mpq_class>>> *vecsRef;
+        FunctionInvariant<Matrix<mpq_class>> *vecsRef;
         switch (match.loopInfo) {
         case LoopInfo::Left:
             vecsRef = &polynomialEquations.at(match.mark).left;
@@ -631,15 +635,72 @@ void populateEquationsMap(
             vecsRef = &polynomialEquations.at(match.mark).none;
             break;
         }
-        auto preVecs = vecsRef->first;
-        auto postVecs = vecsRef->second;
+        auto preVecs = vecsRef->preCondition;
+        auto postVecs = vecsRef->postCondition;
         preVecs.push_back(preEquation);
         postVecs.push_back(postEquation);
         if (linearlyIndependent(preVecs)) {
-            vecsRef->first = preVecs;
+            vecsRef->preCondition = preVecs;
         }
         if (linearlyIndependent(postVecs)) {
-            vecsRef->second = postVecs;
+            vecsRef->postCondition = postVecs;
+        }
+    }
+}
+
+void populateEquationsMap(FunctionInvariantMap<Matrix<mpq_class>> &equationsMap,
+                          FreeVarsMap freeVarsMap,
+                          UncoupledCallInfo<const llvm::Value *> match,
+                          size_t degree) {
+    auto &polynomialEquations = equationsMap[match.function];
+    VarMap<string> variables;
+    for (auto varIt : match.step->state.variables) {
+        variables.insert(std::make_pair(varIt.first->getName(), varIt.second));
+    }
+    variables.insert({resultName(match.prog), match.returnValue});
+    vector<smt::SortedVar> preVariables =
+        removeHeapVariables(freeVarsMap.at(match.mark));
+    vector<smt::SortedVar> postVariables = preVariables;
+    postVariables.emplace_back(resultName(Program::First), int64Type());
+    postVariables.emplace_back(resultName(Program::Second), int64Type());
+    vector<mpq_class> preEquation;
+    vector<mpq_class> postEquation;
+    for (size_t i = 1; i <= degree; ++i) {
+        auto prePolynomialTerms = polynomialTermsOfDegree(preVariables, i);
+        auto postPolynomialTerms = polynomialTermsOfDegree(postVariables, i);
+        for (auto term : prePolynomialTerms) {
+            mpz_class termVal = 1;
+            for (auto var : term) {
+                termVal *= unsafeIntVal(variables.at(var)).asUnbounded();
+            }
+            preEquation.push_back(termVal);
+        }
+        for (auto term : postPolynomialTerms) {
+            mpz_class termVal = 1;
+            for (auto var : term) {
+                termVal *= unsafeIntVal(variables.at(var)).asUnbounded();
+            }
+            postEquation.push_back(termVal);
+        }
+    }
+    // Add a constant at the end of each vector
+    preEquation.push_back(1);
+    postEquation.push_back(1);
+    auto polynomialEquationsIt = polynomialEquations.find(match.mark);
+    if (polynomialEquationsIt == polynomialEquations.end()) {
+        polynomialEquations.insert(
+            {match.mark, {{preEquation}, {postEquation}}});
+    } else {
+        auto &equationsForMark = polynomialEquationsIt->second;
+        auto preVecs = equationsForMark.preCondition;
+        auto postVecs = equationsForMark.postCondition;
+        preVecs.push_back(preEquation);
+        postVecs.push_back(postEquation);
+        if (linearlyIndependent(preVecs)) {
+            equationsForMark.preCondition = preVecs;
+        }
+        if (linearlyIndependent(postVecs)) {
+            equationsForMark.postCondition = postVecs;
         }
     }
 }

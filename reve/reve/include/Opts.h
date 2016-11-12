@@ -20,6 +20,12 @@
 #include <map>
 
 namespace llreve {
+
+template <typename T> struct FunctionInvariant {
+    T preCondition;
+    T postCondition;
+};
+
 namespace opts {
 extern llreve::cl::OptionCategory ReveCategory;
 
@@ -46,11 +52,6 @@ enum class ByteHeap { Enabled, Disabled };
 enum class SMTFormat { Z3, SMTHorn };
 enum class PerfectSynchronization { Enabled, Disabled };
 
-struct FunctionalInvariant {
-    smt::SharedSMTRef preInv;
-    smt::SharedSMTRef postInv;
-};
-
 /// Singleton for the options used for SMT generation to avoid having to pass
 /// around the config object
 class SMTGenerationOpts {
@@ -60,23 +61,25 @@ class SMTGenerationOpts {
         return instance;
     }
     // Convenience method to make sure you don’t forget to set parameters
-    static void initialize(
-        MonoPair<llvm::Function *> mainFunctions, Heap heap, Stack stack,
-        GlobalConstants globalConstants, FunctionEncoding onlyRecursive,
-        ByteHeap byteHeap, bool everythingSigned, SMTFormat muZ,
-        PerfectSynchronization perfectSync, bool passInputThrough, bool bitvect,
-        bool invert, bool initPredicate, bool disableAutoAbstraction,
-        std::map<Mark, smt::SharedSMTRef> iterativeRelationalInvariants,
-        std::map<const llvm::Function *, std::map<Mark, FunctionalInvariant>>
-            functionalFunctionalInvariants,
-        std::map<MonoPair<const llvm::Function *>,
-                 std::map<Mark, FunctionalInvariant>>
-            functionalRelationalInvariants,
-        std::set<MonoPair<const llvm::Function *>> assumeEquivalent,
-        std::set<MonoPair<llvm::Function *>> coupleFunctions,
-        std::map<const llvm::Function *, int> functionNumerals,
-        MonoPair<std::map<int, const llvm::Function *>>
-            reversedFunctionNumerals);
+    static void
+    initialize(MonoPair<llvm::Function *> mainFunctions, Heap heap, Stack stack,
+               GlobalConstants globalConstants, FunctionEncoding onlyRecursive,
+               ByteHeap byteHeap, bool everythingSigned, SMTFormat muZ,
+               PerfectSynchronization perfectSync, bool passInputThrough,
+               bool bitvect, bool invert, bool initPredicate,
+               bool disableAutoAbstraction,
+               std::map<Mark, smt::SharedSMTRef> iterativeRelationalInvariants,
+               std::map<const llvm::Function *,
+                        std::map<Mark, FunctionInvariant<smt::SharedSMTRef>>>
+                   functionalFunctionalInvariants,
+               std::map<MonoPair<const llvm::Function *>,
+                        std::map<Mark, FunctionInvariant<smt::SharedSMTRef>>>
+                   functionalRelationalInvariants,
+               std::set<MonoPair<const llvm::Function *>> assumeEquivalent,
+               std::set<MonoPair<llvm::Function *>> coupleFunctions,
+               std::map<const llvm::Function *, int> functionNumerals,
+               MonoPair<std::map<int, const llvm::Function *>>
+                   reversedFunctionNumerals);
     MonoPair<llvm::Function *> MainFunctions = {nullptr, nullptr};
     Heap Heap;
     Stack Stack;
@@ -95,11 +98,12 @@ class SMTGenerationOpts {
     // the SMT solver to find it
     std::map<Mark, smt::SharedSMTRef> IterativeRelationalInvariants;
     // These are the invariants used for nonmutual function calls
-    std::map<const llvm::Function *, std::map<Mark, FunctionalInvariant>>
+    std::map<const llvm::Function *,
+             std::map<Mark, FunctionInvariant<smt::SharedSMTRef>>>
         FunctionalFunctionalInvariants;
     // These are the invarians for coupled function calls
     std::map<MonoPair<const llvm::Function *>,
-             std::map<Mark, FunctionalInvariant>>
+             std::map<Mark, FunctionInvariant<smt::SharedSMTRef>>>
         FunctionalRelationalInvariants;
     std::set<MonoPair<const llvm::Function *>> AssumeEquivalent;
     // The order in the pairs is normalized so that the first function is always
