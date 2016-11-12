@@ -93,7 +93,6 @@ cegarDriver(MonoPair<llvm::Module &> modules,
 
     // Run the interpreter on the unrolled code
     MergedAnalysisResults dynamicAnalysisResults;
-    MonoPair<PathMap> pathMaps = getPathMaps(functions, analysisResults);
     FreeVarsMap freeVarsMap = getFreeVarsMap(functions, analysisResults);
     size_t degree = DegreeFlag;
     ModelValues vals = initialModelValues(functions);
@@ -191,10 +190,13 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             dynamicAnalysisResults = MergedAnalysisResults();
             vals = initialModelValues(functions);
             // The paths have changed so we need to update the free variables
-            pathMaps = getPathMaps(functions, analysisResults);
-            freeVarsMap = mergeVectorMaps(
-                freeVars(pathMaps.first, funArgsPair.first, Program::First),
-                freeVars(pathMaps.second, funArgsPair.second, Program::Second));
+            analysisResults.at(functions.first).freeVariables =
+                freeVars(analysisResults.at(functions.first).paths,
+                         funArgsPair.first, Program::First);
+            analysisResults.at(functions.second).freeVariables =
+                freeVars(analysisResults.at(functions.second).paths,
+                         funArgsPair.second, Program::Second);
+            freeVarsMap = getFreeVarsMap(functions, analysisResults);
             instrNameMap = instructionNameMap(functions);
             std::cerr << "Transformed program, resetting inputs\n";
             continue;
@@ -377,6 +379,7 @@ bool applyLoopTransformation(
             }
             break;
         case LoopTransformType::Unroll:
+            // TODO we need to mark things as modified here
             switch (mapIt.second.side) {
             case LoopTransformSide::Left:
                 unrollAtMark(*functions.first, mapIt.first, marks.first,
