@@ -676,26 +676,10 @@ void populateHeapPatterns(
     MonoPair<Heap> heaps = makeMonoPair(match.steps.first->state.heap,
                                         match.steps.second->state.heap);
     bool newCandidates =
-        heapPatternCandidates[match.mark].count(exitIndex) == 0;
-    if (!newCandidates) {
-        switch (match.loopInfo) {
-        case LoopInfo::Left:
-            newCandidates = !heapPatternCandidates.at(match.mark)
-                                 .at(exitIndex)
-                                 .left.hasValue();
-            break;
-        case LoopInfo::Right:
-            newCandidates = !heapPatternCandidates.at(match.mark)
-                                 .at(exitIndex)
-                                 .right.hasValue();
-            break;
-        case LoopInfo::None:
-            newCandidates = !heapPatternCandidates.at(match.mark)
-                                 .at(exitIndex)
-                                 .none.hasValue();
-            break;
-        }
-    }
+        heapPatternCandidates[match.mark].count(exitIndex) == 0 ||
+        !getDataForLoopInfo(heapPatternCandidates.at(match.mark).at(exitIndex),
+                            match.loopInfo)
+             .hasValue();
     if (newCandidates) {
         list<shared_ptr<HeapPattern<const llvm::Value *>>> candidates;
         for (auto pat : patterns) {
@@ -709,52 +693,20 @@ void populateHeapPatterns(
                                   Optional<HeapPatternCandidates>(),
                                   Optional<HeapPatternCandidates>(),
                                   Optional<HeapPatternCandidates>())));
-        switch (match.loopInfo) {
-        case LoopInfo::Left:
-            assert(!heapPatternCandidates.at(match.mark)
-                        .at(exitIndex)
-                        .left.hasValue());
-            heapPatternCandidates.at(match.mark).at(exitIndex).left =
-                std::move(candidates);
-            break;
-        case LoopInfo::Right:
-            assert(!heapPatternCandidates.at(match.mark)
-                        .at(exitIndex)
-                        .right.hasValue());
-            heapPatternCandidates.at(match.mark).at(exitIndex).right =
-                std::move(candidates);
-            break;
-        case LoopInfo::None:
-            assert(!heapPatternCandidates.at(match.mark)
-                        .at(exitIndex)
-                        .none.hasValue());
-            heapPatternCandidates.at(match.mark).at(exitIndex).none =
-                std::move(candidates);
-            break;
-        }
+        auto &patternCandidates = getDataForLoopInfo(
+            heapPatternCandidates.at(match.mark).at(exitIndex), match.loopInfo);
+        assert(!patternCandidates.hasValue());
+        patternCandidates = std::move(candidates);
     } else {
-        HeapPatternCandidates *patterns = nullptr;
-        switch (match.loopInfo) {
-        case LoopInfo::Left:
-            patterns = &heapPatternCandidates.at(match.mark)
-                            .at(exitIndex)
-                            .left.getValue();
-            break;
-        case LoopInfo::Right:
-            patterns = &heapPatternCandidates.at(match.mark)
-                            .at(exitIndex)
-                            .right.getValue();
-            break;
-        case LoopInfo::None:
-            patterns = &heapPatternCandidates.at(match.mark)
-                            .at(exitIndex)
-                            .none.getValue();
-            break;
-        }
-        auto listIt = patterns->begin();
-        while (listIt != patterns->end()) {
+        HeapPatternCandidates &patterns =
+            getDataForLoopInfo(
+                heapPatternCandidates.at(match.mark).at(exitIndex),
+                match.loopInfo)
+                .getValue();
+        auto listIt = patterns.begin();
+        while (listIt != patterns.end()) {
             if (!(*listIt)->matches(variables, heaps)) {
-                listIt = patterns->erase(listIt);
+                listIt = patterns.erase(listIt);
             } else {
                 ++listIt;
             }
