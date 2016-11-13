@@ -80,6 +80,95 @@ static llreve::cl::opt<unsigned>
 
 bool ImplicationsFlag;
 
+Transformed analyzeMainCounterExample(
+    Mark cexStartMark, Mark cexEndMark, ModelValues &vals,
+    FreeVarsMap &freeVarsMap, MonoPair<llvm::Function *> functions,
+    MergedAnalysisResults &dynamicAnalysisResults,
+    AnalysisResultsMap &analysisResults,
+    std::map<std::string, const llvm::Value *> &instrNameMap,
+    const MonoPair<BlockNameMap> &nameMap,
+    const vector<shared_ptr<HeapPattern<VariablePlaceholder>>> &patterns,
+    const MonoPair<BidirBlockMarkMap> &markMaps, unsigned degree) {
+    auto primitiveFreeVariables =
+        removeHeapVariables(freeVarsMap.at(cexStartMark));
+    // reconstruct input from counterexample
+    auto variableValues =
+        getVarMapFromModel(instrNameMap, primitiveFreeVariables, vals.values);
+
+    dumpCounterExample(cexStartMark, cexEndMark, variableValues, vals.arrays);
+    {
+        // This is only here for debugging purposes
+        string line;
+        std::getline(std::cin, line);
+    }
+
+    assert(markMaps.first.MarkToBlocksMap.at(cexStartMark).size() == 1);
+    assert(markMaps.second.MarkToBlocksMap.at(cexStartMark).size() == 1);
+    auto firstBlock = *markMaps.first.MarkToBlocksMap.at(cexStartMark).begin();
+    auto secondBlock =
+        *markMaps.second.MarkToBlocksMap.at(cexStartMark).begin();
+    std::string tmp;
+
+    MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
+        functions, variableValues, getHeapsFromModel(vals.arrays),
+        getHeapBackgrounds(vals.arrays), {firstBlock, secondBlock}, 1000);
+    analyzeExecution<const llvm::Value *>(
+        calls, nameMap,
+        [&dynamicAnalysisResults, &freeVarsMap, degree,
+         &patterns](MatchInfo<const llvm::Value *> match) {
+            ExitIndex exitIndex = getExitIndex(match);
+            findLoopCounts<const llvm::Value *>(
+                dynamicAnalysisResults.loopCounts, match);
+            populateEquationsMap(dynamicAnalysisResults.polynomialEquations,
+                                 freeVarsMap, match, exitIndex, degree);
+            populateHeapPatterns(dynamicAnalysisResults.heapPatternCandidates,
+                                 patterns, freeVarsMap, match, exitIndex);
+        },
+        [&dynamicAnalysisResults, &analysisResults,
+         degree](CoupledCallInfo<const llvm::Value *> match) {
+            populateEquationsMap(
+                dynamicAnalysisResults.relationalFunctionPolynomialEquations,
+                getFreeVarsMap(match.functions, analysisResults), match,
+                degree);
+        },
+        [&dynamicAnalysisResults, &analysisResults,
+         degree](UncoupledCallInfo<const llvm::Value *> match) {
+            populateEquationsMap(
+                dynamicAnalysisResults.functionPolynomialEquations,
+                analysisResults.at(match.function).freeVariables, match,
+                degree);
+            std::cerr << "uncoupled call\n";
+        });
+    auto loopTransformations =
+        findLoopTransformations(dynamicAnalysisResults.loopCounts.loopCounts);
+    dumpLoopTransformations(loopTransformations);
+
+    // // Peel and unroll loops
+    if (applyLoopTransformation(functions, analysisResults, loopTransformations,
+                                markMaps)) {
+        // Reset data and start over
+        dynamicAnalysisResults = MergedAnalysisResults();
+        vals = initialModelValues(functions);
+        // The paths have changed so we need to update the free variables
+        analysisResults.at(functions.first).freeVariables =
+            freeVars(analysisResults.at(functions.first).paths,
+                     analysisResults.at(functions.first).functionArguments,
+                     Program::First);
+        analysisResults.at(functions.second).freeVariables =
+            freeVars(analysisResults.at(functions.second).paths,
+                     analysisResults.at(functions.second).functionArguments,
+                     Program::Second);
+        freeVarsMap = getFreeVarsMap(functions, analysisResults);
+        instrNameMap = instructionNameMap(functions);
+        std::cerr << "Transformed program, resetting inputs\n";
+        return Transformed::Yes;
+    }
+    return Transformed::No;
+}
+
+void analyzeRelationalCounterExample() {}
+void analyzeFunctionalCounterExample() {}
+
 std::vector<smt::SharedSMTRef>
 cegarDriver(MonoPair<llvm::Module &> modules,
             AnalysisResultsMap &analysisResults,
@@ -109,10 +198,14 @@ cegarDriver(MonoPair<llvm::Module &> modules,
         std::cout << "MAIN: " << vals.main << "\n";
         std::cout << "startMark: " << cexStartMark << "\n";
         std::cout << "endMark: " << cexEndMark << "\n";
-        std::cout << "function 1: " << vals.functions.first->getName().str()
-                  << "\n";
-        std::cout << "function 2: " << vals.functions.second->getName().str()
-                  << "\n";
+        if (vals.functions.first) {
+            std::cout << "function 1: " << vals.functions.first->getName().str()
+                      << "\n";
+        }
+        if (vals.functions.second) {
+            std::cout << "function 2: "
+                      << vals.functions.second->getName().str() << "\n";
+        }
         // TODO we can’t stop if there is a function call on this path so for
         // now we disable this
         // if ((vals.main && cexEndMark == EXIT_MARK) ||
@@ -125,81 +218,21 @@ cegarDriver(MonoPair<llvm::Module &> modules,
         //     break;
         // }
 
-        auto primitiveFreeVariables =
-            removeHeapVariables(freeVarsMap.at(cexStartMark));
-        // reconstruct input from counterexample
-        auto variableValues = getVarMapFromModel(
-            instrNameMap, primitiveFreeVariables, vals.values);
-
-        dumpCounterExample(cexStartMark, cexEndMark, variableValues,
-                           vals.arrays);
-        {
-            // This is only here for debugging purposes
-            string line;
-            std::getline(std::cin, line);
-        }
-
-        assert(markMaps.first.MarkToBlocksMap.at(cexStartMark).size() == 1);
-        assert(markMaps.second.MarkToBlocksMap.at(cexStartMark).size() == 1);
-        auto firstBlock =
-            *markMaps.first.MarkToBlocksMap.at(cexStartMark).begin();
-        auto secondBlock =
-            *markMaps.second.MarkToBlocksMap.at(cexStartMark).begin();
-        std::string tmp;
-
-        MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
-            functions, variableValues, getHeapsFromModel(vals.arrays),
-            getHeapBackgrounds(vals.arrays), {firstBlock, secondBlock}, 1000);
-        analyzeExecution<const llvm::Value *>(
-            calls, nameMap,
-            [&dynamicAnalysisResults, &freeVarsMap, degree,
-             &patterns](MatchInfo<const llvm::Value *> match) {
-                ExitIndex exitIndex = getExitIndex(match);
-                findLoopCounts<const llvm::Value *>(
-                    dynamicAnalysisResults.loopCounts, match);
-                populateEquationsMap(dynamicAnalysisResults.polynomialEquations,
-                                     freeVarsMap, match, exitIndex, degree);
-                populateHeapPatterns(
-                    dynamicAnalysisResults.heapPatternCandidates, patterns,
-                    freeVarsMap, match, exitIndex);
-            },
-            [&dynamicAnalysisResults, &analysisResults,
-             degree](CoupledCallInfo<const llvm::Value *> match) {
-                populateEquationsMap(
-                    dynamicAnalysisResults
-                        .relationalFunctionPolynomialEquations,
-                    getFreeVarsMap(match.functions, analysisResults), match,
-                    degree);
-            },
-            [&dynamicAnalysisResults, &analysisResults,
-             degree](UncoupledCallInfo<const llvm::Value *> match) {
-                populateEquationsMap(
-                    dynamicAnalysisResults.functionPolynomialEquations,
-                    analysisResults.at(match.function).freeVariables, match,
-                    degree);
-                std::cerr << "uncoupled call\n";
-            });
-        auto loopTransformations = findLoopTransformations(
-            dynamicAnalysisResults.loopCounts.loopCounts);
-        dumpLoopTransformations(loopTransformations);
-
-        // // Peel and unroll loops
-        if (applyLoopTransformation(functions, analysisResults,
-                                    loopTransformations, markMaps)) {
-            // Reset data and start over
-            dynamicAnalysisResults = MergedAnalysisResults();
-            vals = initialModelValues(functions);
-            // The paths have changed so we need to update the free variables
-            analysisResults.at(functions.first).freeVariables =
-                freeVars(analysisResults.at(functions.first).paths,
-                         funArgsPair.first, Program::First);
-            analysisResults.at(functions.second).freeVariables =
-                freeVars(analysisResults.at(functions.second).paths,
-                         funArgsPair.second, Program::Second);
-            freeVarsMap = getFreeVarsMap(functions, analysisResults);
-            instrNameMap = instructionNameMap(functions);
-            std::cerr << "Transformed program, resetting inputs\n";
-            continue;
+        assert(vals.functions.first || vals.functions.second);
+        if (vals.main) {
+            Transformed transformed = analyzeMainCounterExample(
+                cexStartMark, cexEndMark, vals, freeVarsMap, functions,
+                dynamicAnalysisResults, analysisResults, instrNameMap, nameMap,
+                patterns, markMaps, degree);
+            if (transformed == Transformed::Yes) {
+                continue;
+            }
+        } else if (vals.functions.first && vals.functions.second) {
+            analyzeRelationalCounterExample();
+        } else if (vals.functions.first) {
+            analyzeFunctionalCounterExample();
+        } else if (vals.functions.second) {
+            analyzeFunctionalCounterExample();
         }
 
         auto invariantCandidates = makeIterativeInvariantDefinitions(
@@ -296,6 +329,19 @@ static ProgramSelection toSelection(bool program1, bool program2) {
     exit(1);
 }
 
+// Z3_lbool can be implicitely casted to a boolean but the result is useless, so
+// always use this explicit conversion
+static bool convertZ3Bool(Z3_lbool val) {
+    switch (val) {
+    case Z3_L_TRUE:
+        return true;
+    case Z3_L_FALSE:
+        return false;
+    case Z3_L_UNDEF:
+        assert(false && "Cannot handle undef values");
+    }
+}
+
 ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
                          const std::map<std::string, z3::expr> &nameMap,
                          const FreeVarsMap &freeVarsMap) {
@@ -319,11 +365,12 @@ ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
         arrays.insert({"HEAP$1_old", getArrayVal(z3Cxt, heap1Eval)});
         arrays.insert({"HEAP$2_old", getArrayVal(z3Cxt, heap2Eval)});
     }
-    bool main = Z3_get_bool_value(z3Cxt, model.eval(nameMap.at("MAIN")));
-    bool program1 =
-        Z3_get_bool_value(z3Cxt, model.eval(nameMap.at("PROGRAM_1")));
-    bool program2 =
-        Z3_get_bool_value(z3Cxt, model.eval(nameMap.at("PROGRAM_2")));
+    bool main =
+        convertZ3Bool(Z3_get_bool_value(z3Cxt, model.eval(nameMap.at("MAIN"))));
+    bool program1 = convertZ3Bool(
+        Z3_get_bool_value(z3Cxt, model.eval(nameMap.at("PROGRAM_1"))));
+    bool program2 = convertZ3Bool(
+        Z3_get_bool_value(z3Cxt, model.eval(nameMap.at("PROGRAM_2"))));
     const llvm::Function *function1 = nullptr;
     const llvm::Function *function2 = nullptr;
     if (program1) {
@@ -1195,8 +1242,8 @@ ModelValues initialModelValues(MonoPair<const llvm::Function *> funs) {
 }
 
 void dumpCounterExample(Mark cexStartMark, Mark cexEndMark,
-                        MonoPair<FastVarMap> &variableValues,
-                        map<string, ArrayVal> &arrays) {
+                        const MonoPair<FastVarMap> &variableValues,
+                        const map<string, ArrayVal> &arrays) {
     std::cout << "---\nFound counterexample:\n";
     std::cout << "starting at mark " << cexStartMark << "\n";
     std::cout << "ending at mark " << cexEndMark << "\n";

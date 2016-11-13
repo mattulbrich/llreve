@@ -162,6 +162,24 @@ void findLoopCounts(LoopCountsAndMark &loopCountsAndMark, MatchInfo<T> match) {
         loopCountsAndMark.mark = match.mark;
     }
 }
+
+struct MergedAnalysisResults;
+enum class Transformed { Yes, No };
+
+// This function has way too many arguments
+Transformed analyzeMainCounterExample(
+    Mark cexStartMark, Mark cexEndMark, ModelValues &vals,
+    FreeVarsMap &freeVarsMap, MonoPair<llvm::Function *> functions,
+    MergedAnalysisResults &dynamicAnalysisResults,
+    AnalysisResultsMap &analysisResults,
+    std::map<std::string, const llvm::Value *> &instrNameMap,
+    const MonoPair<BlockNameMap> &nameMap,
+    const std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>>
+        &patterns,
+    const MonoPair<BidirBlockMarkMap> &markMaps, unsigned degree);
+void analyzeRelationalCounterExample();
+void analyzeFunctionalCounterExample();
+
 void instantiateBounds(
     std::map<Mark, std::map<std::string, Bound<VarIntVal>>> &boundsMap,
     const FreeVarsMap &freeVars, MatchInfo<std::string> match);
@@ -641,7 +659,7 @@ ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
 ArrayVal getArrayVal(const z3::context &z3Cxt, z3::expr arrayExpr);
 
 void dumpCounterExample(Mark cexStart, Mark cexEndMark,
-                        MonoPair<FastVarMap> &variableValues,
-                        std::map<std::string, ArrayVal> &arrays);
+                        const MonoPair<FastVarMap> &variableValues,
+                        const std::map<std::string, ArrayVal> &arrays);
 }
 }
