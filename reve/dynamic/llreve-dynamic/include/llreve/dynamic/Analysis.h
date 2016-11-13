@@ -143,12 +143,6 @@ Transformed analyzeMainCounterExample(
 void analyzeRelationalCounterExample();
 void analyzeFunctionalCounterExample();
 
-void instantiateBounds(
-    std::map<Mark, std::map<std::string, Bound<VarIntVal>>> &boundsMap,
-    const FreeVarsMap &freeVars, MatchInfo<std::string> match);
-BoundsMap updateBounds(
-    BoundsMap accumulator,
-    const std::map<Mark, std::map<std::string, Bound<VarIntVal>>> &update);
 void populateHeapPatterns(
     HeapPatternCandidatesMap &heapPatternCandidates,
     std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
@@ -158,7 +152,6 @@ void dumpPolynomials(
     const IterativeInvariantMap<PolynomialEquations> &equationsMap,
     const FreeVarsMap &freeVarsmap);
 void dumpHeapPatterns(const HeapPatternCandidatesMap &heapPatternsMap);
-void dumpBounds(const BoundsMap &bounds);
 
 FastVarMap getVarMap(const llvm::Function *fun, std::vector<mpz_class> vals);
 
