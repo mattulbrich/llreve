@@ -145,7 +145,11 @@ void analyzeRelationalCounterExample(
     DynamicAnalysisResults &dynamicAnalysisResults,
     const MonoPair<BlockNameMap> &nameMap,
     const AnalysisResultsMap &analysisResults, unsigned maxDegree);
-void analyzeFunctionalCounterExample();
+void analyzeFunctionalCounterExample(
+    MarkPair pathMarks, const ModelValues &vals, const llvm::Function *function,
+    Program program, DynamicAnalysisResults &dynamicAnalysisResults,
+    const BlockNameMap &blockNameMap, const AnalysisResultsMap &analysisResults,
+    unsigned maxDegree);
 
 void populateHeapPatterns(
     HeapPatternCandidatesMap &heapPatternCandidates,
@@ -173,7 +177,11 @@ FastVarMap getVarMapFromModel(
     std::vector<smt::SortedVar> freeVars,
     std::map<std::string, mpz_class> vals);
 Heap getHeapFromModel(const ArrayVal &ar);
+Heap getHeapFromModel(const std::map<std::string, ArrayVal> &arrays,
+                      Program prog);
 MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays);
+Integer getHeapBackground(const std::map<std::string, ArrayVal> &arrays,
+                          Program prog);
 MonoPair<Integer> getHeapBackgrounds(std::map<std::string, ArrayVal> arrays);
 
 template <typename T>
@@ -448,7 +456,12 @@ void analyzeCoupledCalls(
 template <typename T>
 void analyzeUncoupledPath(
     const PathStep<T> &path, const BlockNameMap &nameMap, Program prog,
-    std::function<void(UncoupledCallInfo<T>)> functionCallMatch) {}
+    std::function<void(UncoupledCallInfo<T>)> functionCallMatch) {
+    auto calls = extractCalls(path);
+    for (const auto &call : calls) {
+        analyzeUncoupledCall(call, nameMap, prog, functionCallMatch);
+    }
+}
 
 template <typename T>
 void analyzeUncoupledCall(
@@ -594,6 +607,9 @@ ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
 
 ArrayVal getArrayVal(const z3::context &z3Cxt, z3::expr arrayExpr);
 
+void dumpCounterExample(Mark cexStart, Mark cexEndMark,
+                        const FastVarMap &variableValues,
+                        const std::map<std::string, ArrayVal> &arrays);
 void dumpCounterExample(Mark cexStart, Mark cexEndMark,
                         const MonoPair<FastVarMap> &variableValues,
                         const std::map<std::string, ArrayVal> &arrays);

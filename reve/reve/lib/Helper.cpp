@@ -133,6 +133,7 @@ SortedVar llvmValToSortedVar(const llvm::Value *val) {
     return SortedVar(val->getName(), llvmType(val->getType()));
 }
 
+std::string heapName(Program prog) { return heapName(programIndex(prog)); }
 std::string heapName(int progIndex) {
     return "HEAP$" + std::to_string(progIndex);
 }

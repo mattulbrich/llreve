@@ -146,7 +146,6 @@ Transformed analyzeMainCounterExample(
                 removeHeapVariables(analysisResults.at(match.function)
                                         .freeVariables.at(match.mark)),
                 match, degree);
-            std::cerr << "uncoupled call\n";
         });
     auto loopTransformations =
         findLoopTransformations(dynamicAnalysisResults.loopCounts.loopCounts);
@@ -180,7 +179,6 @@ void analyzeRelationalCounterExample(
     DynamicAnalysisResults &dynamicAnalysisResults,
     const MonoPair<BlockNameMap> &nameMap,
     const AnalysisResultsMap &analysisResults, unsigned maxDegree) {
-
     const auto markMaps = getBlockMarkMaps(functions, analysisResults);
     auto primitiveFreeVariables = getPrimitiveFreeVariables(
         functions, pathMarks.startMark, analysisResults);
@@ -225,13 +223,49 @@ void analyzeRelationalCounterExample(
                 removeHeapVariables(analysisResults.at(match.function)
                                         .freeVariables.at(match.mark)),
                 match, maxDegree);
-            std::cerr << "uncoupled call\n";
         });
 }
 
-void analyzeFunctionalCounterExample() {
-    std::cout << "functional counter example\n";
+void analyzeFunctionalCounterExample(
+    MarkPair pathMarks, const ModelValues &vals, const llvm::Function *function,
+    Program program, DynamicAnalysisResults &dynamicAnalysisResults,
+    const BlockNameMap &blockNameMap, const AnalysisResultsMap &analysisResults,
+    unsigned maxDegree) {
+    const auto markMap = analysisResults.at(function).blockMarkMap;
+    auto primitiveFreeVariables = getPrimitiveFreeVariables(
+        function, pathMarks.startMark, analysisResults);
+    // reconstruct input from counterexample
+    // TODO we could cache the result of instructionNameMap somewhere
+    auto variableValues =
+        getVarMapFromModel(instructionNameMap(function),
+                           getPrimitiveFreeVariables(
+                               function, pathMarks.startMark, analysisResults),
+                           vals.values);
+
+    dumpCounterExample(pathMarks.startMark, pathMarks.endMark, variableValues,
+                       vals.arrays);
+
     wait();
+
+    assert(markMap.MarkToBlocksMap.at(pathMarks.startMark).size() == 1);
+    auto startBlock = *markMap.MarkToBlocksMap.at(pathMarks.startMark).begin();
+
+    Call<const llvm::Value *> call = interpretFunction(
+        *function,
+        FastState(variableValues, getHeapFromModel(vals.arrays, program),
+                  getHeapBackground(vals.arrays, program)),
+        startBlock, 1000);
+    std::cout << "analyzing trace\n";
+    analyzeUncoupledCall<const llvm::Value *>(
+        call, blockNameMap, program,
+        [&](UncoupledCallInfo<const llvm::Value *> match) {
+            populateEquationsMap(
+                dynamicAnalysisResults.functionPolynomialEquations,
+                removeHeapVariables(analysisResults.at(match.function)
+                                        .freeVariables.at(match.mark)),
+                match, maxDegree);
+        });
+    std::cout << "analyzed trace\n";
 }
 
 std::vector<smt::SharedSMTRef>
@@ -293,9 +327,15 @@ cegarDriver(MonoPair<llvm::Module &> modules,
                 {cexStartMark, cexEndMark}, vals, vals.functions,
                 dynamicAnalysisResults, blockNameMap, analysisResults, degree);
         } else if (vals.functions.first) {
-            analyzeFunctionalCounterExample();
+            analyzeFunctionalCounterExample(
+                {cexStartMark, cexEndMark}, vals, vals.functions.first,
+                Program::First, dynamicAnalysisResults, blockNameMap.first,
+                analysisResults, degree);
         } else if (vals.functions.second) {
-            analyzeFunctionalCounterExample();
+            analyzeFunctionalCounterExample(
+                {cexStartMark, cexEndMark}, vals, vals.functions.second,
+                Program::Second, dynamicAnalysisResults, blockNameMap.second,
+                analysisResults, degree);
         }
 
         auto invariantCandidates = makeIterativeInvariantDefinitions(
@@ -318,8 +358,6 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             functionInvariantCandidates;
         vector<SharedSMTRef> clauses =
             generateSMT(modules, analysisResults, fileOpts);
-        serializeSMT(clauses, false,
-                     SerializeOpts("out.smt2", false, false, true, false));
         z3Solver.reset();
         std::map<std::string, z3::expr> nameMap;
         std::map<std::string, smt::Z3DefineFun> defineFunMap;
@@ -328,10 +366,18 @@ cegarDriver(MonoPair<llvm::Module &> modules,
         for (const auto &clause : clauses) {
             z3Clauses.push_back(clause->removeForalls(introducedVariables));
         }
+        serializeSMT(z3Clauses, false,
+                     SerializeOpts("out.smt2", false, false, true, false));
 
+        vector<SharedSMTRef> introducedClauses;
         for (const auto &var : introducedVariables) {
+            introducedClauses.push_back(make_unique<VarDecl>(var));
             VarDecl(var).toZ3(z3Cxt, z3Solver, nameMap, defineFunMap);
         }
+        z3Clauses.insert(z3Clauses.begin(), introducedClauses.begin(),
+                         introducedClauses.end());
+        serializeSMT(z3Clauses, false,
+                     SerializeOpts("out.smt2", false, false, true, false));
         for (const auto &clause : z3Clauses) {
             clause->toZ3(z3Cxt, z3Solver, nameMap, defineFunMap);
         }
@@ -884,12 +930,28 @@ Heap getHeapFromModel(const ArrayVal &ar) {
     return result;
 }
 
+Heap getHeapFromModel(const std::map<std::string, ArrayVal> &arrays,
+                      Program prog) {
+    if (SMTGenerationOpts::getInstance().Heap == llreve::opts::Heap::Disabled) {
+        return {};
+    }
+    return getHeapFromModel(arrays.at(heapName(prog)));
+}
+
 MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays) {
     if (SMTGenerationOpts::getInstance().Heap == llreve::opts::Heap::Disabled) {
         return {{}, {}};
     }
     return {getHeapFromModel(arrays.at("HEAP$1_old")),
             getHeapFromModel(arrays.at("HEAP$2_old"))};
+}
+
+Integer getHeapBackground(const std::map<std::string, ArrayVal> &arrays,
+                          Program prog) {
+    if (SMTGenerationOpts::getInstance().Heap == llreve::opts::Heap::Disabled) {
+        return Integer(mpz_class(0));
+    }
+    return Integer(arrays.at(heapName(prog)).background);
 }
 
 MonoPair<Integer> getHeapBackgrounds(std::map<std::string, ArrayVal> arrays) {
@@ -949,6 +1011,23 @@ ModelValues initialModelValues(MonoPair<const llvm::Function *> funs) {
     return ModelValues(arrays, values, true, ProgramSelection::Both, funs);
 }
 
+static void dumpVarMap(const FastVarMap &variableValues) {
+    for (auto it : variableValues) {
+        llvm::errs() << it.first->getName() << " "
+                     << unsafeIntVal(it.second).asUnbounded().get_str() << "\n";
+    }
+}
+
+static void dumpArrays(const map<string, ArrayVal> &arrays) {
+    for (auto ar : arrays) {
+        std::cout << ar.first << "\n";
+        std::cout << "background: " << ar.second.background << "\n";
+        for (auto val : ar.second.vals) {
+            std::cout << val.first << ":" << val.second << "\n";
+        }
+    }
+}
+
 void dumpCounterExample(Mark cexStartMark, Mark cexEndMark,
                         const MonoPair<FastVarMap> &variableValues,
                         const map<string, ArrayVal> &arrays) {
@@ -957,21 +1036,23 @@ void dumpCounterExample(Mark cexStartMark, Mark cexEndMark,
     std::cout << "ending at mark " << cexEndMark << "\n";
 
     // dump new example
-    for (auto it : variableValues.first) {
-        llvm::errs() << it.first->getName() << " "
-                     << unsafeIntVal(it.second).asUnbounded().get_str() << "\n";
-    }
-    for (auto it : variableValues.second) {
-        llvm::errs() << it.first->getName() << " "
-                     << unsafeIntVal(it.second).asUnbounded().get_str() << "\n";
-    }
-    for (auto ar : arrays) {
-        std::cout << ar.first << "\n";
-        std::cout << "background: " << ar.second.background << "\n";
-        for (auto val : ar.second.vals) {
-            std::cout << val.first << ":" << val.second << "\n";
-        }
-    }
+    dumpVarMap(variableValues.first);
+    dumpVarMap(variableValues.second);
+
+    dumpArrays(arrays);
+}
+
+void dumpCounterExample(Mark cexStartMark, Mark cexEndMark,
+                        const FastVarMap &variableValues,
+                        const map<string, ArrayVal> &arrays) {
+    std::cout << "---\nFound counterexample:\n";
+    std::cout << "starting at mark " << cexStartMark << "\n";
+    std::cout << "ending at mark " << cexEndMark << "\n";
+
+    // dump new example
+    dumpVarMap(variableValues);
+
+    dumpArrays(arrays);
 }
 }
 }

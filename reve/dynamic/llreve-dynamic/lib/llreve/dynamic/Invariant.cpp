@@ -223,6 +223,13 @@ FunctionInvariantMap<smt::SharedSMTRef> makeFunctionInvariantDefinitions(
                              postCondition = makeInvariantDefinition(
                                  findSolutions(mapIt->second.postCondition), {},
                                  invariantArgsPost, degree);
+                             if (preCondition == nullptr) {
+                                 preCondition = make_unique<ConstantBool>(true);
+                             }
+                             if (postCondition == nullptr) {
+                                 postCondition =
+                                     make_unique<ConstantBool>(true);
+                             }
                          },
                          [] {});
             auto preConditionDef = make_unique<FunDef>(

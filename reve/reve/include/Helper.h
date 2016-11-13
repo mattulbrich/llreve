@@ -144,6 +144,7 @@ auto filterVars(int program, std::vector<smt::SortedVar> vars)
 auto llvmValToSortedVar(const llvm::Value *val) -> smt::SortedVar;
 bool varBelongsTo(std::string varName, int program);
 
+auto heapName(Program prog) -> std::string;
 auto heapName(int progIndex) -> std::string;
 auto stackName(int progIndex) -> std::string;
 auto stackPointerName(int progIndex) -> std::string;
@@ -209,7 +210,8 @@ void nestedLookup(std::map<K1, std::map<K2, V>> map, const K1 &key1,
     }
 }
 
-// This function exists only because initializer lists don’t work for unique_ptrs
+// This function exists only because initializer lists don’t work for
+// unique_ptrs
 template <typename V> auto vecSingleton(V x) -> llvm::SmallVector<V, 1> {
     llvm::SmallVector<V, 1> result;
     result.push_back(std::move(x));
