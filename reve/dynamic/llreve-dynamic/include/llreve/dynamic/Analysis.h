@@ -451,6 +451,10 @@ void analyzeCoupledCalls(
             }
         }
     }
+    analyzeCallsOnPaths(*prevStepsIt1, *prevStepsIt2, nameMaps,
+                        relationalCallMatch, functionalCallMatch);
+    assert(stepsIt1 == call1.steps.end());
+    assert(stepsIt2 == call2.steps.end());
 }
 
 template <typename T>
