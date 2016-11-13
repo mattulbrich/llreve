@@ -50,9 +50,6 @@ std::vector<smt::SharedSMTRef> cegarDriver(
     MonoPair<llvm::Module &> modules, AnalysisResultsMap &analysisResults,
     std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
     llreve::opts::FileOptions fileopts);
-llvm::Optional<MonoPair<llvm::Function *>>
-findFunction(std::vector<MonoPair<llvm::Function *>> functions,
-             std::string functionName);
 Heap randomHeap(const llvm::Function &fun, const FastVarMap &variableValues,
                 int lengthBound, int valLowerBound, int valUpperBound,
                 unsigned int *seedp);

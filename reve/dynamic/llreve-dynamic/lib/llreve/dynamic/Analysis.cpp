@@ -621,17 +621,6 @@ getBlockNameMaps(const AnalysisResultsMap &analysisResults) {
     return {first, second};
 }
 
-Optional<MonoPair<llvm::Function *>>
-findFunction(const vector<MonoPair<llvm::Function *>> functions,
-             string functionName) {
-    for (auto &f : functions) {
-        if (f.first->getName() == functionName) {
-            return Optional<MonoPair<llvm::Function *>>(f);
-        }
-    }
-    return Optional<MonoPair<llvm::Function *>>();
-}
-
 bool normalMarkBlock(const BlockNameMap &map, const BlockName &blockName) {
     auto it = map.find(blockName);
     if (it == map.end()) {
