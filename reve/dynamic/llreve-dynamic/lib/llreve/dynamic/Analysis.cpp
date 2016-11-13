@@ -609,8 +609,7 @@ void populateEquationsMap(FunctionInvariantMap<Matrix<mpq_class>> &equationsMap,
     vector<smt::SortedVar> preVariables =
         removeHeapVariables(freeVarsMap.at(match.mark));
     vector<smt::SortedVar> postVariables = preVariables;
-    postVariables.emplace_back(resultName(Program::First), int64Type());
-    postVariables.emplace_back(resultName(Program::Second), int64Type());
+    postVariables.emplace_back(resultName(match.prog), int64Type());
     vector<mpq_class> preEquation;
     vector<mpq_class> postEquation;
     for (size_t i = 1; i <= degree; ++i) {
