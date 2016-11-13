@@ -190,14 +190,25 @@ FunctionInvariantMap<smt::SharedSMTRef> makeFunctionInvariantDefinitions(
                               InvariantAttr::PRE);
             string postName =
                 invariantName(mark, asSelection(prog), function.getName());
-            auto preInv =
-                make_unique<FunDef>(preName, invariantArgsPre, boolType(),
-                                    make_unique<ConstantBool>(false));
-            auto postInv =
-                make_unique<FunDef>(postName, invariantArgsPost, boolType(),
-                                    make_unique<ConstantBool>(false));
+            SharedSMTRef preCondition = make_unique<ConstantBool>(false);
+            SharedSMTRef postCondition = make_unique<ConstantBool>(false);
+            nestedLookup(equations, &function, mark,
+                         [&](auto mapIt) {
+                             preCondition = makeInvariantDefinition(
+                                 findSolutions(mapIt->second.preCondition), {},
+                                 invariantArgsPre, degree);
+                             postCondition = makeInvariantDefinition(
+                                 findSolutions(mapIt->second.postCondition), {},
+                                 invariantArgsPost, degree);
+                         },
+                         [] {});
+            auto preConditionDef = make_unique<FunDef>(
+                preName, invariantArgsPre, boolType(), preCondition);
+            auto postConditionDef = make_unique<FunDef>(
+                postName, invariantArgsPost, boolType(), postCondition);
             definitions[&function].insert(
-                {mark, {std::move(preInv), std::move(postInv)}});
+                {mark,
+                 {std::move(preConditionDef), std::move(postConditionDef)}});
         }
     }
     return definitions;
@@ -235,7 +246,7 @@ SharedSMTRef makeInvariantDefinition(const vector<vector<mpz_class>> &solution,
         conjunction.push_back(candidate->toSMT());
     }
     if (conjunction.size() == 0) {
-        return make_unique<ConstantBool>(false);
+        return make_unique<ConstantBool>(true);
     } else {
         return make_shared<Op>("and", conjunction);
     }
