@@ -23,6 +23,7 @@
 #include "Preprocess.h"
 
 #include "llreve/dynamic/Invariant.h"
+#include "llreve/dynamic/Match.h"
 
 #include "llvm/IR/Module.h"
 
@@ -76,41 +77,6 @@ struct LoopTransformation {
     LoopTransformation(LoopTransformType type, LoopTransformSide side,
                        size_t count)
         : type(type), side(side), count(count) {}
-};
-
-template <typename T> struct MatchInfo {
-    MonoPair<const BlockStep<T> *> steps;
-    LoopInfo loopInfo;
-    Mark mark;
-    MatchInfo(MonoPair<const BlockStep<T> *> steps, LoopInfo loopInfo,
-              Mark mark)
-        : steps(steps), loopInfo(loopInfo), mark(mark) {}
-};
-
-template <typename T> struct CoupledCallInfo {
-    MonoPair<const llvm::Function *> functions;
-    MonoPair<const BlockStep<T> *> steps;
-    MonoPair<VarIntVal> returnValues;
-    LoopInfo loopInfo;
-    Mark mark;
-    CoupledCallInfo(MonoPair<const llvm::Function *> functions,
-                    MonoPair<const BlockStep<T> *> steps,
-                    MonoPair<VarIntVal> returnValues, LoopInfo loopInfo,
-                    Mark mark)
-        : functions(functions), steps(steps), returnValues(returnValues),
-          loopInfo(loopInfo), mark(mark) {}
-};
-
-template <typename T> struct UncoupledCallInfo {
-    const llvm::Function *function;
-    const BlockStep<T> *step;
-    VarIntVal returnValue;
-    Mark mark;
-    Program prog;
-    UncoupledCallInfo(const llvm::Function *function, const BlockStep<T> *step,
-                      VarIntVal returnValue, Mark mark, Program prog)
-        : function(function), step(step), returnValue(returnValue), mark(mark),
-          prog(prog) {}
 };
 
 template <typename T> VarIntVal getReturnValue(const Call<T> &call) {
@@ -186,19 +152,6 @@ void instantiateBounds(
 BoundsMap updateBounds(
     BoundsMap accumulator,
     const std::map<Mark, std::map<std::string, Bound<VarIntVal>>> &update);
-void populateEquationsMap(
-    IterativeInvariantMap<PolynomialEquations> &equationsMap,
-    std::vector<smt::SortedVar> primitiveVariables,
-    MatchInfo<const llvm::Value *> match, ExitIndex exitIndex, size_t degree);
-void populateEquationsMap(
-    RelationalFunctionInvariantMap<
-        LoopInfoData<FunctionInvariant<Matrix<mpq_class>>>> &equationsMap,
-    std::vector<smt::SortedVar> primitiveVariables,
-    CoupledCallInfo<const llvm::Value *> match, size_t degree);
-void populateEquationsMap(FunctionInvariantMap<Matrix<mpq_class>> &equationsMap,
-                          std::vector<smt::SortedVar> primitiveVariables,
-                          UncoupledCallInfo<const llvm::Value *> match,
-                          size_t degree);
 void populateHeapPatterns(
     HeapPatternCandidatesMap &heapPatternCandidates,
     std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
