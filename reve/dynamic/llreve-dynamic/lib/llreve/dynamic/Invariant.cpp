@@ -65,24 +65,36 @@ map<Mark, SharedSMTRef> makeIterativeInvariantDefinitions(
                         ? patterns.at(mark).at(exit).none.getValue()
                         : HeapPatternCandidates(),
                     freeVarsMap.at(mark), degree);
-                vector<SharedSMTRef> invariantDisjunction = {left, right, none};
+                if (left == nullptr && right == nullptr && none == nullptr) {
+                    continue;
+                }
+                vector<SharedSMTRef> invariantDisjunction;
+                if (left != nullptr) {
+                    invariantDisjunction.push_back(left);
+                }
+                if (right != nullptr) {
+                    invariantDisjunction.push_back(right);
+                }
+                if (none != nullptr) {
+                    invariantDisjunction.push_back(none);
+                }
                 SharedSMTRef invariant =
                     make_shared<Op>("or", invariantDisjunction);
                 exitClauses.push_back(invariant);
-                // if (bounds.find(mark) != bounds.end()) {
-                //     invariant =
-                //         makeOp("and", invariant,
-                //                   makeBoundsDefinitions(bounds.at(mark)));
-                // }
             }
         }
         string invariantName = "INV_MAIN_" + mark.toString();
         if (ImplicationsFlag) {
             invariantName += "_INFERRED";
         }
-        definitions[mark] =
-            make_shared<FunDef>(invariantName, args, boolType(),
-                                make_shared<Op>("or", exitClauses));
+        SMTRef body;
+        if (exitClauses.empty()) {
+            body = make_unique<ConstantBool>(true);
+        } else {
+            body = make_unique<Op>("or", exitClauses);
+        }
+        definitions[mark] = make_shared<FunDef>(invariantName, args, boolType(),
+                                                std::move(body));
     }
     return definitions;
 }
@@ -138,9 +150,15 @@ makeRelationalFunctionInvariantDefinitions(
                     preInvBody = makeInvariantDefinition(
                         findSolutions(markIt->second.none.preCondition), {},
                         invariantArgsPre, degree);
+                    if (preInvBody == nullptr) {
+                        preInvBody = make_unique<ConstantBool>(true);
+                    }
                     postInvBody = makeInvariantDefinition(
                         findSolutions(markIt->second.none.postCondition), {},
                         invariantArgsPost, degree);
+                    if (postInvBody == nullptr) {
+                        postInvBody = make_unique<ConstantBool>(true);
+                    }
                 }
             }
             auto preInv = make_shared<FunDef>(preName, invariantArgsPre,
@@ -246,7 +264,7 @@ SharedSMTRef makeInvariantDefinition(const vector<vector<mpz_class>> &solution,
         conjunction.push_back(candidate->toSMT());
     }
     if (conjunction.size() == 0) {
-        return make_unique<ConstantBool>(true);
+        return nullptr;
     } else {
         return make_shared<Op>("and", conjunction);
     }

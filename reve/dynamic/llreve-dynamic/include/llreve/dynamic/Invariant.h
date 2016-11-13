@@ -86,6 +86,9 @@ FunctionInvariantMap<smt::SharedSMTRef> makeFunctionInvariantDefinitions(
 Matrix<mpz_class> findSolutions(Matrix<mpq_class> equations);
 PolynomialSolutions
 findSolutions(const IterativeInvariantMap<PolynomialEquations> &equationsMap);
+// This can return a nullpointer if the invariant is empty, conceptually this
+// represents the invariant "true" but if the invariant consists of multiple
+// parts, this needs to be handled separately.
 smt::SharedSMTRef
 makeInvariantDefinition(const std::vector<std::vector<mpz_class>> &solution,
                         const HeapPatternCandidates &candidates,
