@@ -711,7 +711,7 @@ template <typename T> struct BinaryIntExpr : public HeapExpr<T> {
         : op(op), args(args) {}
     RewrittenExpr<T> rewriteHeap() const override {
         auto rewrittenPats = args.template map<RewrittenExpr<T>>(
-            [](auto arg) -> RewrittenExpr<T> { arg->rewriteHeap(); });
+            [](auto arg) -> RewrittenExpr<T> { return arg->rewriteHeap(); });
         MonoPair<Constraints<T>> constrs = mergeConstraints(rewrittenPats);
         auto newArgs =
             makeMonoPair(rewrittenPats.first.pat, rewrittenPats.second.pat);
@@ -833,7 +833,7 @@ template <typename T> struct RangeProp : public HeapPattern<T> {
         : quant(quant), bounds(bounds), index(index), pat(pat) {}
     RewrittenPattern<T> rewriteHeap() const override {
         auto rewrittenBounds = bounds.template map<RewrittenExpr<T>>(
-            [](auto arg) -> RewrittenExpr<T> { arg->rewriteHeap(); });
+            [](auto arg) -> RewrittenExpr<T> { return arg->rewriteHeap(); });
         auto constrs = mergeConstraints(rewrittenBounds);
         auto newBounds =
             makeMonoPair(rewrittenBounds.first.pat, rewrittenBounds.second.pat);
@@ -913,6 +913,7 @@ template <typename T> struct RangeProp : public HeapPattern<T> {
         os << ", ";
         pat->dump(os);
         os << ")";
+        return os;
     }
     bool equalTo(const HeapPattern<T> &other) const override {
         if (other.getType() == PatternType::Range) {
