@@ -73,5 +73,12 @@ getPrimitiveFreeVariables(MonoPair<const llvm::Function *> functions, Mark mark,
                                   primitiveFreeVariables2.end());
     return primitiveFreeVariables;
 }
+
+std::vector<smt::SortedVar>
+getPrimitiveFreeVariables(const llvm::Function *function, Mark mark,
+                          const AnalysisResultsMap &analysisResults) {
+    return removeHeapVariables(
+        analysisResults.at(function).freeVariables.at(mark));
+}
 }
 }

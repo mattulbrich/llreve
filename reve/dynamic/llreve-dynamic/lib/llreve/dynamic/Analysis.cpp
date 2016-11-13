@@ -81,9 +81,13 @@ static llreve::cl::opt<unsigned>
 
 bool ImplicationsFlag;
 
+static void wait() {
+    string line;
+    std::getline(std::cin, line);
+}
+
 Transformed analyzeMainCounterExample(
-    Mark cexStartMark, Mark cexEndMark, ModelValues &vals,
-    MonoPair<llvm::Function *> functions,
+    MarkPair pathMarks, ModelValues &vals, MonoPair<llvm::Function *> functions,
     DynamicAnalysisResults &dynamicAnalysisResults,
     AnalysisResultsMap &analysisResults,
     std::map<std::string, const llvm::Value *> &instrNameMap,
@@ -91,25 +95,26 @@ Transformed analyzeMainCounterExample(
     const vector<shared_ptr<HeapPattern<VariablePlaceholder>>> &patterns,
     unsigned degree) {
     const auto markMaps = getBlockMarkMaps(functions, analysisResults);
-    auto primitiveFreeVariables =
-        getPrimitiveFreeVariables(functions, cexStartMark, analysisResults);
     // reconstruct input from counterexample
-    auto variableValues =
-        getVarMapFromModel(instrNameMap, primitiveFreeVariables, vals.values);
+    auto variableValues = getVarMapFromModel(
+        instrNameMap,
+        {getPrimitiveFreeVariables(functions.first, pathMarks.startMark,
+                                   analysisResults),
+         getPrimitiveFreeVariables(functions.second, pathMarks.startMark,
+                                   analysisResults)},
+        vals.values);
 
-    dumpCounterExample(cexStartMark, cexEndMark, variableValues, vals.arrays);
-    {
-        // This is only here for debugging purposes
-        string line;
-        std::getline(std::cin, line);
-    }
+    dumpCounterExample(pathMarks.startMark, pathMarks.endMark, variableValues,
+                       vals.arrays);
 
-    assert(markMaps.first.MarkToBlocksMap.at(cexStartMark).size() == 1);
-    assert(markMaps.second.MarkToBlocksMap.at(cexStartMark).size() == 1);
-    auto firstBlock = *markMaps.first.MarkToBlocksMap.at(cexStartMark).begin();
+    wait();
+
+    assert(markMaps.first.MarkToBlocksMap.at(pathMarks.startMark).size() == 1);
+    assert(markMaps.second.MarkToBlocksMap.at(pathMarks.startMark).size() == 1);
+    auto firstBlock =
+        *markMaps.first.MarkToBlocksMap.at(pathMarks.startMark).begin();
     auto secondBlock =
-        *markMaps.second.MarkToBlocksMap.at(cexStartMark).begin();
-    std::string tmp;
+        *markMaps.second.MarkToBlocksMap.at(pathMarks.startMark).begin();
 
     MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
         functions, variableValues, getHeapsFromModel(vals.arrays),
@@ -169,8 +174,65 @@ Transformed analyzeMainCounterExample(
     return Transformed::No;
 }
 
-void analyzeRelationalCounterExample() {}
-void analyzeFunctionalCounterExample() {}
+void analyzeRelationalCounterExample(
+    MarkPair pathMarks, const ModelValues &vals,
+    MonoPair<const llvm::Function *> functions,
+    DynamicAnalysisResults &dynamicAnalysisResults,
+    const MonoPair<BlockNameMap> &nameMap,
+    const AnalysisResultsMap &analysisResults, unsigned maxDegree) {
+
+    const auto markMaps = getBlockMarkMaps(functions, analysisResults);
+    auto primitiveFreeVariables = getPrimitiveFreeVariables(
+        functions, pathMarks.startMark, analysisResults);
+    // reconstruct input from counterexample
+    // TODO we could cache the result of instructionNameMap somewhere
+    auto variableValues = getVarMapFromModel(
+        instructionNameMap(functions),
+        {getPrimitiveFreeVariables(functions.first, pathMarks.startMark,
+                                   analysisResults),
+         getPrimitiveFreeVariables(functions.second, pathMarks.startMark,
+                                   analysisResults)},
+
+        vals.values);
+
+    dumpCounterExample(pathMarks.startMark, pathMarks.endMark, variableValues,
+                       vals.arrays);
+
+    wait();
+
+    assert(markMaps.first.MarkToBlocksMap.at(pathMarks.startMark).size() == 1);
+    assert(markMaps.second.MarkToBlocksMap.at(pathMarks.startMark).size() == 1);
+    auto firstBlock =
+        *markMaps.first.MarkToBlocksMap.at(pathMarks.startMark).begin();
+    auto secondBlock =
+        *markMaps.second.MarkToBlocksMap.at(pathMarks.startMark).begin();
+
+    MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
+        functions, variableValues, getHeapsFromModel(vals.arrays),
+        getHeapBackgrounds(vals.arrays), {firstBlock, secondBlock}, 1000);
+    analyzeCoupledCalls<const llvm::Value *>(
+        calls.first, calls.second, nameMap,
+        [&](CoupledCallInfo<const llvm::Value *> match) {
+            const auto primitiveVariables = getPrimitiveFreeVariables(
+                match.functions, match.mark, analysisResults);
+            populateEquationsMap(
+                dynamicAnalysisResults.relationalFunctionPolynomialEquations,
+                primitiveVariables, match, maxDegree);
+        },
+        [&](UncoupledCallInfo<const llvm::Value *> match) {
+            populateEquationsMap(
+                dynamicAnalysisResults.functionPolynomialEquations,
+                removeHeapVariables(analysisResults.at(match.function)
+                                        .freeVariables.at(match.mark)),
+                match, maxDegree);
+            std::cerr << "uncoupled call\n";
+        });
+}
+
+void analyzeFunctionalCounterExample() {
+    std::cout << "functional counter example\n";
+    wait();
+}
 
 std::vector<smt::SharedSMTRef>
 cegarDriver(MonoPair<llvm::Module &> modules,
@@ -178,7 +240,7 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
             FileOptions fileOpts) {
     auto functions = SMTGenerationOpts::getInstance().MainFunctions;
-    MonoPair<BlockNameMap> nameMap = getBlockNameMaps(analysisResults);
+    MonoPair<BlockNameMap> blockNameMap = getBlockNameMaps(analysisResults);
 
     // Run the interpreter on the unrolled code
     DynamicAnalysisResults dynamicAnalysisResults;
@@ -220,14 +282,16 @@ cegarDriver(MonoPair<llvm::Module &> modules,
         assert(vals.functions.first || vals.functions.second);
         if (vals.main) {
             Transformed transformed = analyzeMainCounterExample(
-                cexStartMark, cexEndMark, vals, functions,
-                dynamicAnalysisResults, analysisResults, instrNameMap, nameMap,
-                patterns, degree);
+                {cexStartMark, cexEndMark}, vals, functions,
+                dynamicAnalysisResults, analysisResults, instrNameMap,
+                blockNameMap, patterns, degree);
             if (transformed == Transformed::Yes) {
                 continue;
             }
         } else if (vals.functions.first && vals.functions.second) {
-            analyzeRelationalCounterExample();
+            analyzeRelationalCounterExample(
+                {cexStartMark, cexEndMark}, vals, vals.functions,
+                dynamicAnalysisResults, blockNameMap, analysisResults, degree);
         } else if (vals.functions.first) {
             analyzeFunctionalCounterExample();
         } else if (vals.functions.second) {
@@ -288,8 +352,7 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             break;
         }
         z3::model z3Model = z3Solver.get_model();
-        vals =
-            parseZ3Model(z3Cxt, z3Model, nameMap, functions, analysisResults);
+        vals = parseZ3Model(z3Cxt, z3Model, nameMap, analysisResults);
     } while (1 /* sat */);
 
     vector<SharedSMTRef> clauses;
@@ -344,7 +407,6 @@ static bool convertZ3Bool(Z3_lbool val) {
 
 ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
                          const std::map<std::string, z3::expr> &nameMap,
-                         MonoPair<const llvm::Function *> functions,
                          const AnalysisResultsMap &analysisResults) {
     map<string, ArrayVal> arrays;
     map<string, mpz_class> values;
@@ -355,18 +417,6 @@ ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
         Mark(model.eval(nameMap.at("INV_INDEX_END")).get_numeral_int());
     values.insert({"INV_INDEX_START", startMark.asInt()});
     values.insert({"INV_INDEX_END", endMark.asInt()});
-    for (const auto &var :
-         getPrimitiveFreeVariables(functions, startMark, analysisResults)) {
-        std::string stringVal = Z3_get_numeral_string(
-            z3Cxt, model.eval(nameMap.at(var.name + "_old")));
-        values.insert({var.name + "_old", mpz_class(stringVal)});
-    }
-    if (SMTGenerationOpts::getInstance().Heap == llreve::opts::Heap::Enabled) {
-        auto heap1Eval = model.eval(nameMap.at("HEAP$1_old"));
-        auto heap2Eval = model.eval(nameMap.at("HEAP$2_old"));
-        arrays.insert({"HEAP$1_old", getArrayVal(z3Cxt, heap1Eval)});
-        arrays.insert({"HEAP$2_old", getArrayVal(z3Cxt, heap2Eval)});
-    }
     bool main =
         convertZ3Bool(Z3_get_bool_value(z3Cxt, model.eval(nameMap.at("MAIN"))));
     bool program1 = convertZ3Bool(
@@ -379,12 +429,35 @@ ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
         function1 =
             SMTGenerationOpts::getInstance().ReversedFunctionNumerals.first.at(
                 model.eval(nameMap.at("FUNCTION_1")).get_numeral_int64());
+        for (const auto &var :
+             getPrimitiveFreeVariables(function1, startMark, analysisResults)) {
+            std::string stringVal = Z3_get_numeral_string(
+                z3Cxt, model.eval(nameMap.at(var.name + "_old")));
+            values.insert({var.name + "_old", mpz_class(stringVal)});
+        }
     }
     if (program2) {
         function2 =
-            SMTGenerationOpts::getInstance().ReversedFunctionNumerals.first.at(
+            SMTGenerationOpts::getInstance().ReversedFunctionNumerals.second.at(
                 model.eval(nameMap.at("FUNCTION_2")).get_numeral_int64());
+        for (const auto &var :
+             getPrimitiveFreeVariables(function2, startMark, analysisResults)) {
+            std::string stringVal = Z3_get_numeral_string(
+                z3Cxt, model.eval(nameMap.at(var.name + "_old")));
+            values.insert({var.name + "_old", mpz_class(stringVal)});
+        }
     }
+    if (SMTGenerationOpts::getInstance().Heap == llreve::opts::Heap::Enabled) {
+        if (program1) {
+            auto heap1Eval = model.eval(nameMap.at("HEAP$1_old"));
+            arrays.insert({"HEAP$1_old", getArrayVal(z3Cxt, heap1Eval)});
+        }
+        if (program2) {
+            auto heap2Eval = model.eval(nameMap.at("HEAP$2_old"));
+            arrays.insert({"HEAP$2_old", getArrayVal(z3Cxt, heap2Eval)});
+        }
+    }
+
     return ModelValues(arrays, values, main, toSelection(program1, program2),
                        {function1, function2});
 }
@@ -784,17 +857,21 @@ instructionNameMap(MonoPair<const llvm::Function *> funs) {
 
 MonoPair<FastVarMap> getVarMapFromModel(
     std::map<std::string, const llvm::Value *> instructionNameMap,
+    MonoPair<std::vector<smt::SortedVar>> freeVars,
+    std::map<std::string, mpz_class> vals) {
+    return {getVarMapFromModel(instructionNameMap, freeVars.first, vals),
+            getVarMapFromModel(instructionNameMap, freeVars.second, vals)};
+}
+
+FastVarMap getVarMapFromModel(
+    std::map<std::string, const llvm::Value *> instructionNameMap,
     std::vector<smt::SortedVar> freeVars,
     std::map<std::string, mpz_class> vals) {
-    MonoPair<FastVarMap> variableValues = makeMonoPair<FastVarMap>({}, {});
+    FastVarMap variableValues;
     for (const auto &var : freeVars) {
         mpz_class val = vals.at(var.name + "_old");
         const llvm::Value *instr = instructionNameMap.at(var.name);
-        if (varBelongsTo(var.name, 1)) {
-            variableValues.first.insert({instr, Integer(val)});
-        } else {
-            variableValues.second.insert({instr, Integer(val)});
-        }
+        variableValues.insert({instr, Integer(val)});
     }
     return variableValues;
 }

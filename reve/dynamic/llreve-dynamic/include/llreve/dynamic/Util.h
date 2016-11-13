@@ -15,6 +15,9 @@ getFreeVariablesForMark(MonoPair<const llvm::Function *> functions, Mark mark,
 std::vector<smt::SortedVar>
 getPrimitiveFreeVariables(MonoPair<const llvm::Function *> functions, Mark mark,
                           const AnalysisResultsMap &analysisResults);
+std::vector<smt::SortedVar>
+getPrimitiveFreeVariables(const llvm::Function *function, Mark mark,
+                          const AnalysisResultsMap &analysisResults);
 
 std::vector<std::vector<std::string>>
 polynomialTermsOfDegree(std::vector<smt::SortedVar> variables, size_t degree);

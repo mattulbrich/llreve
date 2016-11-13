@@ -131,8 +131,7 @@ enum class Transformed { Yes, No };
 
 // This function has way too many arguments
 Transformed analyzeMainCounterExample(
-    Mark cexStartMark, Mark cexEndMark, ModelValues &vals,
-    MonoPair<llvm::Function *> functions,
+    MarkPair pathMarks, ModelValues &vals, MonoPair<llvm::Function *> functions,
     DynamicAnalysisResults &dynamicAnalysisResults,
     AnalysisResultsMap &analysisResults,
     std::map<std::string, const llvm::Value *> &instrNameMap,
@@ -140,7 +139,12 @@ Transformed analyzeMainCounterExample(
     const std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>>
         &patterns,
     unsigned degree);
-void analyzeRelationalCounterExample();
+void analyzeRelationalCounterExample(
+    MarkPair pathMarks, const ModelValues &vals,
+    MonoPair<const llvm::Function *> functions,
+    DynamicAnalysisResults &dynamicAnalysisResults,
+    const MonoPair<BlockNameMap> &nameMap,
+    const AnalysisResultsMap &analysisResults, unsigned maxDegree);
 void analyzeFunctionalCounterExample();
 
 void populateHeapPatterns(
@@ -161,6 +165,10 @@ std::map<std::string, const llvm::Value *>
 instructionNameMap(MonoPair<const llvm::Function *> funs);
 
 MonoPair<FastVarMap> getVarMapFromModel(
+    std::map<std::string, const llvm::Value *> instructionNameMap,
+    MonoPair<std::vector<smt::SortedVar>> freeVars,
+    std::map<std::string, mpz_class> vals);
+FastVarMap getVarMapFromModel(
     std::map<std::string, const llvm::Value *> instructionNameMap,
     std::vector<smt::SortedVar> freeVars,
     std::map<std::string, mpz_class> vals);
@@ -582,7 +590,6 @@ ExitIndex getExitIndex(const MatchInfo<const llvm::Value *> match);
 
 ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
                          const std::map<std::string, z3::expr> &nameMap,
-                         MonoPair<const llvm::Function *> functions,
                          const AnalysisResultsMap &analysisResults);
 
 ArrayVal getArrayVal(const z3::context &z3Cxt, z3::expr arrayExpr);
