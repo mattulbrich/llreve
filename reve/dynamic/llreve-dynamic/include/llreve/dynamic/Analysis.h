@@ -129,14 +129,14 @@ void findLoopCounts(LoopCountsAndMark &loopCountsAndMark, MatchInfo<T> match) {
     }
 }
 
-struct MergedAnalysisResults;
+struct DynamicAnalysisResults;
 enum class Transformed { Yes, No };
 
 // This function has way too many arguments
 Transformed analyzeMainCounterExample(
     Mark cexStartMark, Mark cexEndMark, ModelValues &vals,
     MonoPair<llvm::Function *> functions,
-    MergedAnalysisResults &dynamicAnalysisResults,
+    DynamicAnalysisResults &dynamicAnalysisResults,
     AnalysisResultsMap &analysisResults,
     std::map<std::string, const llvm::Value *> &instrNameMap,
     const MonoPair<BlockNameMap> &nameMap,
@@ -577,7 +577,7 @@ void analyzeExecution(
     assert(stepsIt2 == call2.steps.end());
 }
 
-struct MergedAnalysisResults {
+struct DynamicAnalysisResults {
     LoopCountsAndMark loopCounts;
     IterativeInvariantMap<PolynomialEquations> polynomialEquations;
     RelationalFunctionInvariantMap<

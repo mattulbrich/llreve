@@ -84,7 +84,7 @@ bool ImplicationsFlag;
 Transformed analyzeMainCounterExample(
     Mark cexStartMark, Mark cexEndMark, ModelValues &vals,
     MonoPair<llvm::Function *> functions,
-    MergedAnalysisResults &dynamicAnalysisResults,
+    DynamicAnalysisResults &dynamicAnalysisResults,
     AnalysisResultsMap &analysisResults,
     std::map<std::string, const llvm::Value *> &instrNameMap,
     const MonoPair<BlockNameMap> &nameMap,
@@ -151,7 +151,7 @@ Transformed analyzeMainCounterExample(
     if (applyLoopTransformation(functions, analysisResults, loopTransformations,
                                 markMaps)) {
         // Reset data and start over
-        dynamicAnalysisResults = MergedAnalysisResults();
+        dynamicAnalysisResults = DynamicAnalysisResults();
         vals = initialModelValues(functions);
         // The paths have changed so we need to update the free variables
         analysisResults.at(functions.first).freeVariables =
@@ -181,7 +181,7 @@ cegarDriver(MonoPair<llvm::Module &> modules,
     MonoPair<BlockNameMap> nameMap = getBlockNameMaps(analysisResults);
 
     // Run the interpreter on the unrolled code
-    MergedAnalysisResults dynamicAnalysisResults;
+    DynamicAnalysisResults dynamicAnalysisResults;
     size_t degree = DegreeFlag;
     ModelValues vals = initialModelValues(functions);
     auto instrNameMap = instructionNameMap(functions);
