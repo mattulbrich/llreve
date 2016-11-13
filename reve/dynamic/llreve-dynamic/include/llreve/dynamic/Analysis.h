@@ -577,11 +577,6 @@ void analyzeExecution(
     assert(stepsIt2 == call2.steps.end());
 }
 
-LoopCountsAndMark mergeLoopCounts(LoopCountsAndMark counts1,
-                                  LoopCountsAndMark counts2);
-IterativeInvariantMap<PolynomialEquations>
-mergePolynomialEquations(IterativeInvariantMap<PolynomialEquations> eq1,
-                         IterativeInvariantMap<PolynomialEquations> eq2);
 struct MergedAnalysisResults {
     LoopCountsAndMark loopCounts;
     IterativeInvariantMap<PolynomialEquations> polynomialEquations;
@@ -591,16 +586,6 @@ struct MergedAnalysisResults {
     FunctionInvariantMap<Matrix<mpq_class>> functionPolynomialEquations;
     HeapPatternCandidatesMap heapPatternCandidates;
 };
-
-MergedAnalysisResults mergeAnalysisResults(MergedAnalysisResults res1,
-                                           MergedAnalysisResults res2);
-
-HeapPatternCandidatesMap mergeHeapPatternMaps(HeapPatternCandidatesMap cand1,
-                                              HeapPatternCandidatesMap cand2);
-HeapPatternCandidates
-mergeHeapPatternCandidates(HeapPatternCandidates candidates1,
-                           HeapPatternCandidates candidates2);
-
 ModelValues initialModelValues(MonoPair<const llvm::Function *> funs);
 
 ExitIndex getExitIndex(const MatchInfo<const llvm::Value *> match);
