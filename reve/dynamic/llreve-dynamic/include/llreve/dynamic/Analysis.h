@@ -169,14 +169,14 @@ enum class Transformed { Yes, No };
 // This function has way too many arguments
 Transformed analyzeMainCounterExample(
     Mark cexStartMark, Mark cexEndMark, ModelValues &vals,
-    FreeVarsMap &freeVarsMap, MonoPair<llvm::Function *> functions,
+    MonoPair<llvm::Function *> functions,
     MergedAnalysisResults &dynamicAnalysisResults,
     AnalysisResultsMap &analysisResults,
     std::map<std::string, const llvm::Value *> &instrNameMap,
     const MonoPair<BlockNameMap> &nameMap,
     const std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>>
         &patterns,
-    const MonoPair<BidirBlockMarkMap> &markMaps, unsigned degree);
+    unsigned degree);
 void analyzeRelationalCounterExample();
 void analyzeFunctionalCounterExample();
 
@@ -188,22 +188,22 @@ BoundsMap updateBounds(
     const std::map<Mark, std::map<std::string, Bound<VarIntVal>>> &update);
 void populateEquationsMap(
     IterativeInvariantMap<PolynomialEquations> &equationsMap,
-    FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match,
-    ExitIndex exitIndex, size_t degree);
+    std::vector<smt::SortedVar> primitiveVariables,
+    MatchInfo<const llvm::Value *> match, ExitIndex exitIndex, size_t degree);
 void populateEquationsMap(
     RelationalFunctionInvariantMap<
         LoopInfoData<FunctionInvariant<Matrix<mpq_class>>>> &equationsMap,
-    FreeVarsMap freeVarsMap, CoupledCallInfo<const llvm::Value *> match,
-    size_t degree);
+    std::vector<smt::SortedVar> primitiveVariables,
+    CoupledCallInfo<const llvm::Value *> match, size_t degree);
 void populateEquationsMap(FunctionInvariantMap<Matrix<mpq_class>> &equationsMap,
-                          FreeVarsMap freeVarsMap,
+                          std::vector<smt::SortedVar> primitiveVariables,
                           UncoupledCallInfo<const llvm::Value *> match,
                           size_t degree);
 void populateHeapPatterns(
     HeapPatternCandidatesMap &heapPatternCandidates,
     std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
-    FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match,
-    ExitIndex exitIndex);
+    const std::vector<smt::SortedVar> &primitiveVariables,
+    MatchInfo<const llvm::Value *> match, ExitIndex exitIndex);
 void dumpPolynomials(
     const IterativeInvariantMap<PolynomialEquations> &equationsMap,
     const FreeVarsMap &freeVarsmap);
@@ -654,7 +654,8 @@ ExitIndex getExitIndex(const MatchInfo<const llvm::Value *> match);
 
 ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
                          const std::map<std::string, z3::expr> &nameMap,
-                         const FreeVarsMap &freeVarsMap);
+                         MonoPair<const llvm::Function *> functions,
+                         const AnalysisResultsMap &analysisResults);
 
 ArrayVal getArrayVal(const z3::context &z3Cxt, z3::expr arrayExpr);
 

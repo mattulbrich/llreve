@@ -31,6 +31,13 @@ FreeVarsMap getFreeVarsMap(MonoPair<const llvm::Function *> functions,
                            analysisResults.at(functions.second).freeVariables);
 }
 
+MonoPair<FreeVarsMap>
+getFreeVarsPair(MonoPair<const llvm::Function *> functions,
+                const AnalysisResultsMap &analysisResults) {
+    return {analysisResults.at(functions.first).freeVariables,
+            analysisResults.at(functions.second).freeVariables};
+}
+
 string getFunctionName(MonoPair<const llvm::Function *> functions) {
     return functions.first->getName().str() + "^" +
            functions.second->getName().str();

@@ -67,9 +67,10 @@ using BoundsMap =
     std::map<Mark, std::map<std::string, Bound<llvm::Optional<VarIntVal>>>>;
 
 std::map<Mark, smt::SharedSMTRef> makeIterativeInvariantDefinitions(
+    MonoPair<const llvm::Function *> functions,
     const IterativeInvariantMap<PolynomialEquations> &equations,
-    const HeapPatternCandidatesMap &patterns, const FreeVarsMap &freeVarsMap,
-    size_t degree);
+    const HeapPatternCandidatesMap &patterns,
+    const AnalysisResultsMap &analysisResults, size_t degree);
 RelationalFunctionInvariantMap<FunctionInvariant<smt::SharedSMTRef>>
 makeRelationalFunctionInvariantDefinitions(
     const RelationalFunctionInvariantMap<

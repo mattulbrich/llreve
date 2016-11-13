@@ -26,18 +26,21 @@ static std::unique_ptr<ConstantInt> smtFromMpz(unsigned bitWidth, mpz_class i) {
 }
 
 map<Mark, SharedSMTRef> makeIterativeInvariantDefinitions(
+    MonoPair<const llvm::Function *> functions,
     const IterativeInvariantMap<PolynomialEquations> &equations,
-    const HeapPatternCandidatesMap &patterns, const FreeVarsMap &freeVarsMap,
-    size_t degree) {
+    const HeapPatternCandidatesMap &patterns,
+    const AnalysisResultsMap &analysisResults, size_t degree) {
     const auto solutions = findSolutions(equations);
     map<Mark, SharedSMTRef> definitions;
-    for (auto mapIt : freeVarsMap) {
+    for (auto mapIt : analysisResults.at(functions.first).freeVariables) {
         Mark mark = mapIt.first;
         vector<SortedVar> args;
-        for (const auto &var : filterVars(1, freeVarsMap.at(mark))) {
+        for (const auto &var :
+             analysisResults.at(functions.first).freeVariables.at(mark)) {
             args.push_back(var);
         }
-        for (auto var : filterVars(2, freeVarsMap.at(mark))) {
+        for (const auto &var :
+             analysisResults.at(functions.second).freeVariables.at(mark)) {
             args.push_back(var);
         }
         auto solutionsMapIt = solutions.find(mark);
@@ -47,24 +50,26 @@ map<Mark, SharedSMTRef> makeIterativeInvariantDefinitions(
         } else {
             for (auto exitIt : solutionsMapIt->second) {
                 ExitIndex exit = exitIt.first;
+                const auto freeVariables =
+                    getFreeVariablesForMark(functions, mark, analysisResults);
                 SharedSMTRef left = makeInvariantDefinition(
                     exitIt.second.left,
                     patterns.at(mark).at(exit).left.hasValue()
                         ? patterns.at(mark).at(exit).left.getValue()
                         : HeapPatternCandidates(),
-                    freeVarsMap.at(mark), degree);
+                    freeVariables, degree);
                 SharedSMTRef right = makeInvariantDefinition(
                     exitIt.second.right,
                     patterns.at(mark).at(exit).right.hasValue()
                         ? patterns.at(mark).at(exit).right.getValue()
                         : HeapPatternCandidates(),
-                    freeVarsMap.at(mark), degree);
+                    freeVariables, degree);
                 SharedSMTRef none = makeInvariantDefinition(
                     exitIt.second.none,
                     patterns.at(mark).at(exit).none.hasValue()
                         ? patterns.at(mark).at(exit).none.getValue()
                         : HeapPatternCandidates(),
-                    freeVarsMap.at(mark), degree);
+                    freeVariables, degree);
                 if (left == nullptr && right == nullptr && none == nullptr) {
                     continue;
                 }

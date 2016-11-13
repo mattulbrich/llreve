@@ -82,15 +82,16 @@ bool ImplicationsFlag;
 
 Transformed analyzeMainCounterExample(
     Mark cexStartMark, Mark cexEndMark, ModelValues &vals,
-    FreeVarsMap &freeVarsMap, MonoPair<llvm::Function *> functions,
+    MonoPair<llvm::Function *> functions,
     MergedAnalysisResults &dynamicAnalysisResults,
     AnalysisResultsMap &analysisResults,
     std::map<std::string, const llvm::Value *> &instrNameMap,
     const MonoPair<BlockNameMap> &nameMap,
     const vector<shared_ptr<HeapPattern<VariablePlaceholder>>> &patterns,
-    const MonoPair<BidirBlockMarkMap> &markMaps, unsigned degree) {
+    unsigned degree) {
+    const auto markMaps = getBlockMarkMaps(functions, analysisResults);
     auto primitiveFreeVariables =
-        removeHeapVariables(freeVarsMap.at(cexStartMark));
+        getPrimitiveFreeVariables(functions, cexStartMark, analysisResults);
     // reconstruct input from counterexample
     auto variableValues =
         getVarMapFromModel(instrNameMap, primitiveFreeVariables, vals.values);
@@ -114,29 +115,31 @@ Transformed analyzeMainCounterExample(
         getHeapBackgrounds(vals.arrays), {firstBlock, secondBlock}, 1000);
     analyzeExecution<const llvm::Value *>(
         calls, nameMap,
-        [&dynamicAnalysisResults, &freeVarsMap, degree,
-         &patterns](MatchInfo<const llvm::Value *> match) {
+        [&](MatchInfo<const llvm::Value *> match) {
             ExitIndex exitIndex = getExitIndex(match);
             findLoopCounts<const llvm::Value *>(
                 dynamicAnalysisResults.loopCounts, match);
+            const auto primitiveVariables = getPrimitiveFreeVariables(
+                functions, match.mark, analysisResults);
             populateEquationsMap(dynamicAnalysisResults.polynomialEquations,
-                                 freeVarsMap, match, exitIndex, degree);
+                                 primitiveVariables, match, exitIndex, degree);
             populateHeapPatterns(dynamicAnalysisResults.heapPatternCandidates,
-                                 patterns, freeVarsMap, match, exitIndex);
+                                 patterns, primitiveVariables, match,
+                                 exitIndex);
         },
-        [&dynamicAnalysisResults, &analysisResults,
-         degree](CoupledCallInfo<const llvm::Value *> match) {
+        [&](CoupledCallInfo<const llvm::Value *> match) {
+            const auto primitiveVariables = getPrimitiveFreeVariables(
+                match.functions, match.mark, analysisResults);
             populateEquationsMap(
                 dynamicAnalysisResults.relationalFunctionPolynomialEquations,
-                getFreeVarsMap(match.functions, analysisResults), match,
-                degree);
+                primitiveVariables, match, degree);
         },
-        [&dynamicAnalysisResults, &analysisResults,
-         degree](UncoupledCallInfo<const llvm::Value *> match) {
+        [&](UncoupledCallInfo<const llvm::Value *> match) {
             populateEquationsMap(
                 dynamicAnalysisResults.functionPolynomialEquations,
-                analysisResults.at(match.function).freeVariables, match,
-                degree);
+                removeHeapVariables(analysisResults.at(match.function)
+                                        .freeVariables.at(match.mark)),
+                match, degree);
             std::cerr << "uncoupled call\n";
         });
     auto loopTransformations =
@@ -158,7 +161,6 @@ Transformed analyzeMainCounterExample(
             freeVars(analysisResults.at(functions.second).paths,
                      analysisResults.at(functions.second).functionArguments,
                      Program::Second);
-        freeVarsMap = getFreeVarsMap(functions, analysisResults);
         instrNameMap = instructionNameMap(functions);
         std::cerr << "Transformed program, resetting inputs\n";
         return Transformed::Yes;
@@ -175,14 +177,10 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
             FileOptions fileOpts) {
     auto functions = SMTGenerationOpts::getInstance().MainFunctions;
-    const auto markMaps = getBlockMarkMaps(functions, analysisResults);
     MonoPair<BlockNameMap> nameMap = getBlockNameMaps(analysisResults);
-    const auto funArgsPair = getFunctionArguments(functions, analysisResults);
-    const auto funArgs = concat(funArgsPair);
 
     // Run the interpreter on the unrolled code
     MergedAnalysisResults dynamicAnalysisResults;
-    FreeVarsMap freeVarsMap = getFreeVarsMap(functions, analysisResults);
     size_t degree = DegreeFlag;
     ModelValues vals = initialModelValues(functions);
     auto instrNameMap = instructionNameMap(functions);
@@ -221,9 +219,9 @@ cegarDriver(MonoPair<llvm::Module &> modules,
         assert(vals.functions.first || vals.functions.second);
         if (vals.main) {
             Transformed transformed = analyzeMainCounterExample(
-                cexStartMark, cexEndMark, vals, freeVarsMap, functions,
+                cexStartMark, cexEndMark, vals, functions,
                 dynamicAnalysisResults, analysisResults, instrNameMap, nameMap,
-                patterns, markMaps, degree);
+                patterns, degree);
             if (transformed == Transformed::Yes) {
                 continue;
             }
@@ -236,8 +234,8 @@ cegarDriver(MonoPair<llvm::Module &> modules,
         }
 
         auto invariantCandidates = makeIterativeInvariantDefinitions(
-            dynamicAnalysisResults.polynomialEquations,
-            dynamicAnalysisResults.heapPatternCandidates, freeVarsMap,
+            functions, dynamicAnalysisResults.polynomialEquations,
+            dynamicAnalysisResults.heapPatternCandidates, analysisResults,
             DegreeFlag);
         auto relationalFunctionInvariantCandidates =
             makeRelationalFunctionInvariantDefinitions(
@@ -289,7 +287,8 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             break;
         }
         z3::model z3Model = z3Solver.get_model();
-        vals = parseZ3Model(z3Cxt, z3Model, nameMap, freeVarsMap);
+        vals =
+            parseZ3Model(z3Cxt, z3Model, nameMap, functions, analysisResults);
     } while (1 /* sat */);
 
     vector<SharedSMTRef> clauses;
@@ -297,8 +296,8 @@ cegarDriver(MonoPair<llvm::Module &> modules,
     case LlreveResult::Equivalent: {
         std::cerr << "The programs have been proven equivalent\n";
         auto invariantCandidates = makeIterativeInvariantDefinitions(
-            dynamicAnalysisResults.polynomialEquations,
-            dynamicAnalysisResults.heapPatternCandidates, freeVarsMap,
+            functions, dynamicAnalysisResults.polynomialEquations,
+            dynamicAnalysisResults.heapPatternCandidates, analysisResults,
             DegreeFlag);
 
         SMTGenerationOpts::getInstance().IterativeRelationalInvariants =
@@ -344,7 +343,8 @@ static bool convertZ3Bool(Z3_lbool val) {
 
 ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
                          const std::map<std::string, z3::expr> &nameMap,
-                         const FreeVarsMap &freeVarsMap) {
+                         MonoPair<const llvm::Function *> functions,
+                         const AnalysisResultsMap &analysisResults) {
     map<string, ArrayVal> arrays;
     map<string, mpz_class> values;
 
@@ -354,7 +354,8 @@ ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
         Mark(model.eval(nameMap.at("INV_INDEX_END")).get_numeral_int());
     values.insert({"INV_INDEX_START", startMark.asInt()});
     values.insert({"INV_INDEX_END", endMark.asInt()});
-    for (const auto &var : removeHeapVariables(freeVarsMap.at(startMark))) {
+    for (const auto &var :
+         getPrimitiveFreeVariables(functions, startMark, analysisResults)) {
         std::string stringVal = Z3_get_numeral_string(
             z3Cxt, model.eval(nameMap.at(var.name + "_old")));
         values.insert({var.name + "_old", mpz_class(stringVal)});
@@ -536,8 +537,8 @@ map<Mark, LoopTransformation> findLoopTransformations(LoopCountMap &map) {
 
 void populateEquationsMap(
     IterativeInvariantMap<PolynomialEquations> &polynomialEquations,
-    FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match,
-    ExitIndex exitIndex, size_t degree) {
+    vector<smt::SortedVar> primitiveVariables,
+    MatchInfo<const llvm::Value *> match, ExitIndex exitIndex, size_t degree) {
     VarMap<string> variables;
     for (auto varIt : match.steps.first->state.variables) {
         variables.insert(std::make_pair(varIt.first->getName(), varIt.second));
@@ -545,8 +546,6 @@ void populateEquationsMap(
     for (auto varIt : match.steps.second->state.variables) {
         variables.insert(std::make_pair(varIt.first->getName(), varIt.second));
     }
-    vector<smt::SortedVar> primitiveVariables =
-        removeHeapVariables(freeVarsMap.at(match.mark));
     vector<mpq_class> equation;
     for (size_t i = 1; i <= degree; ++i) {
         auto polynomialTerms = polynomialTermsOfDegree(primitiveVariables, i);
@@ -582,8 +581,8 @@ void populateEquationsMap(
 void populateEquationsMap(
     RelationalFunctionInvariantMap<
         LoopInfoData<FunctionInvariant<Matrix<mpq_class>>>> &equationsMap,
-    FreeVarsMap freeVarsMap, CoupledCallInfo<const llvm::Value *> match,
-    size_t degree) {
+    vector<SortedVar> primitiveVariables,
+    CoupledCallInfo<const llvm::Value *> match, size_t degree) {
     auto &polynomialEquations = equationsMap[match.functions];
     VarMap<string> variables;
     for (auto varIt : match.steps.first->state.variables) {
@@ -594,8 +593,7 @@ void populateEquationsMap(
     }
     variables.insert({resultName(Program::First), match.returnValues.first});
     variables.insert({resultName(Program::Second), match.returnValues.second});
-    vector<smt::SortedVar> preVariables =
-        removeHeapVariables(freeVarsMap.at(match.mark));
+    vector<smt::SortedVar> preVariables = primitiveVariables;
     vector<smt::SortedVar> postVariables = preVariables;
     postVariables.emplace_back(resultName(Program::First), int64Type());
     postVariables.emplace_back(resultName(Program::Second), int64Type());
@@ -644,7 +642,7 @@ void populateEquationsMap(
 }
 
 void populateEquationsMap(FunctionInvariantMap<Matrix<mpq_class>> &equationsMap,
-                          FreeVarsMap freeVarsMap,
+                          vector<SortedVar> primitiveVariables,
                           UncoupledCallInfo<const llvm::Value *> match,
                           size_t degree) {
     auto &polynomialEquations = equationsMap[match.function];
@@ -653,8 +651,7 @@ void populateEquationsMap(FunctionInvariantMap<Matrix<mpq_class>> &equationsMap,
         variables.insert(std::make_pair(varIt.first->getName(), varIt.second));
     }
     variables.insert({resultName(match.prog), match.returnValue});
-    vector<smt::SortedVar> preVariables =
-        removeHeapVariables(freeVarsMap.at(match.mark));
+    vector<smt::SortedVar> preVariables = primitiveVariables;
     vector<smt::SortedVar> postVariables = preVariables;
     postVariables.emplace_back(resultName(match.prog), int64Type());
     vector<mpq_class> preEquation;
@@ -716,8 +713,8 @@ ExitIndex getExitIndex(const MatchInfo<const llvm::Value *> match) {
 void populateHeapPatterns(
     HeapPatternCandidatesMap &heapPatternCandidates,
     vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
-    FreeVarsMap freeVarsMap, MatchInfo<const llvm::Value *> match,
-    ExitIndex exitIndex) {
+    const vector<SortedVar> &primitiveVariables,
+    MatchInfo<const llvm::Value *> match, ExitIndex exitIndex) {
     VarMap<const llvm::Value *> variables(match.steps.first->state.variables);
     variables.insert(match.steps.second->state.variables.begin(),
                      match.steps.second->state.variables.end());
@@ -733,7 +730,7 @@ void populateHeapPatterns(
         list<shared_ptr<HeapPattern<const llvm::Value *>>> candidates;
         for (auto pat : patterns) {
             auto newCandidates =
-                pat->instantiate(freeVarsMap.at(match.mark), variables, heaps);
+                pat->instantiate(primitiveVariables, variables, heaps);
             candidates.splice(candidates.end(), newCandidates);
         }
         heapPatternCandidates.at(match.mark)

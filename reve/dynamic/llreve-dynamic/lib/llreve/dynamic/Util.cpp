@@ -48,5 +48,30 @@ vector<SortedVar> removeHeapVariables(const vector<SortedVar> &freeVariables) {
     }
     return result;
 }
+
+std::vector<smt::SortedVar>
+getFreeVariablesForMark(MonoPair<const llvm::Function *> functions, Mark mark,
+                        const AnalysisResultsMap &analysisResults) {
+    auto primitiveFreeVariables =
+        analysisResults.at(functions.first).freeVariables.at(mark);
+    auto primitiveFreeVariables2 =
+        analysisResults.at(functions.second).freeVariables.at(mark);
+    primitiveFreeVariables.insert(primitiveFreeVariables.end(),
+                                  primitiveFreeVariables2.begin(),
+                                  primitiveFreeVariables2.end());
+    return primitiveFreeVariables;
+}
+std::vector<smt::SortedVar>
+getPrimitiveFreeVariables(MonoPair<const llvm::Function *> functions, Mark mark,
+                          const AnalysisResultsMap &analysisResults) {
+    auto primitiveFreeVariables = removeHeapVariables(
+        analysisResults.at(functions.first).freeVariables.at(mark));
+    auto primitiveFreeVariables2 = removeHeapVariables(
+        analysisResults.at(functions.second).freeVariables.at(mark));
+    primitiveFreeVariables.insert(primitiveFreeVariables.end(),
+                                  primitiveFreeVariables2.begin(),
+                                  primitiveFreeVariables2.end());
+    return primitiveFreeVariables;
+}
 }
 }
