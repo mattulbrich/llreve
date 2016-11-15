@@ -76,14 +76,19 @@ RelationalFunctionInvariantMap<FunctionInvariant<smt::SharedSMTRef>>
 makeRelationalFunctionInvariantDefinitions(
     const RelationalFunctionInvariantMap<
         LoopInfoData<FunctionInvariant<Matrix<mpq_class>>>> &equations,
+    const RelationalFunctionInvariantMap<
+        LoopInfoData<llvm::Optional<FunctionInvariant<HeapPatternCandidates>>>>
+        &patterns,
     const AnalysisResultsMap &analysisResults, size_t degree);
 FunctionInvariantMap<smt::SharedSMTRef> makeFunctionInvariantDefinitions(
     const llvm::Module &module,
     const FunctionInvariantMap<Matrix<mpq_class>> &equations,
+    const FunctionInvariantMap<HeapPatternCandidates> &patterns,
     const AnalysisResultsMap &analysisResults, Program prog, size_t degree);
 FunctionInvariantMap<smt::SharedSMTRef> makeFunctionInvariantDefinitions(
     MonoPair<const llvm::Module &> modules,
     const FunctionInvariantMap<Matrix<mpq_class>> &equations,
+    const FunctionInvariantMap<HeapPatternCandidates> &patterns,
     const AnalysisResultsMap &analysisResults, size_t degree);
 Matrix<mpz_class> findSolutions(Matrix<mpq_class> equations);
 PolynomialSolutions
@@ -91,6 +96,11 @@ findSolutions(const IterativeInvariantMap<PolynomialEquations> &equationsMap);
 // This can return a nullpointer if the invariant is empty, conceptually this
 // represents the invariant "true" but if the invariant consists of multiple
 // parts, this needs to be handled separately.
+smt::SharedSMTRef
+makeInvariantDefinition(const std::vector<std::vector<mpz_class>> &solution,
+                        const llvm::Optional<HeapPatternCandidates> &candidates,
+                        const std::vector<smt::SortedVar> &freeVars,
+                        size_t degree);
 smt::SharedSMTRef
 makeInvariantDefinition(const std::vector<std::vector<mpz_class>> &solution,
                         const HeapPatternCandidates &candidates,

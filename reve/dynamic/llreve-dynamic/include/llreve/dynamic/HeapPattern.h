@@ -614,7 +614,8 @@ template <typename T> struct Constant : public HeapExpr<T> {
         return false;
     }
     smt::SMTRef toSMT() const override {
-        return smt::stringExpr(value.get_str());
+        return std::make_unique<smt::ConstantInt>(
+            llvm::APInt(64, value.get_str(), 10));
     }
 };
 

@@ -20,10 +20,12 @@ struct AnalysisResults {
     PathMap paths;
     std::vector<smt::SortedVar> functionArguments;
     FreeVarsMap freeVariables;
+    llvm::Value *returnInstruction;
     AnalysisResults(BidirBlockMarkMap marks, PathMap pm,
-                    std::vector<smt::SortedVar> funArgs, FreeVarsMap freeVars)
+                    std::vector<smt::SortedVar> funArgs, FreeVarsMap freeVars,
+                    llvm::Value *returnInstruction)
         : blockMarkMap(marks), paths(pm), functionArguments(funArgs),
-          freeVariables(freeVars) {}
+          freeVariables(freeVars), returnInstruction(returnInstruction) {}
 };
 
 using AnalysisResultsMap = std::map<const llvm::Function *, AnalysisResults>;

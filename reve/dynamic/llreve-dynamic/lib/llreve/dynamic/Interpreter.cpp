@@ -80,38 +80,40 @@ const VarIntVal &unsafeIntValRef(const bool & /* unused */) {
 }
 bool unsafeBool(const bool &b) { return b; }
 
-MonoPair<FastCall> interpretFunctionPair(MonoPair<const Function *> funs,
-                                         MonoPair<FastVarMap> variables,
-                                         MonoPair<Heap> heaps,
-                                         MonoPair<Integer> heapBackgrounds,
-                                         uint32_t maxSteps) {
+MonoPair<FastCall>
+interpretFunctionPair(MonoPair<const Function *> funs,
+                      MonoPair<FastVarMap> variables, MonoPair<Heap> heaps,
+                      MonoPair<Integer> heapBackgrounds, uint32_t maxSteps,
+                      const AnalysisResultsMap &analysisResults) {
     return makeMonoPair(
         interpretFunction(*funs.first, FastState(variables.first, heaps.first,
                                                  heapBackgrounds.first),
-                          maxSteps),
+                          maxSteps, analysisResults),
         interpretFunction(
             *funs.second,
             FastState(variables.second, heaps.second, heapBackgrounds.second),
-            maxSteps));
+            maxSteps, analysisResults));
 }
 
 MonoPair<FastCall> interpretFunctionPair(
     MonoPair<const llvm::Function *> funs, MonoPair<FastVarMap> variables,
     MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds,
-    MonoPair<const llvm::BasicBlock *> startBlocks, uint32_t maxSteps) {
+    MonoPair<const llvm::BasicBlock *> startBlocks, uint32_t maxSteps,
+    const AnalysisResultsMap &analysisResults) {
     return makeMonoPair(
         interpretFunction(*funs.first, FastState(variables.first, heaps.first,
                                                  heapBackgrounds.first),
-                          startBlocks.first, maxSteps),
+                          startBlocks.first, maxSteps, analysisResults),
         interpretFunction(
             *funs.second,
             FastState(variables.second, heaps.second, heapBackgrounds.second),
-            startBlocks.second, maxSteps));
+            startBlocks.second, maxSteps, analysisResults));
 }
 
 FastCall interpretFunction(const Function &fun, FastState entry,
                            const llvm::BasicBlock *startBlock,
-                           uint32_t maxSteps) {
+                           uint32_t maxSteps,
+                           const AnalysisResultsMap &analysisResults) {
     const BasicBlock *prevBlock = nullptr;
     const BasicBlock *currentBlock = startBlock;
     vector<BlockStep<const llvm::Value *>> steps;
@@ -120,8 +122,9 @@ FastCall interpretFunction(const Function &fun, FastState entry,
     uint32_t blocksVisited = 0;
     bool firstBlock = true;
     do {
-        update = interpretBlock(*currentBlock, prevBlock, currentState,
-                                firstBlock, maxSteps - blocksVisited);
+        update =
+            interpretBlock(*currentBlock, prevBlock, currentState, firstBlock,
+                           maxSteps - blocksVisited, analysisResults);
         firstBlock = false;
         blocksVisited += update.blocksVisited;
         steps.push_back(BlockStep<const llvm::Value *>(
@@ -139,14 +142,16 @@ FastCall interpretFunction(const Function &fun, FastState entry,
 }
 
 FastCall interpretFunction(const Function &fun, FastState entry,
-                           uint32_t maxSteps) {
-    return interpretFunction(fun, entry, &fun.getEntryBlock(), maxSteps);
+                           uint32_t maxSteps,
+                           const AnalysisResultsMap &analysisResults) {
+    return interpretFunction(fun, entry, &fun.getEntryBlock(), maxSteps,
+                             analysisResults);
 }
 
-BlockUpdate<const llvm::Value *> interpretBlock(const BasicBlock &block,
-                                                const BasicBlock *prevBlock,
-                                                FastState &state, bool skipPhi,
-                                                uint32_t maxSteps) {
+BlockUpdate<const llvm::Value *>
+interpretBlock(const BasicBlock &block, const BasicBlock *prevBlock,
+               FastState &state, bool skipPhi, uint32_t maxSteps,
+               const AnalysisResultsMap &analysisResults) {
     uint32_t blocksVisited = 1;
     const Instruction *firstNonPhi = block.getFirstNonPHI();
     const Instruction *terminator = block.getTerminator();
@@ -176,7 +181,7 @@ BlockUpdate<const llvm::Value *> interpretBlock(const BasicBlock &block,
             }
             FastCall c = interpretFunction(
                 *fun, FastState(args, state.heap, state.heapBackground),
-                maxSteps - blocksVisited);
+                maxSteps - blocksVisited, analysisResults);
             blocksVisited += c.blocksVisited;
             if (blocksVisited > maxSteps || c.earlyExit) {
                 return BlockUpdate<const llvm::Value *>(
@@ -184,7 +189,9 @@ BlockUpdate<const llvm::Value *> interpretBlock(const BasicBlock &block,
                     blocksVisited);
             }
             state.heap = c.returnState.heap;
-            state.variables[call] = c.returnState.variables[ReturnName];
+            state.variables[call] =
+                c.returnState
+                    .variables[analysisResults.at(fun).returnInstruction];
             calls.push_back(std::move(c));
         } else {
             interpretInstruction(&*instrIterator, state);
@@ -334,9 +341,9 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
                                      FastState &state) {
     if (const auto retInst = dyn_cast<ReturnInst>(instr)) {
         if (retInst->getReturnValue() == nullptr) {
-            state.variables[ReturnName] = 0;
+            state.variables[retInst] = 0;
         } else {
-            state.variables[ReturnName] =
+            state.variables[retInst] =
                 resolveValue(retInst->getReturnValue(), state,
                              retInst->getReturnValue()->getType());
         }
@@ -557,7 +564,7 @@ bool varValEq(const VarVal &lhs, const VarVal &rhs) {
 }
 
 string valueName(const llvm::Value *val) {
-    return val == nullptr ? "return" : val->getName();
+    return val->getName();
 }
 template <typename T>
 json stateToJSON(State<T> state, function<string(T)> getName) {

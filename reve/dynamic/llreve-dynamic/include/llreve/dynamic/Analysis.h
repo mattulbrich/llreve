@@ -76,14 +76,18 @@ struct LoopTransformation {
         : type(type), side(side), count(count) {}
 };
 
-template <typename T> VarIntVal getReturnValue(const Call<T> &call) {
+template <typename T>
+VarIntVal getReturnValue(const Call<T> &call,
+                         const AnalysisResultsMap &analysisResults) {
     // Non int return values should not exist so this is safe
-    return unsafeIntVal(call.returnState.variables.at(ReturnName));
+    return unsafeIntVal(call.returnState.variables.at(
+        analysisResults.at(call.function).returnInstruction));
 }
 template <typename T>
-MonoPair<VarIntVal> getReturnValues(const Call<T> &call1,
-                                    const Call<T> &call2) {
-    return {getReturnValue(call1), getReturnValue(call2)};
+MonoPair<VarIntVal> getReturnValues(const Call<T> &call1, const Call<T> &call2,
+                                    const AnalysisResultsMap &analysisResults) {
+    return {getReturnValue(call1, analysisResults),
+            getReturnValue(call2, analysisResults)};
 }
 
 bool normalMarkBlock(const BlockNameMap &map, const BlockName &blockName);
@@ -156,6 +160,20 @@ void populateHeapPatterns(
     std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
     const std::vector<smt::SortedVar> &primitiveVariables,
     MatchInfo<const llvm::Value *> match, ExitIndex exitIndex);
+void populateHeapPatterns(
+    RelationalFunctionInvariantMap<
+        LoopInfoData<llvm::Optional<FunctionInvariant<HeapPatternCandidates>>>>
+        &heapPatternCandidates,
+    const std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>>
+        &patterns,
+    const std::vector<smt::SortedVar> &primitiveVariables,
+    CoupledCallInfo<const llvm::Value *> match);
+void populateHeapPatterns(
+    FunctionInvariantMap<HeapPatternCandidates> &heapPatternCandidates,
+    const std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>>
+        &patterns,
+    const std::vector<smt::SortedVar> &primitiveVariables,
+    UncoupledCallInfo<const llvm::Value *> match);
 void dumpPolynomials(
     const IterativeInvariantMap<PolynomialEquations> &equationsMap,
     const FreeVarsMap &freeVarsmap);
@@ -184,79 +202,6 @@ Integer getHeapBackground(const std::map<std::string, ArrayVal> &arrays,
                           Program prog);
 MonoPair<Integer> getHeapBackgrounds(std::map<std::string, ArrayVal> arrays);
 
-template <typename T>
-void workerThread(
-    ThreadSafeQueue<WorkItem> &q, T &state,
-    std::function<void(MonoPair<Call<const llvm::Value *>>, T &)> callback,
-    MonoPair<const llvm::Function *> funs) {
-    // std::cerr << "State adddress: " << &state << "\n";
-    // Each thread has it’s own seed
-    unsigned int seedp = static_cast<unsigned int>(time(NULL));
-    for (WorkItem item = q.pop(); item.counter >= 0; item = q.pop()) {
-        MonoPair<FastVarMap> variableValues = makeMonoPair<FastVarMap>({}, {});
-        variableValues.first = getVarMap(funs.first, item.vals.first);
-        variableValues.second = getVarMap(funs.second, item.vals.second);
-        if (!item.heapSet) {
-            Heap heap = randomHeap(*funs.first, variableValues.first, 5, -20,
-                                   20, &seedp);
-            item.heaps.first = heap;
-            item.heaps.second = heap;
-        }
-        MonoPair<Integer> heapBackgrounds = item.heapBackgrounds.map<Integer>(
-            [](auto b) { return Integer(b); });
-        MonoPair<Call<const llvm::Value *>> calls =
-            interpretFunctionPair(funs, std::move(variableValues), item.heaps,
-                                  heapBackgrounds, 10000);
-        callback(std::move(calls), state);
-    }
-}
-
-// Each thread operates on it’s own copy of the inital value of state, when
-// finished the threads are merged using the supplied merge function which has
-// to be associative and the resulting state is written back to the state ref
-template <typename T>
-void iterateTracesInRange(
-    MonoPair<llvm::Function *> funs, mpz_class lowerBound, mpz_class upperBound,
-    unsigned threadsNum, T &state, std::function<T(const T &, const T &)> merge,
-    std::function<void(MonoPair<Call<const llvm::Value *>>, T &)> callback) {
-    assert(!(funs.first->isVarArg() || funs.second->isVarArg()));
-    std::vector<VarIntVal> argValues;
-    T initialState = state;
-    ThreadSafeQueue<WorkItem> q;
-    std::vector<std::thread> threads(threadsNum);
-    std::vector<T> threadStates(threadsNum, initialState);
-    for (size_t i = 0; i < threadsNum; ++i) {
-        threads[i] = std::thread([&q, &callback, &funs, &threadStates, i]() {
-            workerThread(q, threadStates[i], callback, funs);
-        });
-    }
-
-    int counter = 0;
-    assert(funs.first->getArgumentList().size() ==
-           funs.second->getArgumentList().size());
-    if (!InputFileFlag.empty()) {
-        std::vector<WorkItem> items = parseInput(InputFileFlag);
-        for (const auto &item : items) {
-            q.push(item);
-        }
-    } else {
-        for (const auto &vals : Range(lowerBound, upperBound,
-                                      funs.first->getArgumentList().size())) {
-            q.push({{vals, vals}, {0, 0}, {{}, {}}, false, counter});
-            ++counter;
-        }
-    }
-    for (size_t i = 0; i < threads.size(); ++i) {
-        // Each of these items will terminate exactly one thread
-        q.push({{{}, {}}, {0, 0}, {{}, {}}, false, -1});
-    }
-    for (auto &t : threads) {
-        t.join();
-    }
-    for (auto threadState : threadStates) {
-        state = merge(state, threadState);
-    }
-}
 void dumpLoopTransformations(
     std::map<Mark, LoopTransformation> loopTransformations);
 bool applyLoopTransformation(
@@ -314,6 +259,7 @@ template <typename T>
 void analyzeCallsOnPaths(
     const PathStep<T> &path1, const PathStep<T> &path2,
     const MonoPair<BlockNameMap> &nameMaps,
+    const AnalysisResultsMap &analysisResults,
     std::function<void(CoupledCallInfo<T>)> relationalCallMatch,
     std::function<void(UncoupledCallInfo<T>)> functionalCallMatch) {
     auto calls1 = extractCalls(path1);
@@ -324,19 +270,19 @@ void analyzeCallsOnPaths(
     for (const auto step : coupleSteps) {
         switch (step) {
         case InterleaveStep::StepBoth:
-            analyzeCoupledCalls(*callIt1, *callIt2, nameMaps,
+            analyzeCoupledCalls(*callIt1, *callIt2, nameMaps, analysisResults,
                                 relationalCallMatch, functionalCallMatch);
             ++callIt1;
             ++callIt2;
             break;
         case InterleaveStep::StepFirst:
             analyzeUncoupledCall(*callIt1, nameMaps.first, Program::First,
-                                 functionalCallMatch);
+                                 analysisResults, functionalCallMatch);
             ++callIt1;
             break;
         case InterleaveStep::StepSecond:
             analyzeUncoupledCall(*callIt2, nameMaps.second, Program::Second,
-                                 functionalCallMatch);
+                                 analysisResults, functionalCallMatch);
             ++callIt2;
             break;
         }
@@ -351,11 +297,12 @@ template <typename T>
 void analyzeCoupledCalls(
     const Call<T> &call1_, const Call<T> &call2_,
     const MonoPair<BlockNameMap> &nameMaps,
+    const AnalysisResultsMap &analysisResults,
     std::function<void(CoupledCallInfo<T>)> relationalCallMatch,
     std::function<void(UncoupledCallInfo<T>)> functionalCallMatch) {
     MonoPair<const llvm::Function *> functions = {call1_.function,
                                                   call2_.function};
-    const auto returnValues = getReturnValues(call1_, call2_);
+    const auto returnValues = getReturnValues(call1_, call2_, analysisResults);
     const auto call1 = splitCallAtMarks(call1_, nameMaps.first);
     const auto call2 = splitCallAtMarks(call2_, nameMaps.second);
     auto stepsIt1 = call1.steps.begin();
@@ -374,7 +321,8 @@ void analyzeCoupledCalls(
                 // We can only start analyzing calls if we already moved away
                 // from the start
                 analyzeCallsOnPaths(*prevStepsIt1, *prevStepsIt2, nameMaps,
-                                    relationalCallMatch, functionalCallMatch);
+                                    analysisResults, relationalCallMatch,
+                                    functionalCallMatch);
             }
             // The flexible coupling is not yet supported so we should the
             // intersection should contain exactly one block
@@ -412,7 +360,7 @@ void analyzeCoupledCalls(
             // Keep looping one program until it moves on
             do {
                 analyzeUncoupledPath(*prevStepIt, nameMap, prog,
-                                     functionalCallMatch);
+                                     analysisResults, functionalCallMatch);
                 const auto blockNameIntersection = intersection(
                     nameMap.at(prevStepIt->stepsOnPath.front().blockName),
                     otherNameMap.at(
@@ -451,7 +399,7 @@ void analyzeCoupledCalls(
             }
         }
     }
-    analyzeCallsOnPaths(*prevStepsIt1, *prevStepsIt2, nameMaps,
+    analyzeCallsOnPaths(*prevStepsIt1, *prevStepsIt2, nameMaps, analysisResults,
                         relationalCallMatch, functionalCallMatch);
     assert(stepsIt1 == call1.steps.end());
     assert(stepsIt2 == call2.steps.end());
@@ -460,18 +408,21 @@ void analyzeCoupledCalls(
 template <typename T>
 void analyzeUncoupledPath(
     const PathStep<T> &path, const BlockNameMap &nameMap, Program prog,
+    const AnalysisResultsMap &analysisResults,
     std::function<void(UncoupledCallInfo<T>)> functionCallMatch) {
     auto calls = extractCalls(path);
     for (const auto &call : calls) {
-        analyzeUncoupledCall(call, nameMap, prog, functionCallMatch);
+        analyzeUncoupledCall(call, nameMap, prog, analysisResults,
+                             functionCallMatch);
     }
 }
 
 template <typename T>
 void analyzeUncoupledCall(
     const Call<T> &call_, const BlockNameMap &nameMap, Program prog,
+    const AnalysisResultsMap &analysisResults,
     std::function<void(UncoupledCallInfo<T>)> functionCallMatch) {
-    const auto returnValue = getReturnValue(call_);
+    const auto returnValue = getReturnValue(call_, analysisResults);
     auto call = splitCallAtMarks(call_, nameMap);
     for (const auto &step : call.steps) {
         auto markSet = nameMap.at(step.stepsOnPath.front().blockName);
@@ -480,13 +431,15 @@ void analyzeUncoupledCall(
         functionCallMatch(UncoupledCallInfo<T>(call_.function,
                                                &step.stepsOnPath.front(),
                                                returnValue, mark, prog));
-        analyzeUncoupledPath(step, nameMap, prog, functionCallMatch);
+        analyzeUncoupledPath(step, nameMap, prog, analysisResults,
+                             functionCallMatch);
     }
 }
 
 template <typename T>
 void analyzeExecution(
     const MonoPair<Call<T>> &calls, MonoPair<BlockNameMap> nameMaps,
+    const AnalysisResultsMap &analysisResults,
     std::function<void(MatchInfo<T>)> iterativeMatch,
     std::function<void(CoupledCallInfo<T>)> relationalCallMatch,
     std::function<void(UncoupledCallInfo<T>)> functionalCallMatch) {
@@ -501,8 +454,10 @@ void analyzeExecution(
     ++stepsIt1;
     ++stepsIt2;
     while (stepsIt1 != call1.steps.end() && stepsIt2 != call2.steps.end()) {
-        // There are two cases to consider, either both programs are at the same
-        // mark or they are at different marks. The latter case can occur when
+        // There are two cases to consider, either both programs are at the
+        // same
+        // mark or they are at different marks. The latter case can occur
+        // when
         // one program is waiting for the other to finish its loops
         auto blockNameIntersection = intersection(
             nameMaps.first.at(stepsIt1->stepsOnPath.front().blockName),
@@ -510,7 +465,8 @@ void analyzeExecution(
         if (!blockNameIntersection.empty()) {
             // We want to match calls on the paths that led us here
             analyzeCallsOnPaths(prevStepsIt1, prevStepsIt2, nameMaps,
-                                relationalCallMatch, functionalCallMatch);
+                                analysisResults, relationalCallMatch,
+                                functionalCallMatch);
             // The flexible coupling is not yet supported so we should the
             // intersection should contain exactly one block
             assert(blockNameIntersection.size() == 1);
@@ -546,7 +502,7 @@ void analyzeExecution(
             }
             // Keep looping one program until it moves on
             do {
-                analyzeUncoupledPath(prevStepIt, nameMap, prog,
+                analyzeUncoupledPath(prevStepIt, nameMap, prog, analysisResults,
                                      functionalCallMatch);
                 const auto blockNameIntersection = intersection(
                     nameMap.at(prevStepIt.stepsOnPath.front().blockName),
@@ -584,9 +540,10 @@ void analyzeExecution(
             }
         }
     }
-    // There can be calls on the way to the return block which we need to take a
+    // There can be calls on the way to the return block which we need to
+    // take a
     // look at here
-    analyzeCallsOnPaths(prevStepsIt1, prevStepsIt2, nameMaps,
+    analyzeCallsOnPaths(prevStepsIt1, prevStepsIt2, nameMaps, analysisResults,
                         relationalCallMatch, functionalCallMatch);
     assert(stepsIt1 == call1.steps.end());
     assert(stepsIt2 == call2.steps.end());
@@ -600,6 +557,10 @@ struct DynamicAnalysisResults {
         relationalFunctionPolynomialEquations;
     FunctionInvariantMap<Matrix<mpq_class>> functionPolynomialEquations;
     HeapPatternCandidatesMap heapPatternCandidates;
+    RelationalFunctionInvariantMap<
+        LoopInfoData<llvm::Optional<FunctionInvariant<HeapPatternCandidates>>>>
+        relationalFunctionHeapPatterns;
+    FunctionInvariantMap<HeapPatternCandidates> functionHeapPatterns;
 };
 ModelValues initialModelValues(MonoPair<const llvm::Function *> funs);
 

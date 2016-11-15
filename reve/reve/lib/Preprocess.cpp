@@ -92,6 +92,18 @@ void runFunctionPasses(
     }
 }
 
+static llvm::ReturnInst *getReturnInstruction(llvm::Function &fun) {
+    for (auto &bb : fun) {
+        for (auto &inst : bb) {
+            if (auto retInst = llvm::dyn_cast<llvm::ReturnInst>(&inst)) {
+                return retInst;
+            }
+        }
+    }
+    assert(false);
+    return nullptr;
+}
+
 PassAnalysisResults runFunctionPasses(llvm::Function &fun, Program prog,
                                       PreprocessOpts opts) {
     auto fpm =
@@ -133,10 +145,13 @@ PassAnalysisResults runFunctionPasses(llvm::Function &fun, Program prog,
     // FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
     fpm->doInitialization();
     fpm->run(fun);
+
+    auto retInst = getReturnInstruction(fun);
     if (opts.InferMarks) {
-        return {inferMarkAnalysis->BlockMarkMap, pathAnalysis->PathsMap};
+        return {inferMarkAnalysis->BlockMarkMap, pathAnalysis->PathsMap,
+                retInst};
     } else {
-        return {markAnalysis->BlockMarkMap, pathAnalysis->PathsMap};
+        return {markAnalysis->BlockMarkMap, pathAnalysis->PathsMap, retInst};
     }
 }
 
@@ -160,7 +175,8 @@ AnalysisResults runAnalyses(
         freeVars(passResults.at(&fun).paths, functionArguments, prog);
     return AnalysisResults(passResults.at(&fun).blockMarkMap,
                            passResults.at(&fun).paths, functionArguments,
-                           freeVariables);
+                           freeVariables,
+                           passResults.at(&fun).returnInstruction);
 }
 
 bool doesAccessHeap(const llvm::Module &mod) {

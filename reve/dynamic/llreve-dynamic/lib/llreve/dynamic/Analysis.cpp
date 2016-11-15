@@ -118,9 +118,10 @@ Transformed analyzeMainCounterExample(
 
     MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
         functions, variableValues, getHeapsFromModel(vals.arrays),
-        getHeapBackgrounds(vals.arrays), {firstBlock, secondBlock}, 1000);
+        getHeapBackgrounds(vals.arrays), {firstBlock, secondBlock}, 1000,
+        analysisResults);
     analyzeExecution<const llvm::Value *>(
-        calls, nameMap,
+        calls, nameMap, analysisResults,
         [&](MatchInfo<const llvm::Value *> match) {
             ExitIndex exitIndex = getExitIndex(match);
             findLoopCounts<const llvm::Value *>(
@@ -139,13 +140,19 @@ Transformed analyzeMainCounterExample(
             populateEquationsMap(
                 dynamicAnalysisResults.relationalFunctionPolynomialEquations,
                 primitiveVariables, match, degree);
+            populateHeapPatterns(
+                dynamicAnalysisResults.relationalFunctionHeapPatterns, patterns,
+                primitiveVariables, match);
         },
         [&](UncoupledCallInfo<const llvm::Value *> match) {
+            const auto primitiveVariables = getPrimitiveFreeVariables(
+                match.function, match.mark, analysisResults);
             populateEquationsMap(
                 dynamicAnalysisResults.functionPolynomialEquations,
-                removeHeapVariables(analysisResults.at(match.function)
-                                        .freeVariables.at(match.mark)),
-                match, degree);
+                primitiveVariables, match, degree);
+            populateHeapPatterns(dynamicAnalysisResults.functionHeapPatterns,
+                                 patterns, primitiveVariables, match);
+
         });
     auto loopTransformations =
         findLoopTransformations(dynamicAnalysisResults.loopCounts.loopCounts);
@@ -207,9 +214,10 @@ void analyzeRelationalCounterExample(
 
     MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
         functions, variableValues, getHeapsFromModel(vals.arrays),
-        getHeapBackgrounds(vals.arrays), {firstBlock, secondBlock}, 1000);
+        getHeapBackgrounds(vals.arrays), {firstBlock, secondBlock}, 1000,
+        analysisResults);
     analyzeCoupledCalls<const llvm::Value *>(
-        calls.first, calls.second, nameMap,
+        calls.first, calls.second, nameMap, analysisResults,
         [&](CoupledCallInfo<const llvm::Value *> match) {
             const auto primitiveVariables = getPrimitiveFreeVariables(
                 match.functions, match.mark, analysisResults);
@@ -254,10 +262,10 @@ void analyzeFunctionalCounterExample(
         *function,
         FastState(variableValues, getHeapFromModel(vals.arrays, program),
                   getHeapBackground(vals.arrays, program)),
-        startBlock, 1000);
+        startBlock, 1000, analysisResults);
     std::cout << "analyzing trace\n";
     analyzeUncoupledCall<const llvm::Value *>(
-        call, blockNameMap, program,
+        call, blockNameMap, program, analysisResults,
         [&](UncoupledCallInfo<const llvm::Value *> match) {
             populateEquationsMap(
                 dynamicAnalysisResults.functionPolynomialEquations,
@@ -345,10 +353,12 @@ cegarDriver(MonoPair<llvm::Module &> modules,
         auto relationalFunctionInvariantCandidates =
             makeRelationalFunctionInvariantDefinitions(
                 dynamicAnalysisResults.relationalFunctionPolynomialEquations,
+                dynamicAnalysisResults.relationalFunctionHeapPatterns,
                 analysisResults, DegreeFlag);
         auto functionInvariantCandidates = makeFunctionInvariantDefinitions(
             modules, dynamicAnalysisResults.functionPolynomialEquations,
-            analysisResults, DegreeFlag);
+            dynamicAnalysisResults.functionHeapPatterns, analysisResults,
+            DegreeFlag);
 
         SMTGenerationOpts::getInstance().IterativeRelationalInvariants =
             invariantCandidates;
@@ -409,9 +419,22 @@ cegarDriver(MonoPair<llvm::Module &> modules,
             functions, dynamicAnalysisResults.polynomialEquations,
             dynamicAnalysisResults.heapPatternCandidates, analysisResults,
             DegreeFlag);
+        auto relationalFunctionInvariantCandidates =
+            makeRelationalFunctionInvariantDefinitions(
+                dynamicAnalysisResults.relationalFunctionPolynomialEquations,
+                dynamicAnalysisResults.relationalFunctionHeapPatterns,
+                analysisResults, DegreeFlag);
+        auto functionInvariantCandidates = makeFunctionInvariantDefinitions(
+            modules, dynamicAnalysisResults.functionPolynomialEquations,
+            dynamicAnalysisResults.functionHeapPatterns, analysisResults,
+            DegreeFlag);
 
         SMTGenerationOpts::getInstance().IterativeRelationalInvariants =
             invariantCandidates;
+        SMTGenerationOpts::getInstance().FunctionalRelationalInvariants =
+            relationalFunctionInvariantCandidates;
+        SMTGenerationOpts::getInstance().FunctionalFunctionalInvariants =
+            functionInvariantCandidates;
         clauses = generateSMT(modules, analysisResults, fileOpts);
         break;
     }
@@ -719,6 +742,96 @@ void populateHeapPatterns(
     }
 }
 
+void populateHeapPatterns(
+    RelationalFunctionInvariantMap<
+        LoopInfoData<llvm::Optional<FunctionInvariant<HeapPatternCandidates>>>>
+        &heapPatternCandidates,
+    const vector<shared_ptr<HeapPattern<VariablePlaceholder>>> &patterns,
+    const vector<SortedVar> &primitiveVariables,
+    CoupledCallInfo<const llvm::Value *> match) {
+    VarMap<const llvm::Value *> variables(match.steps.first->state.variables);
+    variables.insert(match.steps.second->state.variables.begin(),
+                     match.steps.second->state.variables.end());
+    // TODO don’t copy heaps
+    MonoPair<Heap> heaps = makeMonoPair(match.steps.first->state.heap,
+                                        match.steps.second->state.heap);
+    bool newCandidates =
+        heapPatternCandidates[match.functions].count(match.mark) == 0 ||
+        !getDataForLoopInfo(
+             heapPatternCandidates.at(match.functions).at(match.mark),
+             match.loopInfo)
+             .hasValue();
+    if (newCandidates) {
+        list<shared_ptr<HeapPattern<const llvm::Value *>>> candidates;
+        for (auto pat : patterns) {
+            auto newCandidates =
+                pat->instantiate(primitiveVariables, variables, heaps);
+            candidates.splice(candidates.end(), newCandidates);
+        }
+        // This entry could already be present
+        llvm::Optional<FunctionInvariant<HeapPatternCandidates>> emptyInvariant;
+        auto it =
+            heapPatternCandidates.at(match.functions)
+                .insert({match.mark,
+                         {emptyInvariant, emptyInvariant, emptyInvariant}});
+        auto &patternCandidates =
+            getDataForLoopInfo(it.first->second, match.loopInfo);
+        assert(!patternCandidates.hasValue());
+        // TODO figure out post condition
+        patternCandidates = {std::move(candidates), {}};
+    } else {
+        FunctionInvariant<HeapPatternCandidates> &patterns =
+            getDataForLoopInfo(
+                heapPatternCandidates.at(match.functions).at(match.mark),
+                match.loopInfo)
+                .getValue();
+        auto listIt = patterns.preCondition.begin();
+        while (listIt != patterns.preCondition.end()) {
+            if (!(*listIt)->matches(variables, heaps)) {
+                listIt = patterns.preCondition.erase(listIt);
+            } else {
+                ++listIt;
+            }
+        }
+        // TODO figure out postcondition
+    }
+}
+
+void populateHeapPatterns(
+    FunctionInvariantMap<HeapPatternCandidates> &heapPatternCandidates,
+    const vector<shared_ptr<HeapPattern<VariablePlaceholder>>> &patterns,
+    const vector<SortedVar> &primitiveVariables,
+    UncoupledCallInfo<const llvm::Value *> match) {
+    VarMap<const llvm::Value *> variables(match.step->state.variables);
+    // TODO figure out which heap can be empty
+    MonoPair<Heap> heaps = {match.step->state.heap, {}};
+    bool newCandidates =
+        heapPatternCandidates[match.function].count(match.mark) == 0;
+    if (newCandidates) {
+        list<shared_ptr<HeapPattern<const llvm::Value *>>> candidates;
+        for (auto pat : patterns) {
+            auto newCandidates =
+                pat->instantiate(primitiveVariables, variables, heaps);
+            candidates.splice(candidates.end(), newCandidates);
+        }
+        // TODO figure out postcondition
+        heapPatternCandidates.at(match.function)
+            .insert({match.mark, {std::move(candidates), {}}});
+    } else {
+        FunctionInvariant<HeapPatternCandidates> &patterns =
+            heapPatternCandidates.at(match.function).at(match.mark);
+        auto listIt = patterns.preCondition.begin();
+        while (listIt != patterns.preCondition.end()) {
+            if (!(*listIt)->matches(variables, heaps)) {
+                listIt = patterns.preCondition.erase(listIt);
+            } else {
+                ++listIt;
+            }
+        }
+        // TODO figure out postcondition
+    }
+}
+
 void insertInBlockNameMap(BlockNameMap &nameMap,
                           const BidirBlockMarkMap &blockMap) {
     for (auto it : blockMap.BlockToMarksMap) {
@@ -764,23 +877,14 @@ void debugAnalysis(MatchInfo<const llvm::Value *> match) {
     std::cerr << "First state:" << std::endl;
     std::cerr << match.steps.first
                      ->toJSON([](auto x) -> std::string {
-                         if (x == ReturnName) {
-                             return "RETURN_VALUE";
-                         } else {
-                             return x->getName().str();
-                         }
+                         return x->getName().str();
                      })
                      .dump(4)
               << std::endl;
     std::cerr << "Second state:" << std::endl;
     std::cerr << match.steps.second
-                     ->toJSON([](auto x) -> std::string {
-                         if (x == ReturnName) {
-                             return "RETURN_VALUE";
-                         } else {
-                             return x->getName();
-                         }
-                     })
+                     ->toJSON(
+                         [](auto x) -> std::string { return x->getName(); })
                      .dump(4)
               << std::endl;
     std::cerr << std::endl << std::endl;

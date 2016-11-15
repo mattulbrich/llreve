@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "AnalysisResults.h"
 #include "Helper.h"
 #include "MonoPair.h"
 
@@ -33,7 +34,6 @@ using VarName = const llvm::Value *;
 using VarIntVal = Integer;
 using HeapAddress = Integer;
 enum class VarType { Int, Bool };
-const VarName ReturnName = nullptr;
 
 VarType getType(const VarIntVal &v);
 nlohmann::json toJSON(const VarIntVal &v);
@@ -239,23 +239,26 @@ struct TerminatorUpdate {
 
 /// The variables in the entry state will be renamed appropriately for both
 /// programs
-MonoPair<FastCall> interpretFunctionPair(MonoPair<const llvm::Function *> funs,
-                                         MonoPair<FastVarMap> variables,
-                                         MonoPair<Heap> heaps,
-                                         MonoPair<Integer> heapBackgrounds,
-                                         uint32_t maxSteps);
+MonoPair<FastCall>
+interpretFunctionPair(MonoPair<const llvm::Function *> funs,
+                      MonoPair<FastVarMap> variables, MonoPair<Heap> heaps,
+                      MonoPair<Integer> heapBackgrounds, uint32_t maxSteps,
+                      const AnalysisResultsMap &analysisResults);
 MonoPair<FastCall> interpretFunctionPair(
     MonoPair<const llvm::Function *> funs, MonoPair<FastVarMap> variables,
     MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds,
-    MonoPair<const llvm::BasicBlock *> startBlocks, uint32_t maxSteps);
+    MonoPair<const llvm::BasicBlock *> startBlocks, uint32_t maxSteps,
+    const AnalysisResultsMap &analysisResults);
 auto interpretFunction(const llvm::Function &fun, FastState entry,
-                       uint32_t maxSteps) -> FastCall;
+                       uint32_t maxSteps,
+                       const AnalysisResultsMap &analysisResults) -> FastCall;
 auto interpretFunction(const llvm::Function &fun, FastState entry,
-                       const llvm::BasicBlock *bb, uint32_t maxSteps)
-    -> FastCall;
+                       const llvm::BasicBlock *bb, uint32_t maxSteps,
+                       const AnalysisResultsMap &analysisResults) -> FastCall;
 auto interpretBlock(const llvm::BasicBlock &block,
                     const llvm::BasicBlock *prevBlock, FastState &state,
-                    bool skipPhi, uint32_t maxStep)
+                    bool skipPhi, uint32_t maxStep,
+                    const AnalysisResultsMap &analysisResults)
     -> BlockUpdate<const llvm::Value *>;
 auto interpretPHI(const llvm::PHINode &instr, FastState &state,
                   const llvm::BasicBlock *prevBlock) -> void;

@@ -53,22 +53,13 @@ map<Mark, SharedSMTRef> makeIterativeInvariantDefinitions(
                 const auto freeVariables =
                     getFreeVariablesForMark(functions, mark, analysisResults);
                 SharedSMTRef left = makeInvariantDefinition(
-                    exitIt.second.left,
-                    patterns.at(mark).at(exit).left.hasValue()
-                        ? patterns.at(mark).at(exit).left.getValue()
-                        : HeapPatternCandidates(),
+                    exitIt.second.left, patterns.at(mark).at(exit).left,
                     freeVariables, degree);
                 SharedSMTRef right = makeInvariantDefinition(
-                    exitIt.second.right,
-                    patterns.at(mark).at(exit).right.hasValue()
-                        ? patterns.at(mark).at(exit).right.getValue()
-                        : HeapPatternCandidates(),
+                    exitIt.second.right, patterns.at(mark).at(exit).right,
                     freeVariables, degree);
                 SharedSMTRef none = makeInvariantDefinition(
-                    exitIt.second.none,
-                    patterns.at(mark).at(exit).none.hasValue()
-                        ? patterns.at(mark).at(exit).none.getValue()
-                        : HeapPatternCandidates(),
+                    exitIt.second.none, patterns.at(mark).at(exit).none,
                     freeVariables, degree);
                 if (left == nullptr && right == nullptr && none == nullptr) {
                     continue;
@@ -108,6 +99,9 @@ RelationalFunctionInvariantMap<FunctionInvariant<smt::SharedSMTRef>>
 makeRelationalFunctionInvariantDefinitions(
     const RelationalFunctionInvariantMap<
         LoopInfoData<FunctionInvariant<Matrix<mpq_class>>>> &equations,
+    const RelationalFunctionInvariantMap<
+        LoopInfoData<llvm::Optional<FunctionInvariant<HeapPatternCandidates>>>>
+        &patterns,
     const AnalysisResultsMap &analysisResults, size_t degree) {
     RelationalFunctionInvariantMap<FunctionInvariant<smt::SharedSMTRef>>
         definitions;
@@ -152,8 +146,13 @@ makeRelationalFunctionInvariantDefinitions(
             if (equationsIt != equations.end()) {
                 auto markIt = equationsIt->second.find(mark);
                 if (markIt != equationsIt->second.end()) {
+                    // TODO this needs to handle the optional properly
                     preInvBody = makeInvariantDefinition(
-                        findSolutions(markIt->second.none.preCondition), {},
+                        findSolutions(markIt->second.none.preCondition),
+                        patterns.at(coupledFunctions)
+                            .at(mark)
+                            .none.getValue()
+                            .preCondition,
                         invariantArgsPre, degree);
                     if (preInvBody == nullptr) {
                         preInvBody = make_unique<ConstantBool>(true);
@@ -179,11 +178,14 @@ makeRelationalFunctionInvariantDefinitions(
 FunctionInvariantMap<smt::SharedSMTRef> makeFunctionInvariantDefinitions(
     MonoPair<const llvm::Module &> modules,
     const FunctionInvariantMap<Matrix<mpq_class>> &equations,
+    const FunctionInvariantMap<HeapPatternCandidates> &patterns,
     const AnalysisResultsMap &analysisResults, size_t degree) {
     auto invariants = makeFunctionInvariantDefinitions(
-        modules.first, equations, analysisResults, Program::First, degree);
+        modules.first, equations, patterns, analysisResults, Program::First,
+        degree);
     auto invariants2 = makeFunctionInvariantDefinitions(
-        modules.second, equations, analysisResults, Program::Second, degree);
+        modules.second, equations, patterns, analysisResults, Program::Second,
+        degree);
     invariants.insert(invariants2.begin(), invariants2.end());
     return invariants;
 }
@@ -191,6 +193,7 @@ FunctionInvariantMap<smt::SharedSMTRef> makeFunctionInvariantDefinitions(
 FunctionInvariantMap<smt::SharedSMTRef> makeFunctionInvariantDefinitions(
     const llvm::Module &module,
     const FunctionInvariantMap<Matrix<mpq_class>> &equations,
+    const FunctionInvariantMap<HeapPatternCandidates> &patterns,
     const AnalysisResultsMap &analysisResults, Program prog, size_t degree) {
     FunctionInvariantMap<smt::SharedSMTRef> definitions;
     for (const auto &function : module) {
@@ -218,10 +221,12 @@ FunctionInvariantMap<smt::SharedSMTRef> makeFunctionInvariantDefinitions(
             nestedLookup(equations, &function, mark,
                          [&](auto mapIt) {
                              preCondition = makeInvariantDefinition(
-                                 findSolutions(mapIt->second.preCondition), {},
+                                 findSolutions(mapIt->second.preCondition),
+                                 patterns.at(&function).at(mark).preCondition,
                                  invariantArgsPre, degree);
                              postCondition = makeInvariantDefinition(
-                                 findSolutions(mapIt->second.postCondition), {},
+                                 findSolutions(mapIt->second.postCondition),
+                                 patterns.at(&function).at(mark).postCondition,
                                  invariantArgsPost, degree);
                              if (preCondition == nullptr) {
                                  preCondition = make_unique<ConstantBool>(true);
@@ -261,6 +266,16 @@ makeBoundsDefinitions(const map<string, Bound<Optional<VarIntVal>>> &bounds) {
         }
     }
     return make_shared<Op>("and", constraints);
+}
+
+SharedSMTRef makeInvariantDefinition(
+    const vector<vector<mpz_class>> &solution,
+    const llvm::Optional<HeapPatternCandidates> &candidatesOpt,
+    const vector<SortedVar> &freeVars, size_t degree) {
+    const HeapPatternCandidates &candidates = candidatesOpt.hasValue()
+                                                  ? candidatesOpt.getValue()
+                                                  : HeapPatternCandidates();
+    return makeInvariantDefinition(solution, candidates, freeVars, degree);
 }
 
 SharedSMTRef makeInvariantDefinition(const vector<vector<mpz_class>> &solution,
