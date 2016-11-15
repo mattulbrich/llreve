@@ -146,20 +146,19 @@ makeRelationalFunctionInvariantDefinitions(
             if (equationsIt != equations.end()) {
                 auto markIt = equationsIt->second.find(mark);
                 if (markIt != equationsIt->second.end()) {
+                    const auto &patternsForMark =
+                        patterns.at(coupledFunctions).at(mark).none.getValue();
                     // TODO this needs to handle the optional properly
                     preInvBody = makeInvariantDefinition(
                         findSolutions(markIt->second.none.preCondition),
-                        patterns.at(coupledFunctions)
-                            .at(mark)
-                            .none.getValue()
-                            .preCondition,
-                        invariantArgsPre, degree);
+                        patternsForMark.preCondition, invariantArgsPre, degree);
                     if (preInvBody == nullptr) {
                         preInvBody = make_unique<ConstantBool>(true);
                     }
                     postInvBody = makeInvariantDefinition(
-                        findSolutions(markIt->second.none.postCondition), {},
-                        invariantArgsPost, degree);
+                        findSolutions(markIt->second.none.postCondition),
+                        patternsForMark.postCondition, invariantArgsPost,
+                        degree);
                     if (postInvBody == nullptr) {
                         postInvBody = make_unique<ConstantBool>(true);
                     }

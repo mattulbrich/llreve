@@ -137,12 +137,14 @@ Transformed analyzeMainCounterExample(
         [&](CoupledCallInfo<const llvm::Value *> match) {
             const auto primitiveVariables = getPrimitiveFreeVariables(
                 match.functions, match.mark, analysisResults);
+            auto returnInstrs =
+                getReturnInstructions(match.functions, analysisResults);
             populateEquationsMap(
                 dynamicAnalysisResults.relationalFunctionPolynomialEquations,
                 primitiveVariables, match, degree);
             populateHeapPatterns(
                 dynamicAnalysisResults.relationalFunctionHeapPatterns, patterns,
-                primitiveVariables, match);
+                primitiveVariables, match, returnInstrs);
         },
         [&](UncoupledCallInfo<const llvm::Value *> match) {
             const auto primitiveVariables = getPrimitiveFreeVariables(
@@ -692,6 +694,18 @@ ExitIndex getExitIndex(const MatchInfo<const llvm::Value *> match) {
     return 0;
 }
 
+static void filterPatterns(HeapPatternCandidates &patterns,
+                           const FastVarMap &variables, MonoPair<Heap> heaps) {
+    auto listIt = patterns.begin();
+    while (listIt != patterns.end()) {
+        if (!(*listIt)->matches(variables, heaps)) {
+            listIt = patterns.erase(listIt);
+        } else {
+            ++listIt;
+        }
+    }
+}
+
 void populateHeapPatterns(
     HeapPatternCandidatesMap &heapPatternCandidates,
     vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
@@ -731,14 +745,7 @@ void populateHeapPatterns(
                 heapPatternCandidates.at(match.mark).at(exitIndex),
                 match.loopInfo)
                 .getValue();
-        auto listIt = patterns.begin();
-        while (listIt != patterns.end()) {
-            if (!(*listIt)->matches(variables, heaps)) {
-                listIt = patterns.erase(listIt);
-            } else {
-                ++listIt;
-            }
-        }
+        filterPatterns(patterns, variables, heaps);
     }
 }
 
@@ -748,10 +755,17 @@ void populateHeapPatterns(
         &heapPatternCandidates,
     const vector<shared_ptr<HeapPattern<VariablePlaceholder>>> &patterns,
     const vector<SortedVar> &primitiveVariables,
-    CoupledCallInfo<const llvm::Value *> match) {
+    CoupledCallInfo<const llvm::Value *> match,
+    MonoPair<llvm::Value *> returnValues) {
     VarMap<const llvm::Value *> variables(match.steps.first->state.variables);
     variables.insert(match.steps.second->state.variables.begin(),
                      match.steps.second->state.variables.end());
+    variables.insert({returnValues.first, match.returnValues.first});
+    variables.insert({returnValues.second, match.returnValues.second});
+    vector<SortedVar> preVariables = primitiveVariables;
+    vector<SortedVar> postVariables = preVariables;
+    postVariables.emplace_back(resultName(Program::First), int64Type());
+    postVariables.emplace_back(resultName(Program::Second), int64Type());
     // TODO don’t copy heaps
     MonoPair<Heap> heaps = makeMonoPair(match.steps.first->state.heap,
                                         match.steps.second->state.heap);
@@ -762,13 +776,18 @@ void populateHeapPatterns(
              match.loopInfo)
              .hasValue();
     if (newCandidates) {
-        list<shared_ptr<HeapPattern<const llvm::Value *>>> candidates;
-        for (auto pat : patterns) {
+        list<shared_ptr<HeapPattern<const llvm::Value *>>> preCandidates;
+        list<shared_ptr<HeapPattern<const llvm::Value *>>> postCandidates;
+        for (const auto &pat : patterns) {
             auto newCandidates =
-                pat->instantiate(primitiveVariables, variables, heaps);
-            candidates.splice(candidates.end(), newCandidates);
+                pat->instantiate(preVariables, variables, heaps);
+            preCandidates.splice(preCandidates.end(), newCandidates);
+            newCandidates =
+                pat->instantiate(postVariables, variables, heaps, returnValues);
+            postCandidates.splice(postCandidates.end(), newCandidates);
         }
-        // This entry could already be present
+        // This entry could already be present but insert will not do anything
+        // in that case
         llvm::Optional<FunctionInvariant<HeapPatternCandidates>> emptyInvariant;
         auto it =
             heapPatternCandidates.at(match.functions)
@@ -777,23 +796,16 @@ void populateHeapPatterns(
         auto &patternCandidates =
             getDataForLoopInfo(it.first->second, match.loopInfo);
         assert(!patternCandidates.hasValue());
-        // TODO figure out post condition
-        patternCandidates = {std::move(candidates), {}};
+        patternCandidates = {std::move(preCandidates),
+                             std::move(postCandidates)};
     } else {
         FunctionInvariant<HeapPatternCandidates> &patterns =
             getDataForLoopInfo(
                 heapPatternCandidates.at(match.functions).at(match.mark),
                 match.loopInfo)
                 .getValue();
-        auto listIt = patterns.preCondition.begin();
-        while (listIt != patterns.preCondition.end()) {
-            if (!(*listIt)->matches(variables, heaps)) {
-                listIt = patterns.preCondition.erase(listIt);
-            } else {
-                ++listIt;
-            }
-        }
-        // TODO figure out postcondition
+        filterPatterns(patterns.preCondition, variables, heaps);
+        filterPatterns(patterns.postCondition, variables, heaps);
     }
 }
 
@@ -820,15 +832,8 @@ void populateHeapPatterns(
     } else {
         FunctionInvariant<HeapPatternCandidates> &patterns =
             heapPatternCandidates.at(match.function).at(match.mark);
-        auto listIt = patterns.preCondition.begin();
-        while (listIt != patterns.preCondition.end()) {
-            if (!(*listIt)->matches(variables, heaps)) {
-                listIt = patterns.preCondition.erase(listIt);
-            } else {
-                ++listIt;
-            }
-        }
-        // TODO figure out postcondition
+        filterPatterns(patterns.preCondition, variables, heaps);
+        filterPatterns(patterns.postCondition, variables, heaps);
     }
 }
 

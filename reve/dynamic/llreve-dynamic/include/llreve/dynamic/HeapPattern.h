@@ -53,6 +53,13 @@ template <typename T> struct HeapPattern {
     instantiate(const std::vector<smt::SortedVar> &variables,
                 const FastVarMap &variableValues,
                 const MonoPair<Heap> &heaps) const {
+        return instantiate(variables, variableValues, heaps,
+                           {nullptr, nullptr});
+    }
+    std::list<std::shared_ptr<HeapPattern<const llvm::Value *>>>
+    instantiate(const std::vector<smt::SortedVar> &variables,
+                const FastVarMap &variableValues, const MonoPair<Heap> &heaps,
+                MonoPair<llvm::Value *> returnValues) const {
         size_t k = this->arguments();
         std::list<std::shared_ptr<HeapPattern<const llvm::Value *>>>
             matchingPatterns;
@@ -60,31 +67,26 @@ template <typename T> struct HeapPattern {
         // TODO the free vars map should simply use llvm::Value* to avoid this
         // search
         std::vector<const llvm::Value *> variablePointers;
-        for (auto var : variables) {
-            for (auto val : variableValues) {
-                if (var.name == val.first->getName()) {
-                    variablePointers.push_back(val.first);
+        for (const auto &var : variables) {
+            bool isReturn1 = var.name == resultName(Program::First);
+            bool isReturn2 = var.name == resultName(Program::Second);
+            if (isReturn1) {
+                variablePointers.push_back(returnValues.first);
+            } else if (isReturn2) {
+                variablePointers.push_back(returnValues.second);
+            } else {
+                bool found = false;
+                for (auto val : variableValues) {
+                    if (var.name == val.first->getName()) {
+                        variablePointers.push_back(val.first);
+                        found = true;
+                        break;
+                    }
                 }
+                assert(found);
             }
         }
-        /*
-        std::cerr << "Variables:\n";
-        for (auto var : variables) {
-            std::cerr << var << ": "
-                      << variableValues.at(var)->unsafeIntVal().get_str()
-                      << "\n";
-        }
-        std::cerr << "Heap1:\n";
-        for (auto heap : heaps.first) {
-            std::cerr << heap.first.get_str() << ":"
-                      << heap.second.val.get_str() << "\n";
-        }
-        std::cerr << "Heap2:\n";
-        for (auto heap : heaps.second) {
-            std::cerr << heap.first.get_str() << ":"
-                      << heap.second.val.get_str() << "\n";
-        }
-        */
+
         if (k == 0) {
             auto pat = this->distributeArguments({});
             if (pat->matches(variableValues, heaps)) {

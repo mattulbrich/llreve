@@ -167,7 +167,8 @@ void populateHeapPatterns(
     const std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>>
         &patterns,
     const std::vector<smt::SortedVar> &primitiveVariables,
-    CoupledCallInfo<const llvm::Value *> match);
+    CoupledCallInfo<const llvm::Value *> match,
+    MonoPair<llvm::Value *> returnValues);
 void populateHeapPatterns(
     FunctionInvariantMap<HeapPatternCandidates> &heapPatternCandidates,
     const std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>>

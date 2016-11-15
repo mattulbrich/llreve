@@ -37,6 +37,21 @@ mpz_class getHeapVal(HeapAddress addr, Heap heap) {
 }
 
 template <> smt::SMTRef Variable<const llvm::Value *>::toSMT() const {
+    if (varName->getName().empty()) {
+        // In this case we have a return instruction that’s either in program 1
+        // or program 2.
+        // To figure out in which one we are we use a really hacky workaround
+        // based on the block name
+        auto retInst = llvm::dyn_cast<llvm::ReturnInst>(varName);
+        assert(retInst);
+        char program = retInst->getParent()->getName().back();
+        if (program == '1') {
+            return smt::stringExpr(resultName(Program::First));
+        } else {
+            assert(program == '2');
+            return smt::stringExpr(resultName(Program::Second));
+        }
+    }
     return smt::stringExpr(varName->getName());
 }
 }

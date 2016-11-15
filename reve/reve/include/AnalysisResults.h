@@ -45,3 +45,7 @@ MonoPair<FreeVarsMap>
 getFreeVarsPair(MonoPair<const llvm::Function *> functions,
                 const AnalysisResultsMap &analysisResults);
 std::string getFunctionName(MonoPair<const llvm::Function *> functions);
+
+MonoPair<llvm::Value *>
+getReturnInstructions(MonoPair<const llvm::Function *> functions,
+                      const AnalysisResultsMap &analysisResults);

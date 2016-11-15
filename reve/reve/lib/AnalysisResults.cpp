@@ -42,3 +42,10 @@ string getFunctionName(MonoPair<const llvm::Function *> functions) {
     return functions.first->getName().str() + "^" +
            functions.second->getName().str();
 }
+
+MonoPair<llvm::Value *>
+getReturnInstructions(MonoPair<const llvm::Function *> functions,
+                      const AnalysisResultsMap &analysisResults) {
+    return {analysisResults.at(functions.first).returnInstruction,
+            analysisResults.at(functions.second).returnInstruction};
+}
