@@ -60,9 +60,10 @@ using PolynomialSolutions =
     IterativeInvariantMap<LoopInfoData<Matrix<mpz_class>>>;
 using HeapPatternCandidates =
     std::list<std::shared_ptr<HeapPattern<const llvm::Value *>>>;
-using HeapPatternCandidatesMap = std::map<
-    Mark,
-    std::map<ExitIndex, LoopInfoData<llvm::Optional<HeapPatternCandidates>>>>;
+// The optional is needed to indicate that we have seen a certain combination of
+// mark and exit index but not this loop synchronization
+using HeapPatternCandidatesMap =
+    IterativeInvariantMap<LoopInfoData<llvm::Optional<HeapPatternCandidates>>>;
 using BoundsMap =
     std::map<Mark, std::map<std::string, Bound<llvm::Optional<VarIntVal>>>>;
 

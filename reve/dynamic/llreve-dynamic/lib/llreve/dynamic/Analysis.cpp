@@ -692,14 +692,14 @@ void populateHeapPatterns(
                 pat->instantiate(primitiveVariables, variables, heaps);
             candidates.splice(candidates.end(), newCandidates);
         }
-        heapPatternCandidates.at(match.mark)
-            .insert(make_pair(exitIndex,
-                              LoopInfoData<Optional<HeapPatternCandidates>>(
-                                  Optional<HeapPatternCandidates>(),
-                                  Optional<HeapPatternCandidates>(),
-                                  Optional<HeapPatternCandidates>())));
-        auto &patternCandidates = getDataForLoopInfo(
-            heapPatternCandidates.at(match.mark).at(exitIndex), match.loopInfo);
+        // This entry could already be present
+        auto it = heapPatternCandidates.at(match.mark)
+                      .insert({exitIndex,
+                               {Optional<HeapPatternCandidates>(),
+                                Optional<HeapPatternCandidates>(),
+                                Optional<HeapPatternCandidates>()}});
+        auto &patternCandidates =
+            getDataForLoopInfo(it.first->second, match.loopInfo);
         assert(!patternCandidates.hasValue());
         patternCandidates = std::move(candidates);
     } else {
