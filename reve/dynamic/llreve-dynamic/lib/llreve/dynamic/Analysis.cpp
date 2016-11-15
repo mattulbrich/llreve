@@ -152,8 +152,10 @@ Transformed analyzeMainCounterExample(
             populateEquationsMap(
                 dynamicAnalysisResults.functionPolynomialEquations,
                 primitiveVariables, match, degree);
-            populateHeapPatterns(dynamicAnalysisResults.functionHeapPatterns,
-                                 patterns, primitiveVariables, match);
+            populateHeapPatterns(
+                dynamicAnalysisResults.functionHeapPatterns, patterns,
+                primitiveVariables, match,
+                analysisResults.at(match.function).returnInstruction);
 
         });
     auto loopTransformations =
@@ -813,22 +815,41 @@ void populateHeapPatterns(
     FunctionInvariantMap<HeapPatternCandidates> &heapPatternCandidates,
     const vector<shared_ptr<HeapPattern<VariablePlaceholder>>> &patterns,
     const vector<SortedVar> &primitiveVariables,
-    UncoupledCallInfo<const llvm::Value *> match) {
+    UncoupledCallInfo<const llvm::Value *> match, llvm::Value *returnValue) {
     VarMap<const llvm::Value *> variables(match.step->state.variables);
-    // TODO figure out which heap can be empty
-    MonoPair<Heap> heaps = {match.step->state.heap, {}};
+    variables.insert({returnValue, match.returnValue});
+    vector<SortedVar> preVariables = primitiveVariables;
+    vector<SortedVar> postVariables = preVariables;
+    postVariables.emplace_back(resultName(match.prog), int64Type());
+    MonoPair<Heap> heaps({}, {});
+    if (match.prog == Program::First) {
+        heaps = {match.step->state.heap, {}};
+    } else {
+        heaps = {{}, match.step->state.heap};
+    }
     bool newCandidates =
         heapPatternCandidates[match.function].count(match.mark) == 0;
     if (newCandidates) {
-        list<shared_ptr<HeapPattern<const llvm::Value *>>> candidates;
+        list<shared_ptr<HeapPattern<const llvm::Value *>>> preCandidates;
+        list<shared_ptr<HeapPattern<const llvm::Value *>>> postCandidates;
+        MonoPair<llvm::Value *> returnInstructions(nullptr, nullptr);
+        if (match.prog == Program::First) {
+            returnInstructions.first = returnValue;
+        } else {
+            returnInstructions.second = returnValue;
+        }
         for (auto pat : patterns) {
-            auto newCandidates =
-                pat->instantiate(primitiveVariables, variables, heaps);
-            candidates.splice(candidates.end(), newCandidates);
+            auto newCandidates = pat->instantiate(primitiveVariables, variables,
+                                                  heaps, returnInstructions);
+            preCandidates.splice(preCandidates.end(), newCandidates);
+            newCandidates = pat->instantiate(primitiveVariables, variables,
+                                             heaps, returnInstructions);
+            postCandidates.splice(postCandidates.end(), newCandidates);
         }
         // TODO figure out postcondition
         heapPatternCandidates.at(match.function)
-            .insert({match.mark, {std::move(candidates), {}}});
+            .insert({match.mark,
+                     {std::move(preCandidates), std::move(postCandidates)}});
     } else {
         FunctionInvariant<HeapPatternCandidates> &patterns =
             heapPatternCandidates.at(match.function).at(match.mark);

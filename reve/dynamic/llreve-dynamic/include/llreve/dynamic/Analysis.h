@@ -174,7 +174,7 @@ void populateHeapPatterns(
     const std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>>
         &patterns,
     const std::vector<smt::SortedVar> &primitiveVariables,
-    UncoupledCallInfo<const llvm::Value *> match);
+    UncoupledCallInfo<const llvm::Value *> match, llvm::Value *returnValue);
 void dumpPolynomials(
     const IterativeInvariantMap<PolynomialEquations> &equationsMap,
     const FreeVarsMap &freeVarsmap);
