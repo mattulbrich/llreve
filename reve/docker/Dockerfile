@@ -1,31 +1,39 @@
-FROM alpine:3.4
+FROM ubuntu:16.04
 MAINTAINER Moritz Kiefer <moritz.kiefer@purelyfunctional.org>
-RUN apk add --no-cache \
-    binutils \
-    ca-certificates \
-    clang \
-    clang-dev \
-    cmake \
-    g++ \
-    gcc \
-    git \
-    llvm \
-    llvm-dev \
-    llvm-static \
-    make \
-    python \
-    wget \
-    zlib-dev
-RUN update-ca-certificates
-ENV Z3_REV 8cf356224e08c872c6656eb7d2cf2c3422c6a2b2
-RUN wget https://github.com/Z3Prover/z3/archive/${Z3_REV}.zip -O z3.zip && \
-    unzip z3.zip -d /root && \
-    mv /root/z3-${Z3_REV} /root/z3
-WORKDIR /root/z3
+ENV LLVM_VERSION 3.9.0
+RUN apt-get update && \
+    apt-get install -y \
+      cmake \
+      curl \
+      g++ \
+      gcc \
+      ninja-build \
+      python \
+      xz-utils
+RUN curl -SL http://llvm.org/releases/$LLVM_VERSION/llvm-$LLVM_VERSION.src.tar.xz | tar xJ
+RUN curl -SL http://llvm.org/releases/$LLVM_VERSION/cfe-$LLVM_VERSION.src.tar.xz | tar xJ && \
+    mv cfe-$LLVM_VERSION.src llvm-$LLVM_VERSION.src/tools/clang
+RUN mkdir /llvm-$LLVM_VERSION.src/build
+WORKDIR /llvm-$LLVM_VERSION.src/build
+RUN cmake .. -GNinja \
+             -DCMAKE_BUILD_TYPE=Release \
+             -DLLVM_ENABLE_ASSERTIONS=ON \
+             -DCMAKE_INSTALL_PREFIX=/usr/local \
+             -DLLVM_PARALLEL_LINK_JOBS=1
+RUN ninja && ninja install
+WORKDIR /
+RUN rm -r /llvm-$LLVM_VERSION.src
+ENV Z3_VERSION 4.5.0
+RUN curl -SlL https://github.com/Z3Prover/z3/archive/z3-$Z3_VERSION.tar.gz | tar xz
+RUN mkdir /z3-z3-$Z3_VERSION/build
+WORKDIR /z3-z3-$Z3_VERSION
 RUN python contrib/cmake/bootstrap.py create
-RUN mkdir -p build
-WORKDIR /root/z3/build
-RUN cmake -DUSE_OPENMP=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DBUILD_LIBZ3_SHARED=OFF ..
-RUN make
-RUN make install
-WORKDIR /root
+WORKDIR /z3-z3-$Z3_VERSION/build
+RUN cmake .. -GNinja \
+             -DCMAKE_BUILD_TYPE=Release \
+             -DCMAKE_INSTALL_PREFIX=/usr/local \
+             -DBUILD_LIBZ3_SHARED=OFF \
+             -DUSE_OPENMP=FALSE
+RUN ninja && ninja install
+WORKDIR /
+RUN rm -r /z3-z3-$Z3_VERSION
