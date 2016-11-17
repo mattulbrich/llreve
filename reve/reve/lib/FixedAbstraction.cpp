@@ -38,19 +38,19 @@ static std::vector<SortedVar> externDeclArgs(const llvm::Function &fun1,
     for (auto arg : funArgs1) {
         args.push_back(arg);
     }
-    if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
+    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
         args.push_back(SortedVar("HEAP$1", memoryType()));
     }
     auto funArgs2 = functionArgs(fun2);
     for (auto arg : funArgs2) {
         args.push_back(arg);
     }
-    if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
+    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
         args.push_back(SortedVar("HEAP$2", memoryType()));
     }
     args.push_back(SortedVar("res1", int64Type()));
     args.push_back(SortedVar("res2", int64Type()));
-    if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
+    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
         args.push_back(SortedVar("HEAP$1_res", memoryType()));
         args.push_back(SortedVar("HEAP$2_res", memoryType()));
     }
@@ -103,7 +103,7 @@ void externDeclarations(const llvm::Module &mod1, const llvm::Module &mod2,
 static SMTRef equalOutputs(std::string functionName,
                            std::multimap<string, string> funCondMap) {
     SMTRef body = makeOp("=", "res1", "res2");
-    if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
+    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
         SharedSMTRef heapOutEqual = makeOp("=", memoryVariable("HEAP$1_res"),
                                            memoryVariable("HEAP$2_res"));
         body = makeOp("and", std::move(body), heapOutEqual);
@@ -133,7 +133,7 @@ static SMTRef equalInputs(const llvm::Function &fun1,
         equal.push_back(makeOp("=", typedVariableFromSortedVar(argPair.first),
                                typedVariableFromSortedVar(argPair.second)));
     }
-    if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
+    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
         SharedSMTRef heapInEqual =
             makeOp("=", memoryVariable("HEAP$1"), memoryVariable("HEAP$2"));
         equal.push_back(heapInEqual);
@@ -195,11 +195,11 @@ std::vector<SharedSMTRef> externFunDecl(const llvm::Function &fun,
     set<uint32_t> varArgs = getVarArgs(fun);
     for (auto argNum : varArgs) {
         std::vector<SortedVar> args = functionArgs(fun);
-        if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
+        if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
             args.push_back(SortedVar("HEAP", memoryType()));
         }
         args.push_back(SortedVar("res", int64Type()));
-        if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
+        if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
             args.push_back(SortedVar("HEAP_res", memoryType()));
         }
         std::string funName =

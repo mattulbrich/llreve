@@ -119,9 +119,9 @@ int main(int argc, const char **argv) {
 
     SMTGenerationOpts::initialize(
         findMainFunction(moduleRefs, MainFunctionFlag),
-        HeapFlag ? llreve::opts::Heap::Enabled : llreve::opts::Heap::Disabled,
-        Stack::Disabled, GlobalConstants::Disabled, FunctionEncoding::Iterative,
-        ByteHeap::Enabled, false, SMTFormat::SMTHorn,
+        HeapFlag ? llreve::opts::HeapOpt::Enabled : llreve::opts::HeapOpt::Disabled,
+        StackOpt::Disabled, GlobalConstantsOpt::Disabled, FunctionEncoding::Iterative,
+        ByteHeapOpt::Enabled, false, SMTFormat::SMTHorn,
         PerfectSynchronization::Disabled, false, BoundedFlag, InvertFlag, false,
         false, {}, {}, {}, {}, inferCoupledFunctionsByName(moduleRefs),
         functionNumerals, reversedFunctionNumerals);

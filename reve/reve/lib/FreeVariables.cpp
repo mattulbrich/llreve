@@ -130,7 +130,7 @@ static set<SortedVar> addMemoryLocations(const set<FreeVar> &freeVars) {
     set<SortedVar> newFreeVars;
     for (const auto &var : freeVars) {
         newFreeVars.insert(var.var);
-        if (SMTGenerationOpts::getInstance().Stack == Stack::Enabled &&
+        if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled &&
             var.type->isPointerTy()) {
             newFreeVars.insert({var.var.name + "_OnStack", boolType()});
         }
@@ -141,10 +141,10 @@ static set<SortedVar> addMemoryLocations(const set<FreeVar> &freeVars) {
 static auto addMemoryArrays(vector<smt::SortedVar> vars, Program prog)
     -> vector<smt::SortedVar> {
     int index = programIndex(prog);
-    if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
+    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
         vars.push_back(SortedVar(heapName(index), memoryType()));
     }
-    if (SMTGenerationOpts::getInstance().Stack == Stack::Enabled) {
+    if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
         vars.push_back(SortedVar(stackPointerName(index), pointerType()));
         vars.push_back(SortedVar(stackName(index), memoryType()));
     }

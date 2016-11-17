@@ -28,9 +28,9 @@ llreve::cl::OptionCategory ReveCategory("Reve options",
                                         "Options for controlling reve.");
 
 void SMTGenerationOpts::initialize(
-    MonoPair<llvm::Function *> mainFunctions, enum Heap heap, enum Stack stack,
-    enum GlobalConstants globalConstants, FunctionEncoding onlyRecursive,
-    enum ByteHeap byteHeap, bool everythingSigned, SMTFormat muZ,
+    MonoPair<llvm::Function *> mainFunctions, enum HeapOpt heap, enum StackOpt stack,
+    enum GlobalConstantsOpt globalConstants, FunctionEncoding onlyRecursive,
+    enum ByteHeapOpt byteHeap, bool everythingSigned, SMTFormat muZ,
     enum PerfectSynchronization perfectSync, bool passInputThrough,
     bool bitVect, bool invert, bool initPredicate, bool disableAutoAbstraction,
     map<Mark, SharedSMTRef> iterativeRelationalInvariants,

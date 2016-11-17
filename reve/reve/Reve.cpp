@@ -194,13 +194,13 @@ int main(int argc, const char **argv) {
         generateFunctionMap(moduleRefs);
     SMTGenerationOpts::initialize(
         findMainFunction(moduleRefs, MainFunctionFlag),
-        HeapFlag ? Heap::Enabled : Heap::Disabled,
-        StackFlag ? Stack::Enabled : Stack::Disabled,
-        GlobalConstantsFlag ? GlobalConstants::Enabled
-                            : GlobalConstants::Disabled,
+        HeapFlag ? HeapOpt::Enabled : HeapOpt::Disabled,
+        StackFlag ? StackOpt::Enabled : StackOpt::Disabled,
+        GlobalConstantsFlag ? GlobalConstantsOpt::Enabled
+                            : GlobalConstantsOpt::Disabled,
         OnlyRecursiveFlag ? FunctionEncoding::OnlyRecursive
                           : FunctionEncoding::Iterative,
-        NoByteHeapFlag ? ByteHeap::Disabled : ByteHeap::Enabled,
+        NoByteHeapFlag ? ByteHeapOpt::Disabled : ByteHeapOpt::Enabled,
         EverythingSignedFlag, MuZFlag ? SMTFormat::Z3 : SMTFormat::SMTHorn,
         PerfectSyncFlag ? PerfectSynchronization::Enabled
                         : PerfectSynchronization::Disabled,

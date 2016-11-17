@@ -520,7 +520,7 @@ ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
             values.insert({var.name + "_old", mpz_class(stringVal)});
         }
     }
-    if (SMTGenerationOpts::getInstance().Heap == llreve::opts::Heap::Enabled) {
+    if (SMTGenerationOpts::getInstance().Heap == llreve::opts::HeapOpt::Enabled) {
         if (program1) {
             auto heap1Eval = model.eval(nameMap.at("HEAP$1_old"));
             arrays.insert({"HEAP$1_old", getArrayVal(z3Cxt, heap1Eval)});
@@ -1062,14 +1062,14 @@ Heap getHeapFromModel(const ArrayVal &ar) {
 
 Heap getHeapFromModel(const std::map<std::string, ArrayVal> &arrays,
                       Program prog) {
-    if (SMTGenerationOpts::getInstance().Heap == llreve::opts::Heap::Disabled) {
+    if (SMTGenerationOpts::getInstance().Heap == llreve::opts::HeapOpt::Disabled) {
         return {};
     }
     return getHeapFromModel(arrays.at(heapName(prog)));
 }
 
 MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays) {
-    if (SMTGenerationOpts::getInstance().Heap == llreve::opts::Heap::Disabled) {
+    if (SMTGenerationOpts::getInstance().Heap == llreve::opts::HeapOpt::Disabled) {
         return {{}, {}};
     }
     return {getHeapFromModel(arrays.at("HEAP$1_old")),
@@ -1078,14 +1078,14 @@ MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays) {
 
 Integer getHeapBackground(const std::map<std::string, ArrayVal> &arrays,
                           Program prog) {
-    if (SMTGenerationOpts::getInstance().Heap == llreve::opts::Heap::Disabled) {
+    if (SMTGenerationOpts::getInstance().Heap == llreve::opts::HeapOpt::Disabled) {
         return Integer(mpz_class(0));
     }
     return Integer(arrays.at(heapName(prog)).background);
 }
 
 MonoPair<Integer> getHeapBackgrounds(std::map<std::string, ArrayVal> arrays) {
-    if (SMTGenerationOpts::getInstance().Heap == llreve::opts::Heap::Disabled) {
+    if (SMTGenerationOpts::getInstance().Heap == llreve::opts::HeapOpt::Disabled) {
         return {Integer(mpz_class(0)), Integer(mpz_class(0))};
     }
     return {Integer(arrays.at("HEAP$1_old").background),

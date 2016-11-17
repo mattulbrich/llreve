@@ -48,7 +48,7 @@ vector<SharedSMTRef> generateSMT(MonoPair<const llvm::Module &> modules,
         smtExprs.push_back(std::make_shared<SetLogic>("HORN"));
     }
 
-    if (smtOpts.Stack == Stack::Enabled) {
+    if (smtOpts.Stack == StackOpt::Enabled) {
         declarations.push_back(select_Declaration());
         declarations.push_back(store_Declaration());
     }
@@ -135,7 +135,7 @@ void generateSMTForMainFunctions(MonoPair<const llvm::Module &> modules,
     auto inInv =
         inInvariant(smtOpts.MainFunctions, analysisResults, fileOpts.InRelation,
                     modules.first, modules.second,
-                    smtOpts.GlobalConstants == GlobalConstants::Enabled,
+                    smtOpts.GlobalConstants == GlobalConstantsOpt::Enabled,
                     fileOpts.AdditionalInRelation);
     declarations.push_back(inInv);
     declarations.push_back(outInvariant(
@@ -292,10 +292,10 @@ shared_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
             .indexedMap<vector<smt::SortedVar>>([](vector<smt::SortedVar> args,
                                                    int index)
                                                     -> vector<smt::SortedVar> {
-                if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
+                if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
                     args.push_back(SortedVar(heapName(index), memoryType()));
                 }
-                if (SMTGenerationOpts::getInstance().Stack == Stack::Enabled) {
+                if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
                     args.push_back(
                         SortedVar(stackPointerName(index), pointerType()));
                     args.push_back(SortedVar(stackName(index), memoryType()));
@@ -359,7 +359,7 @@ SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
             funArgs.push_back(std::move(arg));
         }
     }
-    if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
+    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
         funArgs.push_back(SortedVar("HEAP$1", memoryType()));
     }
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
@@ -367,12 +367,12 @@ SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
             funArgs.push_back(std::move(arg));
         }
     }
-    if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
+    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
         funArgs.push_back(SortedVar("HEAP$2", memoryType()));
     }
     if (body == nullptr) {
         body = makeOp("=", "result$1", "result$2");
-        if (SMTGenerationOpts::getInstance().Heap == Heap::Enabled) {
+        if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
             body =
                 makeOp("and", body, makeOp("=", smt::memoryVariable("HEAP$1"),
                                            smt::memoryVariable("HEAP$2")));

@@ -78,7 +78,7 @@ SMTRef instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) {
 }
 
 int typeSize(llvm::Type *Ty, const llvm::DataLayout &layout) {
-    if (SMTGenerationOpts::getInstance().ByteHeap == ByteHeap::Enabled) {
+    if (SMTGenerationOpts::getInstance().ByteHeap == ByteHeapOpt::Enabled) {
         return static_cast<int>(layout.getTypeAllocSize(Ty));
     }
     if (auto IntTy = llvm::dyn_cast<llvm::IntegerType>(Ty)) {
@@ -167,7 +167,7 @@ vector<SortedVar> functionArgs(const llvm::Function &fun) {
     for (auto &arg : fun.args()) {
         auto sVar = llvmValToSortedVar(&arg);
         args.push_back(sVar);
-        if (SMTGenerationOpts::getInstance().Stack == Stack::Enabled &&
+        if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled &&
             arg.getType()->isPointerTy()) {
             args.push_back({sVar.name + "_OnStack", boolType()});
         }

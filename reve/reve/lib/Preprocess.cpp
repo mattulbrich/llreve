@@ -57,10 +57,10 @@ static void nameModuleGlobals(llvm::Module &module, Program prog) {
 
 static void detectMemoryOptions(MonoPair<const llvm::Module &> modules) {
     if (doesAccessHeap(modules.first) || doesAccessHeap(modules.second)) {
-        SMTGenerationOpts::getInstance().Heap = Heap::Enabled;
+        SMTGenerationOpts::getInstance().Heap = HeapOpt::Enabled;
     }
     if (doesAccessStack(modules.first) || doesAccessStack(modules.second)) {
-        SMTGenerationOpts::getInstance().Stack = Stack::Enabled;
+        SMTGenerationOpts::getInstance().Stack = StackOpt::Enabled;
     }
 }
 AnalysisResultsMap preprocessModules(MonoPair<llvm::Module &> modules,

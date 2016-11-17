@@ -40,15 +40,15 @@ class PreprocessOpts {
           InferMarks(inferMarks) {}
 };
 
-enum class Heap { Enabled, Disabled };
+enum class HeapOpt { Enabled, Disabled };
 
-enum class Stack { Enabled, Disabled };
+enum class StackOpt { Enabled, Disabled };
 
-enum class GlobalConstants { Enabled, Disabled };
+enum class GlobalConstantsOpt { Enabled, Disabled };
 
 enum class FunctionEncoding { OnlyRecursive, Iterative };
 
-enum class ByteHeap { Enabled, Disabled };
+enum class ByteHeapOpt { Enabled, Disabled };
 enum class SMTFormat { Z3, SMTHorn };
 enum class PerfectSynchronization { Enabled, Disabled };
 
@@ -61,31 +61,30 @@ class SMTGenerationOpts {
         return instance;
     }
     // Convenience method to make sure you don’t forget to set parameters
-    static void
-    initialize(MonoPair<llvm::Function *> mainFunctions, Heap heap, Stack stack,
-               GlobalConstants globalConstants, FunctionEncoding onlyRecursive,
-               ByteHeap byteHeap, bool everythingSigned, SMTFormat muZ,
-               PerfectSynchronization perfectSync, bool passInputThrough,
-               bool bitvect, bool invert, bool initPredicate,
-               bool disableAutoAbstraction,
-               std::map<Mark, smt::SharedSMTRef> iterativeRelationalInvariants,
-               std::map<const llvm::Function *,
-                        std::map<Mark, FunctionInvariant<smt::SharedSMTRef>>>
-                   functionalFunctionalInvariants,
-               std::map<MonoPair<const llvm::Function *>,
-                        std::map<Mark, FunctionInvariant<smt::SharedSMTRef>>>
-                   functionalRelationalInvariants,
-               std::set<MonoPair<const llvm::Function *>> assumeEquivalent,
-               std::set<MonoPair<llvm::Function *>> coupleFunctions,
-               std::map<const llvm::Function *, int> functionNumerals,
-               MonoPair<std::map<int, const llvm::Function *>>
-                   reversedFunctionNumerals);
+    static void initialize(
+        MonoPair<llvm::Function *> mainFunctions, HeapOpt heap, StackOpt stack,
+        GlobalConstantsOpt globalConstants, FunctionEncoding onlyRecursive,
+        ByteHeapOpt byteHeap, bool everythingSigned, SMTFormat muZ,
+        PerfectSynchronization perfectSync, bool passInputThrough, bool bitvect,
+        bool invert, bool initPredicate, bool disableAutoAbstraction,
+        std::map<Mark, smt::SharedSMTRef> iterativeRelationalInvariants,
+        std::map<const llvm::Function *,
+                 std::map<Mark, FunctionInvariant<smt::SharedSMTRef>>>
+            functionalFunctionalInvariants,
+        std::map<MonoPair<const llvm::Function *>,
+                 std::map<Mark, FunctionInvariant<smt::SharedSMTRef>>>
+            functionalRelationalInvariants,
+        std::set<MonoPair<const llvm::Function *>> assumeEquivalent,
+        std::set<MonoPair<llvm::Function *>> coupleFunctions,
+        std::map<const llvm::Function *, int> functionNumerals,
+        MonoPair<std::map<int, const llvm::Function *>>
+            reversedFunctionNumerals);
     MonoPair<llvm::Function *> MainFunctions = {nullptr, nullptr};
-    Heap Heap;
-    Stack Stack;
-    GlobalConstants GlobalConstants;
+    HeapOpt Heap;
+    StackOpt Stack;
+    GlobalConstantsOpt GlobalConstants;
     FunctionEncoding OnlyRecursive;
-    ByteHeap ByteHeap;
+    ByteHeapOpt ByteHeap;
     bool EverythingSigned;
     SMTFormat OutputFormat;
     PerfectSynchronization PerfectSync;
