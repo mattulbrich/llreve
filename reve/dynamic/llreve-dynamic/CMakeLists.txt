@@ -62,7 +62,7 @@ target_link_libraries(libreve-interpreter
 )
 target_link_libraries(llreve-dynamic
   libreve-interpreter
-  ${GMP_LIBRARIES}
   ${GMPXX_LIBRARIES}
+  ${GMP_LIBRARIES}
   ${FL_LIBRARY}
 )
