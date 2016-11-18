@@ -3,10 +3,13 @@ MAINTAINER Moritz Kiefer <moritz.kiefer@purelyfunctional.org>
 ENV LLVM_VERSION 3.9.0
 RUN apt-get update && \
     apt-get install -y \
+      bison \
       cmake \
       curl \
+      flex \
       g++ \
       gcc \
+      libgmp-dev \
       ninja-build \
       python \
       xz-utils
