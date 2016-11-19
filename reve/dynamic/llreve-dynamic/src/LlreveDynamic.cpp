@@ -111,12 +111,14 @@ int main(int argc, const char **argv) {
 
     SMTGenerationOpts::initialize(
         findMainFunction(moduleRefs, MainFunctionFlag),
-        HeapFlag ? llreve::opts::HeapOpt::Enabled : llreve::opts::HeapOpt::Disabled,
-        StackOpt::Disabled, GlobalConstantsOpt::Disabled, FunctionEncoding::Iterative,
-        ByteHeapOpt::Enabled, false, SMTFormat::SMTHorn,
-        PerfectSynchronization::Disabled, false, BoundedFlag, true, false,
-        false, {}, {}, {}, {}, inferCoupledFunctionsByName(moduleRefs),
-        functionNumerals, reversedFunctionNumerals);
+        HeapFlag ? llreve::opts::HeapOpt::Enabled
+                 : llreve::opts::HeapOpt::Disabled,
+        StackOpt::Disabled, GlobalConstantsOpt::Disabled,
+        FunctionEncoding::Iterative, ByteHeapOpt::Enabled, false,
+        SMTFormat::SMTHorn, PerfectSynchronization::Disabled, false,
+        BoundedFlag, true, false, false, {}, {}, {}, {},
+        inferCoupledFunctionsByName(moduleRefs), functionNumerals,
+        reversedFunctionNumerals);
 
     AnalysisResultsMap analysisResults =
         preprocessModules(moduleRefs, preprocessOpts);
