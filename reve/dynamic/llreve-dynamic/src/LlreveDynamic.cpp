@@ -75,8 +75,7 @@ static llreve::cl::opt<bool>
                       llreve::cl::desc("Show cfg before mark removal"));
 
 static llreve::cl::opt<string> MainFunctionFlag(
-    "fun", llreve::cl::desc("Name of the function which should be verified"),
-    llreve::cl::Required);
+    "fun", llreve::cl::desc("Name of the function which should be verified"));
 // Serialize flags
 static llreve::cl::opt<string>
     OutputFileNameFlag("o", llreve::cl::desc("SMT output filename"),
