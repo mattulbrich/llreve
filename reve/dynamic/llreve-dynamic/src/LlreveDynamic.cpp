@@ -54,10 +54,6 @@ static llreve::cl::opt<bool> HeapFlag("heap",
                                       llreve::cl::desc("Activate heap"));
 static llreve::cl::opt<bool>
     InstantiateFlag("instantiate", llreve::cl::desc("Instantiate arrays"));
-static llreve::cl::opt<bool>
-    InvertFlag("invert",
-               llreve::cl::desc("Check for satisfiability of negation"));
-static llreve::cl::opt<bool> CegarFlag("cegar", llreve::cl::desc("Cegar"));
 static llreve::cl::opt<string>
     PatternFileFlag("patterns",
                     llreve::cl::desc("Path to file containing patterns"),
@@ -107,10 +103,6 @@ int main(int argc, const char **argv) {
     PM.run(*modules.second);
     MonoPair<llvm::Module &> moduleRefs = {*modules.first, *modules.second};
 
-    if (CegarFlag) {
-        InvertFlag = true;
-    }
-
     std::map<const llvm::Function *, int> functionNumerals;
     MonoPair<std::map<int, const llvm::Function *>> reversedFunctionNumerals = {
         {}, {}};
@@ -122,7 +114,7 @@ int main(int argc, const char **argv) {
         HeapFlag ? llreve::opts::HeapOpt::Enabled : llreve::opts::HeapOpt::Disabled,
         StackOpt::Disabled, GlobalConstantsOpt::Disabled, FunctionEncoding::Iterative,
         ByteHeapOpt::Enabled, false, SMTFormat::SMTHorn,
-        PerfectSynchronization::Disabled, false, BoundedFlag, InvertFlag, false,
+        PerfectSynchronization::Disabled, false, BoundedFlag, true, false,
         false, {}, {}, {}, {}, inferCoupledFunctionsByName(moduleRefs),
         functionNumerals, reversedFunctionNumerals);
 
