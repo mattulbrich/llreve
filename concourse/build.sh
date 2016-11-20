@@ -7,4 +7,4 @@ mkdir build
 cd build
 cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXE_LINKER_FLAGS=-static
 ninja
-cp reve "${DIR}/../../static-binaries/"
+cp reve "${DIR}/../../static-binaries/llreve-1"
