@@ -4,18 +4,28 @@ resources:
   source:
     branch: concourse
     uri: https://github.com/mattulbrich/llreve.git
+resources:
+- name: llreve-static-binary-host
+  type: rsync-resource
+  source:
+    server: functor.purelyfunctional.org
+    base_dir: /var/www/html/downloads
+    user : root
+    private_key: {{github-private-key}}
 # - name: llreve-web
 #   type: git
 #   source:
 #     branch: concourse
 #     uri: git@github.com:cocreature/llreve-web.git
 #     github-private-key: {{github-private-key}}
-
 jobs:
 - name: llreve-static
   plan:
   - get: llreve
     trigger: true
+  - put: llreve-static-binary-host
+    params:
+      sync_dir: static-binaries
   - task: llreve-build-static
     config:
       platform: linux
@@ -24,27 +34,9 @@ jobs:
         source:
           repository: cocreature/llreve
           tag: llvm-3.9_z3-4.5
-        inputs:
-          - name: llreve
-        run:
-          path: ls
-          args: [llreve]
-#   - put: resource-gist
-#     params: {repository: updated-gist}
-# - name: job-show-date
-#   plan:
-#   - get: resource-tutorial
-#   - get: resource-gist
-#     passed: [job-bump-date]
-#     trigger: true
-#   - task: show-date
-#     config:
-#       platform: linux
-#       image_resource:
-#         type: docker-image
-#         source: {repository: busybox}
-#       inputs:
-#         - name: resource-gist
-#       run:
-#         path: cat
-#         args: [resource-gist/bumpme]
+      inputs:
+        - name: llreve
+      outputs:
+        - name: static-binaries
+      run:
+        path: llreve/concourse/build.sh
