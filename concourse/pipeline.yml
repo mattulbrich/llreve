@@ -1,0 +1,50 @@
+resources:
+- name: llreve
+  type: git
+  source:
+    branch: concourse
+    uri: https://github.com/mattulbrich/llreve.git
+# - name: llreve-web
+#   type: git
+#   source:
+#     branch: concourse
+#     uri: git@github.com:cocreature/llreve-web.git
+#     github-private-key: {{github-private-key}}
+
+jobs:
+- name: llreve-static
+  plan:
+  - get: llreve
+    trigger: true
+  - task: llreve-build-static
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: cocreature/llreve
+          tag: llvm-3.9_z3-4.5
+        inputs:
+          - name: llreve
+        run:
+          path: ls
+          args: [llreve]
+#   - put: resource-gist
+#     params: {repository: updated-gist}
+# - name: job-show-date
+#   plan:
+#   - get: resource-tutorial
+#   - get: resource-gist
+#     passed: [job-bump-date]
+#     trigger: true
+#   - task: show-date
+#     config:
+#       platform: linux
+#       image_resource:
+#         type: docker-image
+#         source: {repository: busybox}
+#       inputs:
+#         - name: resource-gist
+#       run:
+#         path: cat
+#         args: [resource-gist/bumpme]

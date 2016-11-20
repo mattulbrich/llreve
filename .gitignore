@@ -10,3 +10,4 @@ TAGS
 /reve/dynamic/llreve-dynamic/build
 /reve/docker/llreve
 /reve/docker/llreve-dynamic
+/concourse/credentials.yml
