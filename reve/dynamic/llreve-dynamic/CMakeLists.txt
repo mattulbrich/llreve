@@ -38,23 +38,15 @@ BISON_TARGET(PatternParser lib/llreve/dynamic/PatternParser.y ${CMAKE_CURRENT_BI
 FLEX_TARGET(PatternLexer lib/llreve/dynamic/PatternLexer.l  ${CMAKE_CURRENT_BINARY_DIR}/llreve/dynamic/PatternLexer.cpp)
 ADD_FLEX_BISON_DEPENDENCY(PatternLexer PatternParser)
 
-BISON_TARGET(SMTParser lib/llreve/dynamic/SMTParser.y ${CMAKE_CURRENT_BINARY_DIR}/llreve/dynamic/SMTParser.cpp)
-FLEX_TARGET(SMTLexer lib/llreve/dynamic/SMTLexer.l  ${CMAKE_CURRENT_BINARY_DIR}/llreve/dynamic/SMTLexer.cpp)
-ADD_FLEX_BISON_DEPENDENCY(SMTLexer SMTParser)
-
 set_source_files_properties(${BISON_PatternParser_OUTPUTS} PROPERTIES COMPILE_FLAGS "-Wno-everything")
 set_source_files_properties(${FLEX_PatternLexer_OUTPUTS} PROPERTIES COMPILE_FLAGS "-Wno-everything")
-set_source_files_properties(${BISON_SMTParser_OUTPUTS} PROPERTIES COMPILE_FLAGS "-Wno-everything")
-set_source_files_properties(${FLEX_SMTLexer_OUTPUTS} PROPERTIES COMPILE_FLAGS "-Wno-everything")
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../reve ${CMAKE_CURRENT_BINARY_DIR}/reve)
 add_library(libreve-interpreter
   ${sources}
   ${headers}
   ${BISON_PatternParser_OUTPUTS}
-  ${FLEX_PatternLexer_OUTPUTS}
-  ${BISON_SMTParser_OUTPUTS}
-  ${FLEX_SMTLexer_OUTPUTS})
+  ${FLEX_PatternLexer_OUTPUTS})
 add_executable(llreve-dynamic src/LlreveDynamic.cpp ${headers})
 
 target_link_libraries(libreve-interpreter
