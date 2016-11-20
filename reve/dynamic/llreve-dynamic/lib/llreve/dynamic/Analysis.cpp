@@ -378,9 +378,6 @@ cegarDriver(MonoPair<llvm::Module &> modules,
         for (const auto &clause : clauses) {
             z3Clauses.push_back(clause->removeForalls(introducedVariables));
         }
-        serializeSMT(z3Clauses, false,
-                     SerializeOpts("out.smt2", false, false, true, false));
-
         vector<SharedSMTRef> introducedClauses;
         for (const auto &var : introducedVariables) {
             introducedClauses.push_back(make_unique<VarDecl>(var));
@@ -388,8 +385,6 @@ cegarDriver(MonoPair<llvm::Module &> modules,
         }
         z3Clauses.insert(z3Clauses.begin(), introducedClauses.begin(),
                          introducedClauses.end());
-        serializeSMT(z3Clauses, false,
-                     SerializeOpts("out.smt2", false, false, true, false));
         for (const auto &clause : z3Clauses) {
             clause->toZ3(z3Cxt, z3Solver, nameMap, defineFunMap);
         }
