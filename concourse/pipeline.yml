@@ -4,7 +4,6 @@ resources:
   source:
     branch: concourse
     uri: https://github.com/mattulbrich/llreve.git
-resources:
 - name: llreve-static-binary-host
   type: rsync-resource
   source:
