@@ -1,3 +1,5 @@
+%define parse.error verbose
+%define parse.lac full
 %{
 #include "llreve/dynamic/HeapPattern.h"
 extern "C" int yylex(void);
@@ -128,7 +130,11 @@ namespace llreve {
 namespace dynamic {
 std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> parsePatterns(FILE* stream) {
     yyin = stream;
-    yyparse();
+    int result = yyparse();
+    if (result != 0) {
+        logError("Parse error\n");
+        exit(1);
+    }
     return std::move(patterns);
 }
 }
