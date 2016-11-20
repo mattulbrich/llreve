@@ -32,8 +32,6 @@
 namespace llreve {
 namespace dynamic {
 
-extern std::string InputFileFlag;
-
 enum class LlreveResult { Equivalent, NotEquivalent };
 
 template <typename T1, typename T2>

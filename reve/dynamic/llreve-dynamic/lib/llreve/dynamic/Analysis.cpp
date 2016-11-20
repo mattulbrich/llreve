@@ -62,11 +62,6 @@ namespace dynamic {
 
 static llreve::cl::opt<bool>
     PrettyFlag("pretty", llreve::cl::desc("Pretty print intermediate output"));
-std::string InputFileFlag;
-static llreve::cl::opt<std::string, true>
-    InputFileFlagStorage("input",
-                         llreve::cl::desc("Use the inputs in the passed file"),
-                         llreve::cl::location(InputFileFlag));
 static llreve::cl::opt<unsigned>
     DegreeFlag("degree",
                llreve::cl::desc("Degree of the polynomial invariants"),
