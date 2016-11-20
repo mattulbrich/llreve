@@ -491,6 +491,9 @@ void interpretBoolBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
     case Instruction::Or:
         result = b0 || b1;
         break;
+    case Instruction::And:
+        result = b0 && b1;
+        break;
     default:
         logErrorData("Unsupported binop:\n", *instr);
         llvm::errs() << "\n";
