@@ -8,12 +8,6 @@
 /reve/ubuntu/
 .vagrant
 /reve/vagrant/reve
-/reve/reve.pdf
-/reve/reve.tex
-__pycache__/
-/reve/reve/doc
-/reve/reve/_build/
-/reve/reve/report.html
 /reve/examples/voting/*.java
 /reve/reve/shake/*.smt2
 TAGS
