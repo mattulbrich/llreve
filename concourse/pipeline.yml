@@ -8,7 +8,6 @@ resources:
 - name: llreve-git
   type: git
   source:
-    branch: concourse
     uri: https://github.com/mattulbrich/llreve.git
 - name: llreve-static-binary-host
   type: rsync-resource
