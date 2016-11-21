@@ -13,16 +13,17 @@ resources:
 - name: llreve-static-binary-host
   type: rsync-resource
   source:
-    server: functor.purelyfunctional.org
-    port: 31416
+    server: {{llreve-static-host}}
+    port: {{llreve-static-host-port}}
     base_dir: /var/www/html/downloads
     user : root
     private_key: {{private-key}}
     disable_version_path: true
 jobs:
 - name: llreve-static
+  serial: true
   plan:
-  - get: llreve
+  - get: llreve-git
     trigger: true
   - task: llreve-build-static
     config:
@@ -33,11 +34,11 @@ jobs:
           repository: cocreature/llreve
           tag: llvm-3.9_z3-4.5
       inputs:
-        - name: llreve
+        - name: llreve-git
       outputs:
         - name: static-binaries
       run:
-        path: llreve/concourse/build.sh
+        path: llreve-git/concourse/build.sh
   - put: llreve-static-binary-host
     params:
       sync_dir: static-binaries
