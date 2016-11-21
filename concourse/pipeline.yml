@@ -1,29 +1,29 @@
 resource_types:
-  - name: gcs-resource
-    type: docker-image
-    source:
-      repository: frodenas/gcs-resource
+- name: rsync-resource
+  type: docker-image
+  source:
+      repository: mrsixw/concourse-rsync-resource
+      tag: latest
 resources:
-- name: llreve
+- name: llreve-git
   type: git
   source:
     branch: concourse
     uri: https://github.com/mattulbrich/llreve.git
-- name: gcs
-  type: gcs-resource
+- name: llreve-static-binary-host
+  type: rsync-resource
   source:
-    bucket: llreve
-    json_key: {{gcs-json}}
-    regexp: llreve-(.*)
+    server: functor.purelyfunctional.org
+    port: 31416
+    base_dir: /var/www/html/downloads
+    user : root
+    private_key: {{private-key}}
+    disable_version_path: true
 jobs:
 - name: llreve-static
   plan:
   - get: llreve
     trigger: true
-  - put: gcs
-    params:
-      file: "static-binaries/llreve-*"
-      predefined_acl: publicRead
   - task: llreve-build-static
     config:
       platform: linux
@@ -38,3 +38,6 @@ jobs:
         - name: static-binaries
       run:
         path: llreve/concourse/build.sh
+  - put: llreve-static-binary-host
+    params:
+      sync_dir: static-binaries
