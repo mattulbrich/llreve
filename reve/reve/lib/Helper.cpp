@@ -53,7 +53,7 @@ SMTRef instrNameOrVal(const llvm::Value *val, const llvm::Type *ty) {
         if (SMTGenerationOpts::getInstance().BitVect) {
             return makeOp("_", "bv0", "64");
         } else {
-            return stringExpr("0");
+            return std::make_unique<ConstantInt>(llvm::APInt(64, 0));
         }
     }
     if (const auto gep = llvm::dyn_cast<llvm::GEPOperator>(val)) {
