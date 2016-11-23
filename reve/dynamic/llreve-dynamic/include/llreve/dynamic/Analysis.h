@@ -544,8 +544,9 @@ void analyzeExecution(
     // look at here
     analyzeCallsOnPaths(prevStepsIt1, prevStepsIt2, nameMaps, analysisResults,
                         relationalCallMatch, functionalCallMatch);
-    assert(stepsIt1 == call1.steps.end());
-    assert(stepsIt2 == call2.steps.end());
+    // This assertion is only correct if the interpreter didn’t stop because it ran out of steps
+    // assert(stepsIt1 == call1.steps.end());
+    // assert(stepsIt2 == call2.steps.end());
 }
 
 struct DynamicAnalysisResults {
