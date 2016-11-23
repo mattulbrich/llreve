@@ -77,6 +77,11 @@ static llreve::cl::opt<bool>
 static llreve::cl::opt<bool> DumpIntermediateSMTFlag(
     "intermediate-smt",
     llreve::cl::desc("Dump intermediate SMT files for debugginr purposes"));
+static llreve::cl::opt<unsigned> InterpretStepsFlag(
+    "interpret-steps",
+    llreve::cl::desc(
+        "The number of instructions that are interpreted for each example"),
+    cl::init(50));
 
 bool ImplicationsFlag;
 
@@ -119,8 +124,8 @@ Transformed analyzeMainCounterExample(
 
     MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
         functions, variableValues, getHeapsFromModel(vals.arrays),
-        getHeapBackgrounds(vals.arrays), {firstBlock, secondBlock}, 1000,
-        analysisResults);
+        getHeapBackgrounds(vals.arrays), {firstBlock, secondBlock},
+        InterpretStepsFlag, analysisResults);
     analyzeExecution<const llvm::Value *>(
         calls, nameMap, analysisResults,
         [&](MatchInfo<const llvm::Value *> match) {
@@ -219,8 +224,8 @@ void analyzeRelationalCounterExample(
 
     MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
         functions, variableValues, getHeapsFromModel(vals.arrays),
-        getHeapBackgrounds(vals.arrays), {firstBlock, secondBlock}, 1000,
-        analysisResults);
+        getHeapBackgrounds(vals.arrays), {firstBlock, secondBlock},
+        InterpretStepsFlag, analysisResults);
     analyzeCoupledCalls<const llvm::Value *>(
         calls.first, calls.second, nameMap, analysisResults,
         [&](CoupledCallInfo<const llvm::Value *> match) {
