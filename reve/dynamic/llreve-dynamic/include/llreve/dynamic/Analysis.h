@@ -452,23 +452,16 @@ void analyzeExecution(
     // us so we can start by moving to the next pathstep.
     ++stepsIt1;
     ++stepsIt2;
-    while (stepsIt1 != call1.steps.end() || stepsIt2 != call2.steps.end()) {
+    while (stepsIt1 != call1.steps.end() && stepsIt2 != call2.steps.end()) {
         // There are two cases to consider, either both programs are at the
         // same
         // mark or they are at different marks. The latter case can occur
         // when
         // one program is waiting for the other to finish its loops
-
-        bool notSynced =
-            stepsIt1 == call1.steps.end() || stepsIt2 == call2.steps.end();
-        std::set<Mark> blockNameIntersection;
-        if (!notSynced) {
-            blockNameIntersection = intersection(
-                nameMaps.first.at(stepsIt1->stepsOnPath.front().blockName),
-                nameMaps.second.at(stepsIt2->stepsOnPath.front().blockName));
-            notSynced = blockNameIntersection.empty();
-        }
-        if (!notSynced) {
+        auto blockNameIntersection = intersection(
+            nameMaps.first.at(stepsIt1->stepsOnPath.front().blockName),
+            nameMaps.second.at(stepsIt2->stepsOnPath.front().blockName));
+        if (!blockNameIntersection.empty()) {
             // We want to match calls on the paths that led us here
             analyzeCallsOnPaths(prevStepsIt1, prevStepsIt2, nameMaps,
                                 analysisResults, relationalCallMatch,
