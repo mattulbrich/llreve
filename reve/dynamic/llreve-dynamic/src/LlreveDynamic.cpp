@@ -76,8 +76,7 @@ static llreve::cl::opt<string> MainFunctionFlag(
 // Serialize flags
 static llreve::cl::opt<string>
     OutputFileNameFlag("o", llreve::cl::desc("SMT output filename"),
-                       llreve::cl::value_desc("filename"),
-                       llreve::cl::Required);
+                       llreve::cl::value_desc("filename"));
 static llreve::cl::opt<bool>
     MergeImplications("merge-implications",
                       llreve::cl::desc("Merge implications"));
@@ -147,7 +146,7 @@ int main(int argc, const char **argv) {
     FileOptions fileOpts = getFileOptions(inputOpts.FileNames);
     vector<smt::SharedSMTRef> smtExprs;
     smtExprs = cegarDriver(moduleRefs, analysisResults, patterns, fileOpts);
-    if (!smtExprs.empty()) {
+    if (!smtExprs.empty() && !OutputFileNameFlag.empty()) {
         serializeSMT(smtExprs, false,
                      SerializeOpts(OutputFileNameFlag, !InstantiateFlag,
                                    MergeImplications, true, false));
