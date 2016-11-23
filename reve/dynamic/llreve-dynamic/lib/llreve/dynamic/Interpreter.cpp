@@ -237,6 +237,11 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
                     unsafeIntVal(resolveValue(sext->getOperand(0), state,
                                               sext->getType()))
                         .sext(sext->getType()->getIntegerBitWidth());
+            } else if (const auto trunc = dyn_cast<llvm::TruncInst>(instr)) {
+                state.variables[trunc] =
+                    unsafeIntVal(resolveValue(trunc->getOperand(0), state,
+                                              trunc->getType()))
+                        .zextOrTrunc(trunc->getType()->getIntegerBitWidth());
             } else if (const auto ptrToInt =
                            dyn_cast<llvm::PtrToIntInst>(instr)) {
                 state.variables[ptrToInt] =
@@ -251,6 +256,9 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
                         resolveValue(intToPtr->getOperand(0), state,
                                      intToPtr->getOperand(0)->getType()))
                         .zextOrTrunc(64);
+            } else {
+                logErrorData("Unsupported instruction:\n", *instr);
+                exit(1);
             }
         }
     } else if (const auto gep = dyn_cast<GetElementPtrInst>(instr)) {
@@ -566,9 +574,7 @@ bool varValEq(const VarVal &lhs, const VarVal &rhs) {
     }
 }
 
-string valueName(const llvm::Value *val) {
-    return val->getName();
-}
+string valueName(const llvm::Value *val) { return val->getName(); }
 template <typename T>
 json stateToJSON(State<T> state, function<string(T)> getName) {
     map<string, json> jsonVariables;
