@@ -74,6 +74,9 @@ static llreve::cl::opt<bool>
     StepFlag("step",
              llreve::cl::desc(
                  "Pause after each counterexample until return is pressed"));
+static llreve::cl::opt<bool> DumpIntermediateSMTFlag(
+    "intermediate-smt",
+    llreve::cl::desc("Dump intermediate SMT files for debugginr purposes"));
 
 bool ImplicationsFlag;
 
@@ -387,6 +390,10 @@ cegarDriver(MonoPair<llvm::Module &> modules,
                          introducedClauses.end());
         for (const auto &clause : z3Clauses) {
             clause->toZ3(z3Cxt, z3Solver, nameMap, defineFunMap);
+        }
+        if (DumpIntermediateSMTFlag) {
+            serializeSMT(z3Clauses, false,
+                         SerializeOpts("out.smt2", true, false, true, false));
         }
         bool unsat = false;
         switch (z3Solver.check()) {
