@@ -58,9 +58,6 @@ static llreve::cl::opt<string>
     PatternFileFlag("patterns",
                     llreve::cl::desc("Path to file containing patterns"),
                     llreve::cl::Required);
-static llreve::cl::opt<string> OutputDirectoryFlag(
-    "output",
-    llreve::cl::desc("Directory containing the output of the interpreter"));
 static llreve::cl::list<string> IncludesFlag("I",
                                              llreve::cl::desc("Include path"));
 static llreve::cl::opt<string> ResourceDirFlag(
