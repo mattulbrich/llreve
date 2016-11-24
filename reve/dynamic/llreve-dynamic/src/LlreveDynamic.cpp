@@ -77,6 +77,9 @@ static llreve::cl::opt<string> MainFunctionFlag(
 static llreve::cl::opt<string>
     OutputFileNameFlag("o", llreve::cl::desc("SMT output filename"),
                        llreve::cl::value_desc("filename"));
+static llreve::cl::opt<bool> EverythingSignedFlag(
+    "signed", llreve::cl::desc("Treat all operations as signed operatons"),
+    llreve::cl::cat(ReveCategory));
 static llreve::cl::opt<bool>
     MergeImplications("merge-implications",
                       llreve::cl::desc("Merge implications"));
@@ -109,7 +112,7 @@ int main(int argc, const char **argv) {
         HeapFlag ? llreve::opts::HeapOpt::Enabled
                  : llreve::opts::HeapOpt::Disabled,
         StackOpt::Disabled, GlobalConstantsOpt::Disabled,
-        FunctionEncoding::Iterative, ByteHeapOpt::Enabled, false,
+        FunctionEncoding::Iterative, ByteHeapOpt::Enabled, EverythingSignedFlag,
         SMTFormat::SMTHorn, PerfectSynchronization::Disabled, false,
         BoundedFlag, true, false, false, {}, {}, {}, {},
         inferCoupledFunctionsByName(moduleRefs), functionNumerals,

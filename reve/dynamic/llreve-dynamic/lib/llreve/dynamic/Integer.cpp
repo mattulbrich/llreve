@@ -118,7 +118,10 @@ bool Integer::ult(const Integer &rhs) const {
     assert(type == rhs.type);
     switch (type) {
     case IntType::Unbounded:
-        return unbounded < rhs.unbounded;
+        if (SMTGenerationOpts::getInstance().EverythingSigned) {
+            return unbounded < rhs.unbounded;
+        }
+        return abs(unbounded) < abs(rhs.unbounded);
     case IntType::Bounded:
         return bounded.ult(rhs.bounded);
     }
@@ -136,7 +139,10 @@ bool Integer::ule(const Integer &rhs) const {
     assert(type == rhs.type);
     switch (type) {
     case IntType::Unbounded:
-        return unbounded <= rhs.unbounded;
+        if (SMTGenerationOpts::getInstance().EverythingSigned) {
+            return unbounded <= rhs.unbounded;
+        }
+        return abs(unbounded) <= abs(rhs.unbounded);
     case IntType::Bounded:
         return bounded.ule(rhs.bounded);
     }
@@ -154,7 +160,10 @@ bool Integer::ugt(const Integer &rhs) const {
     assert(type == rhs.type);
     switch (type) {
     case IntType::Unbounded:
-        return unbounded > rhs.unbounded;
+        if (SMTGenerationOpts::getInstance().EverythingSigned) {
+            return unbounded > rhs.unbounded;
+        }
+        return abs(unbounded) > abs(rhs.unbounded);
     case IntType::Bounded:
         return bounded.ugt(rhs.bounded);
     }
@@ -172,7 +181,10 @@ bool Integer::uge(const Integer &rhs) const {
     assert(type == rhs.type);
     switch (type) {
     case IntType::Unbounded:
-        return unbounded >= rhs.unbounded;
+        if (SMTGenerationOpts::getInstance().EverythingSigned) {
+            return unbounded >= rhs.unbounded;
+        }
+        return abs(unbounded) >= abs(rhs.unbounded);
     case IntType::Bounded:
         return bounded.uge(rhs.bounded);
     }
