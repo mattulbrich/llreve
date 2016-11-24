@@ -232,7 +232,6 @@ auto splitCallAtMarks(const Call<T> &call, BlockNameMap nameMap)
         }
         blockSteps.push_back(step);
     }
-    assert(blockSteps.size() == 1);
     pathSteps.push_back({blockSteps});
     // We should have at least one entry and one exit node
     assert(pathSteps.size() >= 2);
