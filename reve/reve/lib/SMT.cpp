@@ -1010,6 +1010,11 @@ Op::toZ3Expr(z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
             z3::expr index = args.at(1)->toZ3Expr(cxt, nameMap, defineFunMap);
             z3::expr val = args.at(2)->toZ3Expr(cxt, nameMap, defineFunMap);
             return z3::store(array, index, val);
+        } else if (opName == "abs") {
+            assert(args.size() == 1);
+            z3::expr val = args.at(0)->toZ3Expr(cxt, nameMap, defineFunMap);
+            z3::expr cond = val >= 0;
+            return z3::ite(cond, val, -val);
         } else {
             if (args.size() != 2) {
                 std::cerr << "Unsupported opname " << opName << "\n";
