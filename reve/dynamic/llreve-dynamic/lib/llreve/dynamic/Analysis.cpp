@@ -602,7 +602,7 @@ bool applyLoopTransformation(
 
 void dumpLoopTransformations(
     map<Mark, LoopTransformation> loopTransformations) {
-    std::cerr << "Loop transformations\n";
+    std::cerr << "-----\nLoop transformations\n";
     for (auto mapIt : loopTransformations) {
         std::cerr << mapIt.first << ": ";
         switch (mapIt.second.side) {
@@ -623,6 +623,7 @@ void dumpLoopTransformations(
         }
         std::cerr << mapIt.second.count << "\n";
     }
+    std::cerr << "-----\n";
 }
 
 map<Mark, LoopTransformation> findLoopTransformations(LoopCountMap &map) {
