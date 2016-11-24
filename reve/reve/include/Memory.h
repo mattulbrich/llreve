@@ -13,6 +13,6 @@
 #include <regex>
 
 const std::regex HEAP_REGEX =
-    std::regex("^(HEAP|STACK)\\$.*?$", std::regex::ECMAScript);
+    std::regex("^(HEAP|STACK)\\$(1|2)(.*?)$", std::regex::ECMAScript);
 const std::regex INDEX_REGEX =
     std::regex("^i(1|2)(_res|_old|_stack)?$", std::regex::ECMAScript);

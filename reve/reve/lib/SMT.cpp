@@ -700,6 +700,8 @@ unique_ptr<const HeapInfo> SMTExpr::heapInfo() const { return nullptr; }
 unique_ptr<const HeapInfo> TypedVariable::heapInfo() const {
     std::smatch matchResult;
     if (std::regex_match(name, matchResult, HEAP_REGEX)) {
+        // The actual match counts too
+        assert(matchResult.size() == 3 || matchResult.size() == 4);
         return make_unique<HeapInfo>(matchResult[1], matchResult[2],
                                      matchResult[3]);
     }
