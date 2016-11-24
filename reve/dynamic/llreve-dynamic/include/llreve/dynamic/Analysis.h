@@ -115,15 +115,9 @@ void findLoopCounts(LoopCountsAndMark &loopCountsAndMark, MatchInfo<T> match) {
             break;
         }
     } else {
-        switch (match.loopInfo) {
-        case LoopInfo::None:
-            loopCountsAndMark.loopCounts[match.mark].push_back(
-                makeMonoPair(0, 0));
-            break;
-        default:
-            assert(false);
-            break;
-        }
+        // We want to count iterations rather than times we arrive at the loop
+        // header so the first time is not counted.
+        loopCountsAndMark.loopCounts[match.mark].push_back(makeMonoPair(0, 0));
         loopCountsAndMark.mark = match.mark;
     }
 }
@@ -543,7 +537,8 @@ void analyzeExecution(
     // look at here
     analyzeCallsOnPaths(prevStepsIt1, prevStepsIt2, nameMaps, analysisResults,
                         relationalCallMatch, functionalCallMatch);
-    // This assertion is only correct if the interpreter didn’t stop because it ran out of steps
+    // This assertion is only correct if the interpreter didn’t stop because it
+    // ran out of steps
     // assert(stepsIt1 == call1.steps.end());
     // assert(stepsIt2 == call2.steps.end());
 }
