@@ -41,5 +41,3 @@ jobs:
   - put: llreve-static-binary-host
     params:
       sync_dir: static-binaries
-    get_params:
-      skip_download: true
