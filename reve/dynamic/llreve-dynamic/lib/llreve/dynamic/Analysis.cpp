@@ -124,8 +124,7 @@ Transformed analyzeMainCounterExample(
 
     MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
         functions, variableValues, getHeapsFromModel(vals.arrays),
-        getHeapBackgrounds(vals.arrays), {firstBlock, secondBlock},
-        InterpretStepsFlag, analysisResults);
+        {firstBlock, secondBlock}, InterpretStepsFlag, analysisResults);
     analyzeExecution<const llvm::Value *>(
         calls, nameMap, analysisResults,
         [&](MatchInfo<const llvm::Value *> match) {
@@ -224,8 +223,7 @@ void analyzeRelationalCounterExample(
 
     MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
         functions, variableValues, getHeapsFromModel(vals.arrays),
-        getHeapBackgrounds(vals.arrays), {firstBlock, secondBlock},
-        InterpretStepsFlag, analysisResults);
+        {firstBlock, secondBlock}, InterpretStepsFlag, analysisResults);
     analyzeCoupledCalls<const llvm::Value *>(
         calls.first, calls.second, nameMap, analysisResults,
         [&](CoupledCallInfo<const llvm::Value *> match) {
@@ -270,8 +268,7 @@ void analyzeFunctionalCounterExample(
 
     Call<const llvm::Value *> call = interpretFunction(
         *function,
-        FastState(variableValues, getHeapFromModel(vals.arrays, program),
-                  getHeapBackground(vals.arrays, program)),
+        FastState(variableValues, getHeapFromModel(vals.arrays, program)),
         startBlock, 1000, analysisResults);
     std::cout << "analyzing trace\n";
     analyzeUncoupledCall<const llvm::Value *>(
@@ -1059,8 +1056,8 @@ FastVarMap getVarMapFromModel(
     return variableValues;
 }
 
-Heap getHeapFromModel(const ArrayVal &ar) {
-    Heap result;
+std::map<HeapAddress, VarIntVal> getHeapFromModel(const ArrayVal &ar) {
+    std::map<HeapAddress, VarIntVal> result;
     for (auto it : ar.vals) {
         result.insert({Integer(it.first), Integer(it.second)});
     }
@@ -1071,9 +1068,11 @@ Heap getHeapFromModel(const std::map<std::string, ArrayVal> &arrays,
                       Program prog) {
     if (SMTGenerationOpts::getInstance().Heap ==
         llreve::opts::HeapOpt::Disabled) {
-        return {};
+        return {{}, Integer(mpz_class(0))};
     }
-    return getHeapFromModel(arrays.at(heapName(prog)));
+    std::string heap = heapName(prog) + "_old";
+    return {getHeapFromModel(arrays.at(heap)),
+            Integer(arrays.at(heap).background)};
 }
 
 MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays) {
@@ -1081,57 +1080,8 @@ MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays) {
         llreve::opts::HeapOpt::Disabled) {
         return {{}, {}};
     }
-    return {getHeapFromModel(arrays.at("HEAP$1_old")),
-            getHeapFromModel(arrays.at("HEAP$2_old"))};
-}
-
-Integer getHeapBackground(const std::map<std::string, ArrayVal> &arrays,
-                          Program prog) {
-    if (SMTGenerationOpts::getInstance().Heap ==
-        llreve::opts::HeapOpt::Disabled) {
-        return Integer(mpz_class(0));
-    }
-    return Integer(arrays.at(heapName(prog)).background);
-}
-
-MonoPair<Integer> getHeapBackgrounds(std::map<std::string, ArrayVal> arrays) {
-    if (SMTGenerationOpts::getInstance().Heap ==
-        llreve::opts::HeapOpt::Disabled) {
-        return {Integer(mpz_class(0)), Integer(mpz_class(0))};
-    }
-    return {Integer(arrays.at("HEAP$1_old").background),
-            Integer(arrays.at("HEAP$2_old").background)};
-}
-
-Heap randomHeap(const llvm::Function &fun, const FastVarMap &variableValues,
-                int lengthBound, int valLowerBound, int valUpperBound,
-                unsigned int *seedp) {
-    // We place an array with a random length <= lengthBound with random values
-    // >= valLowerBound and <= valUpperBound at each pointer argument
-    Heap heap;
-    for (const auto &arg : fun.args()) {
-        if (arg.getType()->isPointerTy()) {
-            VarIntVal arrayStart = unsafeIntVal(variableValues.at(&arg));
-            unsigned int length =
-                static_cast<unsigned int>(rand_r(seedp) % (lengthBound + 1));
-            for (unsigned int i = 0; i <= length; ++i) {
-                int val =
-                    (rand_r(seedp) % (valUpperBound - valLowerBound + 1)) +
-                    valLowerBound;
-                if (SMTGenerationOpts::getInstance().BitVect) {
-                    heap.insert(
-                        {arrayStart.asPointer() +
-                             Integer(mpz_class(i)).asPointer(),
-                         Integer(makeBoundedInt(HeapElemSizeFlag, val))});
-                } else {
-                    heap.insert({arrayStart.asPointer() +
-                                     Integer(mpz_class(i)).asPointer(),
-                                 Integer(mpz_class(val))});
-                }
-            }
-        }
-    }
-    return heap;
+    return {getHeapFromModel(arrays, Program::First),
+            getHeapFromModel(arrays, Program::Second)};
 }
 
 ModelValues initialModelValues(MonoPair<const llvm::Function *> funs) {

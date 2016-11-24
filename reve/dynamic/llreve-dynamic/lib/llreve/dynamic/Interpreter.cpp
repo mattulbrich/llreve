@@ -80,34 +80,54 @@ const VarIntVal &unsafeIntValRef(const bool & /* unused */) {
 }
 bool unsafeBool(const bool &b) { return b; }
 
+bool isContainedIn(const std::map<HeapAddress, VarIntVal> &small,
+                   const Heap &big) {
+    for (const auto &val : small) {
+        auto it = big.assignedValues.find(val.first);
+        if (it != big.assignedValues.end()) {
+            if (val.second != it->second) {
+                return false;
+            }
+        } else {
+            if (val.second != big.background) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool operator==(const Heap &lhs, const Heap &rhs) {
+    if (lhs.background != rhs.background) {
+        return false;
+    }
+    return isContainedIn(lhs.assignedValues, rhs) &&
+           isContainedIn(rhs.assignedValues, lhs);
+}
+
 MonoPair<FastCall>
 interpretFunctionPair(MonoPair<const Function *> funs,
                       MonoPair<FastVarMap> variables, MonoPair<Heap> heaps,
-                      MonoPair<Integer> heapBackgrounds, uint32_t maxSteps,
+                      uint32_t maxSteps,
                       const AnalysisResultsMap &analysisResults) {
     return makeMonoPair(
-        interpretFunction(*funs.first, FastState(variables.first, heaps.first,
-                                                 heapBackgrounds.first),
+        interpretFunction(*funs.first, FastState(variables.first, heaps.first),
                           maxSteps, analysisResults),
-        interpretFunction(
-            *funs.second,
-            FastState(variables.second, heaps.second, heapBackgrounds.second),
-            maxSteps, analysisResults));
+        interpretFunction(*funs.second,
+                          FastState(variables.second, heaps.second), maxSteps,
+                          analysisResults));
 }
 
 MonoPair<FastCall> interpretFunctionPair(
     MonoPair<const llvm::Function *> funs, MonoPair<FastVarMap> variables,
-    MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds,
-    MonoPair<const llvm::BasicBlock *> startBlocks, uint32_t maxSteps,
-    const AnalysisResultsMap &analysisResults) {
+    MonoPair<Heap> heaps, MonoPair<const llvm::BasicBlock *> startBlocks,
+    uint32_t maxSteps, const AnalysisResultsMap &analysisResults) {
     return makeMonoPair(
-        interpretFunction(*funs.first, FastState(variables.first, heaps.first,
-                                                 heapBackgrounds.first),
+        interpretFunction(*funs.first, FastState(variables.first, heaps.first),
                           startBlocks.first, maxSteps, analysisResults),
-        interpretFunction(
-            *funs.second,
-            FastState(variables.second, heaps.second, heapBackgrounds.second),
-            startBlocks.second, maxSteps, analysisResults));
+        interpretFunction(*funs.second,
+                          FastState(variables.second, heaps.second),
+                          startBlocks.second, maxSteps, analysisResults));
 }
 
 FastCall interpretFunction(const Function &fun, FastState entry,
@@ -179,9 +199,9 @@ interpretBlock(const BasicBlock &block, const BasicBlock *prevBlock,
                     &*argIt, resolveValue(arg, state, arg->getType())));
                 ++argIt;
             }
-            FastCall c = interpretFunction(
-                *fun, FastState(args, state.heap, state.heapBackground),
-                maxSteps - blocksVisited, analysisResults);
+            FastCall c =
+                interpretFunction(*fun, FastState(args, state.heap),
+                                  maxSteps - blocksVisited, analysisResults);
             blocksVisited += c.blocksVisited;
             if (blocksVisited > maxSteps || c.earlyExit) {
                 return BlockUpdate<const llvm::Value *>(
@@ -264,8 +284,8 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
     } else if (const auto gep = dyn_cast<GetElementPtrInst>(instr)) {
         state.variables[gep] = resolveGEP(*gep, state);
     } else if (const auto load = dyn_cast<LoadInst>(instr)) {
-        VarVal ptr =
-            resolveValue(load->getPointerOperand(), state, load->getPointerOperand()->getType());
+        VarVal ptr = resolveValue(load->getPointerOperand(), state,
+                                  load->getPointerOperand()->getType());
         assert(getType(ptr) == VarType::Int);
         // This will only insert 0 if there is not already a different element
         if (SMTGenerationOpts::getInstance().BitVect) {
@@ -273,11 +293,11 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
             llvm::APInt val =
                 makeBoundedInt(load->getType()->getIntegerBitWidth(), 0);
             for (unsigned i = 0; i < bytes; ++i) {
-                auto heapIt = state.heap.insert(std::make_pair(
+                auto heapIt = state.heap.assignedValues.insert(std::make_pair(
                     unsafeIntVal(ptr).asPointer() +
                         Integer(mpz_class(i)).asPointer(),
                     Integer(makeBoundedInt(
-                        8, state.heapBackground.asUnbounded().get_si()))));
+                        8, state.heap.background.asUnbounded().get_si()))));
                 assert(heapIt.first->second.type == IntType::Bounded);
                 assert(heapIt.first->second.bounded.getBitWidth() == 8);
                 val = (val << 8) |
@@ -285,8 +305,8 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
             }
             state.variables[load] = Integer(val);
         } else {
-            auto heapIt = state.heap.insert(std::make_pair(
-                unsafeIntVal(ptr).asPointer(), state.heapBackground));
+            auto heapIt = state.heap.assignedValues.insert(std::make_pair(
+                unsafeIntVal(ptr).asPointer(), state.heap.background));
             state.variables[load] = heapIt.first->second;
         }
     } else if (const auto store = dyn_cast<StoreInst>(instr)) {
@@ -303,20 +323,22 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
             assert(val.type == IntType::Bounded);
             llvm::APInt bval = val.bounded;
             if (bytes == 1) {
-                state.heap[addr] = val;
+                state.heap.assignedValues[addr] = val;
             } else {
                 uint64_t i = 0;
                 for (; bytes >= 0; --bytes) {
                     llvm::APInt el = bval.trunc(8);
                     bval = bval.ashr(8);
-                    state.heap[addr + Integer(llvm::APInt(
-                                          64, static_cast<uint64_t>(bytes)))] =
+                    state.heap
+                        .assignedValues[addr + Integer(llvm::APInt(
+                                                   64, static_cast<uint64_t>(
+                                                           bytes)))] =
                         Integer(el);
                     ++i;
                 }
             }
         } else {
-            state.heap[addr] = val;
+            state.heap.assignedValues[addr] = val;
         }
     } else if (const auto select = dyn_cast<SelectInst>(instr)) {
         VarVal cond = resolveValue(select->getCondition(), state,
@@ -583,13 +605,13 @@ json stateToJSON(State<T> state, function<string(T)> getName) {
         string varName = getName(var.first);
         jsonVariables.insert({varName, toJSON(var.second)});
     }
-    for (const auto &index : state.heap) {
+    for (const auto &index : state.heap.assignedValues) {
         jsonHeap.insert({index.first.get_str(), index.second.get_str()});
     }
     json j;
     j["variables"] = jsonVariables;
     j["heap"] = jsonHeap;
-    j["heapBackground"] = toJSON(state.heapBackground);
+    j["heapBackground"] = toJSON(state.heap.background);
     return j;
 }
 }

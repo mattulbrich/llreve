@@ -28,11 +28,11 @@ std::ostream &Variable<const llvm::Value *>::dump(std::ostream &os) const {
 }
 
 mpz_class getHeapVal(HeapAddress addr, Heap heap) {
-    auto it = heap.find(addr);
-    if (it != heap.end()) {
+    auto it = heap.assignedValues.find(addr);
+    if (it != heap.assignedValues.end()) {
         return it->second.asUnbounded();
     } else {
-        return 0;
+        return heap.background.asUnbounded();
     }
 }
 

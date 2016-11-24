@@ -122,18 +122,23 @@ class VarVal {
 
 bool varValEq(const VarVal &lhs, const VarVal &rhs);
 
-using Heap = std::map<HeapAddress, VarIntVal>;
+struct Heap {
+    std::map<HeapAddress, VarIntVal> assignedValues;
+    Integer background;
+};
+
+bool isContainedIn(const std::map<HeapAddress, VarIntVal> &small,
+                   const Heap &big);
+
+bool operator==(const Heap &lhs, const Heap &rhs);
+
 template <typename T> using VarMap = std::map<T, VarVal>;
 using FastVarMap = VarMap<const llvm::Value *>;
 
 template <typename T> struct State {
     VarMap<T> variables;
-    // If an address is not in the map, it’s value is zero
-    // Note that the values in the map can also be zero
     Heap heap;
-    Integer heapBackground;
-    State(VarMap<T> variables, Heap heap, Integer heapBackground)
-        : variables(variables), heap(heap), heapBackground(heapBackground) {}
+    State(VarMap<T> variables, Heap heap) : variables(variables), heap(heap) {}
     State() = default;
 };
 
@@ -242,13 +247,12 @@ struct TerminatorUpdate {
 MonoPair<FastCall>
 interpretFunctionPair(MonoPair<const llvm::Function *> funs,
                       MonoPair<FastVarMap> variables, MonoPair<Heap> heaps,
-                      MonoPair<Integer> heapBackgrounds, uint32_t maxSteps,
+                      uint32_t maxSteps,
                       const AnalysisResultsMap &analysisResults);
 MonoPair<FastCall> interpretFunctionPair(
     MonoPair<const llvm::Function *> funs, MonoPair<FastVarMap> variables,
-    MonoPair<Heap> heaps, MonoPair<Integer> heapBackgrounds,
-    MonoPair<const llvm::BasicBlock *> startBlocks, uint32_t maxSteps,
-    const AnalysisResultsMap &analysisResults);
+    MonoPair<Heap> heaps, MonoPair<const llvm::BasicBlock *> startBlocks,
+    uint32_t maxSteps, const AnalysisResultsMap &analysisResults);
 auto interpretFunction(const llvm::Function &fun, FastState entry,
                        uint32_t maxSteps,
                        const AnalysisResultsMap &analysisResults) -> FastCall;

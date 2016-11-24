@@ -47,9 +47,6 @@ std::vector<smt::SharedSMTRef> cegarDriver(
     MonoPair<llvm::Module &> modules, AnalysisResultsMap &analysisResults,
     std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
     llreve::opts::FileOptions fileopts);
-Heap randomHeap(const llvm::Function &fun, const FastVarMap &variableValues,
-                int lengthBound, int valLowerBound, int valUpperBound,
-                unsigned int *seedp);
 
 using Equality = MonoPair<std::string>;
 
@@ -186,14 +183,10 @@ FastVarMap getVarMapFromModel(
     std::map<std::string, const llvm::Value *> instructionNameMap,
     std::vector<smt::SortedVar> freeVars,
     std::map<std::string, mpz_class> vals);
-Heap getHeapFromModel(const ArrayVal &ar);
+std::map<HeapAddress, VarIntVal> getHeapFromModel(const ArrayVal &ar);
 Heap getHeapFromModel(const std::map<std::string, ArrayVal> &arrays,
                       Program prog);
 MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays);
-Integer getHeapBackground(const std::map<std::string, ArrayVal> &arrays,
-                          Program prog);
-MonoPair<Integer> getHeapBackgrounds(std::map<std::string, ArrayVal> arrays);
-
 void dumpLoopTransformations(
     std::map<Mark, LoopTransformation> loopTransformations);
 bool applyLoopTransformation(
