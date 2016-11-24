@@ -265,7 +265,7 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
         state.variables[gep] = resolveGEP(*gep, state);
     } else if (const auto load = dyn_cast<LoadInst>(instr)) {
         VarVal ptr =
-            resolveValue(load->getPointerOperand(), state, load->getType());
+            resolveValue(load->getPointerOperand(), state, load->getPointerOperand()->getType());
         assert(getType(ptr) == VarType::Int);
         // This will only insert 0 if there is not already a different element
         if (SMTGenerationOpts::getInstance().BitVect) {
@@ -589,6 +589,7 @@ json stateToJSON(State<T> state, function<string(T)> getName) {
     json j;
     j["variables"] = jsonVariables;
     j["heap"] = jsonHeap;
+    j["heapBackground"] = toJSON(state.heapBackground);
     return j;
 }
 }
