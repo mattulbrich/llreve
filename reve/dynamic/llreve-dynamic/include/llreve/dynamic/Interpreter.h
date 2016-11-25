@@ -106,7 +106,7 @@ void insertOrReplace(llvm::DenseMap<K, V> &map, std::pair<K, V> &&kv) {
 
 namespace llreve {
 namespace dynamic {
-using BlockName = std::string;
+using BlockName = llvm::StringRef;
 using VarName = const llvm::Value *;
 using HeapAddress = Integer;
 

@@ -41,7 +41,7 @@ void zipWith(LoopInfoData<T1> &loop1, LoopInfoData<T2> &loop2,
     f(loop1.none, loop2.none);
 }
 
-using BlockNameMap = std::map<std::string, std::set<Mark>>;
+using BlockNameMap = llvm::StringMap<std::set<Mark>>;
 
 std::vector<smt::SharedSMTRef> cegarDriver(
     MonoPair<llvm::Module &> modules, AnalysisResultsMap &analysisResults,
@@ -307,8 +307,10 @@ void analyzeCoupledCalls(
         // mark or they are at different marks. The latter case can occur when
         // one program is waiting for the other to finish its loops
         auto blockNameIntersection = intersection(
-            nameMaps.first.at(stepsIt1->stepsOnPath.front().blockName),
-            nameMaps.second.at(stepsIt2->stepsOnPath.front().blockName));
+            nameMaps.first.find(stepsIt1->stepsOnPath.front().blockName)
+                ->second,
+            nameMaps.second.find(stepsIt2->stepsOnPath.front().blockName)
+                ->second);
         if (!blockNameIntersection.empty()) {
             if (stepsIt1 != prevStepsIt1 && stepsIt2 != prevStepsIt2) {
                 // We can only start analyzing calls if we already moved away
@@ -355,9 +357,9 @@ void analyzeCoupledCalls(
                 analyzeUncoupledPath(*prevStepIt, nameMap, prog,
                                      analysisResults, functionalCallMatch);
                 const auto blockNameIntersection = intersection(
-                    nameMap.at(prevStepIt->stepsOnPath.front().blockName),
-                    otherNameMap.at(
-                        prevStepItOther->stepsOnPath.front().blockName));
+                    nameMap[prevStepIt->stepsOnPath.front().blockName],
+                    otherNameMap[prevStepItOther->stepsOnPath.front()
+                                     .blockName]);
                 assert(blockNameIntersection.size() == 1);
                 Mark mark = *blockNameIntersection.begin();
                 // Make sure the first program is always the first argument
@@ -419,7 +421,7 @@ void analyzeUncoupledCall(
     const auto returnValue = getReturnValue(call_, analysisResults);
     auto call = splitCallAtMarks(std::move(call_), nameMap);
     for (const auto &step : call.steps) {
-        auto markSet = nameMap.at(step.stepsOnPath.front().blockName);
+        auto markSet = nameMap.find(step.stepsOnPath.front().blockName)->second;
         assert(markSet.size() == 1);
         auto mark = *markSet.begin();
         functionCallMatch(UncoupledCallInfo<T>(
@@ -454,8 +456,10 @@ void analyzeExecution(
         // when
         // one program is waiting for the other to finish its loops
         auto blockNameIntersection = intersection(
-            nameMaps.first.at(stepsIt1->stepsOnPath.front().blockName),
-            nameMaps.second.at(stepsIt2->stepsOnPath.front().blockName));
+            nameMaps.first.find(stepsIt1->stepsOnPath.front().blockName)
+                ->second,
+            nameMaps.second.find(stepsIt2->stepsOnPath.front().blockName)
+                ->second);
         if (!blockNameIntersection.empty()) {
             // We want to match calls on the paths that led us here
             analyzeCallsOnPaths(prevStepsIt1, prevStepsIt2, nameMaps,
@@ -499,9 +503,11 @@ void analyzeExecution(
                 analyzeUncoupledPath(prevStepIt, nameMap, prog, analysisResults,
                                      functionalCallMatch);
                 const auto blockNameIntersection = intersection(
-                    nameMap.at(prevStepIt.stepsOnPath.front().blockName),
-                    otherNameMap.at(
-                        prevStepItOther.stepsOnPath.front().blockName));
+                    nameMap.find(prevStepIt.stepsOnPath.front().blockName)
+                        ->second,
+                    otherNameMap
+                        .find(prevStepItOther.stepsOnPath.front().blockName)
+                        ->second);
                 assert(blockNameIntersection.size() == 1);
                 Mark mark = *blockNameIntersection.begin();
                 // Make sure the first program is always the first argument
