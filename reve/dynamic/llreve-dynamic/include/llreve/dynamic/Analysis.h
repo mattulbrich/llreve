@@ -197,6 +197,8 @@ bool applyLoopTransformation(
 // This represents the states along the way from one mark to the next
 template <typename T> struct PathStep {
     std::vector<BlockStep<T>> stepsOnPath;
+    PathStep(std::vector<BlockStep<T>> &&stepsOnPath)
+        : stepsOnPath(std::move(stepsOnPath)) {}
 };
 
 template <typename T> struct SplitCall {
@@ -207,18 +209,18 @@ template <typename T> struct SplitCall {
 };
 
 template <typename T>
-auto splitCallAtMarks(const Call<T> &call, BlockNameMap nameMap)
+auto splitCallAtMarks(const Call<T> &&call, const BlockNameMap &nameMap)
     -> SplitCall<T> {
     std::vector<PathStep<T>> pathSteps;
     std::vector<BlockStep<T>> blockSteps;
     for (const auto &step : call.steps) {
         if (normalMarkBlock(nameMap, step.blockName)) {
-            pathSteps.push_back({blockSteps});
+            pathSteps.emplace_back(std::move(blockSteps));
             blockSteps.clear();
         }
-        blockSteps.push_back(step);
+        blockSteps.emplace_back(std::move(step));
     }
-    pathSteps.push_back({blockSteps});
+    pathSteps.emplace_back(std::move(blockSteps));
     // We should have at least one entry and one exit node
     assert(pathSteps.size() >= 2);
     return {call.function, call.entryState, call.returnState, pathSteps};
@@ -287,8 +289,8 @@ void analyzeCoupledCalls(
     MonoPair<const llvm::Function *> functions = {call1_.function,
                                                   call2_.function};
     const auto returnValues = getReturnValues(call1_, call2_, analysisResults);
-    const auto call1 = splitCallAtMarks(call1_, nameMaps.first);
-    const auto call2 = splitCallAtMarks(call2_, nameMaps.second);
+    const auto call1 = splitCallAtMarks(std::move(call1_), nameMaps.first);
+    const auto call2 = splitCallAtMarks(std::move(call2_), nameMaps.second);
     auto stepsIt1 = call1.steps.begin();
     auto stepsIt2 = call2.steps.begin();
     auto prevStepsIt1 = stepsIt1;
@@ -406,15 +408,15 @@ void analyzeUncoupledCall(
     const Call<T> &call_, const BlockNameMap &nameMap, Program prog,
     const AnalysisResultsMap &analysisResults,
     std::function<void(UncoupledCallInfo<T>)> functionCallMatch) {
+    const llvm::Function *function = call_.function;
     const auto returnValue = getReturnValue(call_, analysisResults);
-    auto call = splitCallAtMarks(call_, nameMap);
+    auto call = splitCallAtMarks(std::move(call_), nameMap);
     for (const auto &step : call.steps) {
         auto markSet = nameMap.at(step.stepsOnPath.front().blockName);
         assert(markSet.size() == 1);
         auto mark = *markSet.begin();
-        functionCallMatch(UncoupledCallInfo<T>(call_.function,
-                                               &step.stepsOnPath.front(),
-                                               returnValue, mark, prog));
+        functionCallMatch(UncoupledCallInfo<T>(
+            function, &step.stepsOnPath.front(), returnValue, mark, prog));
         analyzeUncoupledPath(step, nameMap, prog, analysisResults,
                              functionCallMatch);
     }
@@ -427,8 +429,9 @@ void analyzeExecution(
     std::function<void(MatchInfo<T>)> iterativeMatch,
     std::function<void(CoupledCallInfo<T>)> relationalCallMatch,
     std::function<void(UncoupledCallInfo<T>)> functionalCallMatch) {
-    const auto call1 = splitCallAtMarks(calls.first, nameMaps.first);
-    const auto call2 = splitCallAtMarks(calls.second, nameMaps.second);
+    const auto call1 = splitCallAtMarks(std::move(calls.first), nameMaps.first);
+    const auto call2 =
+        splitCallAtMarks(std::move(calls.second), nameMaps.second);
     auto stepsIt1 = call1.steps.begin();
     auto stepsIt2 = call2.steps.begin();
     auto prevStepsIt1 = *stepsIt1;
