@@ -135,7 +135,7 @@ Transformed analyzeMainCounterExample(
     MarkPair pathMarks, ModelValues &vals, MonoPair<llvm::Function *> functions,
     DynamicAnalysisResults &dynamicAnalysisResults,
     AnalysisResultsMap &analysisResults,
-    std::map<std::string, const llvm::Value *> &instrNameMap,
+    llvm::StringMap<const llvm::Value *> &instrNameMap,
     const MonoPair<BlockNameMap> &nameMap,
     const std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>>
         &patterns,
@@ -180,17 +180,17 @@ void dumpHeapPatterns(const HeapPatternCandidatesMap &heapPatternsMap);
 
 FastVarMap getVarMap(const llvm::Function *fun, std::vector<mpz_class> vals);
 
-std::map<std::string, const llvm::Value *>
+llvm::StringMap<const llvm::Value *>
 instructionNameMap(const llvm::Function *fun);
-std::map<std::string, const llvm::Value *>
+llvm::StringMap<const llvm::Value *>
 instructionNameMap(MonoPair<const llvm::Function *> funs);
 
 MonoPair<FastVarMap> getVarMapFromModel(
-    std::map<std::string, const llvm::Value *> instructionNameMap,
+    const llvm::StringMap<const llvm::Value *> &instructionNameMap,
     MonoPair<std::vector<smt::SortedVar>> freeVars,
     std::map<std::string, mpz_class> vals);
 FastVarMap getVarMapFromModel(
-    std::map<std::string, const llvm::Value *> instructionNameMap,
+    const llvm::StringMap<const llvm::Value *> &instructionNameMap,
     std::vector<smt::SortedVar> freeVars,
     std::map<std::string, mpz_class> vals);
 llvm::SmallDenseMap<HeapAddress, Integer> getHeapFromModel(const ArrayVal &ar);

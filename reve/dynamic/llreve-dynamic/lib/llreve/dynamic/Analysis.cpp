@@ -96,7 +96,7 @@ Transformed analyzeMainCounterExample(
     MarkPair pathMarks, ModelValues &vals, MonoPair<llvm::Function *> functions,
     DynamicAnalysisResults &dynamicAnalysisResults,
     AnalysisResultsMap &analysisResults,
-    std::map<std::string, const llvm::Value *> &instrNameMap,
+    llvm::StringMap<const llvm::Value *> &instrNameMap,
     const MonoPair<BlockNameMap> &nameMap,
     const vector<shared_ptr<HeapPattern<VariablePlaceholder>>> &patterns,
     unsigned degree) {
@@ -1013,9 +1013,9 @@ FastVarMap getVarMap(const llvm::Function *fun, std::vector<mpz_class> vals) {
     return variableValues;
 }
 
-std::map<std::string, const llvm::Value *>
+llvm::StringMap<const llvm::Value *>
 instructionNameMap(const llvm::Function *fun) {
-    std::map<std::string, const llvm::Value *> nameMap;
+    llvm::StringMap<const llvm::Value *> nameMap;
     for (const auto &arg : fun->args()) {
         nameMap.insert({arg.getName(), &arg});
     }
@@ -1029,18 +1029,20 @@ instructionNameMap(const llvm::Function *fun) {
     return nameMap;
 }
 
-std::map<std::string, const llvm::Value *>
+llvm::StringMap<const llvm::Value *>
 instructionNameMap(MonoPair<const llvm::Function *> funs) {
-    std::map<std::string, const llvm::Value *> nameMap =
+    llvm::StringMap<const llvm::Value *> nameMap =
         instructionNameMap(funs.first);
-    std::map<std::string, const llvm::Value *> nameMap2 =
+    llvm::StringMap<const llvm::Value *> nameMap2 =
         instructionNameMap(funs.second);
-    nameMap.insert(nameMap2.begin(), nameMap2.end());
+    for (auto &it : nameMap2) {
+        nameMap[it.getKey()] = it.getValue();
+    }
     return nameMap;
 }
 
 MonoPair<FastVarMap> getVarMapFromModel(
-    std::map<std::string, const llvm::Value *> instructionNameMap,
+    const llvm::StringMap<const llvm::Value *> &instructionNameMap,
     MonoPair<std::vector<smt::SortedVar>> freeVars,
     std::map<std::string, mpz_class> vals) {
     return {getVarMapFromModel(instructionNameMap, freeVars.first, vals),
@@ -1048,13 +1050,13 @@ MonoPair<FastVarMap> getVarMapFromModel(
 }
 
 FastVarMap getVarMapFromModel(
-    std::map<std::string, const llvm::Value *> instructionNameMap,
+    const llvm::StringMap<const llvm::Value *> &instructionNameMap,
     std::vector<smt::SortedVar> freeVars,
     std::map<std::string, mpz_class> vals) {
     FastVarMap variableValues;
     for (const auto &var : freeVars) {
         mpz_class val = vals.at(var.name + "_old");
-        const llvm::Value *instr = instructionNameMap.at(var.name);
+        const llvm::Value *instr = instructionNameMap.find(var.name)->second;
         variableValues.insert({instr, Integer(val)});
     }
     return variableValues;
