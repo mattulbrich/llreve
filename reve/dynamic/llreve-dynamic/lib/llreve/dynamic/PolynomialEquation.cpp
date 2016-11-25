@@ -58,7 +58,7 @@ static VarMap<string> getStringVarMap(const FastVarMap &variables1,
 
 void populateEquationsMap(
     IterativeInvariantMap<PolynomialEquations> &polynomialEquations,
-    vector<smt::SortedVar> primitiveVariables,
+    const vector<smt::SortedVar> &primitiveVariables,
     MatchInfo<const llvm::Value *> match, ExitIndex exitIndex, size_t degree) {
     VarMap<string> variables =
         getStringVarMap(match.steps.first->state.variables,
@@ -87,7 +87,7 @@ void populateEquationsMap(
 void populateEquationsMap(
     RelationalFunctionInvariantMap<
         LoopInfoData<FunctionInvariant<Matrix<mpq_class>>>> &equationsMap,
-    vector<SortedVar> primitiveVariables,
+    const vector<SortedVar> &primitiveVariables,
     CoupledCallInfo<const llvm::Value *> match, size_t degree) {
     auto &polynomialEquations = equationsMap[match.functions];
     VarMap<string> variables =
@@ -125,7 +125,7 @@ void populateEquationsMap(
 }
 
 void populateEquationsMap(FunctionInvariantMap<Matrix<mpq_class>> &equationsMap,
-                          vector<SortedVar> primitiveVariables,
+                          const vector<SortedVar> &primitiveVariables,
                           UncoupledCallInfo<const llvm::Value *> match,
                           size_t degree) {
     auto &polynomialEquations = equationsMap[match.function];
