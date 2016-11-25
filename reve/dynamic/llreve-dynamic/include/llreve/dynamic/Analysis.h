@@ -214,10 +214,12 @@ auto splitCallAtMarks(const Call<T> &&call, const BlockNameMap &nameMap)
     -> SplitCall<T> {
     std::vector<PathStep<T>> pathSteps;
     std::vector<BlockStep<T>> blockSteps;
+    blockSteps.reserve(2);
     for (const auto &step : call.steps) {
         if (normalMarkBlock(nameMap, step.blockName)) {
             pathSteps.emplace_back(std::move(blockSteps));
             blockSteps.clear();
+            blockSteps.reserve(2);
         }
         blockSteps.emplace_back(std::move(step));
     }
