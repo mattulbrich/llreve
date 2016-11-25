@@ -74,8 +74,10 @@ template <typename T>
 VarIntVal getReturnValue(const Call<T> &call,
                          const AnalysisResultsMap &analysisResults) {
     // Non int return values should not exist so this is safe
-    return unsafeIntVal(call.returnState.variables.at(
-        analysisResults.at(call.function).returnInstruction));
+    return unsafeIntVal(
+        call.returnState.variables
+            .find(analysisResults.at(call.function).returnInstruction)
+            ->second);
 }
 template <typename T>
 MonoPair<VarIntVal> getReturnValues(const Call<T> &call1, const Call<T> &call2,

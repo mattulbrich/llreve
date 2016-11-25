@@ -17,7 +17,7 @@ mpz_class
 Variable<const llvm::Value *>::eval(const FastVarMap &variables,
                                     const MonoPair<const Heap &> & /* unused */,
                                     const HoleMap & /* unused */) const {
-    return unsafeIntValRef(variables.at(varName)).asUnbounded();
+    return unsafeIntValRef(variables.find(varName)->second).asUnbounded();
 }
 
 template <>

@@ -51,7 +51,6 @@ using namespace llreve::opts;
 
 namespace llreve {
 namespace dynamic {
-VarVal::VarValConcept::~VarValConcept() = default;
 
 unsigned HeapElemSizeFlag;
 static llreve::cl::opt<unsigned, true> // The parser
@@ -208,9 +207,11 @@ interpretBlock(const BasicBlock &block, const BasicBlock *prevBlock,
                     blocksVisited);
             }
             state.heap = c.returnState.heap;
-            state.variables[call] =
-                c.returnState
-                    .variables[analysisResults.at(fun).returnInstruction];
+            insertOrReplace(
+                state.variables,
+                {call, c.returnState.variables
+                           .find(analysisResults.at(fun).returnInstruction)
+                           ->second});
             calls.push_back(std::move(c));
         } else {
             interpretInstruction(&*instrIterator, state);
@@ -235,53 +236,65 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
         if (cast->getSrcTy()->isIntegerTy(1) &&
             cast->getDestTy()->getIntegerBitWidth() > 1) {
             // Convert a bool to an integer
-            VarVal operand = state.variables.at(cast->getOperand(0));
+            VarVal operand = state.variables.find(cast->getOperand(0))->second;
             assert(getType(operand) == VarType::Bool);
             if (SMTGenerationOpts::getInstance().BitVect) {
-                state.variables[cast] = Integer(
-                    makeBoundedInt(cast->getType()->getIntegerBitWidth(),
-                                   unsafeBool(operand) ? 1 : 0));
+                insertOrReplace(
+                    state.variables,
+                    {cast, Integer(makeBoundedInt(
+                               cast->getType()->getIntegerBitWidth(),
+                               unsafeBool(operand) ? 1 : 0))});
             } else {
-                state.variables[cast] =
-                    Integer(mpz_class(unsafeBool(operand) ? 1 : 0));
+                insertOrReplace(
+                    state.variables,
+                    {cast, Integer(mpz_class(unsafeBool(operand) ? 1 : 0))});
             }
         } else {
             if (const auto zext = dyn_cast<llvm::ZExtInst>(instr)) {
-                state.variables[zext] =
-                    unsafeIntVal(resolveValue(zext->getOperand(0), state,
-                                              zext->getType()))
-                        .zext(zext->getType()->getIntegerBitWidth());
+                insertOrReplace(
+                    state.variables,
+                    {zext, unsafeIntVal(resolveValue(zext->getOperand(0), state,
+                                                     zext->getType()))
+                               .zext(zext->getType()->getIntegerBitWidth())});
             } else if (const auto sext = dyn_cast<llvm::SExtInst>(instr)) {
-                state.variables[sext] =
-                    unsafeIntVal(resolveValue(sext->getOperand(0), state,
-                                              sext->getType()))
-                        .sext(sext->getType()->getIntegerBitWidth());
+                insertOrReplace(
+                    state.variables,
+                    {sext, unsafeIntVal(resolveValue(sext->getOperand(0), state,
+                                                     sext->getType()))
+                               .sext(sext->getType()->getIntegerBitWidth())});
             } else if (const auto trunc = dyn_cast<llvm::TruncInst>(instr)) {
-                state.variables[trunc] =
-                    unsafeIntVal(resolveValue(trunc->getOperand(0), state,
-                                              trunc->getType()))
-                        .zextOrTrunc(trunc->getType()->getIntegerBitWidth());
+                insertOrReplace(
+                    state.variables,
+                    {trunc,
+                     unsafeIntVal(resolveValue(trunc->getOperand(0), state,
+                                               trunc->getType()))
+                         .zextOrTrunc(trunc->getType()->getIntegerBitWidth())});
             } else if (const auto ptrToInt =
                            dyn_cast<llvm::PtrToIntInst>(instr)) {
-                state.variables[ptrToInt] =
-                    unsafeIntVal(
-                        resolveValue(ptrToInt->getPointerOperand(), state,
-                                     ptrToInt->getPointerOperand()->getType()))
-                        .zextOrTrunc(ptrToInt->getType()->getIntegerBitWidth());
+                insertOrReplace(
+                    state.variables,
+                    {ptrToInt,
+                     unsafeIntVal(
+                         resolveValue(ptrToInt->getPointerOperand(), state,
+                                      ptrToInt->getPointerOperand()->getType()))
+                         .zextOrTrunc(
+                             ptrToInt->getType()->getIntegerBitWidth())});
             } else if (const auto intToPtr =
                            dyn_cast<llvm::IntToPtrInst>(instr)) {
-                state.variables[ptrToInt] =
-                    unsafeIntVal(
-                        resolveValue(intToPtr->getOperand(0), state,
-                                     intToPtr->getOperand(0)->getType()))
-                        .zextOrTrunc(64);
+                insertOrReplace(
+                    state.variables,
+                    {ptrToInt,
+                     unsafeIntVal(
+                         resolveValue(intToPtr->getOperand(0), state,
+                                      intToPtr->getOperand(0)->getType()))
+                         .zextOrTrunc(64)});
             } else {
                 logErrorData("Unsupported instruction:\n", *instr);
                 exit(1);
             }
         }
     } else if (const auto gep = dyn_cast<GetElementPtrInst>(instr)) {
-        state.variables[gep] = resolveGEP(*gep, state);
+        insertOrReplace(state.variables, {gep, resolveGEP(*gep, state)});
     } else if (const auto load = dyn_cast<LoadInst>(instr)) {
         VarVal ptr = resolveValue(load->getPointerOperand(), state,
                                   load->getPointerOperand()->getType());
@@ -302,11 +315,11 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
                 val = (val << 8) |
                       (heapIt.first->second.bounded).sextOrSelf(bytes * 8);
             }
-            state.variables[load] = Integer(val);
+            insertOrReplace(state.variables, {load, Integer(val)});
         } else {
             auto heapIt = state.heap.assignedValues.insert(std::make_pair(
                 unsafeIntVal(ptr).asPointer(), state.heap.background));
-            state.variables[load] = heapIt.first->second;
+            insertOrReplace(state.variables, {load, heapIt.first->second});
         }
     } else if (const auto store = dyn_cast<StoreInst>(instr)) {
         VarVal ptr = resolveValue(store->getPointerOperand(), state,
@@ -347,11 +360,11 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
         if (condVal) {
             VarVal var =
                 resolveValue(select->getTrueValue(), state, select->getType());
-            state.variables[select] = var;
+            insertOrReplace(state.variables, {select, var});
         } else {
             VarVal var =
                 resolveValue(select->getFalseValue(), state, select->getType());
-            state.variables[select] = var;
+            insertOrReplace(state.variables, {select, var});
         }
 
     } else {
@@ -363,18 +376,19 @@ void interpretPHI(const PHINode &instr, FastState &state,
                   const BasicBlock *prevBlock) {
     const Value *val = instr.getIncomingValueForBlock(prevBlock);
     VarVal var = resolveValue(val, state, val->getType());
-    state.variables[&instr] = var;
+    insertOrReplace(state.variables, {&instr, var});
 }
 
 TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
                                      FastState &state) {
     if (const auto retInst = dyn_cast<ReturnInst>(instr)) {
         if (retInst->getReturnValue() == nullptr) {
-            state.variables[retInst] = 0;
+            insertOrReplace(state.variables, {retInst, 0});
         } else {
-            state.variables[retInst] =
-                resolveValue(retInst->getReturnValue(), state,
-                             retInst->getReturnValue()->getType());
+            insertOrReplace(
+                state.variables,
+                {retInst, resolveValue(retInst->getReturnValue(), state,
+                                       retInst->getReturnValue()->getType())});
         }
         return TerminatorUpdate(nullptr);
     } else if (const auto branchInst = dyn_cast<BranchInst>(instr)) {
@@ -420,7 +434,7 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
 VarVal resolveValue(const Value *val, const FastState &state,
                     const llvm::Type * /* unused */) {
     if (isa<Instruction>(val) || isa<Argument>(val)) {
-        return state.variables.at(val);
+        return state.variables.find(val)->second;
     } else if (const auto constInt = dyn_cast<ConstantInt>(val)) {
         if (constInt->getBitWidth() == 1) {
             return constInt->isOne();
@@ -490,7 +504,7 @@ void interpretIntPredicate(const ICmpInst *instr, CmpInst::Predicate pred,
     default:
         logErrorData("Unsupported predicate:\n", *instr);
     }
-    state.variables[instr] = predVal;
+    insertOrReplace(state.variables, {instr, predVal});
 }
 
 void interpretBinOp(const BinaryOperator *instr, FastState &state) {
@@ -527,7 +541,7 @@ void interpretBoolBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
         logErrorData("Unsupported binop:\n", *instr);
         llvm::errs() << "\n";
     }
-    state.variables[instr] = result;
+    insertOrReplace(state.variables, {instr, result});
 }
 
 void interpretIntBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
@@ -578,7 +592,7 @@ void interpretIntBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
         logErrorData("Unsupported binop:\n", *instr);
         llvm::errs() << "\n";
     }
-    state.variables[instr] = result;
+    insertOrReplace(state.variables, {instr, result});
 }
 
 bool varValEq(const VarVal &lhs, const VarVal &rhs) {

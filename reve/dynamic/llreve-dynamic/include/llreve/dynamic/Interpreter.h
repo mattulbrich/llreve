@@ -18,6 +18,8 @@
 #include <map>
 #include <vector>
 
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instructions.h"
@@ -26,6 +28,32 @@
 #include "json.hpp"
 
 #include "Integer.h"
+
+namespace llvm {
+template <> struct llvm::DenseMapInfo<std::string> {
+    static inline std::string getEmptyKey() { return std::string(); }
+    static inline StringRef getTombstoneKey() { return std::string(); }
+    static unsigned getHashValue(std::string Val) {
+        return (unsigned)(hash_value(Val));
+    }
+    static bool isEqual(std::string LHS, std::string RHS) { return LHS == RHS; }
+};
+
+template <typename K, typename V>
+void insertOrReplace(llvm::DenseMap<K, V> &map, const std::pair<K, V> &kv) {
+    auto ret = map.insert(kv);
+    if (!ret.second) {
+        ret.first->second = kv.second;
+    }
+}
+template <typename K, typename V>
+void insertOrReplace(llvm::DenseMap<K, V> &map, std::pair<K, V> &&kv) {
+    auto ret = map.insert(kv);
+    if (!ret.second) {
+        ret.first->second = kv.second;
+    }
+}
+}
 
 namespace llreve {
 namespace dynamic {
@@ -54,15 +82,7 @@ class VarVal {
   public:
     template <typename T> VarVal(T x) : self_(new model<T>(std::move(x))) {}
     /* This is only here to make it possible to use [] on maps */
-    VarVal() : self_(nullptr) {}
-
-    VarVal(const VarVal &x) {
-        if (x.self_) {
-            self_ = std::unique_ptr<const VarValConcept>(x.self_->copy_());
-        } else {
-            self_ = nullptr;
-        }
-    }
+    VarVal(const VarVal &x) : self_(x.self_->copy_()) {}
     VarVal(VarVal &&) noexcept = default;
 
     VarVal &operator=(const VarVal &x) {
@@ -94,9 +114,7 @@ class VarVal {
     struct VarValConcept {
         // The virtual destructor exists purely to have something which can be
         // implemented in a source file to pin the vtable
-        virtual ~VarValConcept();
-        VarValConcept() = default;
-        VarValConcept(const VarValConcept &x) = default;
+        virtual ~VarValConcept() = default;
         virtual VarValConcept *copy_() const = 0;
         virtual VarType getType_() const = 0;
         virtual nlohmann::json toJSON_() const = 0;
@@ -106,7 +124,7 @@ class VarVal {
     };
     template <typename T> struct model : VarValConcept {
         model(T x) : data_(std::move(x)) {}
-        VarValConcept *copy_() const override { return new model(*this); }
+        VarValConcept *copy_() const override { return new model<T>(*this); }
         VarType getType_() const override { return getType(data_); }
         nlohmann::json toJSON_() const override { return toJSON(data_); }
         VarIntVal unsafeIntVal_() const override { return unsafeIntVal(data_); }
@@ -132,7 +150,7 @@ bool isContainedIn(const std::map<HeapAddress, VarIntVal> &small,
 
 bool operator==(const Heap &lhs, const Heap &rhs);
 
-template <typename T> using VarMap = std::map<T, VarVal>;
+template <typename T> using VarMap = llvm::DenseMap<T, VarVal>;
 using FastVarMap = VarMap<const llvm::Value *>;
 
 template <typename T> struct State {
