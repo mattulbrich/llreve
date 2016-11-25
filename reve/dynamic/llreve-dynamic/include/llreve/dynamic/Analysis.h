@@ -145,7 +145,8 @@ void analyzeFunctionalCounterExample(
 
 void populateHeapPatterns(
     HeapPatternCandidatesMap &heapPatternCandidates,
-    std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
+    const std::vector<std::shared_ptr<HeapPattern<VariablePlaceholder>>>
+        &patterns,
     const std::vector<smt::SortedVar> &primitiveVariables,
     MatchInfo<const llvm::Value *> match, ExitIndex exitIndex);
 void populateHeapPatterns(

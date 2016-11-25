@@ -15,7 +15,7 @@ namespace dynamic {
 template <>
 mpz_class
 Variable<const llvm::Value *>::eval(const FastVarMap &variables,
-                                    const MonoPair<Heap> & /* unused */,
+                                    const MonoPair<const Heap &> & /* unused */,
                                     const HoleMap & /* unused */) const {
     return unsafeIntValRef(variables.at(varName)).asUnbounded();
 }

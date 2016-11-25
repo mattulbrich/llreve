@@ -702,7 +702,8 @@ ExitIndex getExitIndex(const MatchInfo<const llvm::Value *> match) {
 }
 
 static void filterPatterns(HeapPatternCandidates &patterns,
-                           const FastVarMap &variables, MonoPair<Heap> heaps) {
+                           const FastVarMap &variables,
+                           MonoPair<const Heap &> heaps) {
     auto listIt = patterns.begin();
     while (listIt != patterns.end()) {
         if (!(*listIt)->matches(variables, heaps)) {
@@ -715,15 +716,15 @@ static void filterPatterns(HeapPatternCandidates &patterns,
 
 void populateHeapPatterns(
     HeapPatternCandidatesMap &heapPatternCandidates,
-    vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
+    const vector<shared_ptr<HeapPattern<VariablePlaceholder>>> &patterns,
     const vector<SortedVar> &primitiveVariables,
     MatchInfo<const llvm::Value *> match, ExitIndex exitIndex) {
     VarMap<const llvm::Value *> variables(match.steps.first->state.variables);
     variables.insert(match.steps.second->state.variables.begin(),
                      match.steps.second->state.variables.end());
     // TODO don’t copy heaps
-    MonoPair<Heap> heaps = makeMonoPair(match.steps.first->state.heap,
-                                        match.steps.second->state.heap);
+    MonoPair<const Heap &> heaps(match.steps.first->state.heap,
+                                 match.steps.second->state.heap);
     bool newCandidates =
         heapPatternCandidates[match.mark].count(exitIndex) == 0 ||
         !getDataForLoopInfo(heapPatternCandidates.at(match.mark).at(exitIndex),
