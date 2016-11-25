@@ -14,7 +14,7 @@
 
 using namespace llreve::opts;
 
-Integer &Integer::operator=(Integer other) {
+Integer &Integer::operator=(const Integer &other) {
     switch (type) {
     case IntType::Unbounded:
         unbounded.~mpz_class();
@@ -30,6 +30,27 @@ Integer &Integer::operator=(Integer other) {
         break;
     case IntType::Bounded:
         new (&bounded) llvm::APInt(other.bounded);
+        break;
+    }
+    return *this;
+}
+
+Integer &Integer::operator=(Integer &&other) {
+    switch (type) {
+    case IntType::Unbounded:
+        unbounded.~mpz_class();
+        break;
+    case IntType::Bounded:
+        bounded.~APInt();
+        break;
+    }
+    type = other.type;
+    switch (type) {
+    case IntType::Unbounded:
+        new (&unbounded) mpz_class(std::move(other.unbounded));
+        break;
+    case IntType::Bounded:
+        new (&bounded) llvm::APInt(std::move(other.bounded));
         break;
     }
     return *this;

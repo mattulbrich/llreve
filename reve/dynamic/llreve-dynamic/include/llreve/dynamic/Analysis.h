@@ -71,17 +71,16 @@ struct LoopTransformation {
 };
 
 template <typename T>
-VarIntVal getReturnValue(const Call<T> &call,
-                         const AnalysisResultsMap &analysisResults) {
+Integer getReturnValue(const Call<T> &call,
+                       const AnalysisResultsMap &analysisResults) {
     // Non int return values should not exist so this is safe
-    return unsafeIntVal(
-        call.returnState.variables
-            .find(analysisResults.at(call.function).returnInstruction)
-            ->second);
+    return call.returnState.variables
+        .find(analysisResults.at(call.function).returnInstruction)
+        ->second;
 }
 template <typename T>
-MonoPair<VarIntVal> getReturnValues(const Call<T> &call1, const Call<T> &call2,
-                                    const AnalysisResultsMap &analysisResults) {
+MonoPair<Integer> getReturnValues(const Call<T> &call1, const Call<T> &call2,
+                                  const AnalysisResultsMap &analysisResults) {
     return {getReturnValue(call1, analysisResults),
             getReturnValue(call2, analysisResults)};
 }
@@ -186,8 +185,7 @@ FastVarMap getVarMapFromModel(
     std::map<std::string, const llvm::Value *> instructionNameMap,
     std::vector<smt::SortedVar> freeVars,
     std::map<std::string, mpz_class> vals);
-llvm::SmallDenseMap<HeapAddress, VarIntVal>
-getHeapFromModel(const ArrayVal &ar);
+llvm::SmallDenseMap<HeapAddress, Integer> getHeapFromModel(const ArrayVal &ar);
 Heap getHeapFromModel(const std::map<std::string, ArrayVal> &arrays,
                       Program prog);
 MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays);

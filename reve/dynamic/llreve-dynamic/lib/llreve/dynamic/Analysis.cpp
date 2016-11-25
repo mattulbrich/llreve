@@ -690,12 +690,12 @@ map<Mark, LoopTransformation> findLoopTransformations(LoopCountMap &map) {
 ExitIndex getExitIndex(const MatchInfo<const llvm::Value *> match) {
     for (auto var : match.steps.first->state.variables) {
         if (var.first->getName() == "exitIndex$1_" + match.mark.toString()) {
-            return unsafeIntVal(var.second).asUnbounded();
+            return var.second.asUnbounded();
         }
     }
     for (auto var : match.steps.second->state.variables) {
         if (var.first->getName() == "exitIndex$1_" + match.mark.toString()) {
-            return unsafeIntVal(var.second).asUnbounded();
+            return var.second.asUnbounded();
         }
     }
     return 0;
@@ -1058,9 +1058,8 @@ FastVarMap getVarMapFromModel(
     return variableValues;
 }
 
-llvm::SmallDenseMap<HeapAddress, VarIntVal>
-getHeapFromModel(const ArrayVal &ar) {
-    llvm::SmallDenseMap<HeapAddress, VarIntVal> result;
+llvm::SmallDenseMap<HeapAddress, Integer> getHeapFromModel(const ArrayVal &ar) {
+    llvm::SmallDenseMap<HeapAddress, Integer> result;
     for (auto it : ar.vals) {
         result.insert({Integer(it.first), Integer(it.second)});
     }
@@ -1105,7 +1104,7 @@ ModelValues initialModelValues(MonoPair<const llvm::Function *> funs) {
 static void dumpVarMap(const FastVarMap &variableValues) {
     for (auto it : variableValues) {
         llvm::errs() << it.first->getName() << " "
-                     << unsafeIntVal(it.second).asUnbounded().get_str() << "\n";
+                     << it.second.asUnbounded().get_str() << "\n";
     }
 }
 

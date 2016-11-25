@@ -58,28 +58,23 @@ static llreve::cl::opt<unsigned, true> // The parser
                  llreve::cl::desc("Size for a random heap element"),
                  llreve::cl::location(HeapElemSizeFlag), llreve::cl::init(8));
 
-VarType getType(const VarIntVal & /* unused */) { return VarType::Int; }
-json toJSON(const VarIntVal &v) { return v.get_str(); }
-VarIntVal unsafeIntVal(const VarIntVal &v) { return v; }
-const VarIntVal &unsafeIntValRef(const VarIntVal &v) { return v; }
-bool unsafeBool(const VarIntVal & /* unused */) {
-    logError("Called unsafeBool on an int\n");
-    exit(1);
+json toJSON(const Integer &v) { return v.get_str(); }
+bool unsafeBool(const Integer &val) {
+    switch (val.type) {
+    case IntType::Unbounded:
+        logError("Called unsafeBool on an unbounded int\n");
+        exit(1);
+    case IntType::Bounded:
+        if (val.bounded.getBitWidth() == 1) {
+            return val.bounded.getBoolValue();
+        } else {
+            logError("Called unsafeBool on a bounded int of width > 1\n");
+            exit(1);
+        }
+    }
 }
 
-VarType getType(const bool & /* unused */) { return VarType::Bool; }
-json toJSON(const bool &b) { return json(b); }
-VarIntVal unsafeIntVal(const bool & /* unused */) {
-    logError("Called unsafeIntVal on a bool\n");
-    exit(1);
-}
-const VarIntVal &unsafeIntValRef(const bool & /* unused */) {
-    logError("Called unsafeIntVal on a bool\n");
-    exit(1);
-}
-bool unsafeBool(const bool &b) { return b; }
-
-bool isContainedIn(const llvm::SmallDenseMap<HeapAddress, VarIntVal> &small,
+bool isContainedIn(const llvm::SmallDenseMap<HeapAddress, Integer> &small,
                    const Heap &big) {
     for (const auto &val : small) {
         auto it = big.assignedValues.find(val.first);
@@ -236,8 +231,7 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
         if (cast->getSrcTy()->isIntegerTy(1) &&
             cast->getDestTy()->getIntegerBitWidth() > 1) {
             // Convert a bool to an integer
-            VarVal operand = state.variables.find(cast->getOperand(0))->second;
-            assert(getType(operand) == VarType::Bool);
+            Integer operand = state.variables.find(cast->getOperand(0))->second;
             if (SMTGenerationOpts::getInstance().BitVect) {
                 insertOrReplace(
                     state.variables,
@@ -253,41 +247,37 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
             if (const auto zext = dyn_cast<llvm::ZExtInst>(instr)) {
                 insertOrReplace(
                     state.variables,
-                    {zext, unsafeIntVal(resolveValue(zext->getOperand(0), state,
-                                                     zext->getType()))
-                               .zext(zext->getType()->getIntegerBitWidth())});
+                    {zext,
+                     resolveValue(zext->getOperand(0), state, zext->getType())
+                         .zext(zext->getType()->getIntegerBitWidth())});
             } else if (const auto sext = dyn_cast<llvm::SExtInst>(instr)) {
                 insertOrReplace(
                     state.variables,
-                    {sext, unsafeIntVal(resolveValue(sext->getOperand(0), state,
-                                                     sext->getType()))
-                               .sext(sext->getType()->getIntegerBitWidth())});
+                    {sext,
+                     resolveValue(sext->getOperand(0), state, sext->getType())
+                         .sext(sext->getType()->getIntegerBitWidth())});
             } else if (const auto trunc = dyn_cast<llvm::TruncInst>(instr)) {
                 insertOrReplace(
                     state.variables,
                     {trunc,
-                     unsafeIntVal(resolveValue(trunc->getOperand(0), state,
-                                               trunc->getType()))
+                     resolveValue(trunc->getOperand(0), state, trunc->getType())
                          .zextOrTrunc(trunc->getType()->getIntegerBitWidth())});
             } else if (const auto ptrToInt =
                            dyn_cast<llvm::PtrToIntInst>(instr)) {
                 insertOrReplace(
                     state.variables,
                     {ptrToInt,
-                     unsafeIntVal(
-                         resolveValue(ptrToInt->getPointerOperand(), state,
-                                      ptrToInt->getPointerOperand()->getType()))
+                     resolveValue(ptrToInt->getPointerOperand(), state,
+                                  ptrToInt->getPointerOperand()->getType())
                          .zextOrTrunc(
                              ptrToInt->getType()->getIntegerBitWidth())});
             } else if (const auto intToPtr =
                            dyn_cast<llvm::IntToPtrInst>(instr)) {
                 insertOrReplace(
                     state.variables,
-                    {ptrToInt,
-                     unsafeIntVal(
-                         resolveValue(intToPtr->getOperand(0), state,
-                                      intToPtr->getOperand(0)->getType()))
-                         .zextOrTrunc(64)});
+                    {ptrToInt, resolveValue(intToPtr->getOperand(0), state,
+                                            intToPtr->getOperand(0)->getType())
+                                   .zextOrTrunc(64)});
             } else {
                 logErrorData("Unsupported instruction:\n", *instr);
                 exit(1);
@@ -296,9 +286,8 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
     } else if (const auto gep = dyn_cast<GetElementPtrInst>(instr)) {
         insertOrReplace(state.variables, {gep, resolveGEP(*gep, state)});
     } else if (const auto load = dyn_cast<LoadInst>(instr)) {
-        VarVal ptr = resolveValue(load->getPointerOperand(), state,
-                                  load->getPointerOperand()->getType());
-        assert(getType(ptr) == VarType::Int);
+        Integer ptr = resolveValue(load->getPointerOperand(), state,
+                                   load->getPointerOperand()->getType());
         // This will only insert 0 if there is not already a different element
         if (SMTGenerationOpts::getInstance().BitVect) {
             unsigned bytes = load->getType()->getIntegerBitWidth() / 8;
@@ -306,8 +295,7 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
                 makeBoundedInt(load->getType()->getIntegerBitWidth(), 0);
             for (unsigned i = 0; i < bytes; ++i) {
                 auto heapIt = state.heap.assignedValues.insert(std::make_pair(
-                    unsafeIntVal(ptr).asPointer() +
-                        Integer(mpz_class(i)).asPointer(),
+                    ptr.asPointer() + Integer(mpz_class(i)).asPointer(),
                     Integer(makeBoundedInt(
                         8, state.heap.background.asUnbounded().get_si()))));
                 assert(heapIt.first->second.type == IntType::Bounded);
@@ -317,18 +305,15 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
             }
             insertOrReplace(state.variables, {load, Integer(val)});
         } else {
-            auto heapIt = state.heap.assignedValues.insert(std::make_pair(
-                unsafeIntVal(ptr).asPointer(), state.heap.background));
+            auto heapIt = state.heap.assignedValues.insert(
+                std::make_pair(ptr.asPointer(), state.heap.background));
             insertOrReplace(state.variables, {load, heapIt.first->second});
         }
     } else if (const auto store = dyn_cast<StoreInst>(instr)) {
-        VarVal ptr = resolveValue(store->getPointerOperand(), state,
-                                  store->getPointerOperand()->getType());
-        assert(getType(ptr) == VarType::Int);
-        HeapAddress addr = unsafeIntVal(ptr);
-        VarIntVal val =
-            unsafeIntVal(resolveValue(store->getValueOperand(), state,
-                                      store->getValueOperand()->getType()));
+        HeapAddress addr = resolveValue(store->getPointerOperand(), state,
+                                        store->getPointerOperand()->getType());
+        Integer val = resolveValue(store->getValueOperand(), state,
+                                   store->getValueOperand()->getType());
         if (SMTGenerationOpts::getInstance().BitVect) {
             int bytes =
                 store->getValueOperand()->getType()->getIntegerBitWidth() / 8;
@@ -353,16 +338,15 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
             state.heap.assignedValues[addr] = val;
         }
     } else if (const auto select = dyn_cast<SelectInst>(instr)) {
-        VarVal cond = resolveValue(select->getCondition(), state,
-                                   select->getCondition()->getType());
-        assert(getType(cond) == VarType::Bool);
+        Integer cond = resolveValue(select->getCondition(), state,
+                                    select->getCondition()->getType());
         bool condVal = unsafeBool(cond);
         if (condVal) {
-            VarVal var =
+            Integer var =
                 resolveValue(select->getTrueValue(), state, select->getType());
             insertOrReplace(state.variables, {select, var});
         } else {
-            VarVal var =
+            Integer var =
                 resolveValue(select->getFalseValue(), state, select->getType());
             insertOrReplace(state.variables, {select, var});
         }
@@ -375,7 +359,7 @@ void interpretInstruction(const Instruction *instr, FastState &state) {
 void interpretPHI(const PHINode &instr, FastState &state,
                   const BasicBlock *prevBlock) {
     const Value *val = instr.getIncomingValueForBlock(prevBlock);
-    VarVal var = resolveValue(val, state, val->getType());
+    Integer var = resolveValue(val, state, val->getType());
     insertOrReplace(state.variables, {&instr, var});
 }
 
@@ -383,7 +367,7 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
                                      FastState &state) {
     if (const auto retInst = dyn_cast<ReturnInst>(instr)) {
         if (retInst->getReturnValue() == nullptr) {
-            insertOrReplace(state.variables, {retInst, 0});
+            insertOrReplace(state.variables, {retInst, Integer(mpz_class(0))});
         } else {
             insertOrReplace(
                 state.variables,
@@ -396,9 +380,8 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
             assert(branchInst->getNumSuccessors() == 1);
             return TerminatorUpdate(branchInst->getSuccessor(0));
         } else {
-            VarVal cond = resolveValue(branchInst->getCondition(), state,
-                                       branchInst->getCondition()->getType());
-            assert(getType(cond) == VarType::Bool);
+            Integer cond = resolveValue(branchInst->getCondition(), state,
+                                        branchInst->getCondition()->getType());
             bool condVal = unsafeBool(cond);
             assert(branchInst->getNumSuccessors() == 2);
             if (condVal) {
@@ -408,12 +391,10 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
             }
         }
     } else if (const auto switchInst = dyn_cast<SwitchInst>(instr)) {
-        VarVal cond = resolveValue(switchInst->getCondition(), state,
-                                   switchInst->getCondition()->getType());
-        assert(getType(cond) == VarType::Int);
-        const VarIntVal &condVal = unsafeIntVal(cond);
+        Integer condVal = resolveValue(switchInst->getCondition(), state,
+                                       switchInst->getCondition()->getType());
         for (auto c : switchInst->cases()) {
-            VarIntVal caseVal;
+            Integer caseVal;
             if (SMTGenerationOpts::getInstance().BitVect) {
                 caseVal = Integer(c.getCaseValue()->getValue());
             } else {
@@ -431,13 +412,13 @@ TerminatorUpdate interpretTerminator(const TerminatorInst *instr,
     }
 }
 
-VarVal resolveValue(const Value *val, const FastState &state,
-                    const llvm::Type * /* unused */) {
+Integer resolveValue(const Value *val, const FastState &state,
+                     const llvm::Type * /* unused */) {
     if (isa<Instruction>(val) || isa<Argument>(val)) {
         return state.variables.find(val)->second;
     } else if (const auto constInt = dyn_cast<ConstantInt>(val)) {
         if (constInt->getBitWidth() == 1) {
-            return constInt->isOne();
+            return Integer(constInt->getValue());
         } else if (!SMTGenerationOpts::getInstance().BitVect) {
             return Integer(mpz_class(constInt->getSExtValue()));
         } else {
@@ -452,22 +433,19 @@ VarVal resolveValue(const Value *val, const FastState &state,
 
 void interpretICmpInst(const ICmpInst *instr, FastState &state) {
     assert(instr->getNumOperands() == 2);
-    const VarVal op0 = resolveValue(instr->getOperand(0), state,
-                                    instr->getOperand(0)->getType());
-    const VarVal op1 = resolveValue(instr->getOperand(1), state,
-                                    instr->getOperand(0)->getType());
+    Integer op0 = resolveValue(instr->getOperand(0), state,
+                               instr->getOperand(0)->getType());
+    Integer op1 = resolveValue(instr->getOperand(1), state,
+                               instr->getOperand(0)->getType());
     switch (instr->getPredicate()) {
     default:
-        assert(getType(op0) == VarType::Int);
-        assert(getType(op1) == VarType::Int);
-        const VarIntVal &i0 = unsafeIntVal(op0);
-        const VarIntVal &i1 = unsafeIntVal(op1);
-        interpretIntPredicate(instr, instr->getPredicate(), i0, i1, state);
+        interpretIntPredicate(instr, instr->getPredicate(), std::move(op0),
+                              std::move(op1), state);
     }
 }
 
 void interpretIntPredicate(const ICmpInst *instr, CmpInst::Predicate pred,
-                           const VarIntVal &i0, const VarIntVal &i1,
+                           const Integer &i0, const Integer &i1,
                            FastState &state) {
     bool predVal = false;
     switch (pred) {
@@ -504,26 +482,21 @@ void interpretIntPredicate(const ICmpInst *instr, CmpInst::Predicate pred,
     default:
         logErrorData("Unsupported predicate:\n", *instr);
     }
-    insertOrReplace(state.variables, {instr, predVal});
+    insertOrReplace(state.variables, {instr, Integer(predVal)});
 }
 
 void interpretBinOp(const BinaryOperator *instr, FastState &state) {
-    const VarVal op0 = resolveValue(instr->getOperand(0), state,
-                                    instr->getOperand(0)->getType());
-    const VarVal op1 = resolveValue(instr->getOperand(1), state,
-                                    instr->getOperand(1)->getType());
+    const Integer op0 = resolveValue(instr->getOperand(0), state,
+                                     instr->getOperand(0)->getType());
+    const Integer op1 = resolveValue(instr->getOperand(1), state,
+                                     instr->getOperand(1)->getType());
     if (instr->getType()->getIntegerBitWidth() == 1) {
-        assert(getType(op0) == VarType::Bool);
-        assert(getType(op1) == VarType::Bool);
         bool b0 = unsafeBool(op0);
         bool b1 = unsafeBool(op1);
         interpretBoolBinOp(instr, instr->getOpcode(), b0, b1, state);
     } else {
-        assert(getType(op0) == VarType::Int);
-        assert(getType(op1) == VarType::Int);
-        const VarIntVal &i0 = unsafeIntVal(op0);
-        const VarIntVal &i1 = unsafeIntVal(op1);
-        interpretIntBinOp(instr, instr->getOpcode(), i0, i1, state);
+        interpretIntBinOp(instr, instr->getOpcode(), std::move(op0),
+                          std::move(op1), state);
     }
 }
 
@@ -541,13 +514,12 @@ void interpretBoolBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
         logErrorData("Unsupported binop:\n", *instr);
         llvm::errs() << "\n";
     }
-    insertOrReplace(state.variables, {instr, result});
+    insertOrReplace(state.variables, {instr, Integer(result)});
 }
 
 void interpretIntBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
-                       const VarIntVal &i0, const VarIntVal &i1,
-                       FastState &state) {
-    VarIntVal result;
+                       const Integer &i0, const Integer &i1, FastState &state) {
+    Integer result;
     switch (op) {
     case Instruction::Add:
         result = i0 + i1;
@@ -595,19 +567,7 @@ void interpretIntBinOp(const BinaryOperator *instr, Instruction::BinaryOps op,
     insertOrReplace(state.variables, {instr, result});
 }
 
-bool varValEq(const VarVal &lhs, const VarVal &rhs) {
-    if (getType(lhs) != getType(rhs)) {
-        return false;
-    } else if (getType(lhs) == VarType::Bool) {
-        const bool lhsB = unsafeBool(lhs);
-        const bool rhsB = unsafeBool(rhs);
-        return lhsB == rhsB;
-    } else {
-        const VarIntVal lhsI = unsafeIntVal(lhs);
-        const VarIntVal rhsI = unsafeIntVal(rhs);
-        return lhsI == rhsI;
-    }
-}
+bool varValEq(const Integer &lhs, const Integer &rhs) { return lhs == rhs; }
 
 string valueName(const llvm::Value *val) { return val->getName(); }
 template <typename T>

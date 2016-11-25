@@ -16,12 +16,12 @@ template <typename T> struct MatchInfo {
 template <typename T> struct CoupledCallInfo {
     MonoPair<const llvm::Function *> functions;
     MonoPair<const BlockStep<T> *> steps;
-    MonoPair<VarIntVal> returnValues;
+    MonoPair<Integer> returnValues;
     LoopInfo loopInfo;
     Mark mark;
     CoupledCallInfo(MonoPair<const llvm::Function *> functions,
                     MonoPair<const BlockStep<T> *> steps,
-                    MonoPair<VarIntVal> returnValues, LoopInfo loopInfo,
+                    MonoPair<Integer> returnValues, LoopInfo loopInfo,
                     Mark mark)
         : functions(functions), steps(steps), returnValues(returnValues),
           loopInfo(loopInfo), mark(mark) {}
@@ -30,11 +30,11 @@ template <typename T> struct CoupledCallInfo {
 template <typename T> struct UncoupledCallInfo {
     const llvm::Function *function;
     const BlockStep<T> *step;
-    VarIntVal returnValue;
+    Integer returnValue;
     Mark mark;
     Program prog;
     UncoupledCallInfo(const llvm::Function *function, const BlockStep<T> *step,
-                      VarIntVal returnValue, Mark mark, Program prog)
+                      Integer returnValue, Mark mark, Program prog)
         : function(function), step(step), returnValue(returnValue), mark(mark),
           prog(prog) {}
 };

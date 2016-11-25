@@ -27,10 +27,9 @@ struct Integer {
     };
     IntType type;
     Integer() : unbounded(mpz_class(0)), type(IntType::Unbounded) {}
-    explicit Integer(mpz_class i) : unbounded(std::move(i)), type(IntType::Unbounded) {}
+    explicit Integer(mpz_class i)
+        : unbounded(std::move(i)), type(IntType::Unbounded) {}
     explicit Integer(llvm::APInt i) : bounded(i), type(IntType::Bounded) {}
-
-    friend std::ostream &operator<<(std::ostream &os, const Integer &obj);
     Integer(const Integer &other) : type(other.type) {
         switch (type) {
         case IntType::Unbounded:
@@ -41,8 +40,30 @@ struct Integer {
             break;
         }
     }
-    Integer &operator=(Integer other);
+    Integer(Integer &&other) : type(std::move(other.type)) {
+        switch (type) {
+        case IntType::Unbounded:
+            new (&unbounded) mpz_class(std::move(other.unbounded));
+            break;
+        case IntType::Bounded:
+            new (&bounded) llvm::APInt(std::move(other.bounded));
+            break;
+        }
+    }
+    Integer &operator=(const Integer &other);
+    Integer &operator=(Integer &&other);
     ~Integer();
+
+    inline static Integer True() { return Integer(llvm::APInt(1, 1)); }
+    inline static Integer False() { return Integer(llvm::APInt(1, 0)); }
+    explicit Integer(bool val) : type(IntType::Bounded) {
+        if (val) {
+            new (&bounded) llvm::APInt(1, 1);
+        } else {
+            new (&bounded) llvm::APInt(1, 0);
+        }
+    }
+
     Integer asPointer() const;
     Integer &operator+=(const Integer &other) {
         assert(type == other.type);

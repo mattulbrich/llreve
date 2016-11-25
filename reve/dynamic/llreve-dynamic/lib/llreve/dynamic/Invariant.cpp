@@ -249,7 +249,7 @@ FunctionInvariantMap<smt::SharedSMTRef> makeFunctionInvariantDefinitions(
 }
 
 SharedSMTRef
-makeBoundsDefinitions(const map<string, Bound<Optional<VarIntVal>>> &bounds) {
+makeBoundsDefinitions(const map<string, Bound<Optional<Integer>>> &bounds) {
     vector<SharedSMTRef> constraints;
     for (auto mapIt : bounds) {
         if (mapIt.second.lower.hasValue()) {

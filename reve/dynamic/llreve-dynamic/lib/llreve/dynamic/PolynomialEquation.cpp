@@ -15,7 +15,7 @@ static mpz_class evalTerm(const std::vector<std::string> &term,
                           const VarMap<string> &variables) {
     mpz_class termVal = 1;
     for (const auto &var : term) {
-        termVal *= unsafeIntVal(variables.find(var)->second).asUnbounded();
+        termVal *= variables.find(var)->second.asUnbounded();
     }
     return termVal;
 }

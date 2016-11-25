@@ -65,7 +65,7 @@ using HeapPatternCandidates =
 using HeapPatternCandidatesMap =
     IterativeInvariantMap<LoopInfoData<llvm::Optional<HeapPatternCandidates>>>;
 using BoundsMap =
-    std::map<Mark, std::map<std::string, Bound<llvm::Optional<VarIntVal>>>>;
+    std::map<Mark, std::map<std::string, Bound<llvm::Optional<Integer>>>>;
 
 std::map<Mark, smt::SharedSMTRef> makeIterativeInvariantDefinitions(
     MonoPair<const llvm::Function *> functions,
@@ -110,6 +110,6 @@ smt::SharedSMTRef makeEquation(const std::vector<mpz_class> &eq,
                                const std::vector<smt::SortedVar> &freeVars,
                                size_t degree);
 smt::SharedSMTRef makeBoundsDefinitions(
-    const std::map<std::string, Bound<llvm::Optional<VarIntVal>>> &bounds);
+    const std::map<std::string, Bound<llvm::Optional<Integer>>> &bounds);
 }
 }

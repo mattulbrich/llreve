@@ -108,110 +108,39 @@ namespace llreve {
 namespace dynamic {
 using BlockName = std::string;
 using VarName = const llvm::Value *;
-using VarIntVal = Integer;
 using HeapAddress = Integer;
-enum class VarType { Int, Bool };
 
-VarType getType(const VarIntVal &v);
-nlohmann::json toJSON(const VarIntVal &v);
-VarIntVal unsafeIntVal(const VarIntVal &v);
-const VarIntVal &unsafeIntValRef(const VarIntVal &v);
-bool unsafeBool(const VarIntVal &v);
-
-VarType getType(const bool &b);
-nlohmann::json toJSON(const bool &b);
-VarIntVal unsafeIntVal(const bool &b);
-const VarIntVal &unsafeIntValRef(const bool &b);
-bool unsafeBool(const bool &b);
-
-// This technique is from the talk “Inheritance is The Base Class of Evil”
-// https://channel9.msdn.com/Events/GoingNative/2013/Inheritance-Is-The-Base-Class-of-Evil
-// It gives us value semantics and polymorphism at the same time
-class VarVal {
-  public:
-    template <typename T> VarVal(T x) : self_(new model<T>(std::move(x))) {}
-    /* This is only here to make it possible to use [] on maps */
-    VarVal(const VarVal &x) : self_(x.self_->copy_()) {}
-    VarVal(VarVal &&) noexcept = default;
-
-    VarVal &operator=(const VarVal &x) {
-        VarVal tmp(x);
-        *this = std::move(tmp);
-        return *this;
-    }
-    VarVal &operator=(VarVal &&) noexcept = default;
-    VarVal &operator=(VarIntVal x) {
-        self_.reset(new model<VarIntVal>(std::move(x)));
-        return *this;
-    }
-    VarVal &operator=(bool x) {
-        self_.reset(new model<bool>(std::move(x)));
-        return *this;
-    }
-
-    friend VarType getType(const VarVal &x) { return x.self_->getType_(); }
-    friend nlohmann::json toJSON(const VarVal &x) { return x.self_->toJSON_(); }
-    friend VarIntVal unsafeIntVal(const VarVal &x) {
-        return x.self_->unsafeIntVal_();
-    }
-    friend const VarIntVal &unsafeIntValRef(const VarVal &x) {
-        return x.self_->unsafeIntValRef_();
-    }
-    friend bool unsafeBool(const VarVal &x) { return x.self_->unsafeBool_(); }
-
-  private:
-    struct VarValConcept {
-        // The virtual destructor exists purely to have something which can be
-        // implemented in a source file to pin the vtable
-        virtual ~VarValConcept() = default;
-        virtual VarValConcept *copy_() const = 0;
-        virtual VarType getType_() const = 0;
-        virtual nlohmann::json toJSON_() const = 0;
-        virtual VarIntVal unsafeIntVal_() const = 0;
-        virtual const VarIntVal &unsafeIntValRef_() const = 0;
-        virtual bool unsafeBool_() const = 0;
-    };
-    template <typename T> struct model : VarValConcept {
-        model(T x) : data_(std::move(x)) {}
-        VarValConcept *copy_() const override { return new model<T>(*this); }
-        VarType getType_() const override { return getType(data_); }
-        nlohmann::json toJSON_() const override { return toJSON(data_); }
-        VarIntVal unsafeIntVal_() const override { return unsafeIntVal(data_); }
-        const VarIntVal &unsafeIntValRef_() const override {
-            return unsafeIntValRef(data_);
-        }
-        bool unsafeBool_() const override { return unsafeBool(data_); }
-        T data_;
-    };
-
-    std::unique_ptr<const VarValConcept> self_;
-};
-
-bool varValEq(const VarVal &lhs, const VarVal &rhs);
+nlohmann::json toJSON(const Integer &v);
+bool unsafeBool(const Integer &v);
 
 struct Heap {
-    llvm::SmallDenseMap<HeapAddress, VarIntVal> assignedValues;
+    llvm::SmallDenseMap<HeapAddress, Integer> assignedValues;
     Integer background;
     Heap() : assignedValues({}), background(mpz_class(0)) {}
-    Heap(llvm::SmallDenseMap<HeapAddress, VarIntVal> assignedValues,
+    Heap(llvm::SmallDenseMap<HeapAddress, Integer> assignedValues,
          Integer background)
         : assignedValues(std::move(assignedValues)),
           background(std::move(background)) {}
 };
 
-bool isContainedIn(const llvm::SmallDenseMap<HeapAddress, VarIntVal> &small,
+bool isContainedIn(const llvm::SmallDenseMap<HeapAddress, Integer> &small,
                    const Heap &big);
 
 bool operator==(const Heap &lhs, const Heap &rhs);
 
-template <typename T> using VarMap = llvm::DenseMap<T, VarVal>;
+template <typename T> using VarMap = llvm::DenseMap<T, Integer>;
 using FastVarMap = VarMap<const llvm::Value *>;
 
 template <typename T> struct State {
     VarMap<T> variables;
     Heap heap;
-    State(VarMap<T> variables, Heap heap) : variables(variables), heap(heap) {}
+    State(VarMap<T> variables, Heap heap)
+        : variables(std::move(variables)), heap(std::move(heap)) {}
     State() = default;
+    State(State &&other) = default;
+    State(const State &other) = default;
+    State &operator=(const State &other) = default;
+    State &operator=(State &&other) = default;
 };
 
 template <typename T>
@@ -347,26 +276,23 @@ auto interpretInstruction(const llvm::Instruction *instr, FastState &state)
 auto interpretTerminator(const llvm::TerminatorInst *instr, FastState &state)
     -> TerminatorUpdate;
 auto resolveValue(const llvm::Value *val, const FastState &state,
-                  const llvm::Type *type) -> VarVal;
+                  const llvm::Type *type) -> Integer;
 auto interpretICmpInst(const llvm::ICmpInst *instr, FastState &state) -> void;
 auto interpretIntPredicate(const llvm::ICmpInst *instr,
-                           llvm::CmpInst::Predicate pred, const VarIntVal &i0,
-                           const VarIntVal &i1, FastState &state) -> void;
+                           llvm::CmpInst::Predicate pred, const Integer &i0,
+                           const Integer &i1, FastState &state) -> void;
 auto interpretBinOp(const llvm::BinaryOperator *instr, FastState &state)
     -> void;
 auto interpretIntBinOp(const llvm::BinaryOperator *instr,
-                       llvm::Instruction::BinaryOps op, const VarIntVal &i0,
-                       const VarIntVal &i1, FastState &state) -> void;
+                       llvm::Instruction::BinaryOps op, const Integer &i0,
+                       const Integer &i1, FastState &state) -> void;
 auto interpretBoolBinOp(const llvm::BinaryOperator *instr,
                         llvm::Instruction::BinaryOps op, bool b0, bool b1,
                         FastState &state) -> void;
 
-template <typename A, typename T>
-VarIntVal resolveGEP(T &gep, State<A> &state) {
-    VarVal val = resolveValue(gep.getPointerOperand(), state,
-                              gep.getPointerOperand()->getType());
-    assert(getType(val) == VarType::Int);
-    VarIntVal offset = unsafeIntVal(val);
+template <typename A, typename T> Integer resolveGEP(T &gep, State<A> &state) {
+    Integer offset = resolveValue(gep.getPointerOperand(), state,
+                                  gep.getPointerOperand()->getType());
     const auto type = gep.getSourceElementType();
     std::vector<llvm::Value *> indices;
     for (auto ix = gep.idx_begin(), e = gep.idx_end(); ix != e; ++ix) {
@@ -386,10 +312,9 @@ VarIntVal resolveGEP(T &gep, State<A> &state) {
         const auto indexedType = llvm::GetElementPtrInst::getIndexedType(
             type, llvm::ArrayRef<llvm::Value *>(indices));
         const auto size = typeSize(indexedType, mod->getDataLayout());
-        VarVal val = resolveValue(*ix, state, (*ix)->getType());
-        assert(getType(val) == VarType::Int);
+        Integer val = resolveValue(*ix, state, (*ix)->getType());
         offset += Integer(mpz_class(size)).asPointer() *
-                  Integer(unsafeIntVal(val).asUnbounded()).asPointer();
+                  Integer(val.asUnbounded()).asPointer();
     }
     return offset;
 }
