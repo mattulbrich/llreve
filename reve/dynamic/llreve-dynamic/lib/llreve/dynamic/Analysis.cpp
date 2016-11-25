@@ -126,7 +126,7 @@ Transformed analyzeMainCounterExample(
         functions, variableValues, getHeapsFromModel(vals.arrays),
         {firstBlock, secondBlock}, InterpretStepsFlag, analysisResults);
     analyzeExecution<const llvm::Value *>(
-        calls, nameMap, analysisResults,
+        std::move(calls), nameMap, analysisResults,
         [&](MatchInfo<const llvm::Value *> match) {
             ExitIndex exitIndex = getExitIndex(match);
             findLoopCounts<const llvm::Value *>(

@@ -424,7 +424,7 @@ void analyzeUncoupledCall(
 
 template <typename T>
 void analyzeExecution(
-    const MonoPair<Call<T>> &calls, MonoPair<BlockNameMap> nameMaps,
+    MonoPair<Call<T>> calls, const MonoPair<BlockNameMap> &nameMaps,
     const AnalysisResultsMap &analysisResults,
     std::function<void(MatchInfo<T>)> iterativeMatch,
     std::function<void(CoupledCallInfo<T>)> relationalCallMatch,

@@ -147,9 +147,8 @@ FastCall interpretFunction(const Function &fun, FastState entry,
                            maxSteps - blocksVisited, analysisResults);
         firstBlock = false;
         blocksVisited += update.blocksVisited;
-        steps.push_back(BlockStep<const llvm::Value *>(
-            currentBlock->getName(), std::move(update.step),
-            std::move(update.calls)));
+        steps.emplace_back(currentBlock->getName(), std::move(update.step),
+                           std::move(update.calls));
         prevBlock = currentBlock;
         currentBlock = update.nextBlock;
         if (blocksVisited > maxSteps || update.earlyExit) {
