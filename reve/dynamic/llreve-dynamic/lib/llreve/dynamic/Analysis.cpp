@@ -476,7 +476,8 @@ static bool convertZ3Bool(Z3_lbool val) {
     case Z3_L_FALSE:
         return false;
     case Z3_L_UNDEF:
-        assert(false && "Cannot handle undef values");
+        logError("Cannot handle Z3 undef value\n");
+        exit(1);
     }
 }
 
