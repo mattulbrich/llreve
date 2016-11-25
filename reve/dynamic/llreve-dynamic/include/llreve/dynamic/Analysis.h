@@ -31,6 +31,14 @@
 namespace llreve {
 namespace dynamic {
 
+template <typename V, unsigned N>
+llvm::SmallVector<V, N> intersection(llvm::SmallVector<V, N> a,
+                                     llvm::SmallVector<V, N> b) {
+    llvm::SmallVector<V, N> c;
+    set_intersection(a.begin(), a.end(), b.begin(), b.end(),
+                     std::back_inserter(c));
+    return c;
+}
 enum class LlreveResult { Equivalent, NotEquivalent };
 
 template <typename T1, typename T2>
@@ -41,7 +49,7 @@ void zipWith(LoopInfoData<T1> &loop1, LoopInfoData<T2> &loop2,
     f(loop1.none, loop2.none);
 }
 
-using BlockNameMap = llvm::StringMap<std::set<Mark>>;
+using BlockNameMap = llvm::StringMap<llvm::SmallVector<Mark, 2>>;
 
 std::vector<smt::SharedSMTRef> cegarDriver(
     MonoPair<llvm::Module &> modules, AnalysisResultsMap &analysisResults,

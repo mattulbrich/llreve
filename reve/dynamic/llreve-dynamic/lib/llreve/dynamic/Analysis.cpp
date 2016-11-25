@@ -867,7 +867,8 @@ void populateHeapPatterns(
 void insertInBlockNameMap(BlockNameMap &nameMap,
                           const BidirBlockMarkMap &blockMap) {
     for (auto it : blockMap.BlockToMarksMap) {
-        nameMap[it.first->getName()] = it.second;
+        llvm::SmallVector<Mark, 2> marks(it.second.begin(), it.second.end());
+        nameMap[it.first->getName()] = std::move(marks);
     }
 }
 
@@ -890,7 +891,8 @@ bool normalMarkBlock(const BlockNameMap &map, const BlockName &blockName) {
     if (it == map.end()) {
         return false;
     }
-    return it->second.count(ENTRY_MARK) == 0;
+    return !std::binary_search(it->second.begin(), it->second.end(),
+                               ENTRY_MARK);
 }
 
 void debugAnalysis(MatchInfo<const llvm::Value *> match) {
