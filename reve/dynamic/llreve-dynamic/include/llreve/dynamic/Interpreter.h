@@ -180,7 +180,7 @@ template <typename T> struct Call : Step<T> {
         j["entry_state"] = stateToJSON<T>(entryState, varName);
         j["return_state"] = stateToJSON<T>(returnState, varName);
         std::vector<nlohmann::json> jsonSteps;
-        for (auto step : steps) {
+        for (const auto &step : steps) {
             jsonSteps.push_back(step.toJSON(varName));
         }
         j["steps"] = jsonSteps;
@@ -200,6 +200,10 @@ template <typename T> struct BlockStep : Step<T> {
     BlockStep(BlockName blockName, State<T> state, std::vector<Call<T>> calls)
         : blockName(std::move(blockName)), state(std::move(state)),
           calls(std::move(calls)) {}
+    BlockStep(BlockStep &&other) = default;
+    BlockStep(const BlockStep &other) = default;
+    BlockStep &operator=(BlockStep &&other) = default;
+    BlockStep &operator=(const BlockStep &other) = default;
     nlohmann::json
     toJSON(std::function<std::string(T)> varName) const override {
         nlohmann::json j;

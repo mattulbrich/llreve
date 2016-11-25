@@ -198,7 +198,7 @@ bool applyLoopTransformation(
 // This represents the states along the way from one mark to the next
 template <typename T> struct PathStep {
     std::vector<BlockStep<T>> stepsOnPath;
-    PathStep(std::vector<BlockStep<T>> &&stepsOnPath)
+    PathStep(std::vector<BlockStep<T>> stepsOnPath)
         : stepsOnPath(std::move(stepsOnPath)) {}
 };
 
@@ -207,26 +207,29 @@ template <typename T> struct SplitCall {
     State<T> entryState;
     State<T> returnState;
     std::vector<PathStep<T>> steps;
+    SplitCall(const llvm::Function *function, State<T> entryState,
+              State<T> returnState, std::vector<PathStep<T>> steps)
+        : function(std::move(function)), entryState(std::move(entryState)),
+          returnState(std::move(returnState)), steps(std::move(steps)) {}
 };
 
 template <typename T>
-auto splitCallAtMarks(const Call<T> &&call, const BlockNameMap &nameMap)
+auto splitCallAtMarks(Call<T> call, const BlockNameMap &nameMap)
     -> SplitCall<T> {
     std::vector<PathStep<T>> pathSteps;
     std::vector<BlockStep<T>> blockSteps;
-    blockSteps.reserve(2);
-    for (const auto &step : call.steps) {
+    for (auto &step : call.steps) {
         if (normalMarkBlock(nameMap, step.blockName)) {
             pathSteps.emplace_back(std::move(blockSteps));
             blockSteps.clear();
-            blockSteps.reserve(2);
         }
         blockSteps.emplace_back(std::move(step));
     }
     pathSteps.emplace_back(std::move(blockSteps));
     // We should have at least one entry and one exit node
     assert(pathSteps.size() >= 2);
-    return {call.function, call.entryState, call.returnState, pathSteps};
+    return {std::move(call.function), std::move(call.entryState),
+            std::move(call.returnState), std::move(pathSteps)};
 }
 
 template <typename T>
