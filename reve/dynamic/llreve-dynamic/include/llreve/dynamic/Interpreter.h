@@ -39,6 +39,55 @@ template <> struct llvm::DenseMapInfo<std::string> {
     static bool isEqual(std::string LHS, std::string RHS) { return LHS == RHS; }
 };
 
+template <> struct llvm::DenseMapInfo<Integer> {
+    // Odd bitwidths should never occur in practise, so these are good special
+    // values
+    static inline Integer getEmptyKey() {
+        return Integer(llvm::APInt::getMaxValue(3));
+    }
+    static inline Integer getTombstoneKey() {
+        return Integer(llvm::APInt::getMaxValue(5));
+    }
+    static unsigned getHashValue(Integer val) {
+        switch (val.type) {
+        case IntType::Unbounded:
+            // abs is necessary because gmp is shitty
+            return (unsigned)(hash_combine_range(
+                val.unbounded.get_mpz_t()->_mp_d,
+                val.unbounded.get_mpz_t()->_mp_d +
+                    std::abs(val.unbounded.get_mpz_t()->_mp_size)));
+        case IntType::Bounded:
+            return (unsigned)(hash_value(val.bounded));
+        }
+    }
+    static bool isEqual(Integer lhs, Integer rhs) {
+        switch (lhs.type) {
+        case IntType::Unbounded:
+            switch (rhs.type) {
+            case IntType::Unbounded:
+                return lhs.unbounded == rhs.unbounded;
+            case IntType::Bounded:
+                return false;
+            }
+        case IntType::Bounded:
+            switch (rhs.type) {
+            case IntType::Unbounded:
+                return false;
+            case IntType::Bounded:
+                // LLVM doesn’t allow comparison of APInts of different
+                // bitwidths, since this is the case for tombstones we have to
+                // treat them separately
+                if (lhs.bounded.getBitWidth() == rhs.bounded.getBitWidth()) {
+                    return lhs.bounded == rhs.bounded;
+                } else {
+                    return false;
+                }
+            }
+        }
+        return lhs == rhs;
+    }
+};
+
 template <typename K, typename V>
 void insertOrReplace(llvm::DenseMap<K, V> &map, const std::pair<K, V> &kv) {
     auto ret = map.insert(kv);
@@ -141,11 +190,16 @@ class VarVal {
 bool varValEq(const VarVal &lhs, const VarVal &rhs);
 
 struct Heap {
-    std::map<HeapAddress, VarIntVal> assignedValues;
+    llvm::SmallDenseMap<HeapAddress, VarIntVal> assignedValues;
     Integer background;
+    Heap() : assignedValues({}), background(mpz_class(0)) {}
+    Heap(llvm::SmallDenseMap<HeapAddress, VarIntVal> assignedValues,
+         Integer background)
+        : assignedValues(std::move(assignedValues)),
+          background(std::move(background)) {}
 };
 
-bool isContainedIn(const std::map<HeapAddress, VarIntVal> &small,
+bool isContainedIn(const llvm::SmallDenseMap<HeapAddress, VarIntVal> &small,
                    const Heap &big);
 
 bool operator==(const Heap &lhs, const Heap &rhs);
@@ -307,7 +361,8 @@ auto interpretBoolBinOp(const llvm::BinaryOperator *instr,
                         llvm::Instruction::BinaryOps op, bool b0, bool b1,
                         FastState &state) -> void;
 
-template <typename A, typename T> VarIntVal resolveGEP(T &gep, State<A> state) {
+template <typename A, typename T>
+VarIntVal resolveGEP(T &gep, State<A> &state) {
     VarVal val = resolveValue(gep.getPointerOperand(), state,
                               gep.getPointerOperand()->getType());
     assert(getType(val) == VarType::Int);

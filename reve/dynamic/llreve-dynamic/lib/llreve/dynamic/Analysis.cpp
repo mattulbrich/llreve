@@ -827,7 +827,7 @@ void populateHeapPatterns(
     vector<SortedVar> preVariables = primitiveVariables;
     vector<SortedVar> postVariables = preVariables;
     postVariables.emplace_back(resultName(match.prog), int64Type());
-    MonoPair<Heap> heaps({}, {});
+    MonoPair<Heap> heaps = {Heap(), Heap()};
     if (match.prog == Program::First) {
         heaps = {match.step->state.heap, {}};
     } else {
@@ -1058,8 +1058,9 @@ FastVarMap getVarMapFromModel(
     return variableValues;
 }
 
-std::map<HeapAddress, VarIntVal> getHeapFromModel(const ArrayVal &ar) {
-    std::map<HeapAddress, VarIntVal> result;
+llvm::SmallDenseMap<HeapAddress, VarIntVal>
+getHeapFromModel(const ArrayVal &ar) {
+    llvm::SmallDenseMap<HeapAddress, VarIntVal> result;
     for (auto it : ar.vals) {
         result.insert({Integer(it.first), Integer(it.second)});
     }
@@ -1070,7 +1071,8 @@ Heap getHeapFromModel(const std::map<std::string, ArrayVal> &arrays,
                       Program prog) {
     if (SMTGenerationOpts::getInstance().Heap ==
         llreve::opts::HeapOpt::Disabled) {
-        return {{}, Integer(mpz_class(0))};
+        return {llvm::SmallDenseMap<HeapAddress, Integer>(),
+                Integer(mpz_class(0))};
     }
     std::string heap = heapName(prog) + "_old";
     return {getHeapFromModel(arrays.at(heap)),
@@ -1078,10 +1080,6 @@ Heap getHeapFromModel(const std::map<std::string, ArrayVal> &arrays,
 }
 
 MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays) {
-    if (SMTGenerationOpts::getInstance().Heap ==
-        llreve::opts::HeapOpt::Disabled) {
-        return {{}, {}};
-    }
     return {getHeapFromModel(arrays, Program::First),
             getHeapFromModel(arrays, Program::Second)};
 }

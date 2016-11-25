@@ -79,7 +79,7 @@ const VarIntVal &unsafeIntValRef(const bool & /* unused */) {
 }
 bool unsafeBool(const bool &b) { return b; }
 
-bool isContainedIn(const std::map<HeapAddress, VarIntVal> &small,
+bool isContainedIn(const llvm::SmallDenseMap<HeapAddress, VarIntVal> &small,
                    const Heap &big) {
     for (const auto &val : small) {
         auto it = big.assignedValues.find(val.first);

@@ -186,7 +186,8 @@ FastVarMap getVarMapFromModel(
     std::map<std::string, const llvm::Value *> instructionNameMap,
     std::vector<smt::SortedVar> freeVars,
     std::map<std::string, mpz_class> vals);
-std::map<HeapAddress, VarIntVal> getHeapFromModel(const ArrayVal &ar);
+llvm::SmallDenseMap<HeapAddress, VarIntVal>
+getHeapFromModel(const ArrayVal &ar);
 Heap getHeapFromModel(const std::map<std::string, ArrayVal> &arrays,
                       Program prog);
 MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays);
