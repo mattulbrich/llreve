@@ -160,7 +160,7 @@ rewriteToImplication(RewrittenPattern<T> rewrittenPattern);
 enum class BinaryBooleanOp { And, Or, Impl };
 enum class UnaryIntOp { Minus };
 enum class BinaryIntOp { Mul, Add, Subtract };
-enum class BinaryIntProp { LT, LE, EQ, GE, GT };
+enum class BinaryIntProp { LT, LE, EQ, NE, GE, GT };
 
 template <typename T> struct UnaryHeapPattern;
 template <typename T> struct BinaryHeapPattern : public HeapPattern<T> {
@@ -1010,6 +1010,8 @@ template <typename T> struct HeapExprProp : public HeapPattern<T> {
             return val1 <= val2;
         case BinaryIntProp::EQ:
             return val1 == val2;
+        case BinaryIntProp::NE:
+            return val1 != val2;
         case BinaryIntProp::GE:
             return val1 >= val2;
         case BinaryIntProp::GT:
@@ -1028,6 +1030,9 @@ template <typename T> struct HeapExprProp : public HeapPattern<T> {
             break;
         case BinaryIntProp::EQ:
             os << " = ";
+            break;
+        case BinaryIntProp::NE:
+            os << " ≠ ";
             break;
         case BinaryIntProp::GE:
             os << " ≥ ";
@@ -1070,6 +1075,9 @@ template <typename T> struct HeapExprProp : public HeapPattern<T> {
             break;
         case BinaryIntProp::EQ:
             opName = "=";
+            break;
+        case BinaryIntProp::NE:
+            opName = "distinct";
             break;
         case BinaryIntProp::GE:
             opName = ">=";

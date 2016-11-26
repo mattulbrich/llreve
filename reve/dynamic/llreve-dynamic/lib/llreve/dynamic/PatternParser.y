@@ -35,7 +35,7 @@ void yyerror(const char* s) {
 %left IMPL
 %left OR
 %left AND
-%left LT LE GE GT EQ
+%left LT LE GE GT EQ NE
 %left PLUS MINUS
 %left STAR
 %%
@@ -89,6 +89,10 @@ heapExprProp :
                               std::shared_ptr<HeapExpr<VariablePlaceholder>>($3))); }
   | expr EQ expr
     { $$ = new HeapExprProp<VariablePlaceholder>(BinaryIntProp::EQ,
+                 makeMonoPair(std::shared_ptr<HeapExpr<VariablePlaceholder>>($1),
+                              std::shared_ptr<HeapExpr<VariablePlaceholder>>($3))); }
+  | expr NE expr
+    { $$ = new HeapExprProp<VariablePlaceholder>(BinaryIntProp::NE,
                  makeMonoPair(std::shared_ptr<HeapExpr<VariablePlaceholder>>($1),
                               std::shared_ptr<HeapExpr<VariablePlaceholder>>($3))); }
   | expr GE expr

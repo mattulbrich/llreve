@@ -15,6 +15,7 @@ using namespace std;
 \<              { return LT; }
 \<=             { return LE; }
 =               { return EQ; }
+\/=             { return NE; }
 >=              { return GE; }
 >               { return GT; }
 i_[0-9]+        { yylval.boundVarIndex = strtoul(yytext+2, NULL, 10); return BOUNDVAR; }
