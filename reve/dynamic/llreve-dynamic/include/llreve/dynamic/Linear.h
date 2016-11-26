@@ -24,8 +24,7 @@ template <typename T> bool isZero(const std::vector<T> &a) {
 // The outer vector indicates the row
 template <typename T> using Matrix = std::vector<std::vector<T>>;
 
-Matrix<mpq_class> rowEchelonForm(Matrix<mpq_class> input);
-size_t rank(const Matrix<mpq_class> &m);
+void reducedRowEchelonForm(Matrix<mpq_class> &input);
 
 template <typename T> void dumpMatrix(const Matrix<T> &m) {
     for (const auto &row : m) {
@@ -36,7 +35,8 @@ template <typename T> void dumpMatrix(const Matrix<T> &m) {
     }
 }
 
-bool linearlyIndependent(const std::vector<std::vector<mpq_class>> &vectors);
+bool linearlyIndependent(const Matrix<mpq_class> &vectors,
+                         std::vector<mpq_class> newVector);
 std::vector<std::vector<mpq_class>> nullSpace(const Matrix<mpq_class> &m);
 std::vector<mpq_class> multiplyRow(std::vector<mpq_class> vec, mpq_class c);
 std::vector<mpz_class> ratToInt(std::vector<mpq_class> vec);

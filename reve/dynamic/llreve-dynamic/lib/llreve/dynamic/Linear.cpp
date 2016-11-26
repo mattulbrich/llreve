@@ -14,13 +14,14 @@
 
 using std::vector;
 
-Matrix<mpq_class> rowEchelonForm(Matrix<mpq_class> input) {
+// This is not completely reduced as the leading entries are not normalized
+void reducedRowEchelonForm(Matrix<mpq_class> &input) {
     size_t currentRow = 0;
     for (size_t currentCol = 0; currentCol < input.at(0).size(); ++currentCol) {
         // Find non-zero entry in this column
         int64_t nonZeroRow = -1;
         for (size_t i = currentRow; i < input.size(); ++i) {
-            if (input.at(i).at(currentCol) != mpq_class(0)) {
+            if (input[i][currentCol] != mpq_class(0)) {
                 nonZeroRow = static_cast<int64_t>(i);
                 break;
             }
@@ -31,41 +32,59 @@ Matrix<mpq_class> rowEchelonForm(Matrix<mpq_class> input) {
         }
         if (static_cast<size_t>(nonZeroRow) != currentRow) {
             // Swap rows
-            swap(input.at(static_cast<size_t>(nonZeroRow)),
-                 input.at(currentRow));
+            swap(input[static_cast<size_t>(nonZeroRow)], input[currentRow]);
         }
+        // Subtract the current row from the rows above it
+        for (size_t i = 0; i < currentRow; ++i) {
+            mpq_class multiple =
+                input[i][currentCol] / input[currentRow][currentCol];
+            for (size_t j = currentCol; j < input[i].size(); ++j) {
+                input[i][j] -= multiple * input[currentRow][j];
+            }
+        }
+        // Subtract the current row from the rows below it
         for (size_t i = currentRow + 1; i < input.size(); ++i) {
-            mpq_class multiple = input.at(i).at(currentCol) /
-                                 input.at(currentRow).at(currentCol);
-            for (size_t j = currentCol; j < input.at(i).size(); ++j) {
-                input.at(i).at(j) -= multiple * input.at(currentRow).at(j);
+            mpq_class multiple =
+                input[i][currentCol] / input[currentRow][currentCol];
+            for (size_t j = currentCol; j < input[i].size(); ++j) {
+                input[i][j] -= multiple * input[currentRow][j];
             }
         }
         ++currentRow;
     }
-    return input;
 }
 
-size_t rank(const Matrix<mpq_class> &m) {
-    const Matrix<mpq_class> rowEchelon = rowEchelonForm(m);
-    int64_t i = static_cast<int64_t>(rowEchelon.size()) - 1;
-    while (i >= 0 && isZero(rowEchelon.at(static_cast<size_t>(i)))) {
-        --i;
+// Checks if newVector is linearly indepentent of vectors. vectors has to be in
+// reduced row echelon form
+bool linearlyIndependent(const Matrix<mpq_class> &vectors,
+                         vector<mpq_class> newVector) {
+    assert(newVector.size() == vectors[0].size());
+    size_t col = 0;
+    for (size_t row = 0; row < vectors.size(); ++row) {
+        // We don’t allow zero rows so we don’t need a bounds check here
+        while (vectors[row][col] == 0) {
+            if (newVector[col] != 0) {
+                return true;
+            } else {
+                ++col;
+            }
+        }
+        assert(col < vectors[row].size());
+        assert(vectors[row][col] != 0);
+        mpq_class multiple = newVector[col] / vectors[row][col];
+        for (size_t newVecCol = col; newVecCol < newVector.size();
+             ++newVecCol) {
+            newVector[newVecCol] -= multiple * vectors[row][newVecCol];
+        }
+        assert(newVector[col] == 0);
+        ++col;
     }
-    return static_cast<size_t>(i + 1);
-}
-
-bool linearlyIndependent(const vector<vector<mpq_class>> &vectors) {
-    size_t rows = vectors.at(0).size();
-    Matrix<mpq_class> m(rows, vector<mpq_class>(vectors.size()));
-    for (size_t row = 0; row < vectors.at(0).size(); ++row) {
-        size_t i = 0;
-        for (const auto &vec : vectors) {
-            m.at(row).at(i) = vec.at(row);
-            ++i;
+    for (const auto &i : newVector) {
+        if (i != 0) {
+            return true;
         }
     }
-    return rank(m) == vectors.size();
+    return false;
 }
 
 vector<mpq_class> multiplyRow(vector<mpq_class> vec, mpq_class c) {
@@ -82,7 +101,8 @@ vector<vector<mpq_class>> nullSpace(const Matrix<mpq_class> &m) {
         return {};
     }
     assert(m.at(0).size() >= m.size());
-    Matrix<mpq_class> rowEchelon = rowEchelonForm(m);
+    Matrix<mpq_class> rowEchelon = m;
+    reducedRowEchelonForm(rowEchelon);
     for (size_t row = 0; row < rowEchelon.size(); ++row) {
         size_t col = 0;
         while (rowEchelon.at(row).at(col) == 0) {

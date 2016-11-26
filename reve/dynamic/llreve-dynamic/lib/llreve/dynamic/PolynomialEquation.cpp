@@ -37,20 +37,20 @@ createEquation(const vector<SortedVar> &primitiveVariables,
 
 static void insertInStringMap(const FastVarMap &variables,
                               VarMap<string> &stringVariables) {
-    for (auto varIt : variables) {
+    for (const auto &varIt : variables) {
         stringVariables.insert({varIt.first->getName(), varIt.second});
     }
 }
 
 static VarMap<string> getStringVarMap(const FastVarMap &variables) {
-    VarMap<string> stringVariables;
+    VarMap<string> stringVariables(variables.size());
     insertInStringMap(variables, stringVariables);
     return stringVariables;
 }
 
 static VarMap<string> getStringVarMap(const FastVarMap &variables1,
                                       const FastVarMap &variables2) {
-    VarMap<string> stringVariables;
+    VarMap<string> stringVariables(variables1.size() + variables2.size());
     insertInStringMap(variables1, stringVariables);
     insertInStringMap(variables2, stringVariables);
     return stringVariables;
@@ -72,15 +72,12 @@ void populateEquationsMap(
         getDataForLoopInfo(polynomialEquations.at(match.mark).at(exitIndex),
                            match.loopInfo) = {equation};
     } else {
-        Matrix<mpq_class> vecs = getDataForLoopInfo(
+        Matrix<mpq_class> &vecs = getDataForLoopInfo(
             polynomialEquations.at(match.mark).at(exitIndex), match.loopInfo);
-        vecs.push_back(equation);
-        if (!linearlyIndependent(vecs)) {
-            return;
+        if (linearlyIndependent(vecs, equation)) {
+            vecs.push_back(equation);
+            reducedRowEchelonForm(vecs);
         }
-        getDataForLoopInfo(polynomialEquations.at(match.mark).at(exitIndex),
-                           match.loopInfo)
-            .push_back(equation);
     }
 }
 
@@ -111,15 +108,15 @@ void populateEquationsMap(
     } else {
         auto &vecsRef = getDataForLoopInfo(polynomialEquations.at(match.mark),
                                            match.loopInfo);
-        auto preVecs = vecsRef.preCondition;
-        auto postVecs = vecsRef.postCondition;
-        preVecs.push_back(preEquation);
-        postVecs.push_back(postEquation);
-        if (linearlyIndependent(preVecs)) {
-            vecsRef.preCondition = preVecs;
+        auto &preVecs = vecsRef.preCondition;
+        auto &postVecs = vecsRef.postCondition;
+        if (linearlyIndependent(preVecs, preEquation)) {
+            preVecs.push_back(preEquation);
+            reducedRowEchelonForm(preVecs);
         }
-        if (linearlyIndependent(postVecs)) {
-            vecsRef.postCondition = postVecs;
+        if (linearlyIndependent(postVecs, postEquation)) {
+            postVecs.push_back(postEquation);
+            reducedRowEchelonForm(postVecs);
         }
     }
 }
@@ -144,15 +141,15 @@ void populateEquationsMap(FunctionInvariantMap<Matrix<mpq_class>> &equationsMap,
             {match.mark, {{preEquation}, {postEquation}}});
     } else {
         auto &equationsForMark = polynomialEquationsIt->second;
-        auto preVecs = equationsForMark.preCondition;
-        auto postVecs = equationsForMark.postCondition;
-        preVecs.push_back(preEquation);
-        postVecs.push_back(postEquation);
-        if (linearlyIndependent(preVecs)) {
-            equationsForMark.preCondition = preVecs;
+        auto &preVecs = equationsForMark.preCondition;
+        auto &postVecs = equationsForMark.postCondition;
+        if (linearlyIndependent(preVecs, preEquation)) {
+            preVecs.push_back(preEquation);
+            reducedRowEchelonForm(preVecs);
         }
-        if (linearlyIndependent(postVecs)) {
-            equationsForMark.postCondition = postVecs;
+        if (linearlyIndependent(postVecs, postEquation)) {
+            postVecs.push_back(postEquation);
+            reducedRowEchelonForm(postVecs);
         }
     }
 }
