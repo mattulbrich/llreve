@@ -77,11 +77,12 @@ static llreve::cl::opt<bool>
 static llreve::cl::opt<bool> DumpIntermediateSMTFlag(
     "intermediate-smt",
     llreve::cl::desc("Dump intermediate SMT files for debugginr purposes"));
+// 10 seems to perform pretty well in the benchmarks I tried
 static llreve::cl::opt<unsigned> InterpretStepsFlag(
     "interpret-steps",
     llreve::cl::desc(
         "The number of instructions that are interpreted for each example"),
-    cl::init(50));
+    cl::init(10));
 
 bool ImplicationsFlag;
 
@@ -269,7 +270,7 @@ void analyzeFunctionalCounterExample(
     Call<const llvm::Value *> call = interpretFunction(
         *function,
         FastState(variableValues, getHeapFromModel(vals.arrays, program)),
-        startBlock, 1000, analysisResults);
+        startBlock, InterpretStepsFlag, analysisResults);
     std::cout << "analyzing trace\n";
     analyzeUncoupledCall<const llvm::Value *>(
         call, blockNameMap, program, analysisResults,
