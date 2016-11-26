@@ -1044,7 +1044,7 @@ instructionNameMap(MonoPair<const llvm::Function *> funs) {
 MonoPair<FastVarMap> getVarMapFromModel(
     const llvm::StringMap<const llvm::Value *> &instructionNameMap,
     MonoPair<std::vector<smt::SortedVar>> freeVars,
-    std::map<std::string, mpz_class> vals) {
+    const std::map<std::string, mpz_class> &vals) {
     return {getVarMapFromModel(instructionNameMap, freeVars.first, vals),
             getVarMapFromModel(instructionNameMap, freeVars.second, vals)};
 }
@@ -1052,8 +1052,8 @@ MonoPair<FastVarMap> getVarMapFromModel(
 FastVarMap getVarMapFromModel(
     const llvm::StringMap<const llvm::Value *> &instructionNameMap,
     std::vector<smt::SortedVar> freeVars,
-    std::map<std::string, mpz_class> vals) {
-    FastVarMap variableValues;
+    const std::map<std::string, mpz_class> &vals) {
+    FastVarMap variableValues(freeVars.size());
     for (const auto &var : freeVars) {
         mpz_class val = vals.at(var.name + "_old");
         const llvm::Value *instr = instructionNameMap.find(var.name)->second;
@@ -1063,8 +1063,8 @@ FastVarMap getVarMapFromModel(
 }
 
 llvm::SmallDenseMap<HeapAddress, Integer> getHeapFromModel(const ArrayVal &ar) {
-    llvm::SmallDenseMap<HeapAddress, Integer> result;
-    for (auto it : ar.vals) {
+    llvm::SmallDenseMap<HeapAddress, Integer> result(ar.vals.size());
+    for (const auto &it : ar.vals) {
         result.insert({Integer(it.first), Integer(it.second)});
     }
     return result;
@@ -1082,7 +1082,8 @@ Heap getHeapFromModel(const std::map<std::string, ArrayVal> &arrays,
             Integer(arrays.at(heap).background)};
 }
 
-MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays) {
+MonoPair<Heap>
+getHeapsFromModel(const std::map<std::string, ArrayVal> &arrays) {
     return {getHeapFromModel(arrays, Program::First),
             getHeapFromModel(arrays, Program::Second)};
 }

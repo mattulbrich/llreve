@@ -188,15 +188,15 @@ instructionNameMap(MonoPair<const llvm::Function *> funs);
 MonoPair<FastVarMap> getVarMapFromModel(
     const llvm::StringMap<const llvm::Value *> &instructionNameMap,
     MonoPair<std::vector<smt::SortedVar>> freeVars,
-    std::map<std::string, mpz_class> vals);
+    const std::map<std::string, mpz_class> &vals);
 FastVarMap getVarMapFromModel(
     const llvm::StringMap<const llvm::Value *> &instructionNameMap,
     std::vector<smt::SortedVar> freeVars,
-    std::map<std::string, mpz_class> vals);
+    const std::map<std::string, mpz_class> &vals);
 llvm::SmallDenseMap<HeapAddress, Integer> getHeapFromModel(const ArrayVal &ar);
 Heap getHeapFromModel(const std::map<std::string, ArrayVal> &arrays,
                       Program prog);
-MonoPair<Heap> getHeapsFromModel(std::map<std::string, ArrayVal> arrays);
+MonoPair<Heap> getHeapsFromModel(const std::map<std::string, ArrayVal> &arrays);
 void dumpLoopTransformations(
     std::map<Mark, LoopTransformation> loopTransformations);
 bool applyLoopTransformation(
