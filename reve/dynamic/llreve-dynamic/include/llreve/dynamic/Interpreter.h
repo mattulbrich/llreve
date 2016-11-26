@@ -30,7 +30,7 @@
 #include "Integer.h"
 
 namespace llvm {
-template <> struct llvm::DenseMapInfo<std::string> {
+template <> struct DenseMapInfo<std::string> {
     static inline std::string getEmptyKey() { return std::string(); }
     static inline StringRef getTombstoneKey() { return std::string(); }
     static unsigned getHashValue(std::string Val) {
@@ -39,7 +39,7 @@ template <> struct llvm::DenseMapInfo<std::string> {
     static bool isEqual(std::string LHS, std::string RHS) { return LHS == RHS; }
 };
 
-template <> struct llvm::DenseMapInfo<Integer> {
+template <> struct DenseMapInfo<Integer> {
     // Odd bitwidths should never occur in practise, so these are good special
     // values
     static inline Integer getEmptyKey() {
