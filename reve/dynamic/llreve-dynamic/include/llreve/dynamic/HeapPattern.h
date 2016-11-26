@@ -120,11 +120,6 @@ template <typename T> struct HeapPattern {
     virtual std::ostream &dump(std::ostream &os) const = 0;
     virtual bool equalTo(const HeapPattern<T> &other) const = 0;
     std::shared_ptr<HeapPattern<T>> instantiate() const;
-    virtual std::shared_ptr<HeapPattern<T>>
-    negationNormalForm(bool negate) const = 0;
-    std::shared_ptr<HeapPattern<T>> negationNormalForm() const {
-        return negationNormalForm(false);
-    }
     virtual smt::SMTRef toSMT() const = 0;
 };
 
@@ -201,37 +196,6 @@ template <typename T> struct BinaryHeapPattern : public HeapPattern<T> {
         }
         return false;
     }
-    std::shared_ptr<HeapPattern<T>>
-    negationNormalForm(bool negate) const override {
-        if (op == BinaryBooleanOp::Impl) {
-            std::shared_ptr<HeapPattern<T>> firstArg =
-                std::make_shared<UnaryHeapPattern<T>>(UnaryBooleanOp::Neg,
-                                                      args.first);
-            std::shared_ptr<HeapPattern<T>> secondArg = args.second;
-            auto newArgs = makeMonoPair(firstArg, secondArg);
-            return std::make_shared<BinaryHeapPattern<T>>(BinaryBooleanOp::Or,
-                                                          newArgs)
-                ->negationNormalForm(negate);
-        }
-        auto newArgs = args.template map<std::shared_ptr<HeapPattern<T>>>(
-            [negate](std::shared_ptr<HeapPattern<T>> arg)
-                -> std::shared_ptr<HeapPattern<T>> {
-                return arg->negationNormalForm(negate);
-            });
-        if (negate) {
-            assert(op != BinaryBooleanOp::Impl);
-            if (op == BinaryBooleanOp::And) {
-                return std::make_shared<BinaryHeapPattern<T>>(
-                    BinaryBooleanOp::Or, newArgs);
-            } else {
-                return std::make_shared<BinaryHeapPattern<T>>(
-                    BinaryBooleanOp::And, newArgs);
-            }
-        } else {
-            assert(op != BinaryBooleanOp::Impl);
-            return std::make_shared<BinaryHeapPattern<T>>(op, newArgs);
-        }
-    }
     smt::SMTRef toSMT() const override {
         smt::SMTRef firstArg = args.first->toSMT();
         smt::SMTRef secondArg = args.second->toSMT();
@@ -281,13 +245,6 @@ template <typename T> struct UnaryHeapPattern : public HeapPattern<T> {
         }
         return false;
     }
-    std::shared_ptr<HeapPattern<T>>
-    negationNormalForm(bool negate) const override {
-        if (negate) {
-            return arg;
-        }
-        return arg->negationNormalForm(true);
-    }
     smt::SMTRef toSMT() const override {
         smt::SMTRef smtArg = arg->toSMT();
         switch (op) {
@@ -326,12 +283,6 @@ template <typename T> struct HeapEqual : public HeapPattern<T> {
     }
     bool equalTo(const HeapPattern<T> &other) const override {
         return other.getType() == PatternType::HeapEquality;
-    }
-    std::shared_ptr<HeapPattern<T>>
-    negationNormalForm(bool negate) const override {
-        assert(!negate);
-        unused(negate);
-        return std::make_shared<HeapEqual<T>>();
     }
 };
 
@@ -800,19 +751,7 @@ template <typename T> struct RangeProp : public HeapPattern<T> {
         }
         return false;
     }
-    std::shared_ptr<HeapPattern<T>>
-    negationNormalForm(bool negate) const override {
-        RangeQuantifier newQuant = quant;
-        if (negate) {
-            newQuant = newQuant == RangeQuantifier::All ? RangeQuantifier::Any
-                                                        : RangeQuantifier::All;
-        }
-        std::shared_ptr<HeapPattern<T>> newPat =
-            pat->negationNormalForm(negate);
-        return std::make_shared<RangeProp<T>>(newQuant, bounds, index, newPat);
-    }
     smt::SMTRef toSMT() const override {
-
         std::vector<smt::SortedVar> args = {smt::SortedVar(
             "boundVar_" + std::to_string(index), smt::int64Type())};
         smt::SharedSMTRef var =
@@ -903,16 +842,6 @@ template <typename T> struct HeapExprProp : public HeapPattern<T> {
                    args.second->equalTo(*exprOther->args.second);
         }
         return false;
-    }
-    std::shared_ptr<HeapPattern<T>>
-    negationNormalForm(bool negate) const override {
-        if (negate) {
-            return std::make_shared<UnaryHeapPattern<T>>(
-                UnaryBooleanOp::Neg,
-                std::make_shared<HeapExprProp<T>>(op, args));
-        } else {
-            return std::make_shared<HeapExprProp<T>>(op, args);
-        }
     }
     smt::SMTRef toSMT() const override {
         std::string opName;
