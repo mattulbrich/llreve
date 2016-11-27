@@ -72,11 +72,11 @@ class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
     virtual SharedSMTRef
     inlineLets(std::map<std::string, SharedSMTRef> assignments) const;
     virtual void toZ3(z3::context &cxt, z3::solver &solver,
-                      std::map<std::string, z3::expr> &nameMap,
-                      std::map<std::string, Z3DefineFun> &defineFunMap) const;
+                      llvm::StringMap<z3::expr> &nameMap,
+                      llvm::StringMap<Z3DefineFun> &defineFunMap) const;
     virtual z3::expr
-    toZ3Expr(z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
-             const std::map<std::string, Z3DefineFun> &defineFunMap) const;
+    toZ3Expr(z3::context &cxt, llvm::StringMap<z3::expr> &nameMap,
+             const llvm::StringMap<Z3DefineFun> &defineFunMap) const;
 };
 
 using SMTRef = std::unique_ptr<const SMTExpr>;
@@ -108,8 +108,8 @@ class Assert : public SMTExpr {
     SharedSMTRef
     inlineLets(std::map<std::string, SharedSMTRef> assignments) const override;
     void toZ3(z3::context &cxt, z3::solver &solver,
-              std::map<std::string, z3::expr> &nameMap,
-              std::map<std::string, Z3DefineFun> &defineFunMap) const override;
+              llvm::StringMap<z3::expr> &nameMap,
+              llvm::StringMap<Z3DefineFun> &defineFunMap) const override;
 };
 
 // TypedVariable is simply a reference to a variable with a type attached to it,
@@ -128,9 +128,9 @@ class TypedVariable : public SMTExpr {
     renameAssignments(std::map<std::string, int> variableMap) const override;
     SharedSMTRef
     inlineLets(std::map<std::string, SharedSMTRef> assignments) const override;
-    z3::expr toZ3Expr(
-        z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
-        const std::map<std::string, Z3DefineFun> &defineFunMap) const override;
+    z3::expr
+    toZ3Expr(z3::context &cxt, llvm::StringMap<z3::expr> &nameMap,
+             const llvm::StringMap<Z3DefineFun> &defineFunMap) const override;
 };
 
 class SortedVar {
@@ -200,8 +200,8 @@ class CheckSat : public SMTExpr {
     sexpr::SExprRef toSExpr() const override;
     SharedSMTRef compressLets(AssignmentVec defs) const override;
     void toZ3(z3::context &cxt, z3::solver &solver,
-              std::map<std::string, z3::expr> &nameMap,
-              std::map<std::string, Z3DefineFun> &defineFunMap) const override;
+              llvm::StringMap<z3::expr> &nameMap,
+              llvm::StringMap<Z3DefineFun> &defineFunMap) const override;
 };
 
 class GetModel : public SMTExpr {
@@ -209,8 +209,8 @@ class GetModel : public SMTExpr {
     sexpr::SExprRef toSExpr() const override;
     SharedSMTRef compressLets(AssignmentVec defs) const override;
     void toZ3(z3::context &cxt, z3::solver &solver,
-              std::map<std::string, z3::expr> &nameMap,
-              std::map<std::string, Z3DefineFun> &defineFunMap) const override;
+              llvm::StringMap<z3::expr> &nameMap,
+              llvm::StringMap<Z3DefineFun> &defineFunMap) const override;
 };
 
 class Let : public SMTExpr {
@@ -232,9 +232,9 @@ class Let : public SMTExpr {
     SharedSMTRef instantiateArrays() const override;
     SharedSMTRef
     inlineLets(std::map<std::string, SharedSMTRef> assignments) const override;
-    z3::expr toZ3Expr(
-        z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
-        const std::map<std::string, Z3DefineFun> &defineFunMap) const override;
+    z3::expr
+    toZ3Expr(z3::context &cxt, llvm::StringMap<z3::expr> &nameMap,
+             const llvm::StringMap<Z3DefineFun> &defineFunMap) const override;
 };
 
 // We could unify these in a generic type but it’s probably not worth the
@@ -251,9 +251,9 @@ class ConstantInt : public SMTExpr {
     llvm::APInt value;
     explicit ConstantInt(const llvm::APInt value) : value(value) {}
     sexpr::SExprRef toSExpr() const override;
-    z3::expr toZ3Expr(
-        z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
-        const std::map<std::string, Z3DefineFun> &defineFunMap) const override;
+    z3::expr
+    toZ3Expr(z3::context &cxt, llvm::StringMap<z3::expr> &nameMap,
+             const llvm::StringMap<Z3DefineFun> &defineFunMap) const override;
 };
 
 class ConstantBool : public SMTExpr {
@@ -262,9 +262,9 @@ class ConstantBool : public SMTExpr {
     explicit ConstantBool(bool value) : value(value) {}
     sexpr::SExprRef toSExpr() const override;
     SharedSMTRef compressLets(AssignmentVec defs) const override;
-    z3::expr toZ3Expr(
-        z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
-        const std::map<std::string, Z3DefineFun> &defineFunMap) const override;
+    z3::expr
+    toZ3Expr(z3::context &cxt, llvm::StringMap<z3::expr> &nameMap,
+             const llvm::StringMap<Z3DefineFun> &defineFunMap) const override;
 };
 
 // This is for constants or expressions that have not been parsed and should
@@ -280,9 +280,9 @@ class ConstantString : public SMTExpr {
     renameAssignments(std::map<std::string, int> variableMap) const override;
     SharedSMTRef
     inlineLets(std::map<std::string, SharedSMTRef> assignments) const override;
-    z3::expr toZ3Expr(
-        z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
-        const std::map<std::string, Z3DefineFun> &defineFunMap) const override;
+    z3::expr
+    toZ3Expr(z3::context &cxt, llvm::StringMap<z3::expr> &nameMap,
+             const llvm::StringMap<Z3DefineFun> &defineFunMap) const override;
 };
 
 class Op : public SMTExpr {
@@ -308,9 +308,9 @@ class Op : public SMTExpr {
     SharedSMTRef instantiateArrays() const override;
     SharedSMTRef
     inlineLets(std::map<std::string, SharedSMTRef> assignments) const override;
-    z3::expr toZ3Expr(
-        z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
-        const std::map<std::string, Z3DefineFun> &defineFunMap) const override;
+    z3::expr
+    toZ3Expr(z3::context &cxt, llvm::StringMap<z3::expr> &nameMap,
+             const llvm::StringMap<Z3DefineFun> &defineFunMap) const override;
 };
 
 class FPCmp : public SMTExpr {
@@ -386,8 +386,8 @@ class TypeCast : public SMTExpr {
     SharedSMTRef
     inlineLets(std::map<std::string, SharedSMTRef> assignments) const override;
     z3::expr
-    toZ3Expr(z3::context &cxt, std::map<std::string, z3::expr> &,
-             const std::map<std::string, Z3DefineFun> &funMap) const override;
+    toZ3Expr(z3::context &cxt, llvm::StringMap<z3::expr> &,
+             const llvm::StringMap<Z3DefineFun> &funMap) const override;
 };
 
 class Query : public SMTExpr {
@@ -437,8 +437,8 @@ class FunDef : public SMTExpr {
     sexpr::SExprRef toSExpr() const override;
     SharedSMTRef instantiateArrays() const override;
     void toZ3(z3::context &cxt, z3::solver &solver,
-              std::map<std::string, z3::expr> &nameMap,
-              std::map<std::string, Z3DefineFun> &defineFunMap) const override;
+              llvm::StringMap<z3::expr> &nameMap,
+              llvm::StringMap<Z3DefineFun> &defineFunMap) const override;
 };
 
 class Comment : public SMTExpr {
@@ -454,8 +454,8 @@ class VarDecl : public SMTExpr {
     SortedVar var;
     sexpr::SExprRef toSExpr() const override;
     void toZ3(z3::context &cxt, z3::solver &solver,
-              std::map<std::string, z3::expr> &nameMap,
-              std::map<std::string, Z3DefineFun> &defineFunMap) const override;
+              llvm::StringMap<z3::expr> &nameMap,
+              llvm::StringMap<Z3DefineFun> &defineFunMap) const override;
 };
 
 auto nestLets(SharedSMTRef clause, llvm::ArrayRef<Assignment> defs)

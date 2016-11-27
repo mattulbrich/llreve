@@ -803,8 +803,8 @@ SharedSMTRef FPCmp::inlineLets(map<string, SharedSMTRef> assignments) const {
 // Implementations for using the z3 API
 
 void VarDecl::toZ3(z3::context &cxt, z3::solver & /* unused */,
-                   std::map<std::string, z3::expr> &nameMap,
-                   std::map<std::string, Z3DefineFun> & /* unused */) const {
+                   llvm::StringMap<z3::expr> &nameMap,
+                   llvm::StringMap<Z3DefineFun> & /* unused */) const {
     if (var.type->getTag() == TypeTag::Int) {
         z3::expr c = cxt.int_const(var.name.c_str());
         auto it = nameMap.insert({var.name, c});
@@ -831,43 +831,44 @@ void VarDecl::toZ3(z3::context &cxt, z3::solver & /* unused */,
 }
 
 void Assert::toZ3(z3::context &cxt, z3::solver &solver,
-                  std::map<std::string, z3::expr> &nameMap,
-                  std::map<std::string, Z3DefineFun> &defineFunMap) const {
+                  llvm::StringMap<z3::expr> &nameMap,
+                  llvm::StringMap<Z3DefineFun> &defineFunMap) const {
     solver.add(expr->toZ3Expr(cxt, nameMap, defineFunMap));
 }
 
 void CheckSat::toZ3(z3::context & /* unused */, z3::solver & /* unused */,
-                    std::map<std::string, z3::expr> & /* unused */,
-                    std::map<std::string, Z3DefineFun> & /* unused */) const {
+                    llvm::StringMap<z3::expr> & /* unused */,
+                    llvm::StringMap<Z3DefineFun> & /* unused */) const {
     /* noop */
 }
 
 void GetModel::toZ3(z3::context & /* unused */, z3::solver & /* unused */,
-                    std::map<std::string, z3::expr> & /* unused */,
-                    std::map<std::string, Z3DefineFun> & /* unused */) const {
+                    llvm::StringMap<z3::expr> & /* unused */,
+                    llvm::StringMap<Z3DefineFun> & /* unused */) const {
     /* noop */
 }
 
 void SMTExpr::toZ3(z3::context & /* unused */, z3::solver & /* unused */,
-                   std::map<std::string, z3::expr> & /* unused */,
-                   std::map<std::string, Z3DefineFun> &
+                   llvm::StringMap<z3::expr> & /* unused */,
+                   llvm::StringMap<Z3DefineFun> &
                    /* unused */) const {
     logError("Unsupported smt toplevel\n");
     std::cerr << *toSExpr();
     exit(1);
 }
 
-z3::expr SMTExpr::toZ3Expr(
-    z3::context & /* unused */, std::map<std::string, z3::expr> & /* unused */,
-    const std::map<std::string, Z3DefineFun> & /* unused */) const {
+z3::expr
+SMTExpr::toZ3Expr(z3::context & /* unused */,
+                  llvm::StringMap<z3::expr> & /* unused */,
+                  const llvm::StringMap<Z3DefineFun> & /* unused */) const {
     logError("Unsupported smtexpr\n");
     std::cerr << *toSExpr();
     exit(1);
 }
 
-z3::expr
-TypeCast::toZ3Expr(z3::context &cxt, map<string, z3::expr> &nameMap,
-                   const std::map<std::string, Z3DefineFun> &funMap) const {
+z3::expr TypeCast::toZ3Expr(z3::context &cxt,
+                            llvm::StringMap<z3::expr> &nameMap,
+                            const llvm::StringMap<Z3DefineFun> &funMap) const {
     if (SMTGenerationOpts::getInstance().BitVect) {
         logError("Bitvector mode not implemented for using the Z3 API for "
                  "typecasts\n");
@@ -878,38 +879,39 @@ TypeCast::toZ3Expr(z3::context &cxt, map<string, z3::expr> &nameMap,
 }
 
 z3::expr TypedVariable::toZ3Expr(
-    z3::context &cxt, map<string, z3::expr> &nameMap,
-    const std::map<std::string, Z3DefineFun> & /* unused */) const {
+    z3::context &cxt, llvm::StringMap<z3::expr> &nameMap,
+    const llvm::StringMap<Z3DefineFun> & /* unused */) const {
     if (nameMap.count(name) == 0) {
         std::cerr << "Z3 serialization error: '" << name
                   << "' not in variable map\n";
         exit(1);
     } else {
-        return nameMap.at(name);
+        return nameMap.find(name)->second;
     }
 }
 
 z3::expr ConstantString::toZ3Expr(
-    z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
-    const std::map<std::string, Z3DefineFun> & /* unused */) const {
+    z3::context &cxt, llvm::StringMap<z3::expr> &nameMap,
+    const llvm::StringMap<Z3DefineFun> & /* unused */) const {
     if (nameMap.count(value) == 0) {
         std::cerr << "Z3 serialization error: '" << value
                   << "' not in variable map\n";
         exit(1);
     } else {
-        return nameMap.at(value);
+        return nameMap.find(value)->second;
     }
 }
 
 z3::expr ConstantBool::toZ3Expr(
-    z3::context &cxt, std::map<std::string, z3::expr> & /* unused */,
-    const std::map<std::string, Z3DefineFun> & /* unused */) const {
+    z3::context &cxt, llvm::StringMap<z3::expr> & /* unused */,
+    const llvm::StringMap<Z3DefineFun> & /* unused */) const {
     return cxt.bool_val(value);
 }
 
 z3::expr
-ConstantInt::toZ3Expr(z3::context &cxt, map<string, z3::expr> & /* unused */,
-                      const map<string, Z3DefineFun> & /* unused */) const {
+ConstantInt::toZ3Expr(z3::context &cxt,
+                      llvm::StringMap<z3::expr> & /* unused */,
+                      const llvm::StringMap<Z3DefineFun> & /* unused */) const {
     if (SMTGenerationOpts::getInstance().BitVect) {
         logError("Bitvector serialization for z3 is not yet implemented\n");
         exit(1);
@@ -918,9 +920,8 @@ ConstantInt::toZ3Expr(z3::context &cxt, map<string, z3::expr> & /* unused */,
     }
 }
 
-z3::expr
-Let::toZ3Expr(z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
-              const std::map<std::string, Z3DefineFun> &defineFunMap) const {
+z3::expr Let::toZ3Expr(z3::context &cxt, llvm::StringMap<z3::expr> &nameMap,
+                       const llvm::StringMap<Z3DefineFun> &defineFunMap) const {
     for (const auto &assgn : defs) {
         auto e = assgn.second->toZ3Expr(cxt, nameMap, defineFunMap);
         auto it = nameMap.insert({assgn.first, e});
@@ -931,11 +932,10 @@ Let::toZ3Expr(z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
     return expr->toZ3Expr(cxt, nameMap, defineFunMap);
 }
 
-z3::expr
-Op::toZ3Expr(z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
-             const std::map<std::string, Z3DefineFun> &defineFunMap) const {
+z3::expr Op::toZ3Expr(z3::context &cxt, llvm::StringMap<z3::expr> &nameMap,
+                      const llvm::StringMap<Z3DefineFun> &defineFunMap) const {
     if (defineFunMap.count(opName) > 0) {
-        auto fun = defineFunMap.at(opName);
+        auto fun = defineFunMap.find(opName)->second;
         z3::expr_vector src = fun.vars;
         z3::expr_vector dst(cxt);
         for (const auto &arg : args) {
@@ -1051,8 +1051,8 @@ Op::toZ3Expr(z3::context &cxt, std::map<std::string, z3::expr> &nameMap,
 }
 
 void FunDef::toZ3(z3::context &cxt, z3::solver & /* unused */,
-                  std::map<std::string, z3::expr> &nameMap,
-                  std::map<std::string, Z3DefineFun> &defineFunMap) const {
+                  llvm::StringMap<z3::expr> &nameMap,
+                  llvm::StringMap<Z3DefineFun> &defineFunMap) const {
     z3::expr_vector vars(cxt);
     for (const auto &arg : args) {
         if (arg.type->getTag() == TypeTag::Int) {
@@ -1084,7 +1084,8 @@ void FunDef::toZ3(z3::context &cxt, z3::solver & /* unused */,
 SharedSMTRef fastNestLets(SharedSMTRef clause,
                           llvm::ArrayRef<Assignment> defs) {
     for (auto i = defs.rbegin(); i != defs.rend(); ++i) {
-        clause = std::make_unique<Let>(AssignmentVec({std::move(*i)}), std::move(clause));
+        clause = std::make_unique<Let>(AssignmentVec({std::move(*i)}),
+                                       std::move(clause));
     }
     return clause;
 }

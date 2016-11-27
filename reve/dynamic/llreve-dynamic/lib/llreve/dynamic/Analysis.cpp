@@ -377,8 +377,8 @@ cegarDriver(MonoPair<llvm::Module &> modules,
         vector<SharedSMTRef> clauses =
             generateSMT(modules, analysisResults, fileOpts);
         z3Solver.reset();
-        std::map<std::string, z3::expr> nameMap;
-        std::map<std::string, smt::Z3DefineFun> defineFunMap;
+        llvm::StringMap<z3::expr> nameMap;
+        llvm::StringMap<smt::Z3DefineFun> defineFunMap;
         vector<SharedSMTRef> z3Clauses;
         set<SortedVar> introducedVariables;
         for (const auto &clause : clauses) {
@@ -483,55 +483,57 @@ static bool convertZ3Bool(Z3_lbool val) {
 }
 
 ModelValues parseZ3Model(const z3::context &z3Cxt, const z3::model &model,
-                         const std::map<std::string, z3::expr> &nameMap,
+                         const llvm::StringMap<z3::expr> &nameMap,
                          const AnalysisResultsMap &analysisResults) {
     map<string, ArrayVal> arrays;
     map<string, mpz_class> values;
 
-    Mark startMark =
-        Mark(model.eval(nameMap.at("INV_INDEX_START")).get_numeral_int());
-    Mark endMark =
-        Mark(model.eval(nameMap.at("INV_INDEX_END")).get_numeral_int());
+    Mark startMark = Mark(
+        model.eval(nameMap.find("INV_INDEX_START")->second).get_numeral_int());
+    Mark endMark = Mark(
+        model.eval(nameMap.find("INV_INDEX_END")->second).get_numeral_int());
     values.insert({"INV_INDEX_START", startMark.asInt()});
     values.insert({"INV_INDEX_END", endMark.asInt()});
-    bool main =
-        convertZ3Bool(Z3_get_bool_value(z3Cxt, model.eval(nameMap.at("MAIN"))));
-    bool program1 = convertZ3Bool(
-        Z3_get_bool_value(z3Cxt, model.eval(nameMap.at("PROGRAM_1"))));
-    bool program2 = convertZ3Bool(
-        Z3_get_bool_value(z3Cxt, model.eval(nameMap.at("PROGRAM_2"))));
+    bool main = convertZ3Bool(
+        Z3_get_bool_value(z3Cxt, model.eval(nameMap.find("MAIN")->second)));
+    bool program1 = convertZ3Bool(Z3_get_bool_value(
+        z3Cxt, model.eval(nameMap.find("PROGRAM_1")->second)));
+    bool program2 = convertZ3Bool(Z3_get_bool_value(
+        z3Cxt, model.eval(nameMap.find("PROGRAM_2")->second)));
     const llvm::Function *function1 = nullptr;
     const llvm::Function *function2 = nullptr;
     if (program1) {
         function1 =
             SMTGenerationOpts::getInstance().ReversedFunctionNumerals.first.at(
-                model.eval(nameMap.at("FUNCTION_1")).get_numeral_int64());
+                model.eval(nameMap.find("FUNCTION_1")->second)
+                    .get_numeral_int64());
         for (const auto &var :
              getPrimitiveFreeVariables(function1, startMark, analysisResults)) {
             std::string stringVal = Z3_get_numeral_string(
-                z3Cxt, model.eval(nameMap.at(var.name + "_old")));
+                z3Cxt, model.eval(nameMap.find(var.name + "_old")->second));
             values.insert({var.name + "_old", mpz_class(stringVal)});
         }
     }
     if (program2) {
         function2 =
             SMTGenerationOpts::getInstance().ReversedFunctionNumerals.second.at(
-                model.eval(nameMap.at("FUNCTION_2")).get_numeral_int64());
+                model.eval(nameMap.find("FUNCTION_2")->second)
+                    .get_numeral_int64());
         for (const auto &var :
              getPrimitiveFreeVariables(function2, startMark, analysisResults)) {
             std::string stringVal = Z3_get_numeral_string(
-                z3Cxt, model.eval(nameMap.at(var.name + "_old")));
+                z3Cxt, model.eval(nameMap.find(var.name + "_old")->second));
             values.insert({var.name + "_old", mpz_class(stringVal)});
         }
     }
     if (SMTGenerationOpts::getInstance().Heap ==
         llreve::opts::HeapOpt::Enabled) {
         if (program1) {
-            auto heap1Eval = model.eval(nameMap.at("HEAP$1_old"));
+            auto heap1Eval = model.eval(nameMap.find("HEAP$1_old")->second);
             arrays.insert({"HEAP$1_old", getArrayVal(z3Cxt, heap1Eval)});
         }
         if (program2) {
-            auto heap2Eval = model.eval(nameMap.at("HEAP$2_old"));
+            auto heap2Eval = model.eval(nameMap.find("HEAP$2_old")->second);
             arrays.insert({"HEAP$2_old", getArrayVal(z3Cxt, heap2Eval)});
         }
     }
