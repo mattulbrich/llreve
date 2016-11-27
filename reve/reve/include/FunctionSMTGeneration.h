@@ -101,7 +101,8 @@ inline bool operator<(const MarkPair &lhs, const MarkPair &rhs) {
 }
 
 auto getSynchronizedPaths(const PathMap &pathMap1, const PathMap &pathMap2,
-                          const FreeVarsMap &freeVarsMap,
+                          const FreeVarsMap &freeVarsMap1,
+                          const FreeVarsMap &freeVarsMap2,
                           ReturnInvariantGenerator generateReturnInvariant)
     -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
 
@@ -121,11 +122,12 @@ auto nonmutualPaths(PathMap pathMap, FreeVarsMap freeVarsMap, Program prog,
                     std::string funName, const llvm::Type *type,
                     std::vector<smt::SharedSMTRef> functionNumeralConstraints)
     -> std::vector<smt::SharedSMTRef>;
-auto getOffByNPaths(PathMap pathMap1, PathMap pathMap2, FreeVarsMap freeVarsMap,
-                    std::string funName, bool main)
+auto getOffByNPaths(const PathMap &pathMap1, const PathMap &pathMap2,
+                    const FreeVarsMap &freeVarsMap, std::string funName,
+                    bool main)
     -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
-auto offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
-                       FreeVarsMap freeVarsMap, Program prog,
+auto offByNPathsOneDir(const PathMap &pathMap, const PathMap &otherPathMap,
+                       const FreeVarsMap &freeVarsMap, Program prog,
                        std::string funName, bool main)
     -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
 
@@ -184,8 +186,9 @@ auto splitAssignmentsFromCalls(
 auto checkPathMaps(PathMap map1, PathMap map2) -> void;
 auto mapSubset(PathMap map1, PathMap map2) -> bool;
 auto getDontLoopInvariant(smt::SMTRef endClause, Mark startIndex,
-                          PathMap pathMap, FreeVarsMap freeVarsMap,
-                          Program prog) -> smt::SMTRef;
+                          const PathMap &pathMap,
+                          const FreeVarsMap &freeVarsMap, Program prog)
+    -> smt::SMTRef;
 auto addAssignments(const smt::SharedSMTRef end,
                     llvm::ArrayRef<AssignmentBlock> assignments)
     -> smt::SharedSMTRef;

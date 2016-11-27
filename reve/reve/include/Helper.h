@@ -84,11 +84,13 @@ template <typename T> std::unique_ptr<const smt::SMTExpr> resolveGEP(T &gep) {
 template <typename Key, typename Val>
 auto unionWith(std::map<Key, Val> mapA, std::map<Key, Val> mapB,
                std::function<Val(Val, Val)> combine) -> std::map<Key, Val> {
-    for (auto pair : mapB) {
-        if (mapA.find(pair.first) == mapA.end()) {
-            mapA.insert(pair);
+    for (auto &pair : mapB) {
+        auto it = mapA.find(pair.first);
+        if (it == mapA.end()) {
+            mapA.insert(std::move(pair));
         } else {
-            mapA.at(pair.first) = combine(mapA.at(pair.first), pair.second);
+            it->second =
+                combine(std::move(mapA.at(pair.first)), std::move(pair.second));
         }
     }
     return mapA;
@@ -118,7 +120,7 @@ auto mergeVectorMaps(std::map<K, std::vector<V>> a,
                      std::map<K, std::vector<V>> b)
     -> std::map<K, std::vector<V>> {
     return unionWith<K, std::vector<V>>(
-        a, b, [](std::vector<V> a, std::vector<V> b) {
+        std::move(a), std::move(b), [](std::vector<V> a, std::vector<V> b) {
             a.insert(a.end(), b.begin(), b.end());
             return a;
         });
