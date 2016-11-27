@@ -36,6 +36,7 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
                                        bool onlyPhis, Program prog) {
     const int progIndex = programIndex(prog);
     vector<DefOrCallInfo> definitions;
+    definitions.reserve(BB.size());
     assert(BB.size() >= 1); // There should be at least a terminator instruction
     bool ignorePhis = prevBb == nullptr;
     for (auto instr = BB.begin(), e = std::prev(BB.end(), 1); instr != e;
@@ -159,15 +160,6 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             BinOp->getName(), combineOp(*BinOp, opName(*BinOp),
                                         instrNameOrVal(BinOp->getOperand(0)),
                                         instrNameOrVal(BinOp->getOperand(1)))));
-    }
-    if (const auto fcmpInst = llvm::dyn_cast<llvm::FCmpInst>(&Instr)) {
-        auto cmp = std::make_unique<FPCmp>(
-            fpPredicate(fcmpInst->getPredicate()),
-            llvmType(fcmpInst->getOperand(0)->getType()),
-            instrNameOrVal(fcmpInst->getOperand(0)),
-            instrNameOrVal(fcmpInst->getOperand(1)));
-        return vecSingleton(
-            makeAssignment(fcmpInst->getName(), std::move(cmp)));
     }
     if (const auto cmpInst = llvm::dyn_cast<llvm::CmpInst>(&Instr)) {
         SMTRef cmp = makeOp(
@@ -331,6 +323,15 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             makeAssignment(string(allocaInst->getName()) + "_OnStack",
                            make_unique<ConstantBool>(true)));
         return result;
+    }
+    if (const auto fcmpInst = llvm::dyn_cast<llvm::FCmpInst>(&Instr)) {
+        auto cmp = std::make_unique<FPCmp>(
+            fpPredicate(fcmpInst->getPredicate()),
+            llvmType(fcmpInst->getOperand(0)->getType()),
+            instrNameOrVal(fcmpInst->getOperand(0)),
+            instrNameOrVal(fcmpInst->getOperand(1)));
+        return vecSingleton(
+            makeAssignment(fcmpInst->getName(), std::move(cmp)));
     }
     logErrorData("Couldn’t convert instruction to def\n", Instr);
     return vecSingleton(
