@@ -49,9 +49,7 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> functions,
     const auto funArgsPair = getFunctionArguments(functions, analysisResults);
     const auto freeVarsMap = getFreeVarsMap(functions, analysisResults);
     const auto synchronizedPaths = getSynchronizedPaths(
-        pathMaps.first, pathMaps.second,
-        analysisResults.at(functions.first).freeVariables,
-        analysisResults.at(functions.second).freeVariables,
+        pathMaps.first, pathMaps.second, freeVarsMap,
         [&freeVarsMap, funName](Mark startIndex, Mark endIndex) {
             return invariant(startIndex, endIndex, freeVarsMap.at(startIndex),
                              freeVarsMap.at(endIndex), ProgramSelection::Both,
@@ -130,9 +128,7 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
     }
 
     auto synchronizedPaths = getSynchronizedPaths(
-        pathMaps.first, pathMaps.second,
-        analysisResults.at(functions.first).freeVariables,
-        analysisResults.at(functions.second).freeVariables,
+        pathMaps.first, pathMaps.second, freeVarsMap,
         [&freeVarsMap, funName](Mark startIndex, Mark endIndex) {
             SMTRef endInvariant =
                 mainInvariant(endIndex, freeVarsMap.at(endIndex), funName);
@@ -183,8 +179,7 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
 
 map<MarkPair, vector<SharedSMTRef>>
 getSynchronizedPaths(const PathMap &pathMap1, const PathMap &pathMap2,
-                     const FreeVarsMap &freeVarsMap1,
-                     const FreeVarsMap &freeVarsMap2,
+                     const FreeVarsMap &freeVarsMap,
                      ReturnInvariantGenerator generateReturnInvariant) {
     map<MarkPair, vector<SharedSMTRef>> clauses;
     for (const auto &pathMapIt : pathMap1) {
@@ -198,10 +193,10 @@ getSynchronizedPaths(const PathMap &pathMap1, const PathMap &pathMap2,
                     for (const auto &path2 : paths) {
                         bool returnPath = endIndex == EXIT_MARK;
                         const auto assignments1 = assignmentsOnPath(
-                            path1, Program::First, freeVarsMap1.at(startIndex),
+                            path1, Program::First, freeVarsMap.at(startIndex),
                             returnPath);
                         const auto assignments2 = assignmentsOnPath(
-                            path2, Program::Second, freeVarsMap2.at(startIndex),
+                            path2, Program::Second, freeVarsMap.at(startIndex),
                             returnPath);
                         clauses[{startIndex, endIndex}].push_back(
                             interleaveAssignments(
@@ -317,20 +312,21 @@ nonmutualPaths(PathMap pathMap, FreeVarsMap freeVarsMap, Program prog,
                                    functionNumeralConstraints);
 }
 
-map<MarkPair, vector<SharedSMTRef>>
-getOffByNPaths(const PathMap &pathMap1, const PathMap &pathMap2,
-               const FreeVarsMap &freeVarsMap, string funName, bool main) {
+map<MarkPair, vector<SharedSMTRef>> getOffByNPaths(PathMap pathMap1,
+                                                   PathMap pathMap2,
+                                                   FreeVarsMap freeVarsMap,
+                                                   string funName, bool main) {
     vector<SharedSMTRef> paths;
-    auto firstPaths = offByNPathsOneDir(pathMap1, pathMap2, freeVarsMap,
-                                        Program::First, funName, main);
-    auto secondPaths = offByNPathsOneDir(pathMap2, pathMap1, freeVarsMap,
-                                         Program::Second, funName, main);
-    return mergeVectorMaps(std::move(firstPaths), std::move(secondPaths));
+    const auto firstPaths = offByNPathsOneDir(pathMap1, pathMap2, freeVarsMap,
+                                              Program::First, funName, main);
+    const auto secondPaths = offByNPathsOneDir(pathMap2, pathMap1, freeVarsMap,
+                                               Program::Second, funName, main);
+    return mergeVectorMaps(firstPaths, secondPaths);
 }
 
 map<MarkPair, vector<SharedSMTRef>>
-offByNPathsOneDir(const PathMap &pathMap, const PathMap &otherPathMap,
-                  const FreeVarsMap &freeVarsMap, Program prog, string funName,
+offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
+                  FreeVarsMap freeVarsMap, Program prog, string funName,
                   bool main) {
     const int progIndex = programIndex(prog);
     map<MarkPair, vector<SharedSMTRef>> clauses;
@@ -394,15 +390,17 @@ offByNPathsOneDir(const PathMap &pathMap, const PathMap &otherPathMap,
 vector<AssignmentCallBlock> assignmentsOnPath(const Path &path, Program prog,
                                               const vector<SortedVar> &freeVars,
                                               bool toEnd) {
+    const int progIndex = programIndex(prog);
+    const auto filteredFreeVars = filterVars(progIndex, freeVars);
+
     vector<AssignmentCallBlock> allDefs;
     set<string> constructed;
     vector<CallInfo> callInfos;
 
     // Set the new values to the initial values
     vector<DefOrCallInfo> oldDefs;
-    oldDefs.reserve(freeVars.size());
-    for (const auto &var : freeVars) {
-        oldDefs.emplace_back(DefOrCallInfo(make_unique<Assignment>(
+    for (const auto &var : filteredFreeVars) {
+        oldDefs.push_back(DefOrCallInfo(make_unique<Assignment>(
             var.name,
             make_unique<TypedVariable>(var.name + "_old", var.type->copy()))));
     }
@@ -811,30 +809,27 @@ bool mapSubset(PathMap map1, PathMap map2) {
     return true;
 }
 
-SMTRef getDontLoopInvariant(SMTRef endClause, Mark startIndex,
-                            const PathMap &pathMap, const FreeVarsMap &freeVars,
-                            Program prog) {
+SMTRef getDontLoopInvariant(SMTRef endClause, Mark startIndex, PathMap pathMap,
+                            FreeVarsMap freeVars, Program prog) {
     SMTRef clause = std::move(endClause);
     vector<Path> dontLoopPaths;
-    for (const auto &pathMapIt : pathMap.at(startIndex)) {
+    for (auto pathMapIt : pathMap.at(startIndex)) {
         if (pathMapIt.first == startIndex) {
-            for (const auto &path : pathMapIt.second) {
+            for (auto path : pathMapIt.second) {
                 dontLoopPaths.push_back(path);
             }
         }
     }
     vector<SharedSMTRef> dontLoopExprs;
-    dontLoopExprs.reserve(dontLoopPaths.size());
-    for (const auto &path : dontLoopPaths) {
+    for (auto path : dontLoopPaths) {
         auto defs =
             assignmentsOnPath(path, prog, freeVars.at(startIndex), false);
-        auto smt = nonmutualSMT(make_unique<ConstantBool>(false),
-                                std::move(defs), prog);
-        dontLoopExprs.push_back(std::move(smt));
+        auto smt = nonmutualSMT(make_unique<ConstantBool>(false), defs, prog);
+        dontLoopExprs.push_back(smt);
     }
     if (!dontLoopExprs.empty()) {
-        auto andExpr = make_shared<Op>("and", std::move(dontLoopExprs));
-        clause = makeOp("=>", std::move(andExpr), std::move(clause));
+        auto andExpr = make_shared<Op>("and", dontLoopExprs);
+        clause = makeOp("=>", andExpr, std::move(clause));
     }
     return clause;
 }
