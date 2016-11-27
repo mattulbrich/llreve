@@ -393,24 +393,23 @@ vector<AssignmentCallBlock> assignmentsOnPath(const Path &path, Program prog,
     const int progIndex = programIndex(prog);
     const auto filteredFreeVars = filterVars(progIndex, freeVars);
 
-    vector<AssignmentCallBlock> allDefs;
-    set<string> constructed;
-    vector<CallInfo> callInfos;
-
     // Set the new values to the initial values
     vector<DefOrCallInfo> oldDefs;
+    oldDefs.reserve(filteredFreeVars.size());
     for (const auto &var : filteredFreeVars) {
-        oldDefs.push_back(DefOrCallInfo(make_unique<Assignment>(
+        oldDefs.emplace_back(make_unique<Assignment>(
             var.name,
-            make_unique<TypedVariable>(var.name + "_old", var.type->copy()))));
+            make_unique<TypedVariable>(var.name + "_old", var.type->copy())));
     }
-    allDefs.push_back(AssignmentCallBlock(std::move(oldDefs), nullptr));
+    vector<AssignmentCallBlock> allDefs;
+    allDefs.reserve(2 + path.Edges.size());
+    allDefs.emplace_back(std::move(oldDefs), nullptr);
 
     // First block of path, this is special, because we don’t have a
     // previous
     // block so we can’t resolve phi nodes
-    allDefs.push_back(AssignmentCallBlock(
-        blockAssignments(*path.Start, nullptr, false, prog), nullptr));
+    allDefs.emplace_back(blockAssignments(*path.Start, nullptr, false, prog),
+                         nullptr);
 
     auto prev = path.Start;
 
@@ -419,9 +418,9 @@ vector<AssignmentCallBlock> assignmentsOnPath(const Path &path, Program prog,
     for (const auto &edge : path.Edges) {
         i++;
         const bool last = i == path.Edges.size();
-        allDefs.push_back(AssignmentCallBlock(
+        allDefs.emplace_back(
             blockAssignments(*edge.Block, prev, last && !toEnd, prog),
-            edge.Cond == nullptr ? nullptr : edge.Cond->toSmt()));
+            edge.Cond == nullptr ? nullptr : edge.Cond->toSmt());
         prev = edge.Block;
     }
     return allDefs;
