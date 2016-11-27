@@ -45,7 +45,7 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
         if (!ignorePhis && llvm::isa<llvm::PHINode>(instr)) {
             auto assignments = instrAssignment(*instr, prevBb, prog);
             for (auto &assignment : assignments) {
-                definitions.push_back(DefOrCallInfo(std::move(assignment)));
+                definitions.emplace_back(std::move(assignment));
             }
         }
         if (!onlyPhis && !llvm::isa<llvm::PHINode>(instr)) {
@@ -59,28 +59,28 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
                     vector<DefOrCallInfo> defs =
                         memcpyIntrinsic(CallInst, prog);
                     for (auto &def : defs) {
-                        definitions.push_back(std::move(def));
+                        definitions.emplace_back(std::move(def));
                     }
                 } else {
                     if (SMTGenerationOpts::getInstance().Heap ==
                         HeapOpt::Enabled) {
-                        definitions.push_back(DefOrCallInfo(makeAssignment(
+                        definitions.emplace_back(makeAssignment(
                             heapName(progIndex),
-                            memoryVariable(heapName(progIndex)))));
+                            memoryVariable(heapName(progIndex))));
                     }
-                    definitions.push_back(DefOrCallInfo(
-                        toCallInfo(CallInst->getName(), prog, *CallInst)));
+                    definitions.emplace_back(
+                        toCallInfo(CallInst->getName(), prog, *CallInst));
                     if (SMTGenerationOpts::getInstance().Heap ==
                         HeapOpt::Enabled) {
-                        definitions.push_back(DefOrCallInfo(makeAssignment(
+                        definitions.emplace_back(makeAssignment(
                             heapName(progIndex),
-                            memoryVariable(heapName(progIndex) + "_res"))));
+                            memoryVariable(heapName(progIndex) + "_res")));
                     }
                 }
             } else {
                 auto assignments = instrAssignment(*instr, prevBb, prog);
                 for (auto &assignment : assignments) {
-                    definitions.push_back(DefOrCallInfo(std::move(assignment)));
+                    definitions.push_back(std::move(assignment));
                 }
             }
         }
@@ -119,7 +119,8 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             return vecSingleton(
                 makeAssignment(BinOp->getName(), std::move(op)));
         }
-        if (SMTGenerationOpts::getInstance().ByteHeap == ByteHeapOpt::Disabled &&
+        if (SMTGenerationOpts::getInstance().ByteHeap ==
+                ByteHeapOpt::Disabled &&
             BinOp->getOpcode() == Instruction::SDiv) {
             // This is a heuristic to remove divisions by 4 of pointer
             // subtractions
