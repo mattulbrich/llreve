@@ -138,7 +138,7 @@ auto mergeNestedVectorMaps(std::map<K1, std::map<K2, std::vector<V>>> a,
         });
 }
 
-auto filterVars(int program, std::vector<smt::SortedVar> vars)
+auto filterVars(int program, const std::vector<smt::SortedVar> &vars)
     -> std::vector<smt::SortedVar>;
 
 auto llvmValToSortedVar(const llvm::Value *val) -> smt::SortedVar;
