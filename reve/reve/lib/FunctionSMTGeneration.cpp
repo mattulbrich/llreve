@@ -48,8 +48,11 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> functions,
     const string funName = getFunctionName(functions);
     const auto funArgsPair = getFunctionArguments(functions, analysisResults);
     const auto freeVarsMap = getFreeVarsMap(functions, analysisResults);
+    const auto freeVarsMap1 = analysisResults.at(functions.first).freeVariables;
+    const auto freeVarsMap2 =
+        analysisResults.at(functions.second).freeVariables;
     const auto synchronizedPaths = getSynchronizedPaths(
-        pathMaps.first, pathMaps.second, freeVarsMap,
+        pathMaps.first, pathMaps.second, freeVarsMap1, freeVarsMap2,
         [&freeVarsMap, funName](Mark startIndex, Mark endIndex) {
             return invariant(startIndex, endIndex, freeVarsMap.at(startIndex),
                              freeVarsMap.at(endIndex), ProgramSelection::Both,
@@ -66,7 +69,7 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> functions,
         for (const auto &path : it.second) {
             auto clause = forallStartingAt(
                 path, freeVarsMap.at(it.first.startMark), it.first.startMark,
-                ProgramSelection::Both, funName, false, freeVarsMap);
+                ProgramSelection::Both, funName, false);
             smtExprs[it.first].push_back(clause);
         }
     }
@@ -75,9 +78,9 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> functions,
         getForbiddenPaths(pathMaps, marked, freeVarsMap, funName, false);
     for (const auto &it : forbiddenPaths) {
         for (const auto &path : it.second) {
-            auto clause = forallStartingAt(path, freeVarsMap.at(it.first),
-                                           it.first, ProgramSelection::Both,
-                                           funName, false, freeVarsMap);
+            auto clause =
+                forallStartingAt(path, freeVarsMap.at(it.first), it.first,
+                                 ProgramSelection::Both, funName, false);
             smtExprs[{it.first, FORBIDDEN_MARK}].push_back(clause);
         }
     }
@@ -88,10 +91,9 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> functions,
                                                 freeVarsMap, funName, false);
         for (const auto &it : offByNPaths) {
             for (const auto &path : it.second) {
-                auto clause =
-                    forallStartingAt(path, freeVarsMap.at(it.first.startMark),
-                                     it.first.startMark, ProgramSelection::Both,
-                                     funName, false, freeVarsMap);
+                auto clause = forallStartingAt(
+                    path, freeVarsMap.at(it.first.startMark),
+                    it.first.startMark, ProgramSelection::Both, funName, false);
                 smtExprs[{it.first.startMark, it.first.startMark}].push_back(
                     clause);
             }
@@ -114,6 +116,9 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
     const string funName = getFunctionName(functions);
     const auto funArgsPair = getFunctionArguments(functions, analysisResults);
     const auto freeVarsMap = getFreeVarsMap(functions, analysisResults);
+    const auto freeVarsMap1 = analysisResults.at(functions.first).freeVariables;
+    const auto freeVarsMap2 =
+        analysisResults.at(functions.second).freeVariables;
     vector<SharedSMTRef> smtExprs;
 
     const llvm::Type *returnType = functions.first->getReturnType();
@@ -128,7 +133,7 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
     }
 
     auto synchronizedPaths = getSynchronizedPaths(
-        pathMaps.first, pathMaps.second, freeVarsMap,
+        pathMaps.first, pathMaps.second, freeVarsMap1, freeVarsMap2,
         [&freeVarsMap, funName](Mark startIndex, Mark endIndex) {
             SMTRef endInvariant =
                 mainInvariant(endIndex, freeVarsMap.at(endIndex), funName);
@@ -156,15 +161,15 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
         for (auto &path : it.second) {
             auto clause = forallStartingAt(
                 path, freeVarsMap.at(it.first.startMark), it.first.startMark,
-                ProgramSelection::Both, funName, true, freeVarsMap);
+                ProgramSelection::Both, funName, true);
             clauses[it.first].push_back(clause);
         }
     }
     for (const auto &it : forbiddenPaths) {
         for (auto &path : it.second) {
-            auto clause = forallStartingAt(path, freeVarsMap.at(it.first),
-                                           it.first, ProgramSelection::Both,
-                                           funName, true, freeVarsMap);
+            auto clause =
+                forallStartingAt(path, freeVarsMap.at(it.first), it.first,
+                                 ProgramSelection::Both, funName, true);
             clauses[{it.first, FORBIDDEN_MARK}].push_back(clause);
         }
     }
@@ -179,7 +184,8 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
 
 map<MarkPair, vector<SharedSMTRef>>
 getSynchronizedPaths(const PathMap &pathMap1, const PathMap &pathMap2,
-                     const FreeVarsMap &freeVarsMap,
+                     const FreeVarsMap &freeVarsMap1,
+                     const FreeVarsMap &freeVarsMap2,
                      ReturnInvariantGenerator generateReturnInvariant) {
     map<MarkPair, vector<SharedSMTRef>> clauses;
     for (const auto &pathMapIt : pathMap1) {
@@ -193,12 +199,10 @@ getSynchronizedPaths(const PathMap &pathMap1, const PathMap &pathMap2,
                     for (const auto &path2 : paths) {
                         bool returnPath = endIndex == EXIT_MARK;
                         const auto assignments1 = assignmentsOnPath(
-                            path1, Program::First,
-                            filterVars(1, freeVarsMap.at(startIndex)),
+                            path1, Program::First, freeVarsMap1.at(startIndex),
                             returnPath);
                         const auto assignments2 = assignmentsOnPath(
-                            path2, Program::Second,
-                            filterVars(2, freeVarsMap.at(startIndex)),
+                            path2, Program::Second, freeVarsMap2.at(startIndex),
                             returnPath);
                         clauses[{startIndex, endIndex}].push_back(
                             interleaveAssignments(
@@ -301,7 +305,7 @@ nonmutualPaths(const PathMap &pathMap, const FreeVarsMap &freeVarsMap,
                 auto clause = forallStartingAt(
                     nonmutualSMT(std::move(endInvariant1), defs, prog),
                     filterVars(progIndex, freeVarsMap.at(startIndex)),
-                    startIndex, asSelection(prog), funName, false, freeVarsMap);
+                    startIndex, asSelection(prog), funName, false);
                 smtExprs[{startIndex, endIndex}].push_back(clause);
             }
         }
@@ -614,8 +618,7 @@ SMTRef nonMutualFunctionCall(SharedSMTRef clause, CallInfo call, Program prog) {
 /// Wrap the clause in a forall
 SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
                               Mark blockIndex, ProgramSelection prog,
-                              string funName, bool main,
-                              FreeVarsMap freeVarsMap) {
+                              string funName, bool main) {
     vector<SortedVar> vars;
     vector<SharedSMTRef> preVars;
     for (const auto &arg : freeVars) {
@@ -676,10 +679,11 @@ SharedSMTRef makeFunArgsEqual(SharedSMTRef clause, SharedSMTRef preClause,
 /// Create an assertion to require that if the recursive invariant holds and
 /// the
 /// arguments are equal the outputs are equal
-SharedSMTRef equalInputsEqualOutputs(vector<SortedVar> funArgs,
-                                     vector<SortedVar> funArgs1,
-                                     vector<SortedVar> funArgs2, string funName,
-                                     FreeVarsMap freeVarsMap,
+SharedSMTRef equalInputsEqualOutputs(const vector<SortedVar> &funArgs,
+                                     const vector<SortedVar> &funArgs1,
+                                     const vector<SortedVar> &funArgs2,
+                                     string funName,
+                                     const FreeVarsMap &freeVarsMap,
                                      const llvm::Type *returnType) {
     vector<SortedVar> forallArgs;
     vector<SharedSMTRef> args;
@@ -787,14 +791,14 @@ SplitAssignments splitAssignmentsFromCalls(
 }
 
 /// Check if the marks match
-void checkPathMaps(PathMap map1, PathMap map2) {
+void checkPathMaps(const PathMap &map1, const PathMap &map2) {
     if (!mapSubset(map1, map2) || !mapSubset(map2, map1)) {
         exit(1);
     }
 }
 
-bool mapSubset(PathMap map1, PathMap map2) {
-    for (auto Pair : map1) {
+bool mapSubset(const PathMap &map1, const PathMap &map2) {
+    for (const auto &Pair : map1) {
         if (map2.find(Pair.first) == map2.end()) {
             logError("Mark '" + Pair.first.toString() +
                      "' doesn’t exist in both files\n");
@@ -804,8 +808,9 @@ bool mapSubset(PathMap map1, PathMap map2) {
     return true;
 }
 
-SMTRef getDontLoopInvariant(SMTRef endClause, Mark startIndex, PathMap pathMap,
-                            FreeVarsMap freeVars, Program prog) {
+SMTRef getDontLoopInvariant(SMTRef endClause, Mark startIndex,
+                            const PathMap &pathMap, const FreeVarsMap &freeVars,
+                            Program prog) {
     SMTRef clause = std::move(endClause);
     vector<Path> dontLoopPaths;
     for (auto pathMapIt : pathMap.at(startIndex)) {

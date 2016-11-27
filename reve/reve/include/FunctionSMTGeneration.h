@@ -27,7 +27,7 @@
 #include <regex>
 #include <tuple>
 
-auto dropTypesFreeVars(FreeVarsMap map)
+auto dropTypesFreeVars(const FreeVarsMap &map)
     -> std::map<int, std::vector<std::string>>;
 
 enum class InterleaveStep { StepBoth, StepFirst, StepSecond };
@@ -101,7 +101,8 @@ inline bool operator<(const MarkPair &lhs, const MarkPair &rhs) {
 }
 
 auto getSynchronizedPaths(const PathMap &pathMap1, const PathMap &pathMap2,
-                          const FreeVarsMap &freeVarsMap,
+                          const FreeVarsMap &freeVarsMap1,
+                          const FreeVarsMap &freeVarsMap2,
                           ReturnInvariantGenerator generateReturnInvariant)
     -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
 
@@ -154,8 +155,8 @@ auto nonMutualFunctionCall(smt::SharedSMTRef clause, CallInfo call,
                            Program prog) -> smt::SMTRef;
 auto forallStartingAt(smt::SharedSMTRef clause,
                       std::vector<smt::SortedVar> freeVars, Mark blockIndex,
-                      ProgramSelection prog, std::string funName, bool main,
-                      FreeVarsMap freeVarsMap) -> smt::SharedSMTRef;
+                      ProgramSelection prog, std::string funName, bool main)
+    -> smt::SharedSMTRef;
 
 /* -------------------------------------------------------------------------- */
 // Functions forcing arguments to be equal
@@ -163,10 +164,11 @@ auto forallStartingAt(smt::SharedSMTRef clause,
 auto makeFunArgsEqual(smt::SharedSMTRef clause, smt::SharedSMTRef preClause,
                       std::vector<smt::SortedVar> args1,
                       std::vector<smt::SortedVar> args2) -> smt::SharedSMTRef;
-auto equalInputsEqualOutputs(std::vector<smt::SortedVar> funArgs,
-                             std::vector<smt::SortedVar> funArgs1,
-                             std::vector<smt::SortedVar> funArgs2,
-                             std::string funName, FreeVarsMap freeVarsMap,
+auto equalInputsEqualOutputs(const std::vector<smt::SortedVar> &funArgs,
+                             const std::vector<smt::SortedVar> &funArgs1,
+                             const std::vector<smt::SortedVar> &funArgs2,
+                             std::string funName,
+                             const FreeVarsMap &freeVarsMap,
                              const llvm::Type *returnType) -> smt::SharedSMTRef;
 
 /* -------------------------------------------------------------------------- */
@@ -183,11 +185,12 @@ auto splitAssignmentsFromCalls(
     llvm::ArrayRef<AssignmentCallBlock> assignmentCallBlocks)
     -> SplitAssignments;
 
-auto checkPathMaps(PathMap map1, PathMap map2) -> void;
-auto mapSubset(PathMap map1, PathMap map2) -> bool;
+auto checkPathMaps(const PathMap &map1, const PathMap &map2) -> void;
+auto mapSubset(const PathMap &map1, const PathMap &map2) -> bool;
 auto getDontLoopInvariant(smt::SMTRef endClause, Mark startIndex,
-                          PathMap pathMap, FreeVarsMap freeVarsMap,
-                          Program prog) -> smt::SMTRef;
+                          const PathMap &pathMap,
+                          const FreeVarsMap &freeVarsMap, Program prog)
+    -> smt::SMTRef;
 auto addAssignments(const smt::SharedSMTRef end,
                     llvm::ArrayRef<AssignmentBlock> assignments)
     -> smt::SharedSMTRef;
