@@ -432,7 +432,7 @@ SharedSMTRef addAssignments(const SharedSMTRef end,
     SharedSMTRef clause = end;
     for (auto assgnIt = assignments.rbegin(); assgnIt != assignments.rend();
          ++assgnIt) {
-        clause = nestLets(std::move(clause), assgnIt->definitions);
+        clause = fastNestLets(std::move(clause), assgnIt->definitions);
         if (assgnIt->condition) {
             clause = makeOp("=>", assgnIt->condition, std::move(clause));
         }

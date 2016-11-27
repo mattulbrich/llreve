@@ -1081,6 +1081,14 @@ void FunDef::toZ3(z3::context &cxt, z3::solver & /* unused */,
     defineFunMap.insert({funName, {vars, z3Body}});
 }
 
+SharedSMTRef fastNestLets(SharedSMTRef clause,
+                          llvm::ArrayRef<Assignment> defs) {
+    for (auto i = defs.rbegin(); i != defs.rend(); ++i) {
+        clause = std::make_unique<Let>(AssignmentVec({std::move(*i)}), std::move(clause));
+    }
+    return clause;
+}
+
 SharedSMTRef nestLets(SharedSMTRef clause, llvm::ArrayRef<Assignment> defs) {
     SharedSMTRef lets = std::move(clause);
     llvm::StringSet<> uses;

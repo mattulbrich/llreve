@@ -461,6 +461,9 @@ class VarDecl : public SMTExpr {
 auto nestLets(SharedSMTRef clause, llvm::ArrayRef<Assignment> defs)
     -> SharedSMTRef;
 
+auto fastNestLets(SharedSMTRef clause, llvm::ArrayRef<Assignment> defs)
+    -> SharedSMTRef;
+
 bool isArray(const Type &type);
 
 std::unique_ptr<SMTExpr> memoryVariable(std::string name);
