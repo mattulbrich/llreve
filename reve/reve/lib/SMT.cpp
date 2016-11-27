@@ -723,11 +723,11 @@ SharedSMTRef Forall::removeForalls(set<SortedVar> &introducedVariables) const {
     return expr->removeForalls(introducedVariables);
 }
 SharedSMTRef Op::removeForalls(set<SortedVar> &introducedVariables) const {
-    vector<SharedSMTRef> newArgs;
-    for (const auto &arg : args) {
-        newArgs.push_back(arg->removeForalls(introducedVariables));
+    vector<SharedSMTRef> newArgs(args.size());
+    for (size_t i = 0; i < args.size(); ++i) {
+        newArgs[i] = args[i]->removeForalls(introducedVariables);
     }
-    return make_shared<Op>(opName, newArgs, instantiate);
+    return make_shared<Op>(opName, std::move(newArgs), instantiate);
 }
 SharedSMTRef Let::removeForalls(set<SortedVar> &introducedVariables) const {
     return make_shared<Let>(defs, expr->removeForalls(introducedVariables));
