@@ -212,9 +212,9 @@ getSynchronizedPaths(const PathMap &pathMap1, const PathMap &pathMap2,
 }
 
 map<Mark, vector<SharedSMTRef>>
-getForbiddenPaths(MonoPair<PathMap> pathMaps,
-                  MonoPair<BidirBlockMarkMap> marked, FreeVarsMap freeVarsMap,
-                  string funName, bool main) {
+getForbiddenPaths(const MonoPair<PathMap> &pathMaps,
+                  const MonoPair<BidirBlockMarkMap> &marked,
+                  const FreeVarsMap &freeVarsMap, string funName, bool main) {
     map<Mark, vector<SharedSMTRef>> pathExprs;
     for (const auto &pathMapIt : pathMaps.first) {
         const Mark startIndex = pathMapIt.first;
@@ -229,14 +229,10 @@ getForbiddenPaths(MonoPair<PathMap> pathMaps,
                                 makeMonoPair(path1, path2)
                                     .map<llvm::BasicBlock *>(lastBlock);
                             const auto endIndices =
-                                zipWith<BidirBlockMarkMap, llvm::BasicBlock *,
-                                        set<Mark>>(
-                                    marked, endBlocks,
-                                    [](BidirBlockMarkMap marks,
-                                       llvm::BasicBlock *endBlock)
-                                        -> set<Mark> {
-                                        return marks.BlockToMarksMap[endBlock];
-                                    });
+                                makeMonoPair(marked.first.BlockToMarksMap.at(
+                                                 endBlocks.first),
+                                             marked.second.BlockToMarksMap.at(
+                                                 endBlocks.second));
                             if (SMTGenerationOpts::getInstance().PerfectSync ==
                                     PerfectSynchronization::Enabled ||
                                 ((startIndex != endIndex1 && // no circles
@@ -282,8 +278,8 @@ functionalFunctionAssertions(const llvm::Function *f,
                           getFunctionNumeralConstraints(f, prog));
 }
 vector<SharedSMTRef>
-nonmutualPaths(PathMap pathMap, FreeVarsMap freeVarsMap, Program prog,
-               string funName, const llvm::Type *returnType,
+nonmutualPaths(const PathMap &pathMap, const FreeVarsMap &freeVarsMap,
+               Program prog, string funName, const llvm::Type *returnType,
                vector<SharedSMTRef> functionNumeralConstraints) {
     map<MarkPair, vector<SharedSMTRef>> smtExprs;
     const int progIndex = programIndex(prog);
@@ -312,21 +308,20 @@ nonmutualPaths(PathMap pathMap, FreeVarsMap freeVarsMap, Program prog,
                                    functionNumeralConstraints);
 }
 
-map<MarkPair, vector<SharedSMTRef>> getOffByNPaths(PathMap pathMap1,
-                                                   PathMap pathMap2,
-                                                   FreeVarsMap freeVarsMap,
-                                                   string funName, bool main) {
+map<MarkPair, vector<SharedSMTRef>>
+getOffByNPaths(const PathMap &pathMap1, const PathMap &pathMap2,
+               const FreeVarsMap &freeVarsMap, string funName, bool main) {
     vector<SharedSMTRef> paths;
-    const auto firstPaths = offByNPathsOneDir(pathMap1, pathMap2, freeVarsMap,
-                                              Program::First, funName, main);
-    const auto secondPaths = offByNPathsOneDir(pathMap2, pathMap1, freeVarsMap,
-                                               Program::Second, funName, main);
-    return mergeVectorMaps(firstPaths, secondPaths);
+    auto firstPaths = offByNPathsOneDir(pathMap1, pathMap2, freeVarsMap,
+                                        Program::First, funName, main);
+    auto secondPaths = offByNPathsOneDir(pathMap2, pathMap1, freeVarsMap,
+                                         Program::Second, funName, main);
+    return mergeVectorMaps(std::move(firstPaths), std::move(secondPaths));
 }
 
 map<MarkPair, vector<SharedSMTRef>>
-offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
-                  FreeVarsMap freeVarsMap, Program prog, string funName,
+offByNPathsOneDir(const PathMap &pathMap, const PathMap &otherPathMap,
+                  const FreeVarsMap &freeVarsMap, Program prog, string funName,
                   bool main) {
     const int progIndex = programIndex(prog);
     map<MarkPair, vector<SharedSMTRef>> clauses;

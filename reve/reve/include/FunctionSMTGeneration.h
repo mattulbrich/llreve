@@ -112,20 +112,22 @@ only
 move away from the current block (e.g. the loop condition is no longer true) the
 other is still allowed to loop at its block.
  */
-auto getForbiddenPaths(MonoPair<PathMap> pathMaps,
-                       MonoPair<BidirBlockMarkMap> marked,
-                       FreeVarsMap freeVarsMap, std::string funName, bool main)
+auto getForbiddenPaths(const MonoPair<PathMap> &pathMaps,
+                       const MonoPair<BidirBlockMarkMap> &marked,
+                       const FreeVarsMap &freeVarsMap, std::string funName,
+                       bool main)
     -> std::map<Mark, std::vector<smt::SharedSMTRef>>;
 /// Get the assertions for a single program
-auto nonmutualPaths(PathMap pathMap, FreeVarsMap freeVarsMap, Program prog,
-                    std::string funName, const llvm::Type *type,
+auto nonmutualPaths(const PathMap &pathMap, const FreeVarsMap &freeVarsMap,
+                    Program prog, std::string funName, const llvm::Type *type,
                     std::vector<smt::SharedSMTRef> functionNumeralConstraints)
     -> std::vector<smt::SharedSMTRef>;
-auto getOffByNPaths(PathMap pathMap1, PathMap pathMap2, FreeVarsMap freeVarsMap,
-                    std::string funName, bool main)
+auto getOffByNPaths(const PathMap &pathMap1, const PathMap &pathMap2,
+                    const FreeVarsMap &freeVarsMap, std::string funName,
+                    bool main)
     -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
-auto offByNPathsOneDir(PathMap pathMap, PathMap otherPathMap,
-                       FreeVarsMap freeVarsMap, Program prog,
+auto offByNPathsOneDir(const PathMap &pathMap, const PathMap &otherPathMap,
+                       const FreeVarsMap &freeVarsMap, Program prog,
                        std::string funName, bool main)
     -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
 
