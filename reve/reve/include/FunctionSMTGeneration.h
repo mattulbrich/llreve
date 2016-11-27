@@ -115,7 +115,8 @@ other is still allowed to loop at its block.
  */
 auto getForbiddenPaths(const MonoPair<PathMap> &pathMaps,
                        const MonoPair<BidirBlockMarkMap> &marked,
-                       const FreeVarsMap &freeVarsMap, std::string funName,
+                       const FreeVarsMap &freeVarsMap1,
+                       const FreeVarsMap &freeVarsMap2, std::string funName,
                        bool main)
     -> std::map<Mark, std::vector<smt::SharedSMTRef>>;
 /// Get the assertions for a single program
@@ -164,8 +165,7 @@ auto forallStartingAt(smt::SharedSMTRef clause,
 auto makeFunArgsEqual(smt::SharedSMTRef clause, smt::SharedSMTRef preClause,
                       std::vector<smt::SortedVar> args1,
                       std::vector<smt::SortedVar> args2) -> smt::SharedSMTRef;
-auto equalInputsEqualOutputs(const std::vector<smt::SortedVar> &funArgs,
-                             const std::vector<smt::SortedVar> &funArgs1,
+auto equalInputsEqualOutputs(const std::vector<smt::SortedVar> &funArgs1,
                              const std::vector<smt::SortedVar> &funArgs2,
                              std::string funName,
                              const FreeVarsMap &freeVarsMap,

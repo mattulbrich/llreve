@@ -74,8 +74,8 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> functions,
         }
     }
 
-    const auto forbiddenPaths =
-        getForbiddenPaths(pathMaps, marked, freeVarsMap, funName, false);
+    const auto forbiddenPaths = getForbiddenPaths(
+        pathMaps, marked, freeVarsMap1, freeVarsMap2, funName, false);
     for (const auto &it : forbiddenPaths) {
         for (const auto &path : it.second) {
             auto clause =
@@ -124,11 +124,9 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
     const llvm::Type *returnType = functions.first->getReturnType();
     if (SMTGenerationOpts::getInstance().OnlyRecursive ==
         FunctionEncoding::OnlyRecursive) {
-        smtExprs.push_back(
-            equalInputsEqualOutputs(freeVarsMap.at(ENTRY_MARK),
-                                    filterVars(1, freeVarsMap.at(ENTRY_MARK)),
-                                    filterVars(2, freeVarsMap.at(ENTRY_MARK)),
-                                    funName, freeVarsMap, returnType));
+        smtExprs.push_back(equalInputsEqualOutputs(
+            freeVarsMap1.at(ENTRY_MARK), freeVarsMap2.at(ENTRY_MARK), funName,
+            freeVarsMap, returnType));
         return smtExprs;
     }
 
@@ -147,8 +145,8 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
             return endInvariant;
         });
 
-    const auto forbiddenPaths =
-        getForbiddenPaths(pathMaps, marked, freeVarsMap, funName, true);
+    const auto forbiddenPaths = getForbiddenPaths(
+        pathMaps, marked, freeVarsMap1, freeVarsMap2, funName, true);
     if (SMTGenerationOpts::getInstance().PerfectSync ==
         PerfectSynchronization::Disabled) {
         const auto offByNPaths = getOffByNPaths(pathMaps.first, pathMaps.second,
@@ -220,7 +218,8 @@ getSynchronizedPaths(const PathMap &pathMap1, const PathMap &pathMap2,
 map<Mark, vector<SharedSMTRef>>
 getForbiddenPaths(const MonoPair<PathMap> &pathMaps,
                   const MonoPair<BidirBlockMarkMap> &marked,
-                  const FreeVarsMap &freeVarsMap, string funName, bool main) {
+                  const FreeVarsMap &freeVarsMap1,
+                  const FreeVarsMap &freeVarsMap2, string funName, bool main) {
     map<Mark, vector<SharedSMTRef>> pathExprs;
     for (const auto &pathMapIt : pathMaps.first) {
         const Mark startIndex = pathMapIt.first;
@@ -248,11 +247,11 @@ getForbiddenPaths(const MonoPair<PathMap> &pathMaps,
                                      .empty())) {
                                 const auto smt2 = assignmentsOnPath(
                                     path2, Program::Second,
-                                    filterVars(2, freeVarsMap.at(startIndex)),
+                                    freeVarsMap2.at(startIndex),
                                     endIndex2 == EXIT_MARK);
                                 const auto smt1 = assignmentsOnPath(
                                     path1, Program::First,
-                                    filterVars(1, freeVarsMap.at(startIndex)),
+                                    freeVarsMap1.at(startIndex),
                                     endIndex1 == EXIT_MARK);
                                 // We need to interleave here, because
                                 // otherwise
@@ -288,7 +287,6 @@ nonmutualPaths(const PathMap &pathMap, const FreeVarsMap &freeVarsMap,
                Program prog, string funName, const llvm::Type *returnType,
                vector<SharedSMTRef> functionNumeralConstraints) {
     map<MarkPair, vector<SharedSMTRef>> smtExprs;
-    const int progIndex = programIndex(prog);
     for (const auto &pathMapIt : pathMap) {
         const Mark startIndex = pathMapIt.first;
         for (const auto &innerPathMapIt : pathMapIt.second) {
@@ -298,14 +296,13 @@ nonmutualPaths(const PathMap &pathMap, const FreeVarsMap &freeVarsMap,
                     invariant(startIndex, endIndex, freeVarsMap.at(startIndex),
                               freeVarsMap.at(endIndex), asSelection(prog),
                               funName, freeVarsMap);
-                const auto defs = assignmentsOnPath(
-                    path, prog,
-                    filterVars(programIndex(prog), freeVarsMap.at(startIndex)),
-                    endIndex == EXIT_MARK);
+                const auto defs =
+                    assignmentsOnPath(path, prog, freeVarsMap.at(startIndex),
+                                      endIndex == EXIT_MARK);
                 auto clause = forallStartingAt(
                     nonmutualSMT(std::move(endInvariant1), defs, prog),
-                    filterVars(progIndex, freeVarsMap.at(startIndex)),
-                    startIndex, asSelection(prog), funName, false);
+                    freeVarsMap.at(startIndex), startIndex, asSelection(prog),
+                    funName, false);
                 smtExprs[{startIndex, endIndex}].push_back(clause);
             }
         }
@@ -679,8 +676,7 @@ SharedSMTRef makeFunArgsEqual(SharedSMTRef clause, SharedSMTRef preClause,
 /// Create an assertion to require that if the recursive invariant holds and
 /// the
 /// arguments are equal the outputs are equal
-SharedSMTRef equalInputsEqualOutputs(const vector<SortedVar> &funArgs,
-                                     const vector<SortedVar> &funArgs1,
+SharedSMTRef equalInputsEqualOutputs(const vector<SortedVar> &funArgs1,
                                      const vector<SortedVar> &funArgs2,
                                      string funName,
                                      const FreeVarsMap &freeVarsMap,
@@ -688,12 +684,16 @@ SharedSMTRef equalInputsEqualOutputs(const vector<SortedVar> &funArgs,
     vector<SortedVar> forallArgs;
     vector<SharedSMTRef> args;
     vector<SharedSMTRef> preInvArgs;
-    for (const auto &arg : funArgs) {
+    for (const auto &arg : funArgs1) {
+        args.push_back(typedVariableFromSortedVar(arg));
+    }
+    for (const auto &arg : funArgs2) {
         args.push_back(typedVariableFromSortedVar(arg));
     }
     preInvArgs = args;
 
-    forallArgs.insert(forallArgs.end(), funArgs.begin(), funArgs.end());
+    forallArgs.insert(forallArgs.end(), funArgs1.begin(), funArgs1.end());
+    forallArgs.insert(forallArgs.end(), funArgs2.begin(), funArgs2.end());
 
     args.push_back(stringExpr("result$1"));
     args.push_back(stringExpr("result$2"));
