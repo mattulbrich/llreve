@@ -193,10 +193,12 @@ getSynchronizedPaths(const PathMap &pathMap1, const PathMap &pathMap2,
                     for (const auto &path2 : paths) {
                         bool returnPath = endIndex == EXIT_MARK;
                         const auto assignments1 = assignmentsOnPath(
-                            path1, Program::First, freeVarsMap.at(startIndex),
+                            path1, Program::First,
+                            filterVars(1, freeVarsMap.at(startIndex)),
                             returnPath);
                         const auto assignments2 = assignmentsOnPath(
-                            path2, Program::Second, freeVarsMap.at(startIndex),
+                            path2, Program::Second,
+                            filterVars(2, freeVarsMap.at(startIndex)),
                             returnPath);
                         clauses[{startIndex, endIndex}].push_back(
                             interleaveAssignments(
@@ -242,11 +244,11 @@ getForbiddenPaths(const MonoPair<PathMap> &pathMaps,
                                      .empty())) {
                                 const auto smt2 = assignmentsOnPath(
                                     path2, Program::Second,
-                                    freeVarsMap.at(startIndex),
+                                    filterVars(2, freeVarsMap.at(startIndex)),
                                     endIndex2 == EXIT_MARK);
                                 const auto smt1 = assignmentsOnPath(
                                     path1, Program::First,
-                                    freeVarsMap.at(startIndex),
+                                    filterVars(1, freeVarsMap.at(startIndex)),
                                     endIndex1 == EXIT_MARK);
                                 // We need to interleave here, because
                                 // otherwise
@@ -292,9 +294,10 @@ nonmutualPaths(const PathMap &pathMap, const FreeVarsMap &freeVarsMap,
                     invariant(startIndex, endIndex, freeVarsMap.at(startIndex),
                               freeVarsMap.at(endIndex), asSelection(prog),
                               funName, freeVarsMap);
-                const auto defs =
-                    assignmentsOnPath(path, prog, freeVarsMap.at(startIndex),
-                                      endIndex == EXIT_MARK);
+                const auto defs = assignmentsOnPath(
+                    path, prog,
+                    filterVars(programIndex(prog), freeVarsMap.at(startIndex)),
+                    endIndex == EXIT_MARK);
                 auto clause = forallStartingAt(
                     nonmutualSMT(std::move(endInvariant1), defs, prog),
                     filterVars(progIndex, freeVarsMap.at(startIndex)),
@@ -366,9 +369,10 @@ offByNPathsOneDir(const PathMap &pathMap, const PathMap &otherPathMap,
                     SharedSMTRef dontLoopInvariant = getDontLoopInvariant(
                         std::move(endInvariant), startIndex, otherPathMap,
                         freeVarsMap, swapProgram(prog));
-                    const auto defs =
-                        assignmentsOnPath(path, prog, freeVarsMap.at(endIndex),
-                                          endIndex == EXIT_MARK);
+                    const auto defs = assignmentsOnPath(
+                        path, prog, filterVars(programIndex(prog),
+                                               freeVarsMap.at(startIndex)),
+                        endIndex == EXIT_MARK);
                     clauses[{startIndex, startIndex}].push_back(
                         nonmutualSMT(dontLoopInvariant, defs, prog));
                 }
@@ -385,13 +389,10 @@ offByNPathsOneDir(const PathMap &pathMap, const PathMap &otherPathMap,
 vector<AssignmentCallBlock> assignmentsOnPath(const Path &path, Program prog,
                                               const vector<SortedVar> &freeVars,
                                               bool toEnd) {
-    const int progIndex = programIndex(prog);
-    const auto filteredFreeVars = filterVars(progIndex, freeVars);
-
     // Set the new values to the initial values
     vector<DefOrCallInfo> oldDefs;
-    oldDefs.reserve(filteredFreeVars.size());
-    for (const auto &var : filteredFreeVars) {
+    oldDefs.reserve(freeVars.size());
+    for (const auto &var : freeVars) {
         oldDefs.emplace_back(make_unique<Assignment>(
             var.name,
             make_unique<TypedVariable>(var.name + "_old", var.type->copy())));
@@ -816,8 +817,9 @@ SMTRef getDontLoopInvariant(SMTRef endClause, Mark startIndex, PathMap pathMap,
     }
     vector<SharedSMTRef> dontLoopExprs;
     for (auto path : dontLoopPaths) {
-        auto defs =
-            assignmentsOnPath(path, prog, freeVars.at(startIndex), false);
+        auto defs = assignmentsOnPath(
+            path, prog, filterVars(programIndex(prog), freeVars.at(startIndex)),
+            false);
         auto smt = nonmutualSMT(make_unique<ConstantBool>(false), defs, prog);
         dontLoopExprs.push_back(smt);
     }
