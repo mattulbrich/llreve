@@ -768,26 +768,28 @@ SplitAssignments splitAssignmentsFromCalls(
     vector<vector<AssignmentBlock>> assignmentBlocks;
     vector<CallInfo> callInfos;
     vector<struct AssignmentBlock> currentAssignmentsList;
-    for (const auto &assignments : assignmentCallBlocks) {
+    for (auto &assignments : assignmentCallBlocks) {
         SharedSMTRef condition = assignments.condition;
         vector<Assignment> currentDefinitions;
-        for (const auto &defOrCall : assignments.definitions) {
+        for (auto &defOrCall : assignments.definitions) {
             if (defOrCall.tag == DefOrCallInfoTag::Def) {
-                currentDefinitions.push_back(*defOrCall.definition);
+                currentDefinitions.emplace_back(
+                    std::move(*defOrCall.definition));
             } else {
-                currentAssignmentsList.push_back(
-                    AssignmentBlock(currentDefinitions, condition));
+                currentAssignmentsList.emplace_back(
+                    std::move(currentDefinitions), std::move(condition));
                 currentDefinitions.clear();
-                assignmentBlocks.push_back(currentAssignmentsList);
+                assignmentBlocks.emplace_back(
+                    std::move(currentAssignmentsList));
                 currentAssignmentsList.clear();
                 condition = nullptr;
-                callInfos.push_back(*defOrCall.callInfo);
+                callInfos.emplace_back(std::move(*defOrCall.callInfo));
             }
         }
-        currentAssignmentsList.push_back(
-            AssignmentBlock(currentDefinitions, condition));
+        currentAssignmentsList.emplace_back(std::move(currentDefinitions),
+                                            std::move(condition));
     }
-    assignmentBlocks.push_back(currentAssignmentsList);
+    assignmentBlocks.emplace_back(std::move(currentAssignmentsList));
     return {std::move(assignmentBlocks), std::move(callInfos)};
 }
 
