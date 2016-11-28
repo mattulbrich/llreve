@@ -1066,7 +1066,7 @@ FastVarMap getVarMapFromModel(
 }
 
 llvm::SmallDenseMap<HeapAddress, Integer> getHeapFromModel(const ArrayVal &ar) {
-    llvm::SmallDenseMap<HeapAddress, Integer> result(ar.vals.size());
+    llvm::SmallDenseMap<HeapAddress, Integer> result;
     for (const auto &it : ar.vals) {
         result.insert({Integer(it.first), Integer(it.second)});
     }
