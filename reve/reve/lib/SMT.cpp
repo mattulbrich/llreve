@@ -1040,6 +1040,8 @@ z3::expr Op::toZ3Expr(z3::context &cxt, llvm::StringMap<z3::expr> &nameMap,
                 return z3::implies(firstArg, secondArg);
             } else if (opName == "div") {
                 return firstArg / secondArg;
+            } else if (opName == "mod") {
+                return z3::expr(cxt, Z3_mk_mod(cxt, firstArg, secondArg));
             } else if (opName == "select") {
                 return z3::select(firstArg, secondArg);
             } else if (opName == "xor") {
