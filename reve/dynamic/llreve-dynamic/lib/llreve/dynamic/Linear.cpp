@@ -58,6 +58,9 @@ void reducedRowEchelonForm(Matrix<mpq_class> &input) {
 // reduced row echelon form
 bool linearlyIndependent(const Matrix<mpq_class> &vectors,
                          vector<mpq_class> newVector) {
+    if (vectors.empty()) {
+        return true;
+    }
     assert(newVector.size() == vectors[0].size());
     size_t col = 0;
     for (size_t row = 0; row < vectors.size(); ++row) {
