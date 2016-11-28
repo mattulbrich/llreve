@@ -1042,6 +1042,8 @@ z3::expr Op::toZ3Expr(z3::context &cxt, llvm::StringMap<z3::expr> &nameMap,
                 return firstArg / secondArg;
             } else if (opName == "select") {
                 return z3::select(firstArg, secondArg);
+            } else if (opName == "xor") {
+                return z3::expr(cxt, Z3_mk_xor(cxt, firstArg, secondArg));
             } else {
                 std::cerr << "Unsupported opname " << opName << "\n";
                 exit(1);
