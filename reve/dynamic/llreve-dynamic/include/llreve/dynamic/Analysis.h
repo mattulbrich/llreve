@@ -111,24 +111,21 @@ struct LoopCountsAndMark {
 
 template <typename T>
 void findLoopCounts(LoopCountsAndMark &loopCountsAndMark, MatchInfo<T> match) {
-    if (loopCountsAndMark.mark == match.mark) {
-        switch (match.loopInfo) {
-        case LoopInfo::Left:
-            loopCountsAndMark.loopCounts[match.mark].back().first++;
-            break;
-        case LoopInfo::Right:
-            loopCountsAndMark.loopCounts[match.mark].back().second++;
-            break;
-        case LoopInfo::None:
-            loopCountsAndMark.loopCounts[match.mark].back().first++;
-            loopCountsAndMark.loopCounts[match.mark].back().second++;
-            break;
-        }
-    } else {
-        // We want to count iterations rather than times we arrive at the loop
-        // header so the first time is not counted.
-        loopCountsAndMark.loopCounts[match.mark].push_back(makeMonoPair(0, 0));
+    if (loopCountsAndMark.mark != match.mark) {
+        loopCountsAndMark.loopCounts[match.mark].emplace_back(0, 0);
         loopCountsAndMark.mark = match.mark;
+    }
+    switch (match.loopInfo) {
+    case LoopInfo::Left:
+        loopCountsAndMark.loopCounts[match.mark].back().first++;
+        break;
+    case LoopInfo::Right:
+        loopCountsAndMark.loopCounts[match.mark].back().second++;
+        break;
+    case LoopInfo::None:
+        loopCountsAndMark.loopCounts[match.mark].back().first++;
+        loopCountsAndMark.loopCounts[match.mark].back().second++;
+        break;
     }
 }
 
