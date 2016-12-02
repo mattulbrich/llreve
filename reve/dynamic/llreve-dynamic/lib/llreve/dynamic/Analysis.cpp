@@ -382,6 +382,14 @@ driver(MonoPair<llvm::Module &> modules, AnalysisResultsMap &analysisResults,
     // Peel and unroll loops
     applyLoopTransformation(functionPair, analysisResults, loopTransformations,
                             markMaps);
+    analysisResults.at(functionPair.first).freeVariables =
+        freeVars(analysisResults.at(functionPair.first).paths,
+                 analysisResults.at(functionPair.first).functionArguments,
+                 Program::First);
+    analysisResults.at(functionPair.second).freeVariables =
+        freeVars(analysisResults.at(functionPair.second).paths,
+                 analysisResults.at(functionPair.second).functionArguments,
+                 Program::Second);
 
     return generateSMT(modules, analysisResults, fileOpts);
 }
@@ -781,7 +789,7 @@ map<Mark, LoopTransformation> findLoopTransformations(LoopCountMap &map) {
         } else if (unrollQuotients.count(mark) > 0) {
             float factor = unrollQuotients.at(mark);
             LoopTransformSide side =
-                factor < 1 ? LoopTransformSide::Left : LoopTransformSide::Right;
+                factor < 1 ? LoopTransformSide::Right : LoopTransformSide::Left;
             factor = factor < 1 ? 1 / factor : factor;
             transforms.insert(std::make_pair(
                 mark,

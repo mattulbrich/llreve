@@ -116,10 +116,10 @@ int main(int argc, const char **argv) {
                  : llreve::opts::HeapOpt::Disabled,
         StackOpt::Disabled, GlobalConstantsOpt::Disabled,
         FunctionEncoding::Iterative, ByteHeapOpt::Enabled, EverythingSignedFlag,
-        SMTFormat::SMTHorn, PerfectSynchronization::Disabled, false,
-        BoundedFlag, true, false, false, {}, {}, {}, {},
-        inferCoupledFunctionsByName(moduleRefs), functionNumerals,
-        reversedFunctionNumerals);
+        OnlyTransform ? SMTFormat::Z3 : SMTFormat::SMTHorn,
+        PerfectSynchronization::Disabled, false, BoundedFlag, !OnlyTransform,
+        false, false, {}, {}, {}, {}, inferCoupledFunctionsByName(moduleRefs),
+        functionNumerals, reversedFunctionNumerals);
 
     AnalysisResultsMap analysisResults =
         preprocessModules(moduleRefs, preprocessOpts);
@@ -157,7 +157,7 @@ int main(int argc, const char **argv) {
         smtExprs = cegarDriver(moduleRefs, analysisResults, patterns, fileOpts);
     }
     if (!smtExprs.empty() && !OutputFileNameFlag.empty()) {
-        serializeSMT(smtExprs, false,
+        serializeSMT(smtExprs, OnlyTransform,
                      SerializeOpts(OutputFileNameFlag, !InstantiateFlag,
                                    MergeImplications, true, false));
     }
