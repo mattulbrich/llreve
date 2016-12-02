@@ -284,6 +284,108 @@ void analyzeFunctionalCounterExample(
     std::cout << "analyzed trace\n";
 }
 
+static llvm::SmallDenseMap<HeapAddress, Integer>
+randomHeap(const llvm::Function &fun, const FastVarMap &variableValues,
+           int lengthBound, int valLowerBound, int valUpperBound,
+           unsigned int *seedp) {
+    // We place an array with a random length <= lengthBound with random values
+    // >= valLowerBound and <= valUpperBound at each pointer argument
+    llvm::SmallDenseMap<HeapAddress, Integer> heap;
+    for (const auto &arg : fun.args()) {
+        if (arg.getType()->isPointerTy()) {
+            Integer arrayStart = variableValues.find(&arg)->second;
+            unsigned int length =
+                static_cast<unsigned int>(rand_r(seedp) % (lengthBound + 1));
+            for (unsigned int i = 0; i <= length; ++i) {
+                int val =
+                    (rand_r(seedp) % (valUpperBound - valLowerBound + 1)) +
+                    valLowerBound;
+                if (SMTGenerationOpts::getInstance().BitVect) {
+                    heap.insert(
+                        {arrayStart.asPointer() +
+                             Integer(mpz_class(i)).asPointer(),
+                         Integer(makeBoundedInt(HeapElemSizeFlag, val))});
+                } else {
+                    heap.insert({arrayStart.asPointer() +
+                                     Integer(mpz_class(i)).asPointer(),
+                                 Integer(mpz_class(val))});
+                }
+            }
+        }
+    }
+    return heap;
+}
+static void analyzeExample(
+    std::function<void(MonoPair<Call<const llvm::Value *>>)> callback,
+    MonoPair<std::vector<mpz_class>> initialValues,
+    MonoPair<const llvm::Function *> funs,
+    AnalysisResultsMap &analysisResults) {
+    unsigned int seedp = static_cast<unsigned int>(time(NULL));
+    MonoPair<FastVarMap> variableValues = {FastVarMap(), FastVarMap()};
+    variableValues.first = getVarMap(funs.first, initialValues.first);
+    variableValues.second = getVarMap(funs.second, initialValues.second);
+    auto heap =
+        randomHeap(*funs.first, variableValues.first, 5, -20, 20, &seedp);
+    MonoPair<Heap> heaps = {{heap, Integer(0)}, {heap, Integer(0)}};
+    MonoPair<Call<const llvm::Value *>> calls = interpretFunctionPair(
+        funs, std::move(variableValues), heaps, 10000, analysisResults);
+    callback(std::move(calls));
+}
+
+static void iterateTracesInRange(
+    MonoPair<llvm::Function *> funs, mpz_class lowerBound, mpz_class upperBound,
+    AnalysisResultsMap &analysisResults,
+    std::function<void(MonoPair<Call<const llvm::Value *>>)> callback) {
+    assert(!(funs.first->isVarArg() || funs.second->isVarArg()));
+    std::vector<Integer> argValues;
+
+    assert(funs.first->getArgumentList().size() ==
+           funs.second->getArgumentList().size());
+    for (const auto &vals :
+         Range(lowerBound, upperBound, funs.first->getArgumentList().size())) {
+        for (auto val : vals) {
+            std::cout << val << ", ";
+        }
+        std::cout << "\n";
+        analyzeExample(callback, {vals, vals}, funs, analysisResults);
+    }
+}
+
+vector<SharedSMTRef>
+driver(MonoPair<llvm::Module &> modules, AnalysisResultsMap &analysisResults,
+       vector<shared_ptr<HeapPattern<VariablePlaceholder>>> patterns,
+       FileOptions fileOpts) {
+    auto functionPair = SMTGenerationOpts::getInstance().MainFunctions;
+    const MonoPair<BidirBlockMarkMap> markMaps =
+        getBlockMarkMaps(functionPair, analysisResults);
+    MonoPair<BlockNameMap> nameMap = getBlockNameMaps(analysisResults);
+    const auto funArgsPair =
+        getFunctionArguments(functionPair, analysisResults);
+    const auto funArgs = concat(funArgsPair);
+
+    // Collect loop info
+    LoopCountsAndMark loopCounts;
+    iterateTracesInRange(functionPair, 47, 50, analysisResults,
+                         [&](MonoPair<Call<const llvm::Value *>> calls) {
+                             analyzeExecution<const llvm::Value *>(
+                                 std::move(calls), nameMap, analysisResults,
+                                 [&](MatchInfo<const llvm::Value *> matchInfo) {
+                                     findLoopCounts<const llvm::Value *>(
+                                         loopCounts, matchInfo);
+                                 },
+                                 // We ignore functions for now
+                                 [](auto match) {}, [](auto match) {});
+                         });
+    auto loopTransformations = findLoopTransformations(loopCounts.loopCounts);
+    dumpLoopTransformations(loopTransformations);
+
+    // Peel and unroll loops
+    applyLoopTransformation(functionPair, analysisResults, loopTransformations,
+                            markMaps);
+
+    return generateSMT(modules, analysisResults, fileOpts);
+}
+
 std::vector<smt::SharedSMTRef>
 cegarDriver(MonoPair<llvm::Module &> modules,
             AnalysisResultsMap &analysisResults,

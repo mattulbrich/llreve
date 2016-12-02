@@ -83,6 +83,9 @@ static llreve::cl::opt<bool> EverythingSignedFlag(
 static llreve::cl::opt<bool>
     MergeImplications("merge-implications",
                       llreve::cl::desc("Merge implications"));
+static llreve::cl::opt<bool>
+    OnlyTransform("only-transform",
+                  llreve::cl::desc("Only infer unroll and peel factors"));
 
 int main(int argc, const char **argv) {
     llreve::cl::ParseCommandLineOptions(argc, argv);
@@ -148,7 +151,11 @@ int main(int argc, const char **argv) {
 
     FileOptions fileOpts = getFileOptions(inputOpts.FileNames);
     vector<smt::SharedSMTRef> smtExprs;
-    smtExprs = cegarDriver(moduleRefs, analysisResults, patterns, fileOpts);
+    if (OnlyTransform) {
+        smtExprs = driver(moduleRefs, analysisResults, patterns, fileOpts);
+    } else {
+        smtExprs = cegarDriver(moduleRefs, analysisResults, patterns, fileOpts);
+    }
     if (!smtExprs.empty() && !OutputFileNameFlag.empty()) {
         serializeSMT(smtExprs, false,
                      SerializeOpts(OutputFileNameFlag, !InstantiateFlag,
