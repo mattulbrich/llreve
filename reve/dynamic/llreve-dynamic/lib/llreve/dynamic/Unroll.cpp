@@ -72,7 +72,7 @@ void unrollAtMark(llvm::Function &f, Mark mark, const BidirBlockMarkMap &marks,
         }
         for (auto bb : currentLoop) {
             for (auto &i : *bb) {
-                RemapInstruction(&i, vmap);
+                RemapInstruction(&i, vmap, llvm::RF_IgnoreMissingLocals);
             }
         }
         lastLoop = currentLoop;
