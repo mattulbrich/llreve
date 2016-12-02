@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.8)
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/" "${CMAKE_SOURCE_DIR}/../../reve/cmake/")
 project(reve-interpreter)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -47,7 +47,11 @@ add_library(libreve-interpreter
   ${headers}
   ${BISON_PatternParser_OUTPUTS}
   ${FLEX_PatternLexer_OUTPUTS})
-add_executable(llreve-dynamic src/LlreveDynamic.cpp ${headers})
+
+include(GetGitRevisionDescription)
+get_git_head_revision(GIT_REFSPEC GIT_SHA1)
+configure_file("src/GitSHA1.cpp.in" "${CMAKE_CURRENT_BINARY_DIR}/GitSHA1.cpp" @ONLY)
+add_executable(llreve-dynamic src/LlreveDynamic.cpp ${CMAKE_CURRENT_BINARY_DIR}/GitSHA1.cpp ${headers})
 
 target_link_libraries(libreve-interpreter
   libreve

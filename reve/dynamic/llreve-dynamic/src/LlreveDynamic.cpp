@@ -14,6 +14,7 @@
 
 #include "Compat.h"
 #include "Compile.h"
+#include "GitSHA1.h"
 #include "ModuleSMTGeneration.h"
 #include "Opts.h"
 #include "Preprocess.h"
@@ -87,7 +88,12 @@ static llreve::cl::opt<bool>
     OnlyTransform("only-transform",
                   llreve::cl::desc("Only infer unroll and peel factors"));
 
+static void printVersion() {
+    std::cout << "llreve-dynamic version " << g_GIT_SHA1 << "\n";
+}
+
 int main(int argc, const char **argv) {
+    llreve::cl::SetVersionPrinter(printVersion);
     llreve::cl::ParseCommandLineOptions(argc, argv);
     InputOpts inputOpts(IncludesFlag, ResourceDirFlag, FileName1Flag,
                         FileName2Flag);
