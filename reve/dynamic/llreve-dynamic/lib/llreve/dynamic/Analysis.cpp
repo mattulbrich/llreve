@@ -27,6 +27,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <random>
 #include <regex>
 #include <thread>
 
@@ -332,6 +333,7 @@ static void analyzeExample(
     callback(std::move(calls));
 }
 
+static unsigned randomExamples = 50;
 static void iterateTracesInRange(
     MonoPair<llvm::Function *> funs, mpz_class lowerBound, mpz_class upperBound,
     AnalysisResultsMap &analysisResults,
@@ -341,8 +343,14 @@ static void iterateTracesInRange(
 
     assert(funs.first->getArgumentList().size() ==
            funs.second->getArgumentList().size());
-    for (const auto &vals :
-         Range(lowerBound, upperBound, funs.first->getArgumentList().size())) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> distribution(0, 100);
+    for (unsigned i = 0; i < randomExamples; ++i) {
+        std::vector<mpz_class> vals(funs.first->getArgumentList().size());
+        for (auto &val : vals) {
+            val = mpz_class(distribution(gen));
+        }
         for (auto val : vals) {
             std::cout << val << ", ";
         }
