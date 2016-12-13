@@ -14,7 +14,7 @@
    dst.0$2
    Int)
 (declare-var
-   from$2
+   src$2
    Int)
 (declare-var
    i.0$1
@@ -49,16 +49,16 @@
 (rule
  (=>
   (and
-   (= src$1 from$2)
+   (= src$1 src$2)
    (= dest$1 to$2)
    (= nbytes$1 len$2)
    (= HEAP$1 HEAP$2)
    (<= (+ src$1 nbytes$1) dest$1))
-  (INV_MAIN dest$1 0 (* (div nbytes$1 2) 2) nbytes$1 src$1 HEAP$1 to$2 from$2 len$2 len$2 from$2 to$2 HEAP$2)))
+  (INV_MAIN dest$1 0 (* (div nbytes$1 2) 2) nbytes$1 src$1 HEAP$1 to$2 src$2 len$2 len$2 src$2 to$2 HEAP$2)))
 (rule
  (=>
   (and
-   (INV_MAIN dest$1 i.0$1 mul$1 nbytes$1 src$1 HEAP$1 dst.0$2 from$2 len$2 len.addr.0$2 src.0$2 to$2 HEAP$2)
+   (INV_MAIN dest$1 i.0$1 mul$1 nbytes$1 src$1 HEAP$1 dst.0$2 src$2 len$2 len.addr.0$2 src.0$2 to$2 HEAP$2)
    (not (< i.0$1 mul$1))
    (not (> len.addr.0$2 1))
    (not (= HEAP$1 HEAP$2)))
@@ -66,7 +66,7 @@
 (rule
  (=>
   (and
-   (INV_MAIN dest$1 i.0$1 mul$1 nbytes$1 src$1 HEAP$1 dst.0$2 from$2 len$2 len.addr.0$2 src.0$2 to$2 HEAP$2)
+   (INV_MAIN dest$1 i.0$1 mul$1 nbytes$1 src$1 HEAP$1 dst.0$2 src$2 len$2 len.addr.0$2 src.0$2 to$2 HEAP$2)
    (< i.0$1 mul$1)
    (> len.addr.0$2 1))
   (INV_MAIN dest$1
@@ -83,7 +83,7 @@
                                   (select HEAP$1 (+ src$1 (+ i.0$1 1))))
                            (+ src$1 i.0$1)))
             (+ dst.0$2 2)
-            from$2
+            src$2
             len$2
             (- len.addr.0$2 2)
             (+ src.0$2 2)
