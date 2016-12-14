@@ -22,6 +22,7 @@
  (=>
   (and
    (= src$1 src$2)
+   (= nbytes$1 2)
    (= dest$1 to$2)
    (= nbytes$1 len$2)
    (= HEAP$1 HEAP$2)
@@ -46,25 +47,18 @@
             mul$1
             nbytes$1
             src$1
-            (store (store HEAP$1
-                          (+ dest$1 i.0$1)
-                          (select HEAP$1 (+ src$1 (+ i.0$1 1))))
-                   (+ dest$1 (+ i.0$1 1))
-                   (select (store HEAP$1
-                                  (+ dest$1 i.0$1)
-                                  (select HEAP$1 (+ src$1 (+ i.0$1 1))))
-                           (+ src$1 i.0$1)))
+            (store HEAP$1
+                   (+ dest$1 i.0$1)
+                   (select HEAP$1 (+ src$1 (+ i.0$1 1))))
             (+ dst.0$2 2)
             src$2
             len$2
             (- len.addr.0$2 2)
             (+ src.0$2 2)
             to$2
-            (store (store HEAP$2
-                          (+ dst.0$2 0)
-                          (select HEAP$2 (+ src.0$2 1)))
-                   (+ dst.0$2 1)
-                   (select HEAP$2 (+ src.0$2 0))))))
+            (store HEAP$2
+                   (+ dst.0$2 0)
+                   (select HEAP$2 (+ src.0$2 1))))))
 (query
    END_QUERY
    :print-certificate
