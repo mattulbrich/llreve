@@ -1,45 +1,17 @@
-(set-option
-   :int-real-coercions
-   false)
-(declare-var
-   HEAP$1
-   (Array Int Int))
-(declare-var
-   HEAP$2
-   (Array Int Int))
-(declare-var
-   dest$1
-   Int)
-(declare-var
-   dst.0$2
-   Int)
-(declare-var
-   src$2
-   Int)
-(declare-var
-   i.0$1
-   Int)
-(declare-var
-   len$2
-   Int)
-(declare-var
-   len.addr.0$2
-   Int)
-(declare-var
-   mul$1
-   Int)
-(declare-var
-   nbytes$1
-   Int)
-(declare-var
-   src$1
-   Int)
-(declare-var
-   src.0$2
-   Int)
-(declare-var
-   to$2
-   Int)
+(set-option :int-real-coercions false)
+(declare-var HEAP$1 (Array Int Int))
+(declare-var HEAP$2 (Array Int Int))
+(declare-var dest$1 Int)
+(declare-var dst.0$2 Int)
+(declare-var src$2 Int)
+(declare-var i.0$1 Int)
+(declare-var len$2 Int)
+(declare-var len.addr.0$2 Int)
+(declare-var mul$1 Int)
+(declare-var nbytes$1 Int)
+(declare-var src$1 Int)
+(declare-var src.0$2 Int)
+(declare-var to$2 Int)
 (declare-rel
  END_QUERY
  ())
