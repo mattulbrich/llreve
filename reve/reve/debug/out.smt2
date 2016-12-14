@@ -48,8 +48,8 @@
             nbytes$1
             src$1
             (store HEAP$1
-                   (+ dest$1 i.0$1)
-                   (select HEAP$1 (+ src$1 (+ i.0$1 1))))
+                   dest$1
+                   (select HEAP$1 (+ src$1 1)))
             (+ dst.0$2 2)
             src$2
             len$2
@@ -57,7 +57,7 @@
             (+ src.0$2 2)
             to$2
             (store HEAP$2
-                   (+ dst.0$2 0)
+                   dst.0$2
                    (select HEAP$2 (+ src.0$2 1))))))
 (query
    END_QUERY
