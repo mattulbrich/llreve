@@ -30,6 +30,10 @@ auto invariantDeclaration(Mark BlockIndex, std::vector<smt::SortedVar> FreeVars,
                           ProgramSelection For, std::string FunName,
                           const llvm::Type *resultType)
     -> MonoPair<smt::SMTRef>;
+auto mainInvariantComment(Mark blockIndex,
+                          const std::vector<smt::SortedVar> &freeVars,
+                          ProgramSelection selection, std::string funName)
+    -> smt::SMTRef;
 auto mainInvariantDeclaration(Mark BlockIndex,
                               std::vector<smt::SortedVar> FreeVars,
                               ProgramSelection For, std::string FunName)

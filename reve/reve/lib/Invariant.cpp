@@ -210,12 +210,24 @@ size_t maxArgs(FreeVarsMap freeVarsMap, ProgramSelection prog,
     return maxArgs;
 }
 
+SMTRef mainInvariantComment(Mark blockIndex, const vector<SortedVar> &freeVars,
+                            ProgramSelection selection, std::string funName) {
+    std::string name =
+        invariantName(blockIndex, selection, funName, InvariantAttr::MAIN);
+    std::string comment = ":annot (" + name;
+    for (auto &arg : freeVars) {
+        comment += " " + arg.name;
+    }
+    comment += ")";
+    return make_unique<Comment>(std::move(comment));
+}
+
 SharedSMTRef mainInvariantDeclaration(Mark BlockIndex,
                                       vector<SortedVar> FreeVars,
                                       ProgramSelection For,
                                       std::string FunName) {
     vector<unique_ptr<Type>> args;
-    for (auto arg : FreeVars) {
+    for (auto &arg : FreeVars) {
         args.push_back(std::move(arg.type));
     }
 

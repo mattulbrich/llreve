@@ -101,6 +101,9 @@ vector<SharedSMTRef> relationalIterativeDeclarations(
                 const auto invariant = mainInvariantDeclaration(
                     startIndex, freeVarsMap.at(startIndex),
                     ProgramSelection::Both, functionName);
+                declarations.push_back(
+                    mainInvariantComment(startIndex, freeVarsMap.at(startIndex),
+                                         ProgramSelection::Both, functionName));
                 declarations.push_back(invariant);
             } else {
                 declarations.push_back(foundIt->second);
