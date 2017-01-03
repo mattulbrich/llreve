@@ -66,7 +66,7 @@ auto instrAssignment(const llvm::Instruction &instr,
                      const llvm::BasicBlock *prevBb, Program prog)
     -> std::unique_ptr<const smt::Assignment>;
 auto predicateName(const llvm::CmpInst::Predicate pred) -> std::string;
-auto predicateFun(const llvm::CmpInst::CmpInst &pred)
+auto predicateFun(const llvm::CmpInst &pred)
     -> std::function<smt::SMTRef(smt::SMTRef)>;
 auto opName(const llvm::BinaryOperator &op) -> std::string;
 auto combineOp(const llvm::BinaryOperator &op)
