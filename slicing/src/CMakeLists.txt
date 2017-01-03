@@ -7,11 +7,16 @@ project(llvm-reve-slicing VERSION 0.1)
 
 macro(set_compiler_settings)
 	set(CXX_WARNINGS_FLAGS "-Wall -Wno-c++98-compat -Wno-exit-time-destructors -Wno-global-constructors -Wno-padded -Wno-switch-enum -Wno-shadow -fpermissive")
-	set(CXX_STANDARD_FLAGS "-std=c++14 -fno-rtti -g")
+	set(CXX_STANDARD_FLAGS "-std=c++14 -fno-rtti -g -fopenmp")
+
 	#Use cmake -D CLANG_FLAGS=yourFlags to add custom flags
 	set(USER_FLAGS "${CLANG_FLAGS}")
 	set(CMAKE_CXX_FLAGS "${CXX_WARNINGS_FLAGS} ${CXX_STANDARD_FLAGS} ${CXX_OTHER_FLAGS} ${USER_FLAGS}")
 	set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
+
+	SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+	SET(BUILD_SHARED_LIBRARIES OFF)
+	SET(CMAKE_EXE_LINKER_FLAGS "-static")
 endmacro(set_compiler_settings)
 
 #Find llvm and make it aviable
