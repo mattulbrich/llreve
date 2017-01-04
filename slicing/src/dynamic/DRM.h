@@ -10,41 +10,57 @@
 
 #pragma once
 
-#include "util/BitArray.h"
+#include "Interpreter.h"
+#include "LinearizedFunction.h"
+#include "smtSolver/SmtSolver.h"
 
+#include "llvm/ADT/APInt.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instruction.h"
+#include "llvm/Support/raw_ostream.h"
 
-#include <unordered_map>
-
-class LinearizedFunction {
-	
-	public:
-	
-	LinearizedFunction(llvm::Function& func);
-	~LinearizedFunction(void);
-	
-	llvm::Instruction& operator[](unsigned int const       index) const;
-	unsigned int       operator[](llvm::Instruction const& inst)  const;
-	
-	private:
-	
-	std::unordered_map<llvm::Instruction const*, unsigned int> mapInstToInt;
-	llvm::Instruction**                                        mapIntToInst;
-};
+#include <list>
 
 class DRM {
 	
 	public:
 	
-	// TODO: DRM(LinearizedFunction, CounterExample);
-	// Use the Algorithm for DRM creation
+	friend class DRMCompare;
 	
-	BitArray const& computeSlice(BitArray const& apriori);
+	LinearizedFunction const& linFunc;
+	
+	DRM(LinearizedFunction const& linFunc, CEXType const& cex);
+	~DRM(void);
+	
+	llvm::APInt const& computeSlice(llvm::APInt const& apriori) const;
+	void               print       (llvm::raw_ostream& out) const;
 	
 	private:
 	
-	//LinearizedFunction const& func;
-	BitArray const*           matrix;
-	BitArray                  accumulator;
+	unsigned int  const   _instCount;
+	llvm::APInt** const   _matrix;
+	llvm::APInt   mutable _accumulator;
+	
+	static llvm::APInt const* findNode(
+		std::list<llvm::APInt const*> const& elements,
+		llvm::APInt                   const& ref);
+	
+	void printReachability(
+		llvm::APInt const& row,
+		llvm::raw_ostream& out) const;
+};
+
+class DRMCompare {
+	
+	public:
+	
+	// Comparison is defined as lexicographical comparison of the rows
+	bool operator() (DRM const& lhs, DRM const& rhs) const;
+};
+
+class APIntCompare {
+	
+	public:
+	
+	bool operator() (llvm::APInt const& lhs, llvm::APInt const& rhs) const;
 };

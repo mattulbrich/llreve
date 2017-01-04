@@ -21,8 +21,8 @@ public:
 class SmtSolverCommandLineAdapter: public SmtSolver {
 public:
 	SmtSolverCommandLineAdapter():SmtSolver() {}
-	virtual SatResult checkSat(std::string smtFilePath) override;
-	virtual SatResult parseResult(std::string resultFile) = 0;
+	virtual SatResult checkSat(std::string smtFilePath, CEXType* pCEX) override;
+	virtual SatResult parseResult(std::string resultFile, CEXType* pCEX) = 0;
 	virtual SmtCommand& getCommand() = 0;
 	virtual ~SmtSolverCommandLineAdapter();
 };

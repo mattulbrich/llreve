@@ -15,6 +15,20 @@
 using namespace std;
 using namespace llvm;
 
+unsigned int Util::getIntegerLength(
+		int                value,
+		unsigned int const base) {
+	
+	unsigned int length = 1;
+	
+	while(value <= -static_cast<int>(base) || value >= static_cast<int>(base)) {
+		length++;
+		value /= base;
+	}
+	
+	return length;
+}
+
 string& Util::toString(
 		Value const& value,
 		string&      str,

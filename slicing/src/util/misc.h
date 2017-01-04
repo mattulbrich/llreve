@@ -11,7 +11,9 @@
 #pragma once
 
 #include "llvm/IR/Function.h"
+ #include "llvm/IR/Module.h"
 
 namespace Util {
 	bool isSpecialFunction(llvm::Function& function);
+	int countInstructions(llvm::Module& module);
 }

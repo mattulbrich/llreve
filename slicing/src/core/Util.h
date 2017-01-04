@@ -1,13 +1,3 @@
-/*
- * This file is part of
- *    llreve - Automatic regression verification for LLVM programs
- *
- * Copyright (C) 2016 Karlsruhe Institute of Technology
- *
- * The system is published under a BSD license.
- * See LICENSE (distributed with this file) for details.
- */
-
 // *** ADDED BY HEADER FIXUP ***
 #include <istream>
 #include <iterator>
@@ -22,9 +12,15 @@
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Value.h"
 
+#include <cassert>
+#include <iomanip>
 #include <iostream>
+#include <queue>
+#include <sstream>
 #include <type_traits>
 #include <unordered_set>
+
+#define UTIL_NULL_REF(t) *static_cast<t*>(nullptr);
 
 #define UTIL_REMOVE_POINTER(t)   typename std::remove_pointer<t>::type
 #define UTIL_REMOVE_REF(t)       typename std::remove_reference<t>::type
@@ -32,6 +28,8 @@
 #define UTIL_REF_TYPE_FROM_IT(t) decltype(std::declval<t>().operator*())
 #define UTIL_CHILD_IT_FROM_IT(t) UTIL_IT_FROM_TYPE(UTIL_REF_TYPE_FROM_IT(t))
 #define UTIL_TYPE_FROM_IT(t)     UTIL_REMOVE_REF(UTIL_REF_TYPE_FROM_IT(t))
+
+#define UTIL_UNUSED(x) (void)(x);
 
 template <class TopLevelType>
 class NestedInputIterator :
@@ -243,6 +241,62 @@ class LambdaIterator :
 	LambdaType _lambdaExpr;
 };
 
+template <class ElementType> class SingeltonQueue {
+	
+	public:
+		
+		SingeltonQueue(bool const remember = false) : _remember(remember) {}
+		
+		bool empty(void) const {
+			
+			return elementQueue.empty();
+		}
+		
+		ElementType pop(void) {
+			
+			assert(!empty() && "Cannot pop from an empty queue");
+			
+			ElementType value = elementQueue.front();
+			
+			elementQueue.pop();
+			elementSet  .erase(value);
+			
+			return value;
+		}
+	
+		bool push(ElementType element) {
+			
+			bool const inHistory = _remember ?
+				oldElements.find(element) != oldElements.end() : false;
+			
+			if(elementSet.find(element) == elementSet.end() && !inHistory) {
+				
+				elementQueue.push  (element);
+				elementSet  .insert(element);
+				oldElements .insert(element);
+				
+				return true;
+				
+			} else {
+				
+				return false;
+			}
+		}
+		
+		size_t size(void) const {
+			
+			return static_cast<size_t>(elementQueue.size());
+		}
+		
+	private:
+		
+		bool const _remember;
+		
+		std::queue        <ElementType> elementQueue;
+		std::unordered_set<ElementType> elementSet;
+		std::unordered_set<ElementType> oldElements;
+};
+
 template <class NodeType> class GenericNode {
 	
 	public:
@@ -256,9 +310,7 @@ template <class NodeType> class GenericNode {
 	
 	// Only available if the InnerType provides a default constructor
 	GenericNode(void) : innerNode() {}
-	
-	GenericNode(
-		NodeType innerNode) : innerNode(innerNode) {}
+	GenericNode(NodeType innerNode) : innerNode(innerNode) {}
 	
 	NodeType& operator*() {
 		
@@ -429,5 +481,32 @@ std::string& toString(
 std::string toString(
 	llvm::Value const& value,
 	bool const         isForDebug = false);
+
+template<class T> std::string toHexString(
+		T   const decimalValue,
+		int const digitCount = sizeof(T) * 2) {
+
+	std::stringstream stream;
+	
+	stream << "0x" << std::setfill('0') << std::setw(digitCount) << std::hex <<
+		decimalValue;
+	
+	return stream.str();
+}
+
+unsigned int getIntegerLength(int value, unsigned int const base = 10);
+
+// Function for freeing the resources of an array including its elements
+
+template <class ElementType> void deleteArrayDeep(
+		ElementType** const array,
+		unsigned long const length) {
+	
+	for(unsigned long i = 0; i < length; i++) {
+		delete array[i];
+	}
+	
+	delete [] array;
+}
 
 }

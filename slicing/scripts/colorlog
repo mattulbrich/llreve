@@ -1,0 +1,7 @@
+#!/bin/bash
+sed \
+	-e 's/\([[:alpha:]]* *\)\([[:alnum:]\:\. -]*;\)/\1\x1B[2m\2\x1B[22m/' \
+	-e 's/^\(INFO\)/\x1B[96m\1\x1B[39m/g' \
+	-e 's/^\(WARN\)/\x1B[93m\1\x1B[39m/g' \
+	-e 's/^\(ERROR\)/\x1B[91m\1\x1B[39m/g' \
+	-e 's/^\(FATAL\)/\x1B[91m\1\x1B[39m/g'

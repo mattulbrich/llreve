@@ -24,7 +24,7 @@
  */
 class DeleteVisitor: public llvm::InstVisitor<DeleteVisitor, bool> {
 public:
-	DeleteVisitor(llvm::DominatorTree* domTree){domTree_ = domTree;}
+	DeleteVisitor(llvm::DominatorTree* domTree, bool replaceWithZero):replaceWithZero_(replaceWithZero){domTree_ = domTree;}
 	bool visitInstruction(llvm::Instruction &I);
 	bool visitTerminatorInst(llvm::TerminatorInst &I);
 	bool visitCallInst(llvm::CallInst &I);
@@ -38,6 +38,7 @@ public:
 
 private:
 	llvm::DominatorTree* domTree_;
+	bool replaceWithZero_;
 
 	bool isPriviousDef(const llvm::DIVariable* variable, llvm::Instruction& instruction);
 	llvm::Instruction* findPriviousDef(const llvm::DIVariable* variable, llvm::Instruction& instruction);
@@ -46,4 +47,5 @@ private:
 	bool handleHasPriviousDef(llvm::Instruction& instruction, llvm::DIVariable* variable);
 	bool handleIsArgument(llvm::Instruction& instruction, llvm::DIVariable* variable);
 	bool handleSinglePhiUse(llvm::Instruction& instruction);
+	bool handleReplaceWithZero(llvm::Instruction& instruction);
 };

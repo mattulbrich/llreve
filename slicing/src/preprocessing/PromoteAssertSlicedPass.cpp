@@ -15,6 +15,7 @@
 #include "preprocessing/ExplicitAssignPass.h"
 
 #include "llvm/IR/IntrinsicInst.h"
+ #include "llvm/IR/Module.h"
 
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/Verifier.h"
@@ -29,7 +30,7 @@ char PromoteAssertSlicedPass::ID = 0;
 std::string PromoteAssertSlicedPass::ASSERT_SLICED = "assert_sliced";
 std::string PromoteAssertSlicedPass::FUNCTION_NAME = "__assert_sliced";
 
-PromoteAssertSlicedPass::PromoteAssertSlicedPass(): llvm::FunctionPass(ID) {
+PromoteAssertSlicedPass::PromoteAssertSlicedPass(): llvm::ModulePass(ID) {
 	//ctor
 }
 
@@ -37,43 +38,50 @@ PromoteAssertSlicedPass::~PromoteAssertSlicedPass() {
 	//dtor
 }
 
-bool PromoteAssertSlicedPass::runOnFunction(llvm::Function& fun) {
+bool PromoteAssertSlicedPass::runOnModule(llvm::Module& module) {
 	std::set<Instruction*> toDelete;
 
-	Instruction* priviousInstruction = nullptr;
-	for(Instruction& instruction : Util::getInstructions(fun)) {
-		if (CallInst* call = dyn_cast<CallInst>(&instruction)) {
-			if (call->getCalledFunction()
-					&& call->getCalledFunction()->getName() == FUNCTION_NAME) {
-				Value* assertedValue = call->getArgOperand(0);
+	for (llvm::Function& fun:module) {
+		Instruction* priviousInstruction = nullptr;
+		for(Instruction& instruction : Util::getInstructions(fun)) {
+			if (CallInst* call = dyn_cast<CallInst>(&instruction)) {
+				if (call->getCalledFunction()
+						&& call->getCalledFunction()->getName() == FUNCTION_NAME) {
+					Value* assertedValue = call->getArgOperand(0);
 
-				Instruction* assertedInstruction = dyn_cast<Instruction>(assertedValue);
+					Instruction* assertedInstruction = dyn_cast<Instruction>(assertedValue);
 
-				if (priviousInstruction)
-					if (CallInst* assignment = dyn_cast<CallInst>(priviousInstruction))
-						if (assignment->getCalledFunction()
-							&& assignment->getCalledFunction()->getName()
-								== ExplicitAssignPass::FUNCTION_NAME){
-							if (assignment->getArgOperand(0) == call->getArgOperand(0)) {
-								assertedInstruction = assignment;
-							}
-				}
+					if (priviousInstruction)
+						if (CallInst* assignment = dyn_cast<CallInst>(priviousInstruction))
+							if (assignment->getCalledFunction()
+								&& assignment->getCalledFunction()->getName()
+									== ExplicitAssignPass::FUNCTION_NAME){
+								if (assignment->getArgOperand(0) == call->getArgOperand(0)) {
+									assertedInstruction = assignment;
+								}
+					}
 
-				if (assertedInstruction) {
-					markAssertSliced(*assertedInstruction);
-					assert(!instruction.hasNUsesOrMore(1) && "Please make sure __assert_sliced is not used!");
-					toDelete.insert(&instruction);
+					if (assertedInstruction) {
+						markAssertSliced(*assertedInstruction);
+						assert(!instruction.hasNUsesOrMore(1) && "Please make sure the result of __assert_sliced is not used!");
+						toDelete.insert(&instruction);
+					}
 				}
 			}
+			priviousInstruction = &instruction;
 		}
-		priviousInstruction = &instruction;
 	}
 
 	for (Instruction* instruction: toDelete) {
 		instruction->eraseFromParent();
 	}
 
-	bool hasError = llvm::verifyFunction(fun, &errs());
+	Function* assertSlicedFunction = module.getFunction(FUNCTION_NAME);
+	if (assertSlicedFunction) {
+		assertSlicedFunction->eraseFromParent();
+	}
+
+	bool hasError = llvm::verifyModule(module, &errs());
 	assert(!hasError && "Internal Error: PromoteAssertSlicedPass produced slice candidate, which ist not a valid llvm program.");
 
 	return true;

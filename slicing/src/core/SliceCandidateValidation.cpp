@@ -10,6 +10,8 @@
 
 #include "SliceCandidateValidation.h"
 
+#include "util/FileOperations.h"
+
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "preprocessing/StripExplicitAssignPass.h"
 
@@ -18,20 +20,27 @@
 #include "ModuleSMTGeneration.h"
 #include "Serialize.h"
 
-#include "smtSolver/SmtSolver.h"
+#include "util/logging.h"
 
 using namespace llvm;
 using namespace std;
 
 using smt::SharedSMTRef;
 
+bool SliceCandidateValidation::heap = false;
+bool SliceCandidateValidation::initPredicate = false;
+
+void SliceCandidateValidation::activateHeap(){
+	heap = true;
+}
+
+void SliceCandidateValidation::activateInitPredicate(){
+	initPredicate = true;
+}
 
 ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm::Module* candidate,
-	CriterionPtr criterion, CounterExample* counterExample){
-	string outputFileName("candidate.smt");
-
-	SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
-	smtOpts.PerfectSync = true;
+	CriterionPtr criterion, CEXType* pCEX){
+	string outputFileName("candidate.smt2");
 
 	auto criterionInstructions = criterion->getInstructions(*program);
 	assert(criterionInstructions.size() > 0 && "Internal Error: Got criterion with no instructions.");
@@ -41,8 +50,22 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 		assert((!slicedFunction || function == slicedFunction) && "Not Supported: Got criterion with multiple functions.");
 
 		slicedFunction = function;
-		smtOpts.MainFunction = smtOpts.MainFunction = slicedFunction->getName().str();
 	}
+	assert((slicedFunction) && "Did not find sliced function.");
+
+	SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
+	// don't assign smtOpts member variables directly but use initialize
+	// see https://github.com/mattulbrich/llreve/issues/10 for details
+	smtOpts.initialize(
+		slicedFunction->getName().str(),
+		heap, // Heap
+		false, false, false,
+		false, // No-Byte-Heap
+		false, false, false,
+		true, // PerfectSync
+		false, false, false, false,
+		initPredicate, // InitPredicate
+		map<int, smt::SharedSMTRef>());
 
 	MonoPair<string> fileNames("","");
 	FileOptions fileOpts = getFileOptions(fileNames);
@@ -50,7 +73,10 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 		fileOpts.OutRelation = make_shared<smt::Primitive<string>>("true");
 	}
 
-	PreprocessOpts preprocessOpts(false, false, true);
+	PreprocessOpts preprocessOpts(false,
+		false,
+		false //Infer Marks
+		);
 
 	shared_ptr<Module> programCopy(CloneModule(program));
 	shared_ptr<Module> candiateCopy(CloneModule(candidate));
@@ -59,19 +85,25 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 	PM.add(new StripExplicitAssignPass());
 	PM.run(*programCopy);
 	PM.run(*candiateCopy);
+	writeModuleToFile("candidate.llvm", *candiateCopy);
+	{
+		TIMED_SCOPE(timerBlk, "Reve");
+		MonoPair<shared_ptr<Module>> modules(programCopy, candiateCopy);
+		auto preprocessedFuns = preprocessFunctions(modules, preprocessOpts);
 
+		vector<SharedSMTRef> smtExprs =
+		generateSMT(modules, preprocessedFuns, fileOpts);
 
-	MonoPair<shared_ptr<Module>> modules(programCopy, candiateCopy);
-
-	auto preprocessedFuns = preprocessFunctions(modules, preprocessOpts);
-
-	vector<SharedSMTRef> smtExprs =
-	generateSMT(modules, preprocessedFuns, fileOpts);
-
-	SerializeOpts serializeOpts(outputFileName, false, false, false, true);
-	serializeSMT(smtExprs, SMTGenerationOpts::getInstance().MuZ, serializeOpts);
-
-	SatResult satResult = SmtSolver::getInstance().checkSat(outputFileName);
+		SerializeOpts serializeOpts(outputFileName, false, false, false, true);
+		serializeSMT(smtExprs, SMTGenerationOpts::getInstance().MuZ, serializeOpts);
+	}
+	
+	SatResult satResult;
+	{
+		TIMED_SCOPE(timerBlk, "SMTSolver");
+		satResult = SmtSolver::getInstance().checkSat(outputFileName, pCEX);
+	}
+	Log(Info) << "SMT Solver Result: " << satResult;
 	ValidationResult result;
 
 	switch (satResult) {
@@ -88,3 +120,5 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 
 	return result;
 }
+
+

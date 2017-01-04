@@ -11,6 +11,7 @@
 #include "core/DeleteVisitor.h"
 #include "core/Criterion.h"
 #include "preprocessing/AddVariableNamePass.h"
+#include "preprocessing/MarkAnalysisPass.h"
 #include "util/FileOperations.h"
 
 #include "llvm/IR/Instructions.h"
@@ -31,7 +32,8 @@ bool DeleteVisitor::visitInstruction(llvm::Instruction &instruction){
 	handleNoUses(instruction)
 	|| handleHasPriviousDef(instruction, variable)
 	|| handleIsArgument(instruction, variable)
-	|| handleSinglePhiUse(instruction);
+	|| handleSinglePhiUse(instruction)
+	|| handleReplaceWithZero(instruction);
 	return erased;
 }
 
@@ -41,7 +43,8 @@ bool DeleteVisitor::visitTerminatorInst(TerminatorInst &instruction){
 
 bool DeleteVisitor::visitCallInst(CallInst &instruction){
 	if (instruction.getCalledFunction()
-		&& instruction.getCalledFunction()->getName() == Criterion::FUNCTION_NAME) {
+		&& (instruction.getCalledFunction()->getName() == Criterion::FUNCTION_NAME
+			|| MarkAnalysisPass::isMark(*instruction.getCalledFunction()))) {
 		return false;
 } else {
 		//TODD: avoid removing call instructions, that coudl modify
@@ -238,10 +241,34 @@ bool DeleteVisitor::handleNoUses(llvm::Instruction& instruction){
 
 bool DeleteVisitor::handleHasPriviousDef(llvm::Instruction& instruction, DIVariable* variable) {
 	if (variable){
-		Instruction* priviousDef = this->findPriviousDef(variable,instruction);
-		if (priviousDef) {
-			instruction.replaceAllUsesWith(priviousDef);
+		Instruction* previousDef = this->findPriviousDef(variable,instruction);
+		if (previousDef) {
+			// Store phi Nodes to remove them later if they become unneccessary
+			// vector<PHINode*> phiNodes;
+			// for (User* user: instruction.users()){
+			// 	if (PHINode* phiNode = dyn_cast<PHINode>(user)) {
+			// 		phiNodes.push_back(phiNode);
+			// 	}
+			// }
+
+			instruction.replaceAllUsesWith(previousDef);
 			instruction.eraseFromParent();
+
+			// for (PHINode* phiNode: phiNodes) {
+			// 	bool allSameAndPrevious = true;
+			// 	for (Use& use:phiNode->incoming_values()) {
+			// 		if (use.get() != previousDef) {
+			// 			allSameAndPrevious = false;
+			// 			break;
+			// 		}
+			// 	}
+			// 	if (allSameAndPrevious) {
+			// 		// Todo: this could lead to further unneccessary phiNodes
+			// 		phiNode->replaceAllUsesWith(previousDef);
+			// 		phiNode->eraseFromParent();
+			// 	}
+			// }
+
 			return true;
 		}
 	}
@@ -278,3 +305,14 @@ bool DeleteVisitor::handleIsArgument(llvm::Instruction& instruction, DIVariable*
 
 	return false;
 }
+
+bool DeleteVisitor::handleReplaceWithZero(llvm::Instruction& instruction){
+	if (this->replaceWithZero_) {
+		instruction.replaceAllUsesWith(Constant::getNullValue(instruction.getType()));
+		instruction.eraseFromParent();
+		return true;
+	} else {
+		return false;
+	}
+}
+

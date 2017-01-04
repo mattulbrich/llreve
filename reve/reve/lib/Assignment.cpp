@@ -62,6 +62,9 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
                     for (auto &def : defs) {
                         definitions.emplace_back(std::move(def));
                     }
+                } else if (fun->getName() == "__everyValue") {
+                    definitions.push_back(
+                    DefOrCallInfo(makeAssignment(CallInst->getName(), std::make_unique<smt::Primitive<string>>("__everyValue"))));
                 } else {
                     if (SMTGenerationOpts::getInstance().Heap ==
                         HeapOpt::Enabled) {

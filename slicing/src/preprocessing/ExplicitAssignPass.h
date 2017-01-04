@@ -23,6 +23,7 @@ public:
 
 	ExplicitAssignPass() : llvm::ModulePass(ID) {}
 	virtual bool runOnModule(llvm::Module &module) override;
+	static bool isExplicitAssignFunction(llvm::Function &function);
 
 private:
 	llvm::Function& getID(llvm::Type& type, llvm::Module& module);

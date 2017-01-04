@@ -55,7 +55,9 @@ template <class ContentType> class DependencyGraph {
 		}
 		
 		// The pseudo root will not be part of the result set
-		for(auto i : llvm::depth_first_ext(&pseudoRoot, result)) {}
+		for(auto i : llvm::depth_first_ext(&pseudoRoot, result)) {
+			UTIL_UNUSED(i)
+		}
 	}
 	
 	template <class InputSetType, class OutputSetType> void getInfluencingNodes(
@@ -69,7 +71,9 @@ template <class ContentType> class DependencyGraph {
 		}
 		
 		// The pseudo root will not be part of the result set
-		for(auto i : llvm::inverse_depth_first_ext(&pseudoRoot, result)) {}
+		for(auto i : llvm::inverse_depth_first_ext(&pseudoRoot, result)) {
+			UTIL_UNUSED(i)
+		}
 	}
 	
 	NodeType& operator[](ContentType& content) const {

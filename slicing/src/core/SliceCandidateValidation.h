@@ -12,10 +12,13 @@
 
 #include "llvm/IR/Module.h"
 #include "core/Criterion.h"
+#include "smtSolver/SmtSolver.h"
+
+#include "MonoPair.h"
+#include "Opts.h"
+#include "Preprocess.h"
 
 enum class ValidationResult {valid, invalid, unknown};
-
-class CounterExample;
 
 extern bool CriterionPresent;
 
@@ -23,5 +26,11 @@ class SliceCandidateValidation {
 public:
 	static ValidationResult validate(llvm::Module* program, llvm::Module* candidate,
 		CriterionPtr criterion = Criterion::getReturnValueCriterion(),
-		CounterExample* counterExample = nullptr);
+		CEXType* pCEX = nullptr);
+
+	static void activateHeap();
+	static void activateInitPredicate();
+private:
+	static bool heap;
+	static bool initPredicate;
 };

@@ -17,6 +17,8 @@
 #include "core/Util.h"
 #include "util/misc.h"
 
+#include "Helper.h"
+
 using namespace std;
 using namespace llvm;
 
@@ -40,22 +42,49 @@ bool ReturnValueCriterion::isReturnValue() const {
 }
 
 std::set<llvm::Instruction*> ReturnValueCriterion::getInstructions(llvm::Module& module) const{
-	bool multipleFunctions = false;
 	set<Instruction*> instructions;
+	Function* criterionFunction = nullptr;
+	bool foundMain = false;
+	bool singleFunction = true;
+	bool firstFunction = true;
 	for (Function& function:module) {
-		if (!Util::isSpecialFunction(function)) {
-			assert(!multipleFunctions && "Can't use slicing after return value for programs with more than one function!");
-		multipleFunctions = true;
+		if (!Util::isSpecialFunction(function) && !function.isDeclaration()) {
+			if (function.getName() == "main") {
+				foundMain = true;
+				criterionFunction = &function;
+			}
+			if (firstFunction) {
+				firstFunction = false;
+				criterionFunction = &function;
+			} else {
+				singleFunction = false;
+			}
+		}
+	}
 
-		for (Instruction& instruction: Util::getInstructions(function)) {
+	if (!singleFunction && !foundMain) {
+		logError("There are multiple functions, can't use slicing after return value.\n");
+		logWarning("Found the following methods:\n");
+		for (Function& function:module) {
+			if (!Util::isSpecialFunction(function) && !function.isDeclaration()) {
+				logWarning(function.getName().str() + "\n");
+			}
+		}
+		logError("There are multiple functions, can't use slicing after return value.\n");
+		logError("Use __criterion to mark the slicing criterion, or define a main function.\n");
+		std::exit(1);
+	}
+	assert((singleFunction || foundMain) && "Can't use slicing after return value for programs with more than one function!");
+
+	if (criterionFunction) {
+		for (Instruction& instruction: Util::getInstructions(*criterionFunction)) {
 			if(isa<ReturnInst>(&instruction)) {
 				instructions.insert(&instruction);
 			}
 		}
 	}
-}
 
-return instructions;
+	return instructions;
 }
 
 PresentCriterion::PresentCriterion():Criterion(){}

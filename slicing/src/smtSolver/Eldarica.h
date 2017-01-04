@@ -10,6 +10,7 @@
 
 #pragma once
 #include <string>
+#include <regex>
 #include "SmtSolverCommandLineAdapter.h"
 
 class EldaricaCommand : public SmtCommand {
@@ -24,8 +25,13 @@ private:
 class Eldarica : public SmtSolverCommandLineAdapter {
 public:
 	Eldarica(std::string pathToEldarica):SmtSolverCommandLineAdapter(), command(pathToEldarica) {}
-	virtual SatResult parseResult(std::string resultFile) override;
+	virtual SatResult parseResult(std::string resultFile, CEXType* pCEX) override;
 	virtual SmtCommand& getCommand() override;
 private:
+	static std::regex const patternSat;
+	static std::regex const patternUnsat;
+	static std::regex const patternUnknown;
+	static std::regex const patternInitPred;
+	static std::regex const patternInitPredTokenizer;
 	EldaricaCommand command;
 };

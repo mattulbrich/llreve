@@ -1,0 +1,6 @@
+#!/bin/bash
+rm -f *.smt2
+rm -f *.llvm
+rm -f *.dot
+rm -f *.txt
+rm -f log
