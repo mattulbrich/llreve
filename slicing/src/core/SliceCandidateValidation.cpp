@@ -24,6 +24,7 @@
 
 using namespace llvm;
 using namespace std;
+using namespace llreve::opts;
 
 using smt::SharedSMTRef;
 
@@ -70,7 +71,7 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 	MonoPair<string> fileNames("","");
 	FileOptions fileOpts = getFileOptions(fileNames);
 	if (!criterion->isReturnValue()) {
-		fileOpts.OutRelation = make_shared<smt::Primitive<string>>("true");
+		fileOpts.OutRelation = make_unique<ConstantBool>(true);
 	}
 
 	PreprocessOpts preprocessOpts(false,
@@ -97,7 +98,7 @@ ValidationResult SliceCandidateValidation::validate(llvm::Module* program, llvm:
 		SerializeOpts serializeOpts(outputFileName, false, false, false, true);
 		serializeSMT(smtExprs, SMTGenerationOpts::getInstance().MuZ, serializeOpts);
 	}
-	
+
 	SatResult satResult;
 	{
 		TIMED_SCOPE(timerBlk, "SMTSolver");

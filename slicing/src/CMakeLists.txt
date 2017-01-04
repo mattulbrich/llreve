@@ -6,10 +6,8 @@ project(llvm-reve-slicing VERSION 0.1)
 ### =======================================================
 
 macro(set_compiler_settings)
-	set(CMAKE_CXX_COMPILER "clang++")
-	set(CXX_WARNINGS_FLAGS "-Weverything -Wno-c++98-compat -Wno-exit-time-destructors -Wno-global-constructors -Wno-padded -Wno-switch-enum -Wno-shadow")
-	set(CXX_OTHER_FLAGS "--system-header-prefix=llvm --system-header-prefix=clang")
-	set(CXX_STANDARD_FLAGS "-std=c++14 -stdlib=libc++ -fno-rtti -g")
+	set(CXX_WARNINGS_FLAGS "-Wno-c++98-compat -Wno-exit-time-destructors -Wno-global-constructors -Wno-padded -Wno-switch-enum -Wno-shadow")
+	set(CXX_STANDARD_FLAGS "-std=c++14 -fno-rtti -g -fpermissive")
 	#Use cmake -D CLANG_FLAGS=yourFlags to add custom flags
 	set(USER_FLAGS "${CLANG_FLAGS}")
 	set(CMAKE_CXX_FLAGS "${CXX_WARNINGS_FLAGS} ${CXX_STANDARD_FLAGS} ${CXX_OTHER_FLAGS} ${USER_FLAGS}")
