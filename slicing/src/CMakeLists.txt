@@ -18,7 +18,7 @@ endmacro(set_compiler_settings)
 
 #Find llvm and make it aviable
 macro (load_llvm)
-	find_package(LLVM 3.8 REQUIRED CONFIG)
+	find_package(LLVM 3.9 REQUIRED CONFIG)
 	find_package(Clang REQUIRED CONFIG)
 
 	message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
@@ -52,6 +52,7 @@ macro (load_libreve)
 	# This command will make libreve aviable.
 	# Note, that adding include directory is not neccessary as
 	# target_include_directories() was used in the other cmake file.
+	include(${reve_build_dir}/llreve-cl-exports.cmake)
 	include(${reve_build_dir}/libreve-exports.cmake)
 
 	# Second, we add a custom target. This is neccessary to automaticaly
