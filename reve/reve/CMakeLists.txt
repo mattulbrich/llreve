@@ -3,7 +3,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/../dynamic/inter
 project(llvm-reve)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CXX_WARNINGS_FLAGS "-Wall -Wno-c++98-compat -Wno-exit-time-destructors -Wno-global-constructors -Wno-padded -Wno-switch-enum -Wno-shadow")
-set(CXX_STANDARD_FLAGS "-std=c++14 -fno-rtti")
+set(CXX_STANDARD_FLAGS "-std=c++14 -fno-rtti -O3")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CXX_WARNINGS_FLAGS} ${CXX_STANDARD_FLAGS} ${CXX_OTHER_FLAGS}")
 set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
 
