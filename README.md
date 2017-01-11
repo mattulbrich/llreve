@@ -2,8 +2,8 @@
 
 | Links: |
 |-------|
-| Visit our [web interface](https://formal.iti.kit.edu/llreve)!|
-| Visit our [web interface for noninterference](https://formal.iti.kit.edu/llreve/noninter)!|
+| Visit our [web interface](http://formal.iti.kit.edu/projects/improve/reve/)!|
+| Visit our [web interface for noninterference](http://formal.iti.kit.edu/projects/improve/reve/noninterference/)!|
 
 
 This repository contains tools for the regression verification and semantic slicing of programs.
