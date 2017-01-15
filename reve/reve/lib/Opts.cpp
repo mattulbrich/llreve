@@ -10,6 +10,7 @@
 
 #include "Opts.h"
 #include "Helper.h"
+#include "SMT.h"
 
 #include <fstream>
 #include <regex>
@@ -28,9 +29,10 @@ llreve::cl::OptionCategory ReveCategory("Reve options",
                                         "Options for controlling reve.");
 
 void SMTGenerationOpts::initialize(
-    MonoPair<llvm::Function *> mainFunctions, enum HeapOpt heap, enum StackOpt stack,
-    enum GlobalConstantsOpt globalConstants, FunctionEncoding onlyRecursive,
-    enum ByteHeapOpt byteHeap, bool everythingSigned, SMTFormat muZ,
+    MonoPair<llvm::Function *> mainFunctions, enum HeapOpt heap,
+    enum StackOpt stack, enum GlobalConstantsOpt globalConstants,
+    FunctionEncoding onlyRecursive, enum ByteHeapOpt byteHeap,
+    bool everythingSigned, SMTFormat muZ,
     enum PerfectSynchronization perfectSync, bool passInputThrough,
     bool bitVect, bool invert, bool initPredicate, bool disableAutoAbstraction,
     map<Mark, SharedSMTRef> iterativeRelationalInvariants,
@@ -165,7 +167,9 @@ void searchCustomRelationsInFile(std::string file, SharedSMTRef &in,
             additionalIn = true;
         } else if (std::regex_search(file, match, relinRegex)) {
             std::string matchStr = match[2];
-            in = stringExpr("(" + matchStr + ")");
+            std::string combinedString = "(" + matchStr + ")";
+            setSMTLexerInput(combinedString.c_str());
+            in = parseSMT();
         }
     }
     if (std::regex_search(file, match, reloutRegex) && out == nullptr) {

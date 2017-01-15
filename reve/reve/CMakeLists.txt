@@ -56,7 +56,17 @@ target_include_directories(llreve-cl PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/cllib)
 export(TARGETS llreve-cl FILE llreve-cl-exports.cmake)
 
-add_library(libreve ${sources} ${headers})
+find_package(BISON)
+find_package(FLEX)
+
+BISON_TARGET(SMTParser lib/SMTParser.yy ${CMAKE_CURRENT_BINARY_DIR}/smtparser/lib/SMTParser.cpp)
+FLEX_TARGET(SMTLexer lib/SMTLexer.ll  ${CMAKE_CURRENT_BINARY_DIR}/smtparser/lib/SMTLexer.cpp)
+ADD_FLEX_BISON_DEPENDENCY(SMTLexer SMTParser)
+
+set_source_files_properties(${BISON_SMTParser_OUTPUTS} PROPERTIES COMPILE_FLAGS "-Wno-everything")
+set_source_files_properties(${FLEX_SMTLexer_OUTPUTS} PROPERTIES COMPILE_FLAGS "-Wno-everything")
+
+add_library(libreve ${sources} ${headers} ${BISON_SMTParser_OUTPUTS} ${FLEX_SMTLexer_OUTPUTS})
 target_include_directories(libreve PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include)
 

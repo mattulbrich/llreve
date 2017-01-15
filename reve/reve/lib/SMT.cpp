@@ -1146,3 +1146,20 @@ unique_ptr<TypedVariable> typedVariableFromSortedVar(const SortedVar &var) {
     return make_unique<TypedVariable>(var.name, var.type->copy());
 }
 }
+static size_t lexerOffset;
+static const char *lexerInput;
+void setSMTLexerInput(const char *input) {
+    lexerOffset = 0;
+    lexerInput = input;
+}
+int readInputForLexer(char *buffer, int *numBytesRead, int maxBytesToRead) {
+    int numBytesToRead = maxBytesToRead;
+    int bytesRemaining = strlen(lexerInput) - lexerOffset;
+    if (numBytesToRead > bytesRemaining) {
+        numBytesToRead = bytesRemaining;
+    }
+    memcpy(buffer, lexerInput + lexerOffset, numBytesToRead);
+    *numBytesRead = numBytesToRead;
+    lexerOffset += numBytesToRead;
+    return 0;
+}
