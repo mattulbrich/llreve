@@ -1,5 +1,3 @@
-find_package(GMP)
-
 file(GLOB sources lib/llreve/dynamic/*.cpp)
 
 BISON_TARGET(PatternParser lib/llreve/dynamic/PatternParser.y ${CMAKE_CURRENT_BINARY_DIR}/patternparser/llreve/dynamic/PatternParser.cpp)
@@ -16,8 +14,10 @@ add_library(libllreve-interpreter
   ${BISON_PatternParser_OUTPUTS}
   ${FLEX_PatternLexer_OUTPUTS})
 
-target_include_directories(libllreve-interpreter PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
-                                                 PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/patternparser)
+target_include_directories(libllreve-interpreter
+  PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+  PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/patternparser
+  PRIVATE ${GMP_INCLUDE_DIR})
 target_link_libraries(libllreve-interpreter
   libllreve
 )

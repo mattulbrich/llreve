@@ -22,11 +22,19 @@ if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
   set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
 endif()
 
+option(LLREVE_STATIC "Link binaries statically" OFF)
+
+if(${LLREVE_STATIC})
+  set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+  set(CMAKE_EXE_LINKER_FLAGS "-static")
+endif()
+
 find_package(LLVM 3.9 REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
-find_package (Threads REQUIRED)
-find_package(BISON)
-find_package(FLEX)
+find_package(Threads REQUIRED)
+find_package(BISON REQUIRED)
+find_package(FLEX REQUIRED)
+find_package(GMP REQUIRED)
 
 exec_program(llvm-config ARGS --cxxflags OUTPUT_VARIABLE LLVM_CXXFLAGS)
 separate_arguments(LLVM_CXXFLAGS)
