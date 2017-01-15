@@ -1,0 +1,5 @@
+include(GetGitRevisionDescription)
+get_git_head_revision(GIT_REFSPEC GIT_SHA1)
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/GitSHA1.cpp.in" "${CMAKE_CURRENT_BINARY_DIR}/GitSHA1.cpp" @ONLY)
+add_library(llreve-version ${CMAKE_CURRENT_BINARY_DIR}/GitSHA1.cpp)
+target_include_directories(llreve-version PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
