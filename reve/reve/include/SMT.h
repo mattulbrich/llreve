@@ -470,4 +470,4 @@ std::unique_ptr<SMTExpr> memoryVariable(std::string name);
 std::unique_ptr<TypedVariable> typedVariableFromSortedVar(const SortedVar &var);
 }
 void setSMTLexerInput(const char *input);
-smt::SharedSMTRef parseSMT();
+smt::SharedSMTRef parseSMT(const std::string &input);

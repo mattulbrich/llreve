@@ -1,14 +1,15 @@
 %define parse.error verbose
 %define parse.lac full
+%define api.prefix {smt}
 %{
 #include <vector>
 #include "SMT.h"
 #include "Logging.h"
 
-extern "C" int yylex(void);
+extern "C" int smtlex(void);
 
 static smt::SharedSMTRef parsedExpr;
-void yyerror(const char* s) {
+void smterror(const char* s) {
      std::cout << "error: " << s << "\n";
 }
 %}
@@ -40,8 +41,9 @@ Exprs : Expr { $$ = new std::vector<smt::SharedSMTRef>({ smt::SharedSMTRef($1) }
 
 %%
 
-smt::SharedSMTRef parseSMT() {
-    int result = yyparse();
+smt::SharedSMTRef parseSMT(const std::string& input) {
+    setSMTLexerInput(input.c_str());
+    int result = smtparse();
     if (result != 0) {
         logError("Parse error\n");
         exit(1);
