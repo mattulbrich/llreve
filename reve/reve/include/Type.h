@@ -8,6 +8,7 @@ namespace smt {
 enum class TypeTag { Bool, Int, Float, Array };
 
 struct Type {
+    virtual ~Type() = default;
     // Used for safe casting without rtti
     virtual TypeTag getTag() const = 0;
     virtual sexpr::SExprRef toSExpr() const = 0;
