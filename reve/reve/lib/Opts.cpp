@@ -163,7 +163,8 @@ void searchCustomRelationsInFile(std::string file, SharedSMTRef &in,
     if (in == nullptr) {
         if (std::regex_search(file, match, preRegex)) {
             std::string matchStr = match[2];
-            in = stringExpr("(" + matchStr + ")");
+            std::string combinedString = "(" + matchStr + ")";
+            in = parseSMT(combinedString);
             additionalIn = true;
         } else if (std::regex_search(file, match, relinRegex)) {
             std::string matchStr = match[2];
@@ -173,7 +174,8 @@ void searchCustomRelationsInFile(std::string file, SharedSMTRef &in,
     }
     if (std::regex_search(file, match, reloutRegex) && out == nullptr) {
         std::string matchStr = match[2];
-        out = stringExpr("(" + matchStr + ")");
+        std::string combinedString = "(" + matchStr + ")";
+        out = parseSMT(combinedString);
     }
 }
 
