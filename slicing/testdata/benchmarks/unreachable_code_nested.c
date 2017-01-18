@@ -1,6 +1,8 @@
 #include "slicing_marks.h"
 
-// Simmelar to Listing 4, precondition replaced by additional if
+/*
+ * The line is sliceable, because it is never executed anyway.
+ */
 int foo ( int x ) {
 	if (x > 0) {
 		if ( x < 0) {
