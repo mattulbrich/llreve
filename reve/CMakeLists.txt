@@ -29,6 +29,12 @@ if(${LLREVE_STATIC})
   set(CMAKE_EXE_LINKER_FLAGS "-static")
 endif()
 
+option(LLREVE_SANITIZE "Enable sanitizers" OFF)
+
+if(${LLREVE_SANITIZE})
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined -fsanitize=address")
+endif()
+
 find_package(LLVM 3.9 REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
 find_package(Threads REQUIRED)
