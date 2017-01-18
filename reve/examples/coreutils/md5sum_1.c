@@ -1,4 +1,4 @@
-/*@ rel_in (and (= s$1_0 s$2_0) (= s_len$1_0 s_len$2_0) (= hex_digest$1_0 hex_digest$2_0) (= file_name$1_0 file_name$2_0) (forall ((i Int)) (= (select HEAP$1 i) (select HEAP$2 i))) (>= s$1_0 0) (>= hex_digest$1_0 0) (>= file_name$1_0 0) (>= s$2_0 0) (>= hex_digest$2_0 0) (>= file_name$2_0 0) (distinct s_len$1_0 0))  @*/
+/*@ rel_in (and (= s$1_0 s$2_0) (= s_len$1_0 s_len$2_0) (= hex_digest$1_0 hex_digest$2_0) (= file_name$1_0 file_name$2_0) (= HEAP$1 HEAP$2) (>= s$1_0 0) (>= hex_digest$1_0 0) (>= file_name$1_0 0) (>= s$2_0 0) (>= hex_digest$2_0 0) (>= file_name$2_0 0) (distinct s_len$1_0 0))  @*/
 typedef int bool;
 typedef int size_t;
 
