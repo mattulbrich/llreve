@@ -62,7 +62,9 @@ Interpreter::Interpreter(
 	unsigned int curIndex = 0;
 	
 	if(_tracePrinting) {
-		_out << _printPrefix << linFunc.func.getName().str();
+		_out << "\n";
+		_out << _printPrefix << "Interpreting function '";
+		_out << linFunc.func.getName().str();
 	}
 	
 	// Initialize the argument values with the input passed as argument
@@ -99,7 +101,7 @@ Interpreter::Interpreter(
 	}
 	
 	if(_tracePrinting) {
-		_out << ")\n";
+		_out << ")' ...\n";
 	}
 	
 	// Initialize the instruction values with undefined values

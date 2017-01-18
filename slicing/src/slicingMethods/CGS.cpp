@@ -198,7 +198,14 @@ ModulePtr CGS::computeSlice(
 	LinearizedFunction linFunc(func);
 	CEXType            cex    (func.getArgumentList().size());
 	
+	_out << "\n";
+	_out << "The following lines show a mapping of integer values to LLVM instructions.\n";
+	_out << "The mapping is used for the execution traces to show which instruction\n";
+	_out << "has been executed. A slice is displayed in the form X_XX with as many\n";
+	_out << "digits as there are instructions in the program. For each removed\n";
+	_out << "instruction 'X' is replaced with '_'\n\n";
 	linFunc.print(_out);
+	_out << "\n";
 	
 	CandidateGenerationEngine cge(module, criterion, linFunc);
 	CandidateNode*            pCurCandidate(&cge.generateCandidate());
@@ -209,7 +216,10 @@ ModulePtr CGS::computeSlice(
 		SliceCandidateValidation::activateInitPredicate();
 	}
 	
-	printSlice(pCurCandidate->slice) << "  ";
+	_out << "\n";
+	_out << "Current slice candidate: ";
+	printSlice(pCurCandidate->slice) << "\n";
+	_out << " -> ";
 	
 	while(pCurCandidate->validate(cex).getState() !=
 		CandidateNode::State::valid) {
@@ -217,7 +227,8 @@ ModulePtr CGS::computeSlice(
 		switch(pCurCandidate->getState()) {
 			case CandidateNode::State::valid: _out << "valid\n"; break;
 			case CandidateNode::State::invalid:
-				_out << "invalid ";
+				_out << "invalid\n";
+				_out << " -> new counterexample: ";
 				printCounterexample(cex) << "\n";
 				break;
 			case CandidateNode::State::unknown: _out << "unknown\n"; break;
@@ -229,7 +240,10 @@ ModulePtr CGS::computeSlice(
 			&cge.generateCandidate(cex) :
 			&cge.generateCandidate();
 		
-		printSlice(pCurCandidate->slice) << "  ";
+		_out << "\n";
+		_out << "Current slice candidate: ";
+		printSlice(pCurCandidate->slice) << "\n";
+		_out << " -> ";
 	}
 	
 	cge.updateBestValidSlice(*pCurCandidate);
