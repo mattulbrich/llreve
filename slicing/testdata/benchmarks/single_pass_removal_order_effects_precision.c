@@ -1,7 +1,8 @@
 #include "slicing_marks.h"
 
 /**
- * This example shows that a fix point iteration may be useful for SLE and IAA.
+ * This example shows that a fixed point iteration may be useful for
+ * SLE and IAA.
  *
  * It is not possible to remove [1] or [3], unless [2] is removed first.
  */
