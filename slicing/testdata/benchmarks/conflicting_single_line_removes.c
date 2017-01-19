@@ -1,5 +1,10 @@
 #include "slicing_marks.h"
 
+/*
+ * This example shows, that it is not possible to remove every line,
+ * which does not have an effect on its own.
+ */
+
 int foo(){
 	int a = 0;
 	int b = 0;

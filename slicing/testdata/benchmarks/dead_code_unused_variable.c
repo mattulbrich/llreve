@@ -1,6 +1,8 @@
 #include "slicing_marks.h"
 
-//Simmelar to examples Listing 2
+/* A very simple example, that is also sliceable syntactically.
+ * The variable y is set but never used.
+ */
 int foo ( int x ) {
 	int y;
 	x = x + 3;
