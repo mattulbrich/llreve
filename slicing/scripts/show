@@ -1,27 +1,29 @@
 #!/bin/bash
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+orig="program.llvm"
+slice="slice.llvm"
+
+echo "This script compares the program and the slice using a diff tool
+if you don't like wdiff you can pass another diff tool p.a. meld as first
+parameter."
+echo ""
+
 if [[ $# -eq 0 ]]; then
-	$DIR/prepare program.llvm
-	$DIR/prepare slice.llvm
-	meld program.llvm slice.llvm
+	diffTool="wdiff"
 else
-	name=${1%.}
-	name=${name%.orig}
-
-	orig=$name.orig
-	slice=$name.slice
-
-	if [ ! -f $orig ]; then
-		echo "Could not find original program: $orig"
-		exit 2
-	fi
-	if [ ! -f $slice ]; then
-		echo "Could not find sliced program: $slice"
-		exit 2
-	fi
-
-	DIR/prepare $orig
-	DIR/prepare $slice
-	meld $orig $slice
+	diffTool="$1"
 fi
+
+if [ ! -f $orig ]; then
+	echo "Could not find original program: $orig"
+	exit 2
+fi
+if [ ! -f $slice ]; then
+	echo "Could not find sliced program: $slice"
+	exit 2
+fi
+
+$DIR/prepare $orig
+$DIR/prepare $slice
+$diffTool $orig $slice

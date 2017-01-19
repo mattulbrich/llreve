@@ -1,0 +1,20 @@
+#!/bin/bash
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+echo "This script runs all experiments listed in $DIR/benchmarks.bench"
+echo "If it is run multiple times it will show the results of all previous"
+echo "runs. To prevent this remove the logs directory, which will be"
+echo "create in the working directory of this script."
+echo ""
+echo "To show the results without rerunning the experiments run"
+echo "python3 $DIR/parseLogs.py"
+echo ""
+echo "To view a single slice and its program go to the right directory
+in logs. Then run
+$DIR/show"
+echo ""
+echo "Starting experiments..."
+
+eld-client -h > /dev/null
+$DIR/batchSlicing $DIR/benchmarks.bench
+python3 $DIR/parseLogs.py
