@@ -73,9 +73,8 @@ static cl::opt<SlicingMethodOptions> SlicingMethodOption(cl::desc("Choose slicin
 		clEnumVal(sle, "Single Line Elimination, trys to remove instruction by instruction. (default)"),
 		clEnumVal(cgs, "Use counterexample guided slicing to find unneccesary instructions."),
 		clEnumVal(id, "Use the program it self as slice and verify validity."),
-		cl::init(sle)
-
 		clEnumValEnd),
+	cl::init(sle),
 	llvm::cl::cat(SlicingCategory)
 	);
 
