@@ -215,7 +215,6 @@ int main(int argc, const char **argv) {
 		performPostProcessing(slice);
 
 		Log(Info) << "Instructions in program: " << Util::countInstructions(*program);
-		Log(Info) << "Instructions in slice: " << Util::countInstructions(*slice);
 		writeModuleToFile("program.llvm", *program);
 		writeModuleToFile("slice.llvm", *slice);
 
@@ -232,7 +231,10 @@ int main(int argc, const char **argv) {
 			SlicingMethodPtr syntactic = shared_ptr<SlicingMethod>(new SyntacticSlicing(slice));
 			ModulePtr sslice = syntactic->computeSlice(criterion);
 			performPostProcessing(sslice);
+			Log(Info) << "Instructions in slice: " << Util::countInstructions(*sslice);
 			writeModuleToFile("slice.llvm", *sslice);
+		} else {
+			Log(Info) << "Instructions in slice: " << Util::countInstructions(*slice);
 		}
 
 		outs() << "See program.llvm and slice.llvm for the resulting LLVMIRs \n";
