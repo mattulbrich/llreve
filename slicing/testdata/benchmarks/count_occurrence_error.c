@@ -1,11 +1,15 @@
+#include "slicing_marks.h"
+
 const int NO_ERROR = 0;
 const int NULL_POINTER = -1;
 const int OUT_OF_BOUND = -2;
 
-int __criterion(int x){
-	return x;
-}
-
+/*
+ * This example is motivated by a simple method, that counts the occurrences
+ * of a value in an array. The method contains error handling.
+ * If we slice for the error we will notice that the OUT_OF_BOUND error
+ * is sliced, as it can not occur.
+ */
 int countOccurrence(int x, int a[], int N) {
 	int result = 0;
 	int err = NO_ERROR;
@@ -24,6 +28,6 @@ int countOccurrence(int x, int a[], int N) {
 				break;
 		}
 
-	__criterion(result);
+	__criterion(err);
 	return err?err:result;
 }
