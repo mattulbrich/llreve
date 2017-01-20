@@ -107,8 +107,10 @@ def main():
 
 	i = 0
 
-	print("%50s %6s %3s %8s %4s %4s %4s" % ("name", "method", "run", "time",
-		"programInstructions", "sliceInstructions", "reveCalls"))
+	print("%50s %6s %3s %8s %7s %6s %5s" % ("name", "method", "run", "time",
+		"program", "slice ", "reve"))
+	print("%50s %6s %3s %8s %7s %6s %5s" % ("", "", "", "",
+		"Instr.", "Instr.", "Calls"))
 	for dirpath,_,_ in os.walk(cwd):
 		match = pattern.match(dirpath)
 		fileName = os.path.join(dirpath,"log")
@@ -119,7 +121,7 @@ def main():
 
 			parser = LogParser(fileName)
 
-			print('%50s %6s %3s %8.1f %4i %4i %4i' % (name, method, run, parser.executionTime,
+			print('%50s %6s %3s %8.1f %7i %6i %5i' % (name, method, run, parser.executionTime,
 			parser.programInstructions, parser.sliceInstructions, parser.reveCalls))
 
 #pandas.concat([smtData, problemData], axis=1, join_axes=[smtData.problem])
