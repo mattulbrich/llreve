@@ -26,4 +26,4 @@ fi
 
 $DIR/prepare $orig
 $DIR/prepare $slice
-$diffTool $orig $slice
+$diffTool $orig $slice | $DIR/colorlog
