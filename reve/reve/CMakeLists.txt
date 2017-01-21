@@ -57,3 +57,10 @@ target_link_libraries(llreve
   libllreve
   llreve-version
   )
+
+find_package(GTest REQUIRED)
+add_executable(llreve-test test/LlreveTest.cpp)
+add_dependencies(llreve-test llreve)
+target_include_directories(llreve-test PRIVATE ${GTEST_INCLUDE_DIR})
+target_link_libraries(llreve-test ${GTEST_BOTH_LIBRARIES})
+add_test(AllTestsInLlreveTest llreve-test)

@@ -60,6 +60,8 @@ find_library(Z3_LIB NAMES z3 libz3)
 include_directories(${LLVM_INCLUDE_DIRS} ${Z3_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
+enable_testing()
+
 add_subdirectory(version)
 add_subdirectory(reve)
 add_subdirectory(dynamic/llreve-dynamic)
