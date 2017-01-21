@@ -6,7 +6,7 @@ int fib(int n,int *x) {
    int b = 1;
    int t;
 
-   while(__mark(42) & i < n) {
+   while(__mark(42) & (i < n)) {
       t = a;
       a = b;
       b = a+t;

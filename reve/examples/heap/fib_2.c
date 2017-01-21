@@ -7,7 +7,7 @@ int fib(int n, int *a) {
    a[0] = 1;
    a[1] = 1;
 
-   while(__mark(42) & i < n) {
+   while(__mark(42) & (i < n)) {
       a[i] = a[i-1] + a[i-2];
       i++;
    }
