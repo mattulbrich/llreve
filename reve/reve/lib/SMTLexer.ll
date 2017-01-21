@@ -22,7 +22,7 @@ false           { return FALSE; }
 forall          { return FORALL; }
 Int             { return INT; }
 HEAP$(1|2)      { smtlval.heapName = new std::string(yytext); return HEAP; }
-(and|=|>=|or|select|store|distinct|\<=|\<|>) {
+(and|=|>=|or|select|store|distinct|\<=|\<|>|\+|-) {
     smtlval.opName = new std::string(yytext);
     return OPNAME;
 }
