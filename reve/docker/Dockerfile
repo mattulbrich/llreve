@@ -10,6 +10,7 @@ RUN apt-get update && \
       flex \
       g++ \
       gcc \
+      git \
       libgmp-dev \
       ninja-build \
       python \
