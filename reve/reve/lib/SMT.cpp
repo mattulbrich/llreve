@@ -717,16 +717,15 @@ std::string getSMTType(std::string arg) {
     }
 }
 
-smt::SharedSMTRef apIntToSMT(llvm::APInt i) {
+smt::SharedSMTRef intToSMT(std::string val, unsigned bitWidth) {
     if (SMTGenerationOpts::getInstance().BitVect) {
-        unsigned bitWidth = i.getBitWidth();
-        return smt::stringExpr("(_ bv" + i.toString(10, true) + " " +
-                               std::to_string(bitWidth) + ")");
+        return smt::stringExpr("(_ bv" + val + " " + std::to_string(bitWidth) +
+                               ")");
     } else {
-        if (i.isNegative()) {
-            return smt::makeOp("-", (-i).toString(10, true));
-        } else {
-            return smt::stringExpr(i.toString(10, true));
-        }
+        return smt::stringExpr(val);
     }
+}
+
+smt::SharedSMTRef apIntToSMT(llvm::APInt i) {
+    return intToSMT(i.toString(10, true), i.getBitWidth());
 }
