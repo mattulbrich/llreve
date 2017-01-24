@@ -1,4 +1,3 @@
-sle/conflicting_single_line_removes ../bin/slicing -eld-client -sle ../testdata/benchmarks/conflicting_single_line_removes.c
 sle/count_occurrence_error ../bin/slicing -heap -eld-client -sle ../testdata/benchmarks/count_occurrence_error.c
 sle/count_occurrence_result ../bin/slicing -heap -eld-client -sle ../testdata/benchmarks/count_occurrence_result.c
 sle/dead_code_after_ssa ../bin/slicing -eld-client -sle ../testdata/benchmarks/dead_code_after_ssa.c
@@ -16,7 +15,6 @@ sle/unreachable_code_nested ../bin/slicing -eld-client -sle ../testdata/benchmar
 sle/unreachable_code_simple ../bin/slicing -eld-client -sle ../testdata/benchmarks/unreachable_code_simple.c
 sle/whole_loop_removable ../bin/slicing -eld-client -sle ../testdata/benchmarks/whole_loop_removable.c
 
-iaa/conflicting_single_line_removes ../bin/slicing -eld-client -iaa ../testdata/benchmarks/conflicting_single_line_removes.c
 iaa/count_occurrence_error ../bin/slicing -heap -eld-client -iaa ../testdata/benchmarks/count_occurrence_error.c
 iaa/count_occurrence_result ../bin/slicing -heap -eld-client -iaa ../testdata/benchmarks/count_occurrence_result.c
 iaa/dead_code_after_ssa ../bin/slicing -eld-client -iaa ../testdata/benchmarks/dead_code_after_ssa.c
@@ -34,7 +32,6 @@ iaa/unreachable_code_nested ../bin/slicing -eld-client -iaa ../testdata/benchmar
 iaa/unreachable_code_simple ../bin/slicing -eld-client -iaa ../testdata/benchmarks/unreachable_code_simple.c
 iaa/whole_loop_removable ../bin/slicing -eld-client -iaa ../testdata/benchmarks/whole_loop_removable.c
 
-cgs/conflicting_single_line_removes ../bin/slicing -eld-client -cgs ../testdata/benchmarks/conflicting_single_line_removes.c
 cgs/dead_code_after_ssa ../bin/slicing -eld-client -cgs ../testdata/benchmarks/dead_code_after_ssa.c
 cgs/dead_code_unused_variable ../bin/slicing -eld-client -cgs ../testdata/benchmarks/dead_code_unused_variable.c
 cgs/identity_not_modifying ../bin/slicing -eld-client -cgs ../testdata/benchmarks/identity_not_modifying.c
@@ -50,7 +47,6 @@ cgs/unreachable_code_nested ../bin/slicing -eld-client -cgs ../testdata/benchmar
 cgs/unreachable_code_simple ../bin/slicing -eld-client -cgs ../testdata/benchmarks/unreachable_code_simple.c
 cgs/whole_loop_removable ../bin/slicing -eld-client -cgs ../testdata/benchmarks/whole_loop_removable.c
 
-bf/conflicting_single_line_removes ../bin/slicing -eld-client -bf ../testdata/benchmarks/conflicting_single_line_removes.c
 bf/dead_code_after_ssa ../bin/slicing -eld-client -bf ../testdata/benchmarks/dead_code_after_ssa.c
 bf/dead_code_unused_variable ../bin/slicing -eld-client -bf ../testdata/benchmarks/dead_code_unused_variable.c
 bf/identity_not_modifying ../bin/slicing -eld-client -bf ../testdata/benchmarks/identity_not_modifying.c
