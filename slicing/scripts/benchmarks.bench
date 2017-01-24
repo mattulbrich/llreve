@@ -10,7 +10,7 @@ sle/informationflow_end_of_loop_override ../bin/slicing -eld-client -sle ../test
 sle/intermediate ../bin/slicing -eld-client -sle ../testdata/benchmarks/intermediate.c
 sle/requires_path_sensitivity ../bin/slicing -eld-client -sle ../testdata/benchmarks/requires_path_sensitivity.c
 sle/single_pass_removal_order_effects_precision ../bin/slicing -eld-client -sle ../testdata/benchmarks/single_pass_removal_order_effects_precision.c
-sle/unchanged_over_multiple_itterationts ../bin/slicing -eld-client -sle ../testdata/benchmarks/unchanged_over_multiple_itterationts.c
+sle/unchanged_over_multiple_itterationts ../bin/slicing -eld-client -sle ../testdata/benchmarks/unchanged_over_multiple_iterations.c
 sle/unreachable_code_nested ../bin/slicing -eld-client -sle ../testdata/benchmarks/unreachable_code_nested.c
 sle/unreachable_code_simple ../bin/slicing -eld-client -sle ../testdata/benchmarks/unreachable_code_simple.c
 sle/whole_loop_removable ../bin/slicing -eld-client -sle ../testdata/benchmarks/whole_loop_removable.c
@@ -27,7 +27,7 @@ iaa/informationflow_end_of_loop_override ../bin/slicing -eld-client -iaa ../test
 iaa/intermediate ../bin/slicing -eld-client -iaa ../testdata/benchmarks/intermediate.c
 iaa/requires_path_sensitivity ../bin/slicing -eld-client -iaa ../testdata/benchmarks/requires_path_sensitivity.c
 iaa/single_pass_removal_order_effects_precision ../bin/slicing -eld-client -iaa ../testdata/benchmarks/single_pass_removal_order_effects_precision.c
-iaa/unchanged_over_multiple_itterationts ../bin/slicing -eld-client -iaa ../testdata/benchmarks/unchanged_over_multiple_itterationts.c
+iaa/unchanged_over_multiple_itterationts ../bin/slicing -eld-client -iaa ../testdata/benchmarks/unchanged_over_multiple_iterations.c
 iaa/unreachable_code_nested ../bin/slicing -eld-client -iaa ../testdata/benchmarks/unreachable_code_nested.c
 iaa/unreachable_code_simple ../bin/slicing -eld-client -iaa ../testdata/benchmarks/unreachable_code_simple.c
 iaa/whole_loop_removable ../bin/slicing -eld-client -iaa ../testdata/benchmarks/whole_loop_removable.c
@@ -42,7 +42,7 @@ cgs/informationflow_end_of_loop_override ../bin/slicing -eld-client -cgs ../test
 cgs/intermediate ../bin/slicing -eld-client -cgs ../testdata/benchmarks/intermediate.c
 cgs/requires_path_sensitivity ../bin/slicing -eld-client -cgs ../testdata/benchmarks/requires_path_sensitivity.c
 cgs/single_pass_removal_order_effects_precision ../bin/slicing -eld-client -cgs ../testdata/benchmarks/single_pass_removal_order_effects_precision.c
-cgs/unchanged_over_multiple_itterationts ../bin/slicing -eld-client -cgs ../testdata/benchmarks/unchanged_over_multiple_itterationts.c
+cgs/unchanged_over_multiple_itterationts ../bin/slicing -eld-client -cgs ../testdata/benchmarks/unchanged_over_multiple_iterations.c
 cgs/unreachable_code_nested ../bin/slicing -eld-client -cgs ../testdata/benchmarks/unreachable_code_nested.c
 cgs/unreachable_code_simple ../bin/slicing -eld-client -cgs ../testdata/benchmarks/unreachable_code_simple.c
 cgs/whole_loop_removable ../bin/slicing -eld-client -cgs ../testdata/benchmarks/whole_loop_removable.c
@@ -57,7 +57,7 @@ bf/informationflow_end_of_loop_override ../bin/slicing -eld-client -bf ../testda
 bf/intermediate ../bin/slicing -eld-client -bf ../testdata/benchmarks/intermediate.c
 bf/requires_path_sensitivity ../bin/slicing -eld-client -bf ../testdata/benchmarks/requires_path_sensitivity.c
 bf/single_pass_removal_order_effects_precision ../bin/slicing -eld-client -bf ../testdata/benchmarks/single_pass_removal_order_effects_precision.c
-bf/unchanged_over_multiple_itterationts ../bin/slicing -eld-client -bf ../testdata/benchmarks/unchanged_over_multiple_itterationts.c
+bf/unchanged_over_multiple_itterationts ../bin/slicing -eld-client -bf ../testdata/benchmarks/unchanged_over_multiple_iterations.c
 bf/unreachable_code_nested ../bin/slicing -eld-client -bf ../testdata/benchmarks/unreachable_code_nested.c
 bf/unreachable_code_simple ../bin/slicing -eld-client -bf ../testdata/benchmarks/unreachable_code_simple.c
 bf/whole_loop_removable ../bin/slicing -eld-client -bf ../testdata/benchmarks/whole_loop_removable.c
