@@ -119,7 +119,24 @@ CandidateGenerationEngine::CandidateGenerationEngine(
 
 CandidateNode& CandidateGenerationEngine::generateCandidate(void) {
 	
-	if(!_pUnionSlice) {
+	if(_pUnionSlice) {
+		
+		unsigned int const minSize        = _pUnionSlice->size + 1;
+		CandidateNode*     pBestCandidate = _pFullSlice;
+		
+		for(DRM const& i : _drms) {
+			
+			CandidateNode&     candidate = _pUnionSlice->createSuccessor(i);
+			unsigned int const newSize   = candidate.size;
+			
+			if(newSize >= minSize && newSize < pBestCandidate->size) {
+				pBestCandidate = &candidate;
+			}
+		}
+		
+		return *pBestCandidate;
+		
+	} else {
 		
 		CEXType cex(_instCount);
 		
@@ -129,10 +146,6 @@ CandidateNode& CandidateGenerationEngine::generateCandidate(void) {
 		}
 		
 		return generateCandidate(cex);
-		
-	} else {
-		
-		assert(false);
 	}
 }
 
@@ -142,15 +155,18 @@ CandidateNode& CandidateGenerationEngine::generateCandidate(
 	auto  drmCreation = _drms.emplace(linFunc, cex);
 	APInt dynSlice    = drmCreation.first->computeSlice(_critInstructions);
 	
-	if(_pUnionSlice) {
-		_pUnionSlice = &getCandidateNode(_pUnionSlice->slice | dynSlice);
-	} else {
-		_pUnionSlice = &getCandidateNode(dynSlice);
+	// If there's no union slice yet, the dynamic slice is the union slice
+	if(!_pUnionSlice) {
+		return *(_pUnionSlice = &getCandidateNode(dynSlice));
 	}
 	
-	// TODO: Delete outdated candidates
+	CandidateNode const* const _pOldUnionSlice = _pUnionSlice;
 	
-	return *_pUnionSlice;
+	_pUnionSlice = &getCandidateNode(_pUnionSlice->slice | dynSlice);
+	
+	// Check whether the dynamic slice yielded a new union slice
+	return
+		_pUnionSlice != _pOldUnionSlice ? *_pUnionSlice : generateCandidate();
 }
 
 CandidateNode& CandidateGenerationEngine::getCandidateNode(
