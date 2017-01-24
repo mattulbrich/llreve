@@ -30,6 +30,12 @@ DRM::DRM(
 	list<APInt const*>* const nodes       = new list<APInt const*>[_instCount];
 	APInt const**       const recentNodes = new APInt const*      [_instCount];
 	
+	// The recent nodes must explicitely initialized with a null pointer to
+	// avoid segmentation faults later on
+	for(unsigned int i = 0; i < _instCount; i++) {
+		recentNodes[i] = nullptr;
+	}
+	
 	// Bit array where the current reachability is accumulated
 	APInt reachability(_instCount, 0);
 	
@@ -53,9 +59,11 @@ DRM::DRM(
 		// Mark the recently executed instruction as reachable
 		reachability.setBit(instIndex);
 		
-		// Consider the control dependency
-		if(ctrlDependencies[instIndex]) {
-			reachability |= *recentNodes[linFunc[*ctrlDependencies[instIndex]]];
+		// Consider the control dependencies
+		for(Instruction const* i : ctrlDependencies[instIndex]) {
+			if(APInt const* const recentNode = recentNodes[linFunc[*i]]) {
+				reachability |= *recentNode;
+			}
 		}
 		
 		// Union the reachable instructions of all instructions used by the

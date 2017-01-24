@@ -56,15 +56,17 @@ bool CtrlDepExtractionPass::runOnFunction(
 	CDGPass const& cdg = getAnalysis<CDGPass>();
 	
 	for(Instruction& i : Util::getInstructions(func)) {
-	
-		auto& predecessors = cdg[i].predecessors;
 		
-		if(predecessors.size() == 0) {
-			_dependencies[_linFunc[i]] = nullptr;
-		} else if(predecessors.size() == 1) {
-			_dependencies[_linFunc[i]] = (*predecessors.begin())->innerNode;
-		} else {
-			assert(false);
+		unordered_set<Instruction const*>& instDependencies =
+			_dependencies[_linFunc[i]];
+		
+		instDependencies.clear();
+		
+		// Predecessors that point to no instruction (root node) are not copied
+		for(auto& j : cdg[i].predecessors) {
+			if(j->innerNode) {
+				instDependencies.insert(j->innerNode);
+			}
 		}
 	}
 	

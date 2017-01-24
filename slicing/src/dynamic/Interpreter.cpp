@@ -64,7 +64,7 @@ Interpreter::Interpreter(
 	if(_tracePrinting) {
 		_out << "\n";
 		_out << _printPrefix << "Interpreting function '";
-		_out << linFunc.func.getName().str();
+		_out << linFunc.func.getName().str() << "(";
 	}
 	
 	// Initialize the argument values with the input passed as argument
@@ -95,7 +95,9 @@ Interpreter::Interpreter(
 		}
 		
 		if(_tracePrinting) {
-			_out << (curIndex == 1 ? "(" : ", ");
+			if(curIndex > 1) {
+				_out << ", ";
+			}
 			_state[&i]->print(_out);
 		}
 	}

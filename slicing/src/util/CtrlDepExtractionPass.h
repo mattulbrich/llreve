@@ -15,13 +15,14 @@
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/LegacyPassManager.h"
 
+#include <unordered_set>
 #include <vector>
 
 class CtrlDepExtractionPass : public llvm::FunctionPass {
 	
 	public:
 	
-	typedef std::vector<llvm::Instruction const*> ResultType;
+	typedef std::vector<std::unordered_set<llvm::Instruction const*>> ResultType;
 	
 	static char ID;
 	

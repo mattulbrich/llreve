@@ -33,7 +33,7 @@ void CDGPass::computeDependency(
 		BasicBlock&              bb,
 		PostDominatorTree const& pdt) {
 	
-	NodeType*                  pDependency = &getRoot();
+	unordered_set<NodeType*>   dependencies;
 	queue<BasicBlock*>         toCheck;
 	unordered_set<BasicBlock*> markedToCheck;
 	
@@ -45,24 +45,34 @@ void CDGPass::computeDependency(
 		
 		toCheck.pop();
 		
-		// Check whether 'curBB' is the control dependency we're looking for
+		// Check whether 'curBB' is a control dependency (there may be multiple)
 		if(!pdt.dominates(&bb, &curBB)) {
-			pDependency = &(*this)[*curBB.getTerminator()];
-			break;
-		}
+			
+			dependencies.insert(&(*this)[*curBB.getTerminator()]);
+			
+		} else {
 		
-		// Prepare the basic block's predecessors for dependency checking in future
-		for(BasicBlock* i : predecessors(&curBB)) {
-			if(markedToCheck.find(i) == markedToCheck.end()) {
-				toCheck      .push(i);
-				markedToCheck.insert(i);
+			// Prepare the basic block's predecessors for dependency checking in
+			// future
+			for(BasicBlock* i : predecessors(&curBB)) {
+				if(markedToCheck.find(i) == markedToCheck.end()) {
+					toCheck      .push(i);
+					markedToCheck.insert(i);
+				}
 			}
 		}
 	}
 	
-	// All instructions in a basic block share the same control dependency
+	// If there are no dependencies, set the root node as dependency
+	if(dependencies.empty()) {
+		dependencies.insert(&getRoot());
+	}
+	
+	// All instructions in a basic block share the same control dependencies
 	for(Instruction& i : bb) {
-		(*this)[i].predecessors.insert(pDependency);
+		for(NodeType* const j : dependencies) {
+			(*this)[i].predecessors.insert(j);
+		}
 	}
 }
 
