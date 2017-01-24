@@ -100,15 +100,14 @@ CandidateGenerationEngine::CandidateGenerationEngine(
 	// Add the control dependency closure to the accumulator
 	while(!critInstAccumulator.empty()) {
 		
-		unsigned int const  instIndex = linFunc[*critInstAccumulator.front()];
-		Instruction  const* pCtrlDep  = ctrlDependencies[instIndex];
+		unsigned int const instIndex = linFunc[*critInstAccumulator.front()];
 		
 		critInstAccumulator.pop();
 		
 		if(!_critInstructions[instIndex]) {
 			_critInstructions.setBit(instIndex);
-			if(pCtrlDep) {
-				critInstAccumulator.push(pCtrlDep);
+			for(Instruction const* i : ctrlDependencies[instIndex]) {
+				critInstAccumulator.push(i);
 			}
 		}
 	}
