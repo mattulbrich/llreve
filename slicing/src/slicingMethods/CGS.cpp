@@ -119,7 +119,24 @@ CandidateGenerationEngine::CandidateGenerationEngine(
 
 CandidateNode& CandidateGenerationEngine::generateCandidate(void) {
 	
-	if(!_pUnionSlice) {
+	if(_pUnionSlice) {
+		
+		unsigned int const minSize        = _pUnionSlice->size + 1;
+		CandidateNode*     pBestCandidate = _pFullSlice;
+		
+		for(DRM const& i : _drms) {
+			
+			CandidateNode&     candidate = _pUnionSlice->createSuccessor(i);
+			unsigned int const newSize   = candidate.size;
+			
+			if(newSize >= minSize && newSize < pBestCandidate->size) {
+				pBestCandidate = &candidate;
+			}
+		}
+		
+		return *pBestCandidate;
+		
+	} else {
 		
 		CEXType cex(_instCount);
 		
@@ -129,10 +146,6 @@ CandidateNode& CandidateGenerationEngine::generateCandidate(void) {
 		}
 		
 		return generateCandidate(cex);
-		
-	} else {
-		
-		assert(false);
 	}
 }
 
@@ -142,15 +155,18 @@ CandidateNode& CandidateGenerationEngine::generateCandidate(
 	auto  drmCreation = _drms.emplace(linFunc, cex);
 	APInt dynSlice    = drmCreation.first->computeSlice(_critInstructions);
 	
-	if(_pUnionSlice) {
-		_pUnionSlice = &getCandidateNode(_pUnionSlice->slice | dynSlice);
-	} else {
-		_pUnionSlice = &getCandidateNode(dynSlice);
+	// If there's no union slice yet, the dynamic slice is the union slice
+	if(!_pUnionSlice) {
+		return *(_pUnionSlice = &getCandidateNode(dynSlice));
 	}
 	
-	// TODO: Delete outdated candidates
+	CandidateNode const* const _pOldUnionSlice = _pUnionSlice;
 	
-	return *_pUnionSlice;
+	_pUnionSlice = &getCandidateNode(_pUnionSlice->slice | dynSlice);
+	
+	// Check whether the dynamic slice yielded a new union slice
+	return
+		_pUnionSlice != _pOldUnionSlice ? *_pUnionSlice : generateCandidate();
 }
 
 CandidateNode& CandidateGenerationEngine::getCandidateNode(
@@ -198,7 +214,14 @@ ModulePtr CGS::computeSlice(
 	LinearizedFunction linFunc(func);
 	CEXType            cex    (func.getArgumentList().size());
 	
+	_out << "\n";
+	_out << "The following lines show a mapping of integer values to LLVM instructions.\n";
+	_out << "The mapping is used for the execution traces to show which instruction\n";
+	_out << "has been executed. A slice is displayed in the form X_XX with as many\n";
+	_out << "digits as there are instructions in the program. For each removed\n";
+	_out << "instruction 'X' is replaced with '_'\n\n";
 	linFunc.print(_out);
+	_out << "\n";
 	
 	CandidateGenerationEngine cge(module, criterion, linFunc);
 	CandidateNode*            pCurCandidate(&cge.generateCandidate());
@@ -209,7 +232,10 @@ ModulePtr CGS::computeSlice(
 		SliceCandidateValidation::activateInitPredicate();
 	}
 	
-	printSlice(pCurCandidate->slice) << "  ";
+	_out << "\n";
+	_out << "Current slice candidate: ";
+	printSlice(pCurCandidate->slice) << "\n";
+	_out << " -> ";
 	
 	while(pCurCandidate->validate(cex).getState() !=
 		CandidateNode::State::valid) {
@@ -217,7 +243,8 @@ ModulePtr CGS::computeSlice(
 		switch(pCurCandidate->getState()) {
 			case CandidateNode::State::valid: _out << "valid\n"; break;
 			case CandidateNode::State::invalid:
-				_out << "invalid ";
+				_out << "invalid\n";
+				_out << " -> new counterexample: ";
 				printCounterexample(cex) << "\n";
 				break;
 			case CandidateNode::State::unknown: _out << "unknown\n"; break;
@@ -229,7 +256,10 @@ ModulePtr CGS::computeSlice(
 			&cge.generateCandidate(cex) :
 			&cge.generateCandidate();
 		
-		printSlice(pCurCandidate->slice) << "  ";
+		_out << "\n";
+		_out << "Current slice candidate: ";
+		printSlice(pCurCandidate->slice) << "\n";
+		_out << " -> ";
 	}
 	
 	cge.updateBestValidSlice(*pCurCandidate);

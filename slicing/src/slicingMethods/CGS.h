@@ -76,8 +76,8 @@ class CandidateGenerationEngine {
 	CandidateNode*     _pUnionSlice;
 	CandidateNode*     _pBestValidSlice;
 	
-	std::set<DRM const,                         DRMCompare>   _drms;
-	std::map<llvm::APInt const, CandidateNode*, APIntCompare> _sliceCandidates;
+	std::set<DRM,                         DRMCompare>   _drms;
+	std::map<llvm::APInt, CandidateNode*, APIntCompare> _sliceCandidates;
 };
 
 class CGS : public SlicingMethod {

@@ -70,13 +70,13 @@ static cl::opt<SlicingMethodOptions> SlicingMethodOption(cl::desc("Choose slicin
 		clEnumVal(syntactic , "Classical syntactic slicing, folowd by verification of the slice."),
 		clEnumVal(bf, "Bruteforce all slicecandidates, returns smalest."),
 		clEnumVal(iaa, "Use impact analysis for assignments to find unneccesary statments."),
-		clEnumVal(sle, "Single Line Elimination, trys to remove instruction by instruction."),
+		clEnumVal(sle, "Single Line Elimination, trys to remove instruction by instruction. (default)"),
 		clEnumVal(cgs, "Use counterexample guided slicing to find unneccesary instructions."),
 		clEnumVal(id, "Use the program it self as slice and verify validity."),
-
 		clEnumValEnd),
-	llvm::cl::cat(SlicingCategory),
-	llvm::cl::Required);
+	cl::init(sle),
+	llvm::cl::cat(SlicingCategory)
+	);
 
 enum CriterionModes{present, returnValue, automatic};
 static cl::opt<CriterionModes> CriterionMode(cl::desc("Chose crietion mode:"),
@@ -93,7 +93,7 @@ enum class SolverOptions{eld, z3, eld_client, cex1};
 static cl::opt<SolverOptions> SolverMode(cl::desc("Chose smt solver: (Make sure the choosen solver can be found in command line, i.e. set $PATH)"),
 	cl::values(
 		clEnumValN(SolverOptions::eld, "eld", "Eldarica using command 'eld'"),
-		clEnumValN(SolverOptions::eld_client, "eld-client", "Eldarica using command 'eld-client'"),
+		clEnumValN(SolverOptions::eld_client, "eld-client", "Eldarica using command 'eld-client' (default)"),
 		clEnumValN(SolverOptions::z3, "z3", "Z3 using command 'z3', requires eld-client as well!"),
 		clEnumValN(SolverOptions::cex1, "cex1", "Manual counterexamples for benchmark 'count_occurences.c'"),
 		clEnumValEnd),
@@ -107,7 +107,8 @@ static llvm::cl::list<string> Includes("I", llvm::cl::desc("Include path"),
 static llvm::cl::opt<string> ResourceDir(
 	"resource-dir",
 	llvm::cl::desc("Directory containing the clang resource files, "
-		"e.g. /usr/local/lib/clang/3.8.0"),
+		"e.g. /usr/local/lib/clang/3.8.0. "
+		"It is necessary to set this if some standard includes were not found."),
 	llvm::cl::cat(ClangCategory));
 
 static llvm::cl::opt<bool> RemoveFunctions("remove-functions", llvm::cl::desc("Removes body of functions from module before slicing. The sliced function is excluded. See -D Option for excluding further functions."),
@@ -149,11 +150,29 @@ void parseArgs(int argc, const char **argv) {
 	optionCategorys.push_back(&SlicingCategory);
 	llvm::cl::HideUnrelatedOptions(optionCategorys);
 
+	std::vector<const char*> argvDummy;
+	std::string help = "-help";
 	if (argc == 1) {
-		llvm::cl::PrintHelpMessage(false,true);
-		exit(0);
-	}	
-	llvm::cl::ParseCommandLineOptions(argc, argv);
+		argvDummy.push_back(argv[0]);
+		argvDummy.push_back(help.c_str());
+		argv = argvDummy.data();
+		argc = 2;
+	}
+
+	llvm::cl::ParseCommandLineOptions(argc, argv, ""
+			"Welcome to SemSlice!\n"
+			"\n"
+			"SemSlice is a tool for slicing. To slice a program pass it as argument\n"
+			"and select a slicing method.\n"
+			"\n"
+			"The default criterion is the return value. If you want to specify another\n"
+			"variable and a specific location you can use the __criterion function.\n"
+			"It is possible to place assignments like x = 3; inside the function\n"
+			"__assert_sliced: __assert_sliced(x = 3); This way the relevant instruction\n"
+			"will be highlighted in the LLVM-IR with '!assert_sliced'.\n"
+			"\n"
+			"To use __assert_sliced or __criterion please #include \"slicing_marks.h\".\n"
+		"");
 
 	Log(Info) << "Slicing the program " << FileName;
 	std::stringstream ss;
@@ -184,11 +203,11 @@ int main(int argc, const char **argv) {
 
 
 	ModulePtr slice;
-	{	
+	{
 		TIMED_SCOPE(timerBlk, "Slicing");
-		slice = method->computeSlice(criterion);		
-	}	
-	
+		slice = method->computeSlice(criterion);
+	}
+
 	if (!slice){
 		Log(Error) << "An error occured. Could not produce slice. \n";
 	} else {
@@ -196,7 +215,6 @@ int main(int argc, const char **argv) {
 		performPostProcessing(slice);
 
 		Log(Info) << "Instructions in program: " << Util::countInstructions(*program);
-		Log(Info) << "Instructions in slice: " << Util::countInstructions(*slice);
 		writeModuleToFile("program.llvm", *program);
 		writeModuleToFile("slice.llvm", *slice);
 
@@ -213,7 +231,10 @@ int main(int argc, const char **argv) {
 			SlicingMethodPtr syntactic = shared_ptr<SlicingMethod>(new SyntacticSlicing(slice));
 			ModulePtr sslice = syntactic->computeSlice(criterion);
 			performPostProcessing(sslice);
+			Log(Info) << "Instructions in slice: " << Util::countInstructions(*sslice);
 			writeModuleToFile("slice.llvm", *sslice);
+		} else {
+			Log(Info) << "Instructions in slice: " << Util::countInstructions(*slice);
 		}
 
 		outs() << "See program.llvm and slice.llvm for the resulting LLVMIRs \n";
@@ -291,7 +312,7 @@ void performRemoveFunctions(ModulePtr program, CriterionPtr criterion) {
 		Function* slicedFunction = getSlicedFunction(program, criterion);
 
 		for (Function& function: *program) {
-			if (!Util::isSpecialFunction(function) 
+			if (!Util::isSpecialFunction(function)
 					&& &function != slicedFunction
 					&& notToBeRemoved.find(function.getName()) == notToBeRemoved.end()) {
 
@@ -333,13 +354,13 @@ void performInlining(ModulePtr program, CriterionPtr criterion) {
 				} else {
 					std::cout << "INFO: inlined " << function->getName().str() << std::endl;
 				}
-			}		
+			}
 		}
 
 		// Erase all inlined Functions
 		vector<Function*> toBeDeleted;
 		for (Function& function: *program) {
-			if (!Util::isSpecialFunction(function) 
+			if (!Util::isSpecialFunction(function)
 					&& &function != slicedFunction
 					&& !function.isDeclaration()) {
 				toBeDeleted.push_back(&function);
@@ -358,7 +379,7 @@ void performMarkAnalysis(ModulePtr program) {
 	int threshold = MarkInsertThreshold;
 
 	llvm::legacy::PassManager PM;
-	PM.add(llvm::createUnifyFunctionExitNodesPass()); 
+	PM.add(llvm::createUnifyFunctionExitNodesPass());
 	PM.add(llvm::createLoopSimplifyPass());
 	PM.add(new MarkAnalysisPass(threshold));
 	PM.run(*program);

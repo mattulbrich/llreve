@@ -4,4 +4,8 @@ sed \
 	-e 's/^\(INFO\)/\x1B[96m\1\x1B[39m/g' \
 	-e 's/^\(WARN\)/\x1B[93m\1\x1B[39m/g' \
 	-e 's/^\(ERROR\)/\x1B[91m\1\x1B[39m/g' \
-	-e 's/^\(FATAL\)/\x1B[91m\1\x1B[39m/g'
+	-e 's/^\(FATAL\)/\x1B[91m\1\x1B[39m/g' \
+	-e 's/\[-/\x1B[31m[-/g' \
+	-e 's/-\]/-]\x1B[39m/g' \
+	-e 's/{+/\x1B[32m{+/g' \
+	-e 's/+}/+}\x1B[39m/g' 

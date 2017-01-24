@@ -27,6 +27,7 @@
 #define Verbose VERBOSE
 #define Log LOG
 
+#ifdef __clang__
 //Disable all clang warning for the logging library:
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wall"
@@ -42,13 +43,16 @@
 #pragma clang diagnostic ignored "-Wnewline-eof"
 #pragma clang diagnostic ignored "-Wdocumentation"
 #pragma clang diagnostic ignored "-Wmissing-noreturn"
+#endif
 
 #define ELPP_FRESH_LOG_FILE
 #define ELPP_NO_DEFAULT_LOG_FILE
 #define ELPP_DISABLE_DEFAULT_CRASH_HANDLING
 #include "easylogging++.h"
 
+#ifdef __clang__
 #pragma clang diagnostic pop
+#endif
 
 #include <chrono>
 
