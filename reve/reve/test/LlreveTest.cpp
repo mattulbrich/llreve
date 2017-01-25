@@ -4,6 +4,8 @@
 
 using std::string;
 
+static std::string PathToTestExecutable;
+
 static std::pair<int, std::string> exec(const std::string &cmd) {
     std::array<char, 128> buffer;
     std::string result;
@@ -66,10 +68,10 @@ TEST_P(LlreveTest, Llreve) {
     ExpectedResult expectedResult;
     Solver solver;
     std::tie(directory, fileName, expectedResult, solver) = GetParam();
-    fileName = "../examples/" + directory + "/" + fileName;
+    fileName = PathToTestExecutable + "../../examples/" + directory + "/" + fileName;
     auto smtOutput = std::tmpnam(nullptr);
     std::ostringstream llreveCommand;
-    llreveCommand << "reve/llreve -inline-opts -o " << smtOutput << " ";
+    llreveCommand << PathToTestExecutable << "llreve -inline-opts -o " << smtOutput << " ";
     if (solver == Solver::Z3) {
         llreveCommand << "-muz ";
     }
@@ -140,3 +142,18 @@ INSTANTIATE_TEST_CASE_P(
                                      "rec_while", "triangular"),
                      testing::Values(ExpectedResult::EQUIVALENT),
                      testing::Values(Solver::Z3, Solver::ELDARICA)));
+
+static std::string getDirectory(std::string filePath) {
+    auto pos = filePath.rfind('/');
+    if (pos != std::string::npos) {
+        filePath = filePath.substr(0, pos) + "/";
+    }
+    std::cout << filePath << "\n";
+    return filePath;
+}
+
+int main(int argc, char **argv) {
+    PathToTestExecutable = getDirectory(argv[0]);
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}
