@@ -1,4 +1,12 @@
-/*@ rel_in (and (= items$1_0 items$2_0) (= itemCount$1_0 itemCount$2_0) (= onlineItems$1_0 onlineItems$2_0) (= onlineItemCount$1_0 onlineItemCount$2_0) (= paidOnline$1_0 paidOnline$2_0) (= onlineItemCount$1_0 0) (= paidOnline$1_0 0) (forall ((i Int)) (= (select HEAP$1 i) (select HEAP$2 i)))) @*/
+/*@ rel_in
+      (and (= items$1 items$2)
+           (= itemCount$1 itemCount$2)
+           (= onlineItems$1 onlineItems$2)
+           (= onlineItemCount$1 onlineItemCount$2)
+           (= paidOnline$1 paidOnline$2)
+           (= onlineItemCount$1 0)
+           (= paidOnline$1 0)
+           (forall ((i Int)) (= (select HEAP$1 i) (select HEAP$2 i)))) @*/
 extern int __mark(int);
 
 int sumItems(int *items, int itemCount, int *onlineItems, int onlineItemCount, int paidOnline) {

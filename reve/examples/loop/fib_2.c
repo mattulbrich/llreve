@@ -1,4 +1,4 @@
-/*@ rel_in (= n$1_0 (+ n$2_0 1)) @*/
+/*@ rel_in (= n$1 (+ n$2 1)) @*/
 extern int __mark(int);
 int fib(int n) {
   int f = 1;  //  <---- starting at 1

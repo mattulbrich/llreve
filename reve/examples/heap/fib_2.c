@@ -1,4 +1,4 @@
-/*@ rel_in (and (= n$1_0 n$2_0) (= x$1_0 a$2_0) (= HEAP$1 HEAP$2) (>= n$1_0 0)) @*/
+/*@ rel_in (and (= n$1 n$2) (= x$1 a$2) (= HEAP$1 HEAP$2) (>= n$1 0)) @*/
 /*@ rel_out (= result$1 result$2) @*/
 
 extern int __mark(int);
