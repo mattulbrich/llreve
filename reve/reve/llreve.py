@@ -1,6 +1,6 @@
-# run with python2
+#! /usr/bin/env python3
 
-# You need to add reve, eld-client and z3 to your path before you execute this.
+# You need to add llreve, eld-client and z3 to your path before you execute this.
 
 # return values and their explanation
 # EQUAL             | The two programs have been proved equivalent.
@@ -69,7 +69,7 @@ def runProcess(args):
 
 def llreve(fileName):
     log("Running llreve")
-    args = ["reve"] + sys.argv[1:]
+    args = ["llreve"] + sys.argv[1:]
     if (z3Opt):
         args.append("-muz")
     args.append("-o")
@@ -84,20 +84,18 @@ def getSMTFileName():
 def z3(fileName):
     log("Running z3")
     args = ["z3", "fixedpoint.engine=duality", fileName]
-    if verboseOpt:
-        args.append("-v:1")
     process = subprocess.Popen(args, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
     result = "INTERNAL_ERROR"
-    for line in iter(process.stdout.readline, ''):
+    for line in process.stdout:
         if verboseOpt:
-            sys.stdout.write(line)
+            sys.stdout.buffer.write(line)
         line = line.strip()
-        if line == "sat":
+        if line == b"sat":
             result = "NOT_EQUAL"
-        elif line == "unsat":
+        elif line == b"unsat":
             result = "EQUAL"
-        elif line == "unknown":
+        elif line == b"unknown":
             result = "UNKNOWN"
     process.wait()
     if process.returncode == 0:
