@@ -139,10 +139,14 @@ std::string heapName(int progIndex) {
     return "HEAP$" + std::to_string(progIndex);
 }
 
+std::string stackName(Program prog) { return stackName(programIndex(prog)); }
 std::string stackName(int progIndex) {
     return "STACK$" + std::to_string(progIndex);
 }
 
+std::string stackPointerName(Program prog) {
+    return stackPointerName(programIndex(prog));
+}
 std::string stackPointerName(int progIndex) {
     return "SP$" + std::to_string(progIndex);
 }

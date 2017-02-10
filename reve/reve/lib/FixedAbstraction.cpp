@@ -30,24 +30,25 @@ std::set<uint32_t> getVarArgs(const llvm::Function &fun) {
     return varArgs;
 }
 
+static void appendExternInputArgs(const llvm::Function &fun, Program progIndex,
+                                  std::vector<SortedVar> &args) {
+    auto funArgs = functionArgs(fun);
+    args.insert(args.end(), funArgs.begin(), funArgs.end());
+    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
+        args.emplace_back(heapName(progIndex), memoryType());
+    }
+    if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
+        args.emplace_back(stackPointerName(progIndex), pointerType());
+        args.emplace_back(stackName(progIndex), memoryType());
+    }
+}
+
 static std::vector<SortedVar> externDeclArgs(const llvm::Function &fun1,
                                              const llvm::Function &fun2,
                                              unsigned numberOfArguments) {
     std::vector<SortedVar> args;
-    auto funArgs1 = functionArgs(fun1);
-    for (auto arg : funArgs1) {
-        args.push_back(arg);
-    }
-    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        args.push_back(SortedVar("HEAP$1", memoryType()));
-    }
-    auto funArgs2 = functionArgs(fun2);
-    for (auto arg : funArgs2) {
-        args.push_back(arg);
-    }
-    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        args.push_back(SortedVar("HEAP$2", memoryType()));
-    }
+    appendExternInputArgs(fun1, Program::First, args);
+    appendExternInputArgs(fun2, Program::Second, args);
     args.push_back(SortedVar("res1", int64Type()));
     args.push_back(SortedVar("res2", int64Type()));
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
@@ -138,6 +139,18 @@ static SMTRef equalInputs(const llvm::Function &fun1,
             makeOp("=", memoryVariable("HEAP$1"), memoryVariable("HEAP$2"));
         equal.push_back(heapInEqual);
     }
+    if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
+        SharedSMTRef stackPtrEqual =
+            makeOp("=", make_unique<TypedVariable>(
+                            stackPointerName(Program::First), pointerType()),
+                   make_unique<TypedVariable>(stackPointerName(Program::Second),
+                                              pointerType()));
+        SharedSMTRef stackEqual =
+            makeOp("=", memoryVariable(stackName(Program::First)),
+                   memoryVariable(stackName(Program::Second)));
+        equal.emplace_back(std::move(stackPtrEqual));
+        equal.emplace_back(std::move(stackEqual));
+    }
     return make_unique<Op>("and", equal);
 }
 
@@ -197,6 +210,10 @@ std::vector<SharedSMTRef> externFunDecl(const llvm::Function &fun,
         std::vector<SortedVar> args = functionArgs(fun);
         if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
             args.push_back(SortedVar("HEAP", memoryType()));
+        }
+        if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
+            args.emplace_back("SP", pointerType());
+            args.emplace_back("STACK", memoryType());
         }
         args.push_back(SortedVar("res", int64Type()));
         if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
