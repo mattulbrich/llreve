@@ -26,6 +26,22 @@ using namespace llreve::opts;
 /* -------------------------------------------------------------------------- */
 // Functions related to generating invariants
 
+static void addArgumentsForSelection(
+    ProgramSelection SMTFor, std::function<std::string(Program)> getVarName,
+    std::unique_ptr<Type> varType, std::vector<TypedVariable> &argVec) {
+    switch (SMTFor) {
+    case ProgramSelection::First:
+        argVec.emplace_back(getVarName(Program::First), varType->copy());
+        break;
+    case ProgramSelection::Second:
+        argVec.emplace_back(getVarName(Program::Second), varType->copy());
+        break;
+    case ProgramSelection::Both:
+        argVec.emplace_back(getVarName(Program::First), varType->copy());
+        argVec.emplace_back(getVarName(Program::Second), varType->copy());
+        break;
+    }
+}
 SMTRef invariant(Mark StartIndex, Mark EndIndex, vector<SortedVar> InputArgs,
                  vector<SortedVar> EndArgs, ProgramSelection SMTFor,
                  std::string FunName, FreeVarsMap freeVarsMap) {
@@ -42,49 +58,16 @@ SMTRef invariant(Mark StartIndex, Mark EndIndex, vector<SortedVar> InputArgs,
         FilteredEndArgs = filterVars(2, FilteredEndArgs);
     }
     vector<TypedVariable> ResultArgs;
-    switch (SMTFor) {
-    case ProgramSelection::First:
-        ResultArgs.push_back({"result$1", int64Type()});
-        break;
-    case ProgramSelection::Second:
-        ResultArgs.push_back({"result$2", int64Type()});
-        break;
-    case ProgramSelection::Both:
-        ResultArgs.push_back({"result$1", int64Type()});
-        ResultArgs.push_back({"result$2", int64Type()});
-        break;
-    }
+    addArgumentsForSelection(SMTFor, resultName, int64Type(), ResultArgs);
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        switch (SMTFor) {
-        case ProgramSelection::First:
-            ResultArgs.push_back({"HEAP$1_res", memoryType()});
-            break;
-        case ProgramSelection::Second:
-            ResultArgs.push_back({"HEAP$2_res", memoryType()});
-            break;
-        case ProgramSelection::Both:
-            ResultArgs.push_back({"HEAP$1_res", memoryType()});
-            ResultArgs.push_back({"HEAP$2_res", memoryType()});
-            break;
-        }
+        addArgumentsForSelection(
+            SMTFor, [](auto prog) { return heapName(prog) + "_res"; },
+            memoryType(), ResultArgs);
     }
     if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
-        switch (SMTFor) {
-        case ProgramSelection::First:
-            ResultArgs.emplace_back(stackName(Program::First) + "_res",
-                                    memoryType());
-            break;
-        case ProgramSelection::Second:
-            ResultArgs.emplace_back(stackName(Program::Second) + "_res",
-                                    memoryType());
-            break;
-        case ProgramSelection::Both:
-            ResultArgs.emplace_back(stackName(Program::First) + "_res",
-                                    memoryType());
-            ResultArgs.emplace_back(stackName(Program::Second) + "_res",
-                                    memoryType());
-            break;
-        }
+        addArgumentsForSelection(
+            SMTFor, [](auto prog) { return stackName(prog) + "_res"; },
+            memoryType(), ResultArgs);
     }
     // Arguments passed into the current invariant
     vector<SharedSMTRef> EndArgsVect;
