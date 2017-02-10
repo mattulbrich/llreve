@@ -55,6 +55,10 @@ static std::vector<SortedVar> externDeclArgs(const llvm::Function &fun1,
         args.push_back(SortedVar("HEAP$1_res", memoryType()));
         args.push_back(SortedVar("HEAP$2_res", memoryType()));
     }
+    if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
+        args.emplace_back("STACK$1_res", memoryType());
+        args.emplace_back("STACK$2_res", memoryType());
+    }
     return args;
 }
 
@@ -218,6 +222,9 @@ std::vector<SharedSMTRef> externFunDecl(const llvm::Function &fun,
         args.push_back(SortedVar("res", int64Type()));
         if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
             args.push_back(SortedVar("HEAP_res", memoryType()));
+        }
+        if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
+            args.emplace_back("STACK_res", memoryType());
         }
         std::string funName =
             invariantName(ENTRY_MARK, asSelection(program), fun.getName().str(),

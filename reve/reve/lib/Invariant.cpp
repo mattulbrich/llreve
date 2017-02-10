@@ -68,6 +68,24 @@ SMTRef invariant(Mark StartIndex, Mark EndIndex, vector<SortedVar> InputArgs,
             break;
         }
     }
+    if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
+        switch (SMTFor) {
+        case ProgramSelection::First:
+            ResultArgs.emplace_back(stackName(Program::First) + "_res",
+                                    memoryType());
+            break;
+        case ProgramSelection::Second:
+            ResultArgs.emplace_back(stackName(Program::Second) + "_res",
+                                    memoryType());
+            break;
+        case ProgramSelection::Both:
+            ResultArgs.emplace_back(stackName(Program::First) + "_res",
+                                    memoryType());
+            ResultArgs.emplace_back(stackName(Program::Second) + "_res",
+                                    memoryType());
+            break;
+        }
+    }
     // Arguments passed into the current invariant
     vector<SharedSMTRef> EndArgsVect;
     for (const auto &arg : FilteredArgs) {
@@ -165,6 +183,12 @@ MonoPair<SMTRef> invariantDeclaration(Mark BlockIndex,
         args.push_back(llvmType(resultType));
     }
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
+        args.push_back(memoryType());
+        if (For == ProgramSelection::Both) {
+            args.push_back(memoryType());
+        }
+    }
+    if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
         args.push_back(memoryType());
         if (For == ProgramSelection::Both) {
             args.push_back(memoryType());

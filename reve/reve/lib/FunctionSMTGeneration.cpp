@@ -544,6 +544,10 @@ SMTRef mutualFunctionCall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
         args.push_back(SortedVar("HEAP$1_res", memoryType()));
         args.push_back(SortedVar("HEAP$2_res", memoryType()));
     }
+    if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
+        args.push_back(SortedVar("STACK$1_res", memoryType()));
+        args.push_back(SortedVar("STACK$2_res", memoryType()));
+    }
     vector<SharedSMTRef> implArgs;
 
     callPair.indexedForEach(addMemory(implArgs));
@@ -552,8 +556,12 @@ SMTRef mutualFunctionCall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
     implArgs.push_back(stringExpr(callPair.first.assignedTo));
     implArgs.push_back(stringExpr(callPair.second.assignedTo));
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        implArgs.push_back(memoryVariable("HEAP$1_res"));
-        implArgs.push_back(memoryVariable("HEAP$2_res"));
+        implArgs.push_back(memoryVariable(heapName(Program::First) + "_res"));
+        implArgs.push_back(memoryVariable(heapName(Program::Second) + "_res"));
+    }
+    if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
+        implArgs.push_back(memoryVariable(stackName(Program::First) + "_res"));
+        implArgs.push_back(memoryVariable(stackName(Program::Second) + "_res"));
     }
     SMTRef postInvariant = std::make_unique<Op>(
         invariantName(ENTRY_MARK, ProgramSelection::Both,
@@ -579,21 +587,25 @@ SMTRef nonMutualFunctionCall(SharedSMTRef clause, CallInfo call, Program prog) {
     vector<SharedSMTRef> implArgs;
 
     const int progIndex = programIndex(prog);
-    const string programS = std::to_string(progIndex);
 
     const uint32_t varArgs = call.varArgs;
     // TODO figure out proper return type
     forallArgs.push_back(SortedVar(call.assignedTo, int64Type()));
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        forallArgs.push_back(
-            SortedVar("HEAP$" + programS + "_res", memoryType()));
+        forallArgs.push_back(SortedVar(heapName(prog) + "_res", memoryType()));
+    }
+    if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
+        forallArgs.emplace_back(stackName(prog) + "_res", memoryType());
     }
     addMemory(implArgs)(call, progIndex);
     const vector<SharedSMTRef> preArgs = implArgs;
 
     implArgs.push_back(stringExpr(call.assignedTo));
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        implArgs.push_back(memoryVariable("HEAP$" + programS + "_res"));
+        implArgs.push_back(memoryVariable(heapName(prog) + "_res"));
+    }
+    if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
+        implArgs.push_back(memoryVariable(stackName(prog) + "_res"));
     }
 
     const SharedSMTRef endInvariant = make_shared<Op>(
