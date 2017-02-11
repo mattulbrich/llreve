@@ -107,12 +107,18 @@ void externDeclarations(const llvm::Module &mod1, const llvm::Module &mod2,
 
 static SMTRef equalOutputs(std::string functionName,
                            std::multimap<string, string> funCondMap) {
-    SMTRef body = makeOp("=", "res1", "res2");
+    std::vector<SharedSMTRef> equalClauses;
+    equalClauses.emplace_back(makeOp("=", "res1", "res2"));
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        SharedSMTRef heapOutEqual = makeOp("=", memoryVariable("HEAP$1_res"),
-                                           memoryVariable("HEAP$2_res"));
-        body = makeOp("and", std::move(body), heapOutEqual);
+        equalClauses.emplace_back(makeOp("=", memoryVariable("HEAP$1_res"),
+                                         memoryVariable("HEAP$2_res")));
     }
+    if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
+        equalClauses.emplace_back(
+            makeOp("=", memoryVariable(stackName(Program::First) + "_res"),
+                   memoryVariable(stackName(Program::Second) + "_res")));
+    }
+    SMTRef body = make_unique<Op>("and", std::move(equalClauses));
 
     std::vector<SharedSMTRef> equalOut;
     // TODO remove dependency on a single name
