@@ -31,8 +31,6 @@ bool InferMarksAnalysis::runOnFunction(llvm::Function &Fun) {
         getAnalysis<llvm::UnifyFunctionExitNodes>().ReturnBlock);
     BlockedMarks[getAnalysis<llvm::UnifyFunctionExitNodes>().ReturnBlock]
         .insert(EXIT_MARK);
-    // loop rotation duplicates marks, so we need to remove the marks that are
-    // outside the loop
     llvm::LoopInfo &loopInfo =
         getAnalysis<llvm::LoopInfoWrapperPass>().getLoopInfo();
     int i = 1;
