@@ -35,6 +35,11 @@ bool InferMarksAnalysis::runOnFunction(llvm::Function &Fun) {
         getAnalysis<llvm::LoopInfoWrapperPass>().getLoopInfo();
     int i = 1;
     for (auto loop : loopInfo) {
+        for (auto subLoop : loop->getSubLoops()) {
+            MarkedBlocks.insert({Mark(i), {subLoop->getHeader()}});
+            BlockedMarks.insert({subLoop->getHeader(), {Mark(i)}});
+            ++i;
+        }
         MarkedBlocks.insert({Mark(i), {loop->getHeader()}});
         BlockedMarks.insert({loop->getHeader(), {Mark(i)}});
         ++i;
