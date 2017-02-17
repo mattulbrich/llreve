@@ -158,6 +158,14 @@ std::vector<std::string> &split(const std::string &s, char delim,
 std::vector<std::string> split(const std::string &s, char delim);
 
 auto functionArgs(const llvm::Function &fun) -> std::vector<smt::SortedVar>;
+auto getMutualResultValues(const llvm::StringRef assignedTo1,
+                           const llvm::Function &function1,
+                           const llvm::StringRef assignedTo2,
+                           const llvm::Function &function2)
+    -> std::vector<smt::SortedVar>;
+auto getResultValues(Program prog, const llvm::StringRef assignedTo,
+                     const llvm::Function &function)
+    -> std::vector<smt::SortedVar>;
 
 auto callsTransitively(const llvm::Function &caller,
                        const llvm::Function &callee) -> bool;

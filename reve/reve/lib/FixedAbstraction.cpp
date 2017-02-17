@@ -49,17 +49,9 @@ static std::vector<SortedVar> externDeclArgs(const llvm::Function &fun1,
     std::vector<SortedVar> args;
     appendExternInputArgs(fun1, Program::First, args);
     appendExternInputArgs(fun2, Program::Second, args);
-    args.push_back(SortedVar(resultName(Program::First), int64Type()));
-    args.push_back(SortedVar(resultName(Program::Second), int64Type()));
-    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        args.push_back(SortedVar(heapResultName(Program::First), memoryType()));
-        args.push_back(
-            SortedVar(heapResultName(Program::Second), memoryType()));
-    }
-    if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
-        args.emplace_back(stackResultName(Program::First), memoryType());
-        args.emplace_back(stackResultName(Program::Second), memoryType());
-    }
+    auto resultValues = getMutualResultValues(
+        resultName(Program::First), fun1, resultName(Program::Second), fun2);
+    args.insert(args.end(), resultValues.begin(), resultValues.end());
     return args;
 }
 

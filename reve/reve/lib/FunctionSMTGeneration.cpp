@@ -535,40 +535,6 @@ nonmutualSMT(SharedSMTRef endClause,
     return clause;
 }
 
-static std::vector<SortedVar> getMutualResultValues(
-    const llvm::StringRef assignedTo1, const llvm::Function &function1,
-    const llvm::StringRef assignedTo2, const llvm::Function &function2) {
-    std::vector<SortedVar> resultValues;
-    resultValues.emplace_back(assignedTo1, llvmType(function1.getReturnType()));
-    resultValues.emplace_back(assignedTo2, llvmType(function2.getReturnType()));
-    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        resultValues.emplace_back(heapResultName(Program::First), memoryType());
-        resultValues.emplace_back(heapResultName(Program::Second),
-                                  memoryType());
-    }
-    if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
-        resultValues.emplace_back(stackResultName(Program::First),
-                                  memoryType());
-        resultValues.emplace_back(stackResultName(Program::Second),
-                                  memoryType());
-    }
-    return resultValues;
-}
-
-static std::vector<SortedVar> getResultValues(Program prog,
-                                              const llvm::StringRef assignedTo,
-                                              const llvm::Function &function) {
-    std::vector<SortedVar> resultValues;
-    resultValues.emplace_back(assignedTo, llvmType(function.getReturnType()));
-    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        resultValues.emplace_back(heapResultName(prog), memoryType());
-    }
-    if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
-        resultValues.emplace_back(stackResultName(prog), memoryType());
-    }
-    return resultValues;
-}
-
 SMTRef mutualFunctionCall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
     const uint32_t varArgs = callPair.first.varArgs;
     const vector<SortedVar> resultValues =
