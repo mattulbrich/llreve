@@ -149,6 +149,7 @@ auto heapName(int progIndex) -> std::string;
 auto heapResultName(Program prog) -> std::string;
 auto stackName(Program progIndex) -> std::string;
 auto stackName(int progIndex) -> std::string;
+auto stackResultName(Program prog) -> std::string;
 auto stackPointerName(Program prog) -> std::string;
 auto stackPointerName(int progIndex) -> std::string;
 

@@ -144,6 +144,7 @@ std::string stackName(Program prog) { return stackName(programIndex(prog)); }
 std::string stackName(int progIndex) {
     return "STACK$" + std::to_string(progIndex);
 }
+std::string stackResultName(Program prog) { return stackName(prog) + "_res"; }
 
 std::string stackPointerName(Program prog) {
     return stackPointerName(programIndex(prog));

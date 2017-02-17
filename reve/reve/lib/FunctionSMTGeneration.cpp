@@ -546,8 +546,10 @@ SMTRef mutualFunctionCall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
             SortedVar(heapResultName(Program::Second), memoryType()));
     }
     if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
-        args.push_back(SortedVar("STACK$1_res", memoryType()));
-        args.push_back(SortedVar("STACK$2_res", memoryType()));
+        args.push_back(
+            SortedVar(stackResultName(Program::First), memoryType()));
+        args.push_back(
+            SortedVar(stackResultName(Program::Second), memoryType()));
     }
     vector<SharedSMTRef> implArgs;
 
@@ -561,8 +563,8 @@ SMTRef mutualFunctionCall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
         implArgs.push_back(memoryVariable(heapResultName(Program::Second)));
     }
     if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
-        implArgs.push_back(memoryVariable(stackName(Program::First) + "_res"));
-        implArgs.push_back(memoryVariable(stackName(Program::Second) + "_res"));
+        implArgs.push_back(memoryVariable(stackResultName(Program::First)));
+        implArgs.push_back(memoryVariable(stackResultName(Program::Second)));
     }
     SMTRef postInvariant = std::make_unique<Op>(
         invariantName(ENTRY_MARK, ProgramSelection::Both,
@@ -596,7 +598,7 @@ SMTRef nonMutualFunctionCall(SharedSMTRef clause, CallInfo call, Program prog) {
         forallArgs.push_back(SortedVar(heapResultName(prog), memoryType()));
     }
     if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
-        forallArgs.emplace_back(stackName(prog) + "_res", memoryType());
+        forallArgs.emplace_back(stackResultName(prog), memoryType());
     }
     addMemory(implArgs)(call, progIndex);
     const vector<SharedSMTRef> preArgs = implArgs;
@@ -606,7 +608,7 @@ SMTRef nonMutualFunctionCall(SharedSMTRef clause, CallInfo call, Program prog) {
         implArgs.push_back(memoryVariable(heapResultName(prog)));
     }
     if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
-        implArgs.push_back(memoryVariable(stackName(prog) + "_res"));
+        implArgs.push_back(memoryVariable(stackResultName(prog)));
     }
 
     const SharedSMTRef endInvariant = make_shared<Op>(

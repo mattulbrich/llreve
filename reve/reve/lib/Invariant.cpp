@@ -66,7 +66,7 @@ SMTRef invariant(Mark StartIndex, Mark EndIndex, vector<SortedVar> InputArgs,
     }
     if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
         addArgumentsForSelection(
-            SMTFor, [](auto prog) { return stackName(prog) + "_res"; },
+            SMTFor, [](auto prog) { return stackResultName(prog); },
             memoryType(), ResultArgs);
     }
     // Arguments passed into the current invariant

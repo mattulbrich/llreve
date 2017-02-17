@@ -57,8 +57,8 @@ static std::vector<SortedVar> externDeclArgs(const llvm::Function &fun1,
             SortedVar(heapResultName(Program::Second), memoryType()));
     }
     if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
-        args.emplace_back("STACK$1_res", memoryType());
-        args.emplace_back("STACK$2_res", memoryType());
+        args.emplace_back(stackResultName(Program::First), memoryType());
+        args.emplace_back(stackResultName(Program::Second), memoryType());
     }
     return args;
 }
@@ -117,8 +117,8 @@ static SMTRef equalOutputs(std::string functionName,
     }
     if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
         equalClauses.emplace_back(
-            makeOp("=", memoryVariable(stackName(Program::First) + "_res"),
-                   memoryVariable(stackName(Program::Second) + "_res")));
+            makeOp("=", memoryVariable(stackResultName(Program::First)),
+                   memoryVariable(stackResultName(Program::Second))));
     }
     SMTRef body = make_unique<Op>("and", std::move(equalClauses));
 

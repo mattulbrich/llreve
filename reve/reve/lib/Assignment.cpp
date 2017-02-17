@@ -81,7 +81,7 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
                         StackOpt::Enabled) {
                         definitions.emplace_back(makeAssignment(
                             stackName(progIndex),
-                            memoryVariable(stackName(progIndex) + "_res")));
+                            memoryVariable(stackResultName(prog))));
                     }
                 }
             } else {
@@ -108,9 +108,8 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
                 heapResultName(prog), memoryVariable(heapName(progIndex)))));
         }
         if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
-            definitions.push_back(DefOrCallInfo(
-                makeAssignment(stackName(progIndex) + "_res",
-                               memoryVariable(stackName(progIndex)))));
+            definitions.push_back(DefOrCallInfo(makeAssignment(
+                stackResultName(prog), memoryVariable(stackName(progIndex)))));
         }
     }
     return definitions;
