@@ -20,11 +20,11 @@
 
 enum class InvariantAttr { MAIN, PRE, NONE };
 
-auto invariant(Mark StartIndex, Mark EndIndex,
+auto functionalCouplingPredicate(Mark StartIndex, Mark EndIndex,
                std::vector<smt::SortedVar> InputArgs,
                std::vector<smt::SortedVar> EndArgs, ProgramSelection SMTFor,
                std::string FunName, FreeVarsMap freeVarsMap) -> smt::SMTRef;
-auto mainInvariant(Mark EndIndex, std::vector<smt::SortedVar> FreeVars,
+auto iterativeCouplingPredicate(Mark EndIndex, std::vector<smt::SortedVar> FreeVars,
                    std::string FunName) -> smt::SMTRef;
 auto invariantDeclaration(Mark BlockIndex, std::vector<smt::SortedVar> FreeVars,
                           ProgramSelection For, std::string FunName,

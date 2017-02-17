@@ -48,10 +48,12 @@ cloneTypedVariable(const TypedVariable &var) {
     return make_unique<TypedVariable>(var.name, var.type->copy());
 }
 
-SMTRef invariant(Mark currentCallMark, Mark tailCallMark,
-                 vector<SortedVar> currentCallArguments,
-                 vector<SortedVar> tailCallArguments, ProgramSelection SMTFor,
-                 std::string functionName, FreeVarsMap freeVarsMap) {
+SMTRef functionalCouplingPredicate(Mark currentCallMark, Mark tailCallMark,
+                                   vector<SortedVar> currentCallArguments,
+                                   vector<SortedVar> tailCallArguments,
+                                   ProgramSelection SMTFor,
+                                   std::string functionName,
+                                   FreeVarsMap freeVarsMap) {
     // we want to end up with something like
     // (and pre (=> (tailcall newargs res) (currentcall oldargs res)))
 
@@ -134,8 +136,8 @@ SMTRef invariant(Mark currentCallMark, Mark tailCallMark,
     return std::make_unique<Forall>(forallArguments, std::move(clause));
 }
 
-SMTRef mainInvariant(Mark EndIndex, vector<SortedVar> FreeVars,
-                     string FunName) {
+SMTRef iterativeCouplingPredicate(Mark EndIndex, vector<SortedVar> FreeVars,
+                                  string FunName) {
     if (EndIndex == EXIT_MARK) {
         vector<SharedSMTRef> args = {stringExpr(resultName(Program::First)),
                                      stringExpr(resultName(Program::Second))};

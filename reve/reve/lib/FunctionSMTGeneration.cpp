@@ -54,18 +54,19 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> functions,
     const auto synchronizedPaths = getSynchronizedPaths(
         pathMaps.first, pathMaps.second, freeVarsMap1, freeVarsMap2,
         [&freeVarsMap, funName](Mark startIndex, Mark endIndex) {
-            return invariant(startIndex, endIndex, freeVarsMap.at(startIndex),
-                             freeVarsMap.at(endIndex), ProgramSelection::Both,
-                             funName, freeVarsMap);
+            return functionalCouplingPredicate(
+                startIndex, endIndex, freeVarsMap.at(startIndex),
+                freeVarsMap.at(endIndex), ProgramSelection::Both, funName,
+                freeVarsMap);
         });
 
     map<MarkPair, vector<SharedSMTRef>> smtExprs;
     for (const auto &it : synchronizedPaths) {
-        const SharedSMTRef endInvariant =
-            invariant(it.first.startMark, it.first.endMark,
-                      freeVarsMap.at(it.first.startMark),
-                      freeVarsMap.at(it.first.endMark), ProgramSelection::Both,
-                      funName, freeVarsMap);
+        const SharedSMTRef endInvariant = functionalCouplingPredicate(
+            it.first.startMark, it.first.endMark,
+            freeVarsMap.at(it.first.startMark),
+            freeVarsMap.at(it.first.endMark), ProgramSelection::Both, funName,
+            freeVarsMap);
         for (const auto &path : it.second) {
             auto clause = forallStartingAt(
                 path, freeVarsMap.at(it.first.startMark), it.first.startMark,
@@ -133,8 +134,8 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
     auto synchronizedPaths = getSynchronizedPaths(
         pathMaps.first, pathMaps.second, freeVarsMap1, freeVarsMap2,
         [&freeVarsMap, funName](Mark startIndex, Mark endIndex) {
-            SMTRef endInvariant =
-                mainInvariant(endIndex, freeVarsMap.at(endIndex), funName);
+            SMTRef endInvariant = iterativeCouplingPredicate(
+                endIndex, freeVarsMap.at(endIndex), funName);
             if (SMTGenerationOpts::getInstance().OutputFormat ==
                     SMTFormat::Z3 &&
                 endIndex == EXIT_MARK) {
@@ -292,10 +293,10 @@ nonmutualPaths(const PathMap &pathMap, const FreeVarsMap &freeVarsMap,
         for (const auto &innerPathMapIt : pathMapIt.second) {
             const Mark endIndex = innerPathMapIt.first;
             for (const auto &path : innerPathMapIt.second) {
-                SMTRef endInvariant1 =
-                    invariant(startIndex, endIndex, freeVarsMap.at(startIndex),
-                              freeVarsMap.at(endIndex), asSelection(prog),
-                              funName, freeVarsMap);
+                SMTRef endInvariant1 = functionalCouplingPredicate(
+                    startIndex, endIndex, freeVarsMap.at(startIndex),
+                    freeVarsMap.at(endIndex), asSelection(prog), funName,
+                    freeVarsMap);
                 const auto defs =
                     assignmentsOnPath(path, prog, freeVarsMap.at(startIndex),
                                       endIndex == EXIT_MARK);
@@ -361,9 +362,10 @@ offByNPathsOneDir(const PathMap &pathMap, const PathMap &otherPathMap,
                     }
                     SMTRef endInvariant;
                     if (main) {
-                        endInvariant = mainInvariant(startIndex, args, funName);
+                        endInvariant = iterativeCouplingPredicate(
+                            startIndex, args, funName);
                     } else {
-                        endInvariant = invariant(
+                        endInvariant = functionalCouplingPredicate(
                             startIndex, startIndex, freeVarsMap.at(startIndex),
                             args, ProgramSelection::Both, funName, freeVarsMap);
                     }
