@@ -175,6 +175,26 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
  */
 // Generate SMT for all paths
 
+static void addSynchronizedPaths(
+    Mark startMark, Mark endMark, const std::vector<Path> &paths1,
+    const std::vector<Path> &paths2, const FreeVarsMap &freeVarsMap1,
+    const FreeVarsMap &freeVarsMap2,
+    ReturnInvariantGenerator generateReturnInvariant,
+    map<MarkPair, vector<SharedSMTRef>> &clauses) {
+    for (const auto &path1 : paths1) {
+        for (const auto &path2 : paths2) {
+            bool returnPath = endMark == EXIT_MARK;
+            const auto assignments1 = assignmentsOnPath(
+                path1, Program::First, freeVarsMap1.at(startMark), returnPath);
+            const auto assignments2 = assignmentsOnPath(
+                path2, Program::Second, freeVarsMap2.at(startMark), returnPath);
+            clauses[{startMark, endMark}].push_back(interleaveAssignments(
+                generateReturnInvariant(startMark, endMark), assignments1,
+                assignments2));
+        }
+    }
+}
+
 map<MarkPair, vector<SharedSMTRef>>
 getSynchronizedPaths(const PathMap &pathMap1, const PathMap &pathMap2,
                      const FreeVarsMap &freeVarsMap1,
@@ -187,22 +207,11 @@ getSynchronizedPaths(const PathMap &pathMap1, const PathMap &pathMap2,
             const Mark endIndex = innerPathMapIt.first;
             if (pathMap2.at(startIndex).find(endIndex) !=
                 pathMap2.at(startIndex).end()) {
-                const auto paths = pathMap2.at(startIndex).at(endIndex);
-                for (const auto &path1 : innerPathMapIt.second) {
-                    for (const auto &path2 : paths) {
-                        bool returnPath = endIndex == EXIT_MARK;
-                        const auto assignments1 = assignmentsOnPath(
-                            path1, Program::First, freeVarsMap1.at(startIndex),
-                            returnPath);
-                        const auto assignments2 = assignmentsOnPath(
-                            path2, Program::Second, freeVarsMap2.at(startIndex),
-                            returnPath);
-                        clauses[{startIndex, endIndex}].push_back(
-                            interleaveAssignments(
-                                generateReturnInvariant(startIndex, endIndex),
-                                assignments1, assignments2));
-                    }
-                }
+                const auto &paths1 = innerPathMapIt.second;
+                const auto &paths2 = pathMap2.at(startIndex).at(endIndex);
+                addSynchronizedPaths(startIndex, endIndex, paths1, paths2,
+                                     freeVarsMap1, freeVarsMap2,
+                                     generateReturnInvariant, clauses);
             }
         }
     }
