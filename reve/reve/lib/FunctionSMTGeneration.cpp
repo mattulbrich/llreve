@@ -337,28 +337,25 @@ offByNPathsOneDir(const PathMap &pathMap, const PathMap &otherPathMap,
             if (startIndex == endIndex) {
                 // we found a loop
                 for (const auto &path : innerPathMapIt.second) {
-                    const auto endArgs2 = filterVars(
+                    const auto waitingArgs = filterVars(
                         swapIndex(progIndex), freeVarsMap.at(startIndex));
-                    const auto endArgs =
+                    const auto loopingArgs =
                         filterVars(progIndex, freeVarsMap.at(startIndex));
                     vector<SortedVar> args;
                     if (prog == Program::First) {
-                        for (auto arg : endArgs) {
-                            args.push_back(arg);
-                        }
-                        for (auto arg : endArgs2) {
+                        args.insert(args.end(), loopingArgs.begin(),
+                                    loopingArgs.end());
+                        for (auto arg : waitingArgs) {
                             args.push_back(SortedVar(arg.name + "_old",
                                                      std::move(arg.type)));
                         }
-
                     } else {
-                        for (auto arg : endArgs2) {
+                        for (auto arg : waitingArgs) {
                             args.push_back(SortedVar(arg.name + "_old",
                                                      std::move(arg.type)));
                         }
-                        for (auto arg : endArgs) {
-                            args.push_back(arg);
-                        }
+                        args.insert(args.end(), loopingArgs.begin(),
+                                    loopingArgs.end());
                     }
                     SMTRef endInvariant;
                     if (main) {
