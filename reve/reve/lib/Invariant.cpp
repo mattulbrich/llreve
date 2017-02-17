@@ -42,81 +42,96 @@ static void addArgumentsForSelection(
         break;
     }
 }
-SMTRef invariant(Mark StartIndex, Mark EndIndex, vector<SortedVar> InputArgs,
-                 vector<SortedVar> EndArgs, ProgramSelection SMTFor,
-                 std::string FunName, FreeVarsMap freeVarsMap) {
+
+static std::unique_ptr<TypedVariable>
+cloneTypedVariable(const TypedVariable &var) {
+    return make_unique<TypedVariable>(var.name, var.type->copy());
+}
+
+SMTRef invariant(Mark currentCallMark, Mark tailCallMark,
+                 vector<SortedVar> currentCallArguments,
+                 vector<SortedVar> tailCallArguments, ProgramSelection SMTFor,
+                 std::string functionName, FreeVarsMap freeVarsMap) {
     // we want to end up with something like
-    // (and pre (=> (nextcall newargs res) (currentcall oldargs res)))
-    auto FilteredArgs = InputArgs;
-    auto FilteredEndArgs = EndArgs;
+    // (and pre (=> (tailcall newargs res) (currentcall oldargs res)))
+
+    // TODO get rid of filtering
     if (SMTFor == ProgramSelection::First) {
-        FilteredArgs = filterVars(1, FilteredArgs);
-        FilteredEndArgs = filterVars(1, FilteredEndArgs);
+        currentCallArguments = filterVars(1, currentCallArguments);
+        tailCallArguments = filterVars(1, tailCallArguments);
     }
     if (SMTFor == ProgramSelection::Second) {
-        FilteredArgs = filterVars(2, FilteredArgs);
-        FilteredEndArgs = filterVars(2, FilteredEndArgs);
+        currentCallArguments = filterVars(2, currentCallArguments);
+        tailCallArguments = filterVars(2, tailCallArguments);
     }
-    vector<TypedVariable> ResultArgs;
-    addArgumentsForSelection(SMTFor, resultName, int64Type(), ResultArgs);
+
+    vector<TypedVariable> resultValues;
+    addArgumentsForSelection(SMTFor, resultName, int64Type(), resultValues);
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        addArgumentsForSelection(SMTFor,
-                                 [](auto prog) { return heapResultName(prog); },
-                                 memoryType(), ResultArgs);
+        addArgumentsForSelection(SMTFor, heapResultName, memoryType(),
+                                 resultValues);
     }
     if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
-        addArgumentsForSelection(
-            SMTFor, [](auto prog) { return stackResultName(prog); },
-            memoryType(), ResultArgs);
+        addArgumentsForSelection(SMTFor, stackResultName, memoryType(),
+                                 resultValues);
     }
-    // Arguments passed into the current invariant
-    vector<SharedSMTRef> EndArgsVect;
-    for (const auto &arg : FilteredArgs) {
-        EndArgsVect.push_back(std::make_unique<TypedVariable>(
-            arg.name + "_old", arg.type->copy()));
-    }
-    for (const auto &var : ResultArgs) {
-        EndArgsVect.push_back(
-            make_unique<TypedVariable>(var.name, var.type->copy()));
-    }
-    // The current invariant
-    SMTRef Clause = std::make_unique<Op>(
-        invariantName(StartIndex, SMTFor, FunName), EndArgsVect);
 
-    if (EndIndex != EXIT_MARK) {
-        // The result of another call is required to establish the current
-        // invariant
-        // so we do do that call and use the result in the current invariant
-        vector<SortedVar> ForallArgs;
-        for (const auto &ResultArg : ResultArgs) {
-            ForallArgs.push_back(
-                SortedVar(ResultArg.name, ResultArg.type->copy()));
-        }
-        if (EndIndex != UNREACHABLE_MARK) {
-            vector<SharedSMTRef> usingArgsPre;
-            for (const auto &arg : FilteredEndArgs) {
-                usingArgsPre.push_back(std::make_unique<TypedVariable>(
-                    arg.name, arg.type->copy()));
-            }
-            vector<SharedSMTRef> usingArgs = usingArgsPre;
-            SMTRef PreInv = std::make_unique<Op>(
-                invariantName(EndIndex, SMTFor, FunName, InvariantAttr::PRE),
-                usingArgsPre);
-            for (const auto &var : ResultArgs) {
-                usingArgs.push_back(
-                    make_unique<TypedVariable>(var.name, var.type->copy()));
-            }
-            Clause = makeOp(
-                "=>", std::make_unique<Op>(
-                          invariantName(EndIndex, SMTFor, FunName), usingArgs),
-                std::move(Clause));
-            if (SMTFor == ProgramSelection::Both) {
-                Clause = makeOp("and", std::move(PreInv), std::move(Clause));
-            }
-        }
-        Clause = std::make_unique<Forall>(ForallArgs, std::move(Clause));
+    // Arguments passed into the current invariant
+    vector<SharedSMTRef> currentCallArgumentsPost;
+    std::transform(currentCallArguments.begin(), currentCallArguments.end(),
+                   std::back_inserter(currentCallArgumentsPost),
+                   [](const SortedVar &var) {
+                       return make_unique<TypedVariable>(var.name + "_old",
+                                                         var.type->copy());
+                   });
+    std::transform(resultValues.begin(), resultValues.end(),
+                   std::back_inserter(currentCallArgumentsPost),
+                   cloneTypedVariable);
+
+    SMTRef currentCallInvariant = std::make_unique<Op>(
+        invariantName(currentCallMark, SMTFor, functionName),
+        currentCallArgumentsPost);
+
+    if (tailCallMark == EXIT_MARK) {
+        return currentCallInvariant;
     }
-    return Clause;
+
+    // In this case, a tail call is necessary to get the result values which can
+    // then be used in the invariant of the current call.
+    vector<SortedVar> forallArguments;
+    std::transform(resultValues.begin(), resultValues.end(),
+                   std::back_inserter(forallArguments),
+                   [](const TypedVariable &var) {
+                       return SortedVar(var.name, var.type->copy());
+                   });
+    if (tailCallMark == UNREACHABLE_MARK) {
+        return std::make_unique<Forall>(forallArguments,
+                                        std::move(currentCallInvariant));
+    }
+
+    vector<SharedSMTRef> tailCallArgumentsPre;
+    std::transform(tailCallArguments.begin(), tailCallArguments.end(),
+                   std::back_inserter(tailCallArgumentsPre),
+                   typedVariableFromSortedVar);
+    SMTRef tailCallInvariantPre = std::make_unique<Op>(
+        invariantName(tailCallMark, SMTFor, functionName, InvariantAttr::PRE),
+        tailCallArgumentsPre);
+
+    vector<SharedSMTRef> tailCallArgumentsPost = tailCallArgumentsPre;
+    std::transform(resultValues.begin(), resultValues.end(),
+                   std::back_inserter(tailCallArgumentsPost),
+                   cloneTypedVariable);
+    SMTRef tailCallInvariantPost =
+        std::make_unique<Op>(invariantName(tailCallMark, SMTFor, functionName),
+                             tailCallArgumentsPost);
+
+    SMTRef clause = makeOp("=>", std::move(tailCallInvariantPost),
+                           std::move(currentCallInvariant));
+    if (SMTFor == ProgramSelection::Both) {
+        clause =
+            makeOp("and", std::move(tailCallInvariantPre), std::move(clause));
+    }
+    return std::make_unique<Forall>(forallArguments, std::move(clause));
 }
 
 SMTRef mainInvariant(Mark EndIndex, vector<SortedVar> FreeVars,
