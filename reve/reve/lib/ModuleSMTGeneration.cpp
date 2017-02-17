@@ -349,17 +349,15 @@ outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs, SharedSMTRef body,
     std::sort(functionArgs.first.begin(), functionArgs.first.end());
     std::sort(functionArgs.second.begin(), functionArgs.second.end());
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
-        for (auto arg : functionArgs.first) {
-            funArgs.push_back(std::move(arg));
-        }
+        funArgs.insert(funArgs.end(), functionArgs.first.begin(),
+                       functionArgs.first.end());
     }
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
         funArgs.push_back({heapName(Program::First), memoryType()});
     }
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
-        for (auto arg : functionArgs.second) {
-            funArgs.push_back(std::move(arg));
-        }
+        funArgs.insert(funArgs.end(), functionArgs.second.begin(),
+                       functionArgs.second.end());
     }
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
         funArgs.push_back({heapName(Program::Second), memoryType()});
