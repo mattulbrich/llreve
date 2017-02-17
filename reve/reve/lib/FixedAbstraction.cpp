@@ -221,13 +221,8 @@ std::vector<SharedSMTRef> externFunDecl(const llvm::Function &fun,
             args.emplace_back("SP", pointerType());
             args.emplace_back("STACK", memoryType());
         }
-        args.push_back(SortedVar("res", int64Type()));
-        if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-            args.push_back(SortedVar("HEAP_res", memoryType()));
-        }
-        if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
-            args.emplace_back("STACK_res", memoryType());
-        }
+        auto resultValues = getResultValues(program, resultName(program), fun);
+        args.insert(args.end(), resultValues.begin(), resultValues.end());
         std::string funName =
             invariantName(ENTRY_MARK, asSelection(program), fun.getName().str(),
                           InvariantAttr::NONE, argNum);

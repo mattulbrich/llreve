@@ -167,9 +167,11 @@ auto makeFunArgsEqual(smt::SharedSMTRef clause, smt::SharedSMTRef preClause,
                       std::vector<smt::SortedVar> args2) -> smt::SharedSMTRef;
 auto equalInputsEqualOutputs(const std::vector<smt::SortedVar> &funArgs1,
                              const std::vector<smt::SortedVar> &funArgs2,
+                             const llvm::Function &function1,
+                             const llvm::Function &function2,
                              std::string funName,
-                             const FreeVarsMap &freeVarsMap,
-                             const llvm::Type *returnType) -> smt::SharedSMTRef;
+                             const FreeVarsMap &freeVarsMap)
+    -> smt::SharedSMTRef;
 
 /* -------------------------------------------------------------------------- */
 // Miscellanous helper functions that don't really belong anywhere

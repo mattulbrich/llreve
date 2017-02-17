@@ -117,12 +117,11 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
         analysisResults.at(functions.second).freeVariables;
     vector<SharedSMTRef> smtExprs;
 
-    const llvm::Type *returnType = functions.first->getReturnType();
     if (SMTGenerationOpts::getInstance().OnlyRecursive ==
         FunctionEncoding::OnlyRecursive) {
         smtExprs.push_back(equalInputsEqualOutputs(
-            freeVarsMap1.at(ENTRY_MARK), freeVarsMap2.at(ENTRY_MARK), funName,
-            freeVarsMap, returnType));
+            freeVarsMap1.at(ENTRY_MARK), freeVarsMap2.at(ENTRY_MARK),
+            *functions.first, *functions.second, funName, freeVarsMap));
         return smtExprs;
     }
 
@@ -655,9 +654,10 @@ SharedSMTRef makeFunArgsEqual(SharedSMTRef clause, SharedSMTRef preClause,
 /// arguments are equal the outputs are equal
 SharedSMTRef equalInputsEqualOutputs(const vector<SortedVar> &funArgs1,
                                      const vector<SortedVar> &funArgs2,
+                                     const llvm::Function &function1,
+                                     const llvm::Function &function2,
                                      string funName,
-                                     const FreeVarsMap &freeVarsMap,
-                                     const llvm::Type *returnType) {
+                                     const FreeVarsMap &freeVarsMap) {
     vector<SortedVar> forallArgs;
     vector<SharedSMTRef> args;
     vector<SharedSMTRef> preInvArgs;
@@ -672,20 +672,13 @@ SharedSMTRef equalInputsEqualOutputs(const vector<SortedVar> &funArgs1,
     forallArgs.insert(forallArgs.end(), funArgs1.begin(), funArgs1.end());
     forallArgs.insert(forallArgs.end(), funArgs2.begin(), funArgs2.end());
 
-    args.push_back(stringExpr(resultName(Program::First)));
-    args.push_back(stringExpr(resultName(Program::Second)));
-    forallArgs.push_back(
-        SortedVar(resultName(Program::First), llvmType(returnType)));
-    forallArgs.push_back(
-        SortedVar(resultName(Program::Second), llvmType(returnType)));
-    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        forallArgs.push_back(
-            SortedVar(heapResultName(Program::First), memoryType()));
-        forallArgs.push_back(
-            SortedVar(heapResultName(Program::Second), memoryType()));
-        args.push_back(memoryVariable(heapResultName(Program::First)));
-        args.push_back(memoryVariable(heapResultName(Program::Second)));
-    }
+    auto resultValues =
+        getMutualResultValues(resultName(Program::First), function1,
+                              resultName(Program::Second), function2);
+    forallArgs.insert(forallArgs.end(), resultValues.begin(),
+                      resultValues.end());
+    std::transform(resultValues.begin(), resultValues.end(),
+                   std::back_inserter(args), typedVariableFromSortedVar);
     vector<SharedSMTRef> outArgs = {stringExpr(resultName(Program::First)),
                                     stringExpr(resultName(Program::Second))};
     vector<string> sortedFunArgs1;
