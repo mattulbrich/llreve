@@ -124,13 +124,9 @@ auto nonmutualPaths(const PathMap &pathMap, const FreeVarsMap &freeVarsMap,
                     Program prog, std::string funName, const llvm::Type *type,
                     std::vector<smt::SharedSMTRef> functionNumeralConstraints)
     -> std::vector<smt::SharedSMTRef>;
-auto getOffByNPaths(const PathMap &pathMap1, const PathMap &pathMap2,
-                    const FreeVarsMap &freeVarsMap, std::string funName,
-                    bool main)
-    -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
-auto offByNPathsOneDir(const PathMap &pathMap, const PathMap &otherPathMap,
-                       const FreeVarsMap &freeVarsMap, Program prog,
-                       std::string funName, bool main)
+auto getStutterPaths(const PathMap &pathMap1, const PathMap &pathMap2,
+                     const FreeVarsMap &freeVarsMap, std::string funName,
+                     bool main)
     -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
 
 /* -------------------------------------------------------------------------- */

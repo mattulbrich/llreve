@@ -83,9 +83,9 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> functions,
 
     if (SMTGenerationOpts::getInstance().PerfectSync ==
         PerfectSynchronization::Disabled) {
-        const auto offByNPaths = getOffByNPaths(pathMaps.first, pathMaps.second,
-                                                freeVarsMap, funName, false);
-        for (const auto &it : offByNPaths) {
+        const auto stutterPaths = getStutterPaths(
+            pathMaps.first, pathMaps.second, freeVarsMap, funName, false);
+        for (const auto &it : stutterPaths) {
             for (const auto &path : it.second) {
                 auto clause = forallStartingAt(
                     path, freeVarsMap.at(it.first.startMark),
@@ -144,9 +144,9 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
         pathMaps, marked, freeVarsMap1, freeVarsMap2, funName, true);
     if (SMTGenerationOpts::getInstance().PerfectSync ==
         PerfectSynchronization::Disabled) {
-        const auto offByNPaths = getOffByNPaths(pathMaps.first, pathMaps.second,
-                                                freeVarsMap, funName, true);
-        synchronizedPaths = mergeVectorMaps(synchronizedPaths, offByNPaths);
+        const auto stutterPaths = getStutterPaths(
+            pathMaps.first, pathMaps.second, freeVarsMap, funName, true);
+        synchronizedPaths = mergeVectorMaps(synchronizedPaths, stutterPaths);
     }
 
     map<MarkPair, vector<SharedSMTRef>> clauses;
@@ -321,21 +321,10 @@ nonmutualPaths(const PathMap &pathMap, const FreeVarsMap &freeVarsMap,
                                    functionNumeralConstraints);
 }
 
-map<MarkPair, vector<SharedSMTRef>>
-getOffByNPaths(const PathMap &pathMap1, const PathMap &pathMap2,
-               const FreeVarsMap &freeVarsMap, string funName, bool main) {
-    vector<SharedSMTRef> paths;
-    auto firstPaths = offByNPathsOneDir(pathMap1, pathMap2, freeVarsMap,
-                                        Program::First, funName, main);
-    auto secondPaths = offByNPathsOneDir(pathMap2, pathMap1, freeVarsMap,
-                                         Program::Second, funName, main);
-    return mergeVectorMaps(std::move(firstPaths), std::move(secondPaths));
-}
-
-map<MarkPair, vector<SharedSMTRef>>
-offByNPathsOneDir(const PathMap &pathMap, const PathMap &otherPathMap,
-                  const FreeVarsMap &freeVarsMap, Program prog, string funName,
-                  bool main) {
+static map<MarkPair, vector<SharedSMTRef>>
+stutterPathsForProg(const PathMap &pathMap, const PathMap &otherPathMap,
+                    const FreeVarsMap &freeVarsMap, Program prog,
+                    string funName, bool iterative) {
     const int progIndex = programIndex(prog);
     map<MarkPair, vector<SharedSMTRef>> clauses;
     for (const auto &pathMapIt : pathMap) {
@@ -366,7 +355,7 @@ offByNPathsOneDir(const PathMap &pathMap, const PathMap &otherPathMap,
                                     loopingArgs.end());
                     }
                     SMTRef endInvariant;
-                    if (main) {
+                    if (iterative) {
                         endInvariant = iterativeCouplingPredicate(
                             startIndex, args, funName);
                     } else {
@@ -388,6 +377,17 @@ offByNPathsOneDir(const PathMap &pathMap, const PathMap &otherPathMap,
         }
     }
     return clauses;
+}
+
+map<MarkPair, vector<SharedSMTRef>>
+getStutterPaths(const PathMap &pathMap1, const PathMap &pathMap2,
+                const FreeVarsMap &freeVarsMap, string funName, bool main) {
+    vector<SharedSMTRef> paths;
+    auto firstPaths = stutterPathsForProg(pathMap1, pathMap2, freeVarsMap,
+                                          Program::First, funName, main);
+    auto secondPaths = stutterPathsForProg(pathMap2, pathMap1, freeVarsMap,
+                                           Program::Second, funName, main);
+    return mergeVectorMaps(std::move(firstPaths), std::move(secondPaths));
 }
 
 /* --------------------------------------------------------------------------
