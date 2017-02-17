@@ -132,7 +132,7 @@ void generateSMTForMainFunctions(MonoPair<const llvm::Module &> modules,
                                  std::vector<smt::SharedSMTRef> &assertions,
                                  std::vector<smt::SharedSMTRef> &declarations) {
     const auto &smtOpts = SMTGenerationOpts::getInstance();
-    auto inInv =
+    std::shared_ptr<FunDef> inInv =
         inInvariant(smtOpts.MainFunctions, analysisResults, fileOpts.InRelation,
                     modules.first, modules.second,
                     smtOpts.GlobalConstants == GlobalConstantsOpt::Enabled,
@@ -280,11 +280,11 @@ vector<SharedSMTRef> stringConstants(const llvm::Module &mod, string memory) {
     return stringConstants;
 }
 
-shared_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
-                               const AnalysisResultsMap &analysisResults,
-                               SharedSMTRef body, const llvm::Module &mod1,
-                               const llvm::Module &mod2, bool strings,
-                               bool additionalIn) {
+std::unique_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
+                                    const AnalysisResultsMap &analysisResults,
+                                    SharedSMTRef body, const llvm::Module &mod1,
+                                    const llvm::Module &mod2, bool strings,
+                                    bool additionalIn) {
     MonoPair<std::vector<smt::SortedVar>> functionArgumentsPair =
         getFunctionArguments(funs, analysisResults);
     functionArgumentsPair.first =
@@ -337,11 +337,12 @@ shared_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
         body = make_shared<Op>("and", smtArgs);
     }
 
-    return make_shared<FunDef>("IN_INV", funArgs, boolType(), body);
+    return make_unique<FunDef>("IN_INV", funArgs, boolType(), body);
 }
 
-SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
-                          SharedSMTRef body, const llvm::Type *returnType) {
+std::unique_ptr<FunDef>
+outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs, SharedSMTRef body,
+             const llvm::Type *returnType) {
     vector<SortedVar> funArgs = {
         {resultName(Program::First), llvmType(returnType)},
         {resultName(Program::Second), llvmType(returnType)}};
@@ -374,7 +375,7 @@ SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
         }
     }
 
-    return make_shared<FunDef>("OUT_INV", funArgs, boolType(), body);
+    return make_unique<FunDef>("OUT_INV", funArgs, boolType(), body);
 }
 
 SharedSMTRef initPredicate(shared_ptr<const FunDef> inInv) {

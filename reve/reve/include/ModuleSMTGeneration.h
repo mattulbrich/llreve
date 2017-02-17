@@ -46,10 +46,10 @@ auto inInvariant(MonoPair<const llvm::Function *> funs,
                  const AnalysisResultsMap &analysisResults,
                  smt::SharedSMTRef body, const llvm::Module &mod1,
                  const llvm::Module &mod2, bool strings, bool inInvariant)
-    -> std::shared_ptr<smt::FunDef>;
+    -> std::unique_ptr<smt::FunDef>;
 auto outInvariant(MonoPair<std::vector<smt::SortedVar>> funArgs,
                   smt::SharedSMTRef body, const llvm::Type *type)
-    -> smt::SharedSMTRef;
+    -> std::unique_ptr<smt::FunDef>;
 
 smt::SharedSMTRef initPredicate(std::shared_ptr<const smt::FunDef> inInv);
 smt::SharedSMTRef
