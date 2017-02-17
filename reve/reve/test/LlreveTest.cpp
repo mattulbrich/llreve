@@ -68,10 +68,14 @@ TEST_P(LlreveTest, Llreve) {
     ExpectedResult expectedResult;
     Solver solver;
     std::tie(directory, fileName, expectedResult, solver) = GetParam();
-    fileName = PathToTestExecutable + "../../examples/" + directory + "/" + fileName;
+    fileName =
+        PathToTestExecutable + "../../examples/" + directory + "/" + fileName;
     auto smtOutput = std::tmpnam(nullptr);
     std::ostringstream llreveCommand;
-    llreveCommand << PathToTestExecutable << "llreve -inline-opts -o " << smtOutput << " ";
+    llreveCommand << PathToTestExecutable << "llreve -inline-opts -o "
+                  << smtOutput << " -I=" << PathToTestExecutable
+                  << "../../examples/headers"
+                  << " ";
     if (solver == Solver::Z3) {
         llreveCommand << "-muz ";
     }
@@ -140,6 +144,20 @@ INSTANTIATE_TEST_CASE_P(
                                      "inlining", "limit1unrolled", "limit2",
                                      "limit3", "loop_rec", "mccarthy91",
                                      "rec_while", "triangular"),
+                     testing::Values(ExpectedResult::EQUIVALENT),
+                     testing::Values(Solver::Z3, Solver::ELDARICA)));
+
+INSTANTIATE_TEST_CASE_P(
+    Libc, LlreveTest,
+    testing::Combine(testing::Values("libc"),
+                     testing::Values("memccpy_1", "memchr_1", /* "memmem_1", */
+                                     "memmove_1", "memrchr_1", "memset_1",
+                                     "sbrk_1", "stpcpy_1", "strcmp",
+                                     /* "strcspn_2", "strcspn_3", */
+                                     /* "strncasecmp_1", */ "strncmp_2",
+                                     "strncmp_3",
+                                     /* "strpbrk_1", */ /* "strpbrk_2", */
+                                     "strpbrk_3" /* "swab" */),
                      testing::Values(ExpectedResult::EQUIVALENT),
                      testing::Values(Solver::Z3, Solver::ELDARICA)));
 
