@@ -52,8 +52,9 @@ static std::vector<SortedVar> externDeclArgs(const llvm::Function &fun1,
     args.push_back(SortedVar("res1", int64Type()));
     args.push_back(SortedVar("res2", int64Type()));
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        args.push_back(SortedVar("HEAP$1_res", memoryType()));
-        args.push_back(SortedVar("HEAP$2_res", memoryType()));
+        args.push_back(SortedVar(heapResultName(Program::First), memoryType()));
+        args.push_back(
+            SortedVar(heapResultName(Program::Second), memoryType()));
     }
     if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
         args.emplace_back("STACK$1_res", memoryType());
@@ -110,8 +111,9 @@ static SMTRef equalOutputs(std::string functionName,
     std::vector<SharedSMTRef> equalClauses;
     equalClauses.emplace_back(makeOp("=", "res1", "res2"));
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        equalClauses.emplace_back(makeOp("=", memoryVariable("HEAP$1_res"),
-                                         memoryVariable("HEAP$2_res")));
+        equalClauses.emplace_back(
+            makeOp("=", memoryVariable(heapResultName(Program::First)),
+                   memoryVariable(heapResultName(Program::Second))));
     }
     if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
         equalClauses.emplace_back(
@@ -146,7 +148,8 @@ static SMTRef equalInputs(const llvm::Function &fun1,
     }
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
         SharedSMTRef heapInEqual =
-            makeOp("=", memoryVariable("HEAP$1"), memoryVariable("HEAP$2"));
+            makeOp("=", memoryVariable(heapName(Program::First)),
+                   memoryVariable(heapName(Program::Second)));
         equal.push_back(heapInEqual);
     }
     if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {

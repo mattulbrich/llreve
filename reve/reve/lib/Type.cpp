@@ -92,8 +92,9 @@ unique_ptr<Type> llvmType(const llvm::Type *type) {
 }
 
 unique_ptr<Type> inferTypeByName(string arg) {
-    if (std::regex_match(arg, HEAP_REGEX) || arg == "HEAP$1_res" ||
-        arg == "HEAP$2_res") {
+    if (std::regex_match(arg, HEAP_REGEX) ||
+        oneOf(arg, heapResultName(Program::First),
+              heapResultName(Program::Second))) {
         return memoryType();
     }
     return int64Type();

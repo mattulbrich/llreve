@@ -295,7 +295,8 @@ shared_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
                 if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
                     args.push_back(SortedVar(heapName(index), memoryType()));
                 }
-                if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
+                if (SMTGenerationOpts::getInstance().Stack ==
+                    StackOpt::Enabled) {
                     args.push_back(
                         SortedVar(stackPointerName(index), pointerType()));
                     args.push_back(SortedVar(stackName(index), memoryType()));
@@ -360,7 +361,7 @@ SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
         }
     }
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        funArgs.push_back(SortedVar("HEAP$1", memoryType()));
+        funArgs.push_back({heapName(Program::First), memoryType()});
     }
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
         for (auto arg : functionArgs.second) {
@@ -368,14 +369,15 @@ SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
         }
     }
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        funArgs.push_back(SortedVar("HEAP$2", memoryType()));
+        funArgs.push_back({heapName(Program::Second), memoryType()});
     }
     if (body == nullptr) {
         body = makeOp("=", "result$1", "result$2");
         if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-            body =
-                makeOp("and", body, makeOp("=", smt::memoryVariable("HEAP$1"),
-                                           smt::memoryVariable("HEAP$2")));
+            body = makeOp(
+                "and", body,
+                makeOp("=", smt::memoryVariable(heapName(Program::First)),
+                       smt::memoryVariable(heapName(Program::Second))));
         }
     }
 

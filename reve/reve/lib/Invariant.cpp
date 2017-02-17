@@ -60,9 +60,9 @@ SMTRef invariant(Mark StartIndex, Mark EndIndex, vector<SortedVar> InputArgs,
     vector<TypedVariable> ResultArgs;
     addArgumentsForSelection(SMTFor, resultName, int64Type(), ResultArgs);
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        addArgumentsForSelection(
-            SMTFor, [](auto prog) { return heapName(prog) + "_res"; },
-            memoryType(), ResultArgs);
+        addArgumentsForSelection(SMTFor,
+                                 [](auto prog) { return heapResultName(prog); },
+                                 memoryType(), ResultArgs);
     }
     if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
         addArgumentsForSelection(

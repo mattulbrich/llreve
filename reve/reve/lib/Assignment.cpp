@@ -75,7 +75,7 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
                         HeapOpt::Enabled) {
                         definitions.emplace_back(makeAssignment(
                             heapName(progIndex),
-                            memoryVariable(heapName(progIndex) + "_res")));
+                            memoryVariable(heapResultName(prog))));
                     }
                     if (SMTGenerationOpts::getInstance().Stack ==
                         StackOpt::Enabled) {
@@ -104,9 +104,8 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
         definitions.push_back(DefOrCallInfo(
             makeAssignment("result$" + std::to_string(progIndex), retName)));
         if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-            definitions.push_back(DefOrCallInfo(
-                makeAssignment(heapName(progIndex) + "_res",
-                               memoryVariable(heapName(progIndex)))));
+            definitions.push_back(DefOrCallInfo(makeAssignment(
+                heapResultName(prog), memoryVariable(heapName(progIndex)))));
         }
         if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
             definitions.push_back(DefOrCallInfo(
@@ -583,8 +582,8 @@ vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *callInst,
                 instrNameOrVal(callInst->getArgOperand(0));
             SharedSMTRef basePointerSrc =
                 instrNameOrVal(callInst->getArgOperand(1));
-            string heapNameSelect = "HEAP$" + std::to_string(program);
-            string heapNameStore = "HEAP$" + std::to_string(program);
+            string heapNameSelect = heapName(prog);
+            string heapNameStore = heapName(prog);
             int i = 0;
             for (const auto elTy : StructTy0->elements()) {
                 SharedSMTRef heapSelect = memoryVariable(heapNameSelect);
