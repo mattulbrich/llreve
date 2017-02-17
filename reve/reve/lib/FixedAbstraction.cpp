@@ -134,11 +134,13 @@ static SMTRef equalInputs(const llvm::Function &fun1,
     std::vector<SharedSMTRef> equal;
     auto funArgs1 = functionArgs(fun1);
     auto funArgs2 = functionArgs(fun2);
-
-    for (auto argPair : makeZip(funArgs1, funArgs2)) {
-        equal.push_back(makeOp("=", typedVariableFromSortedVar(argPair.first),
-                               typedVariableFromSortedVar(argPair.second)));
-    }
+    assert(funArgs1.size() == funArgs2.size());
+    std::transform(funArgs1.begin(), funArgs1.end(), funArgs2.begin(),
+                   std::back_inserter(equal),
+                   [](const auto &var1, const auto &var2) {
+                       return makeOp("=", typedVariableFromSortedVar(var1),
+                                     typedVariableFromSortedVar(var2));
+                   });
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
         SharedSMTRef heapInEqual =
             makeOp("=", memoryVariable(heapName(Program::First)),

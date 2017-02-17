@@ -321,9 +321,11 @@ shared_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
         }
     });
 
-    for (auto argPair : makeZip(Args1, Args2)) {
-        args.push_back(makeOp("=", argPair.first, argPair.second));
-    }
+    std::transform(Args1.begin(), Args1.end(), Args2.begin(),
+                   std::back_inserter(args),
+                   [](const auto &arg1, const auto &arg2) {
+                       return makeOp("=", arg1, arg2);
+                   });
     if (additionalIn) {
         args.push_back(body);
     }

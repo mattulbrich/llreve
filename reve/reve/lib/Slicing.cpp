@@ -45,10 +45,11 @@ slicingAssertion(MonoPair<llvm::Function *> funPair,
     // Ensure all variables in the criterion are equal in both versions
     // of the program using the mutual precondition
     vector<SharedSMTRef> equalArgs;
-    for (auto argPair : makeZip(funArgs1, funArgs2)) {
-        equalArgs.push_back(
-            makeOp("=", argPair.first.name, argPair.second.name));
-    }
+    std::transform(funArgs1.begin(), funArgs1.end(), funArgs2.begin(),
+                   std::back_inserter(equalArgs),
+                   [](const auto &arg1, const auto &arg2) {
+                       return makeOp("=", arg1.name, arg2.name);
+                   });
 
     SharedSMTRef allEqual = make_shared<Op>("and", equalArgs);
     name = invariantName(ENTRY_MARK, ProgramSelection::Both, "__criterion",
