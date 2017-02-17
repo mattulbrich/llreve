@@ -351,8 +351,9 @@ shared_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
 
 SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
                           SharedSMTRef body, const llvm::Type *returnType) {
-    vector<SortedVar> funArgs = {{"result$1", llvmType(returnType)},
-                                 {"result$2", llvmType(returnType)}};
+    vector<SortedVar> funArgs = {
+        {resultName(Program::First), llvmType(returnType)},
+        {resultName(Program::Second), llvmType(returnType)}};
     std::sort(functionArgs.first.begin(), functionArgs.first.end());
     std::sort(functionArgs.second.begin(), functionArgs.second.end());
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
@@ -372,7 +373,8 @@ SharedSMTRef outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs,
         funArgs.push_back({heapName(Program::Second), memoryType()});
     }
     if (body == nullptr) {
-        body = makeOp("=", "result$1", "result$2");
+        body = makeOp("=", resultName(Program::First),
+                      resultName(Program::Second));
         if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
             body = makeOp(
                 "and", body,

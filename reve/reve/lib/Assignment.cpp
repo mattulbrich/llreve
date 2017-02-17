@@ -101,8 +101,8 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
             retName =
                 instrNameOrVal(retInst->getReturnValue(), retInst->getType());
         }
-        definitions.push_back(DefOrCallInfo(
-            makeAssignment("result$" + std::to_string(progIndex), retName)));
+        definitions.push_back(
+            DefOrCallInfo(makeAssignment(resultName(prog), retName)));
         if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
             definitions.push_back(DefOrCallInfo(makeAssignment(
                 heapResultName(prog), memoryVariable(heapName(progIndex)))));

@@ -708,10 +708,12 @@ SharedSMTRef equalInputsEqualOutputs(const vector<SortedVar> &funArgs1,
     forallArgs.insert(forallArgs.end(), funArgs1.begin(), funArgs1.end());
     forallArgs.insert(forallArgs.end(), funArgs2.begin(), funArgs2.end());
 
-    args.push_back(stringExpr("result$1"));
-    args.push_back(stringExpr("result$2"));
-    forallArgs.push_back(SortedVar("result$1", llvmType(returnType)));
-    forallArgs.push_back(SortedVar("result$2", llvmType(returnType)));
+    args.push_back(stringExpr(resultName(Program::First)));
+    args.push_back(stringExpr(resultName(Program::Second)));
+    forallArgs.push_back(
+        SortedVar(resultName(Program::First), llvmType(returnType)));
+    forallArgs.push_back(
+        SortedVar(resultName(Program::Second), llvmType(returnType)));
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
         forallArgs.push_back(
             SortedVar(heapResultName(Program::First), memoryType()));
@@ -720,8 +722,8 @@ SharedSMTRef equalInputsEqualOutputs(const vector<SortedVar> &funArgs1,
         args.push_back(memoryVariable(heapResultName(Program::First)));
         args.push_back(memoryVariable(heapResultName(Program::Second)));
     }
-    vector<SharedSMTRef> outArgs = {stringExpr("result$1"),
-                                    stringExpr("result$2")};
+    vector<SharedSMTRef> outArgs = {stringExpr(resultName(Program::First)),
+                                    stringExpr(resultName(Program::Second))};
     vector<string> sortedFunArgs1;
     vector<string> sortedFunArgs2;
     for (const auto &arg : funArgs1) {

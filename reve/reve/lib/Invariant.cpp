@@ -122,8 +122,8 @@ SMTRef invariant(Mark StartIndex, Mark EndIndex, vector<SortedVar> InputArgs,
 SMTRef mainInvariant(Mark EndIndex, vector<SortedVar> FreeVars,
                      string FunName) {
     if (EndIndex == EXIT_MARK) {
-        vector<SharedSMTRef> args = {stringExpr("result$1"),
-                                     stringExpr("result$2")};
+        vector<SharedSMTRef> args = {stringExpr(resultName(Program::First)),
+                                     stringExpr(resultName(Program::Second))};
         for (const auto &arg : FreeVars) {
             // No stack in output
             if (arg.name.compare(0, 5, "STACK") &&
