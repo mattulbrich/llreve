@@ -49,8 +49,8 @@ static std::vector<SortedVar> externDeclArgs(const llvm::Function &fun1,
     std::vector<SortedVar> args;
     appendExternInputArgs(fun1, Program::First, args);
     appendExternInputArgs(fun2, Program::Second, args);
-    args.push_back(SortedVar("res1", int64Type()));
-    args.push_back(SortedVar("res2", int64Type()));
+    args.push_back(SortedVar(resultName(Program::First), int64Type()));
+    args.push_back(SortedVar(resultName(Program::Second), int64Type()));
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
         args.push_back(SortedVar(heapResultName(Program::First), memoryType()));
         args.push_back(
@@ -109,7 +109,8 @@ void externDeclarations(const llvm::Module &mod1, const llvm::Module &mod2,
 static SMTRef equalOutputs(std::string functionName,
                            std::multimap<string, string> funCondMap) {
     std::vector<SharedSMTRef> equalClauses;
-    equalClauses.emplace_back(makeOp("=", "res1", "res2"));
+    equalClauses.emplace_back(
+        makeOp("=", resultName(Program::First), resultName(Program::Second)));
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
         equalClauses.emplace_back(
             makeOp("=", memoryVariable(heapResultName(Program::First)),
