@@ -51,7 +51,6 @@ auto outInvariant(MonoPair<std::vector<smt::SortedVar>> funArgs,
                   smt::SharedSMTRef body, const llvm::Type *type)
     -> std::unique_ptr<smt::FunDef>;
 
-smt::SharedSMTRef initPredicate(std::shared_ptr<const smt::FunDef> inInv);
-smt::SharedSMTRef
-initPredicateComment(std::shared_ptr<const smt::FunDef> inInv);
-smt::SharedSMTRef initImplication(std::shared_ptr<const smt::FunDef> funDecl);
+smt::SMTRef initPredicate(const smt::FunDef &inInv);
+smt::SMTRef initPredicateComment(const smt::FunDef &inInv);
+smt::SMTRef initImplication(const smt::FunDef &funDecl);

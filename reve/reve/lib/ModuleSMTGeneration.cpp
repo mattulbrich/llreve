@@ -142,9 +142,9 @@ void generateSMTForMainFunctions(MonoPair<const llvm::Module &> modules,
         getFunctionArguments(smtOpts.MainFunctions, analysisResults),
         fileOpts.OutRelation, smtOpts.MainFunctions.first->getReturnType()));
     if (smtOpts.InitPredicate) {
-        declarations.push_back(initPredicate(inInv));
-        declarations.push_back(initPredicateComment(inInv));
-        assertions.push_back(initImplication(inInv));
+        declarations.push_back(initPredicate(*inInv));
+        declarations.push_back(initPredicateComment(*inInv));
+        assertions.push_back(initImplication(*inInv));
     }
     generateRelationalIterativeSMT(smtOpts.MainFunctions, analysisResults,
                                    assertions, declarations);
@@ -376,43 +376,42 @@ outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs, SharedSMTRef body,
     return make_unique<FunDef>("OUT_INV", funArgs, boolType(), body);
 }
 
-SharedSMTRef initPredicate(shared_ptr<const FunDef> inInv) {
-
+SMTRef initPredicate(const FunDef &inInv) {
     vector<std::unique_ptr<Type>> funArgs;
-    for (auto var : inInv->args) {
-        funArgs.push_back(std::move(var.type));
+    for (const auto &var : inInv.args) {
+        funArgs.push_back(var.type->copy());
     }
 
-    return make_shared<smt::FunDecl>("INIT", std::move(funArgs), boolType());
+    return make_unique<smt::FunDecl>("INIT", std::move(funArgs), boolType());
 }
 
-SharedSMTRef initPredicateComment(shared_ptr<const FunDef> inInv) {
+SMTRef initPredicateComment(const FunDef &inInv) {
 
-    std::stringstream comment;
+    std::ostringstream comment;
     comment << "; INIT-ARGS";
-    for (auto var : inInv->args) {
+    for (const auto &var : inInv.args) {
         comment << " " << var.name;
     }
 
-    return make_shared<smt::Comment>(comment.str());
+    return make_unique<smt::Comment>(comment.str());
 }
 
-SharedSMTRef initImplication(shared_ptr<const FunDef> funDecl) {
-
+SMTRef initImplication(const FunDef &funDecl) {
     vector<SharedSMTRef> ininv_args;
     vector<SharedSMTRef> init_args;
     vector<SortedVar> quantified_vars;
 
-    for (auto var : funDecl->args) {
+    for (const auto &var : funDecl.args) {
         ininv_args.push_back(typedVariableFromSortedVar(var));
         init_args.push_back(typedVariableFromSortedVar(var));
     }
 
-    SharedSMTRef inAppl = std::make_shared<Op>("IN_INV", ininv_args);
-    SharedSMTRef initAppl = std::make_shared<Op>("INIT", init_args);
+    SMTRef inAppl = std::make_unique<Op>("IN_INV", ininv_args);
+    SMTRef initAppl = std::make_unique<Op>("INIT", init_args);
 
-    SharedSMTRef clause = makeOp("=>", inAppl, initAppl);
-    auto forall = std::make_shared<smt::Forall>(funDecl->args, clause);
+    SMTRef clause = makeOp("=>", std::move(inAppl), std::move(initAppl));
+    SMTRef forall =
+        std::make_unique<smt::Forall>(funDecl.args, std::move(clause));
 
-    return make_shared<smt::Assert>(forall);
+    return make_unique<smt::Assert>(std::move(forall));
 }
