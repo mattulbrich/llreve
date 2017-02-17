@@ -369,7 +369,11 @@ driver(MonoPair<llvm::Module &> modules, AnalysisResultsMap &analysisResults,
     MonoPair<BlockNameMap> nameMap = getBlockNameMaps(analysisResults);
     const auto funArgsPair =
         getFunctionArguments(functionPair, analysisResults);
-    const auto funArgs = concat(funArgsPair);
+    std::vector<SortedVar> funArgs;
+    funArgs.insert(funArgs.end(), funArgsPair.first.begin(),
+                   funArgsPair.second.end());
+    funArgs.insert(funArgs.end(), funArgsPair.second.begin(),
+                   funArgsPair.second.end());
 
     // Collect loop info
     LoopCountsAndMark loopCounts;

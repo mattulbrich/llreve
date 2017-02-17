@@ -111,16 +111,6 @@ void appendTo(std::vector<A> &to, MonoPair<std::vector<A>> pair) {
     to.insert(to.end(), pair.second.begin(), pair.second.end());
 }
 
-// special folds
-template <typename A> std::vector<A> concat(MonoPair<std::vector<A>> pair) {
-    return pair.template foldl<std::vector<A>>(
-        {},
-        [](std::vector<A> acc, std::vector<A> vec) -> std::vector<A> {
-            acc.insert(acc.end(), vec.begin(), vec.end());
-            return acc;
-        });
-}
-
 template <typename T>
 std::ostream &operator<<(std::ostream &os, const MonoPair<T> &p) {
     os << "(";
