@@ -62,11 +62,6 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> functions,
 
     map<MarkPair, vector<SharedSMTRef>> smtExprs;
     for (const auto &it : synchronizedPaths) {
-        const SharedSMTRef endInvariant = functionalCouplingPredicate(
-            it.first.startMark, it.first.endMark,
-            freeVarsMap.at(it.first.startMark),
-            freeVarsMap.at(it.first.endMark), ProgramSelection::Both, funName,
-            freeVarsMap);
         for (const auto &path : it.second) {
             auto clause = forallStartingAt(
                 path, freeVarsMap.at(it.first.startMark), it.first.startMark,
