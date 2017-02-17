@@ -553,6 +553,20 @@ static std::vector<SortedVar> getMutualResultValues(
     return resultValues;
 }
 
+static std::vector<SortedVar> getResultValues(Program prog,
+                                              const llvm::StringRef assignedTo,
+                                              const llvm::Function &function) {
+    std::vector<SortedVar> resultValues;
+    resultValues.emplace_back(assignedTo, llvmType(function.getReturnType()));
+    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
+        resultValues.emplace_back(heapResultName(prog), memoryType());
+    }
+    if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
+        resultValues.emplace_back(stackResultName(prog), memoryType());
+    }
+    return resultValues;
+}
+
 SMTRef mutualFunctionCall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
     const uint32_t varArgs = callPair.first.varArgs;
     const vector<SortedVar> resultValues =
@@ -587,45 +601,32 @@ SMTRef mutualFunctionCall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
 }
 
 SMTRef nonMutualFunctionCall(SharedSMTRef clause, CallInfo call, Program prog) {
-    vector<SortedVar> forallArgs;
-    vector<SharedSMTRef> implArgs;
-
-    const int progIndex = programIndex(prog);
-
     const uint32_t varArgs = call.varArgs;
-    // TODO figure out proper return type
-    forallArgs.push_back(SortedVar(call.assignedTo, int64Type()));
-    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        forallArgs.push_back(SortedVar(heapResultName(prog), memoryType()));
-    }
-    if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
-        forallArgs.emplace_back(stackResultName(prog), memoryType());
-    }
-    addMemory(implArgs)(call, progIndex);
-    const vector<SharedSMTRef> preArgs = implArgs;
+    vector<SortedVar> resultValues =
+        getResultValues(prog, call.assignedTo, call.fun);
 
-    implArgs.push_back(stringExpr(call.assignedTo));
-    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        implArgs.push_back(memoryVariable(heapResultName(prog)));
-    }
-    if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
-        implArgs.push_back(memoryVariable(stackResultName(prog)));
-    }
+    vector<SharedSMTRef> preInvariantArguments;
+    addMemory(preInvariantArguments)(call, programIndex(prog));
+    SMTRef preInvariant =
+        make_unique<Op>(invariantName(ENTRY_MARK, asSelection(prog),
+                                      call.callName, InvariantAttr::PRE),
+                        preInvariantArguments);
 
-    const SharedSMTRef endInvariant = make_shared<Op>(
+    vector<SharedSMTRef> postInvariantArguments = preInvariantArguments;
+    std::transform(resultValues.begin(), resultValues.end(),
+                   std::back_inserter(postInvariantArguments),
+                   typedVariableFromSortedVar);
+    SMTRef postInvariant = make_unique<Op>(
         invariantName(ENTRY_MARK, asSelection(prog), call.callName,
                       InvariantAttr::NONE, varArgs),
-        implArgs, !hasFixedAbstraction(call.fun));
-    SMTRef result = makeOp("=>", endInvariant, clause);
-    result = std::make_unique<Forall>(forallArgs, std::move(result));
+        postInvariantArguments, !hasFixedAbstraction(call.fun));
+
+    SMTRef result = makeOp("=>", std::move(postInvariant), clause);
+    result = std::make_unique<Forall>(resultValues, std::move(result));
     if (hasFixedAbstraction(call.fun)) {
         return result;
     }
-    const auto preInv =
-        make_shared<Op>(invariantName(ENTRY_MARK, asSelection(prog),
-                                      call.callName, InvariantAttr::PRE),
-                        preArgs);
-    return makeOp("and", preInv, std::move(result));
+    return makeOp("and", std::move(preInvariant), std::move(result));
 }
 
 /// Wrap the clause in a forall
