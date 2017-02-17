@@ -210,6 +210,42 @@ getSynchronizedPaths(const PathMap &pathMap1, const PathMap &pathMap2,
     return clauses;
 }
 
+static void addForbiddenPaths(Mark startIndex, Mark endIndex1, Mark endIndex2,
+                              const std::vector<Path> &paths1,
+                              const std::vector<Path> &paths2,
+                              const FreeVarsMap &freeVarsMap1,
+                              const FreeVarsMap &freeVarsMap2,
+                              const MonoPair<BidirBlockMarkMap> &marked,
+                              map<Mark, vector<SharedSMTRef>> &pathExprs) {
+    for (const Path &path1 : paths1) {
+        for (const Path &path2 : paths2) {
+            const auto endBlocks =
+                makeMonoPair(path1, path2).map<llvm::BasicBlock *>(lastBlock);
+            const auto endIndices = makeMonoPair(
+                marked.first.BlockToMarksMap.at(endBlocks.first),
+                marked.second.BlockToMarksMap.at(endBlocks.second));
+            if (SMTGenerationOpts::getInstance().PerfectSync ==
+                    PerfectSynchronization::Enabled ||
+                (startIndex != endIndex1 && // no cycles
+                 startIndex != endIndex2 &&
+                 intersection(endIndices.first, endIndices.second).empty())) {
+                const auto smt2 = assignmentsOnPath(path2, Program::Second,
+                                                    freeVarsMap2.at(startIndex),
+                                                    endIndex2 == EXIT_MARK);
+                const auto smt1 = assignmentsOnPath(path1, Program::First,
+                                                    freeVarsMap1.at(startIndex),
+                                                    endIndex1 == EXIT_MARK);
+                // We need to interleave here, because
+                // otherwise
+                // extern functions are not matched
+                const auto smt = interleaveAssignments(
+                    make_unique<ConstantBool>(false), smt1, smt2);
+                pathExprs[startIndex].push_back(smt);
+            }
+        }
+    }
+};
+
 map<Mark, vector<SharedSMTRef>>
 getForbiddenPaths(const MonoPair<PathMap> &pathMaps,
                   const MonoPair<BidirBlockMarkMap> &marked,
@@ -218,46 +254,15 @@ getForbiddenPaths(const MonoPair<PathMap> &pathMaps,
     map<Mark, vector<SharedSMTRef>> pathExprs;
     for (const auto &pathMapIt : pathMaps.first) {
         const Mark startIndex = pathMapIt.first;
-        for (const auto &innerPathMapIt1 : pathMapIt.second) {
-            const Mark endIndex1 = innerPathMapIt1.first;
-            for (auto &innerPathMapIt2 : pathMaps.second.at(startIndex)) {
-                const auto endIndex2 = innerPathMapIt2.first;
+        for (const auto &pathsLeadingTo1 : pathMapIt.second) {
+            const Mark endIndex1 = pathsLeadingTo1.first;
+            for (auto &pathsLeadingTo2 : pathMaps.second.at(startIndex)) {
+                const Mark endIndex2 = pathsLeadingTo2.first;
                 if (endIndex1 != endIndex2) {
-                    for (const auto &path1 : innerPathMapIt1.second) {
-                        for (const auto &path2 : innerPathMapIt2.second) {
-                            const auto endBlocks =
-                                makeMonoPair(path1, path2)
-                                    .map<llvm::BasicBlock *>(lastBlock);
-                            const auto endIndices =
-                                makeMonoPair(marked.first.BlockToMarksMap.at(
-                                                 endBlocks.first),
-                                             marked.second.BlockToMarksMap.at(
-                                                 endBlocks.second));
-                            if (SMTGenerationOpts::getInstance().PerfectSync ==
-                                    PerfectSynchronization::Enabled ||
-                                ((startIndex != endIndex1 && // no circles
-                                  startIndex != endIndex2) &&
-                                 intersection(endIndices.first,
-                                              endIndices.second)
-                                     .empty())) {
-                                const auto smt2 = assignmentsOnPath(
-                                    path2, Program::Second,
-                                    freeVarsMap2.at(startIndex),
-                                    endIndex2 == EXIT_MARK);
-                                const auto smt1 = assignmentsOnPath(
-                                    path1, Program::First,
-                                    freeVarsMap1.at(startIndex),
-                                    endIndex1 == EXIT_MARK);
-                                // We need to interleave here, because
-                                // otherwise
-                                // extern functions are not matched
-                                const auto smt = interleaveAssignments(
-                                    make_unique<ConstantBool>(false), smt1,
-                                    smt2);
-                                pathExprs[startIndex].push_back(smt);
-                            }
-                        }
-                    }
+                    addForbiddenPaths(startIndex, endIndex1, endIndex2,
+                                      pathsLeadingTo1.second,
+                                      pathsLeadingTo2.second, freeVarsMap1,
+                                      freeVarsMap2, marked, pathExprs);
                 }
             }
         }
