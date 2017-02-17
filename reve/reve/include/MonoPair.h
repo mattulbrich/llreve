@@ -53,11 +53,6 @@ template <typename T> struct MonoPair {
         return {f(first), f(second)};
     }
 
-    template <typename NewT>
-    MonoPair<NewT> indexedMap(std::function<NewT(T, int)> f) const {
-        return {f(first, 1), f(second, 2)};
-    }
-
     void forEach(std::function<void(T)> f) const & {
         f(first);
         f(second);
@@ -75,18 +70,6 @@ template <typename T> struct MonoPair {
     void indexedForEachProgram(std::function<void(T, Program)> f) const {
         f(first, Program::First);
         f(second, Program::Second);
-    }
-
-    // left fold
-    template <typename Result>
-    Result foldl(Result init, std::function<Result(Result, T)> f) const {
-        return f(f(init, first), second);
-    }
-
-    // right fold
-    template <typename Result>
-    Result foldr(std::function<Result(T, Result)> f, Result init) const {
-        return f(first, f(second, init));
     }
 };
 

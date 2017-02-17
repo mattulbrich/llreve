@@ -285,66 +285,55 @@ shared_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
                                SharedSMTRef body, const llvm::Module &mod1,
                                const llvm::Module &mod2, bool strings,
                                bool additionalIn) {
-
-    vector<SharedSMTRef> args;
-    const auto funArgsPair =
-        getFunctionArguments(funs, analysisResults)
-            .indexedMap<vector<smt::SortedVar>>([](vector<smt::SortedVar> args,
-                                                   int index)
-                                                    -> vector<smt::SortedVar> {
-                if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-                    args.push_back(SortedVar(heapName(index), memoryType()));
-                }
-                if (SMTGenerationOpts::getInstance().Stack ==
-                    StackOpt::Enabled) {
-                    args.push_back(
-                        SortedVar(stackPointerName(index), pointerType()));
-                    args.push_back(SortedVar(stackName(index), memoryType()));
-                }
-                return args;
-            });
-    vector<string> Args1;
-    for (const auto &arg : funArgsPair.first) {
-        Args1.push_back(arg.name);
-    }
-    vector<string> Args2;
-    for (const auto &arg : funArgsPair.second) {
-        Args2.push_back(arg.name);
-    }
-
-    assert(Args1.size() == Args2.size());
+    MonoPair<std::vector<smt::SortedVar>> functionArgumentsPair =
+        getFunctionArguments(funs, analysisResults);
+    functionArgumentsPair.first =
+        addMemoryArrays(functionArgumentsPair.first, Program::First);
+    functionArgumentsPair.second =
+        addMemoryArrays(functionArgumentsPair.second, Program::Second);
 
     vector<SortedVar> funArgs;
-    funArgsPair.forEach([&funArgs](const auto &args) {
-        for (auto var : args) {
-            funArgs.push_back({var.name, std::move(var.type)});
-        }
-    });
+    funArgs.insert(funArgs.end(), functionArgumentsPair.first.begin(),
+                   functionArgumentsPair.first.end());
+    funArgs.insert(funArgs.end(), functionArgumentsPair.second.begin(),
+                   functionArgumentsPair.second.end());
 
-    std::transform(Args1.begin(), Args1.end(), Args2.begin(),
-                   std::back_inserter(args),
-                   [](const auto &arg1, const auto &arg2) {
-                       return makeOp("=", arg1, arg2);
+    vector<SMTRef> functionArguments1;
+    std::transform(
+        functionArgumentsPair.first.begin(), functionArgumentsPair.first.end(),
+        std::back_inserter(functionArguments1), typedVariableFromSortedVar);
+    vector<SMTRef> functionArguments2;
+    std::transform(functionArgumentsPair.second.begin(),
+                   functionArgumentsPair.second.end(),
+                   std::back_inserter(functionArguments2),
+                   typedVariableFromSortedVar);
+    assert(functionArguments1.size() == functionArguments2.size());
+
+    vector<SharedSMTRef> equalInputs;
+    std::transform(functionArguments1.begin(), functionArguments1.end(),
+                   functionArguments2.begin(), std::back_inserter(equalInputs),
+                   [](auto &arg1, auto &arg2) {
+                       return makeOp("=", std::move(arg1), std::move(arg2));
                    });
+
     if (additionalIn) {
-        args.push_back(body);
+        equalInputs.push_back(body);
     }
     if (body == nullptr || additionalIn) {
-        body = make_shared<Op>("and", args);
+        body = make_shared<Op>("and", equalInputs);
     }
     if (strings) {
         // Add values of static arrays, strings and similar things
         vector<SharedSMTRef> smtArgs = {body};
-        makeMonoPair(&mod1, &mod2)
-            .indexedMap<vector<SharedSMTRef>>(
-                [&args](const llvm::Module *mod, int index) {
-                    return stringConstants(*mod, heapName(index));
-                })
-            .forEach([&smtArgs](vector<SharedSMTRef> constants) {
-                if (!constants.empty()) {
-                    smtArgs.push_back(make_shared<Op>("and", constants));
-                }
-            });
+        auto stringConstants1 = stringConstants(mod1, heapName(Program::First));
+        auto stringConstants2 =
+            stringConstants(mod2, heapName(Program::Second));
+        if (!stringConstants1.empty()) {
+            smtArgs.push_back(make_unique<Op>("and", stringConstants1));
+        }
+        if (!stringConstants2.empty()) {
+            smtArgs.push_back(make_unique<Op>("and", stringConstants2));
+        }
         body = make_shared<Op>("and", smtArgs);
     }
 

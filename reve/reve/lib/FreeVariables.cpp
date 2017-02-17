@@ -138,7 +138,7 @@ static set<SortedVar> addMemoryLocations(const set<FreeVar> &freeVars) {
     return newFreeVars;
 }
 
-static auto addMemoryArrays(vector<smt::SortedVar> vars, Program prog)
+auto addMemoryArrays(vector<smt::SortedVar> vars, Program prog)
     -> vector<smt::SortedVar> {
     int index = programIndex(prog);
     if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
