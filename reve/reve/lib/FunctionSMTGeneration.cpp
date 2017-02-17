@@ -533,56 +533,57 @@ nonmutualSMT(SharedSMTRef endClause,
     return clause;
 }
 
+static std::vector<SortedVar> getMutualResultValues(
+    const llvm::StringRef assignedTo1, const llvm::Function &function1,
+    const llvm::StringRef assignedTo2, const llvm::Function &function2) {
+    std::vector<SortedVar> resultValues;
+    resultValues.emplace_back(assignedTo1, llvmType(function1.getReturnType()));
+    resultValues.emplace_back(assignedTo2, llvmType(function2.getReturnType()));
+    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
+        resultValues.emplace_back(heapResultName(Program::First), memoryType());
+        resultValues.emplace_back(heapResultName(Program::Second),
+                                  memoryType());
+    }
+    if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
+        resultValues.emplace_back(stackResultName(Program::First),
+                                  memoryType());
+        resultValues.emplace_back(stackResultName(Program::Second),
+                                  memoryType());
+    }
+    return resultValues;
+}
+
 SMTRef mutualFunctionCall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
     const uint32_t varArgs = callPair.first.varArgs;
-    vector<SortedVar> args;
-    args.push_back(SortedVar(callPair.first.assignedTo,
-                             llvmType(callPair.first.fun.getReturnType())));
-    args.push_back(SortedVar(callPair.second.assignedTo,
-                             llvmType(callPair.second.fun.getReturnType())));
-    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        args.push_back(SortedVar(heapResultName(Program::First), memoryType()));
-        args.push_back(
-            SortedVar(heapResultName(Program::Second), memoryType()));
-    }
-    if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
-        args.push_back(
-            SortedVar(stackResultName(Program::First), memoryType()));
-        args.push_back(
-            SortedVar(stackResultName(Program::Second), memoryType()));
-    }
-    vector<SharedSMTRef> implArgs;
+    const vector<SortedVar> resultValues =
+        getMutualResultValues(callPair.first.assignedTo, callPair.first.fun,
+                              callPair.second.assignedTo, callPair.second.fun);
 
-    callPair.indexedForEach(addMemory(implArgs));
-    vector<SharedSMTRef> preArgs = implArgs;
+    vector<SharedSMTRef> preInvariantArguments;
+    callPair.indexedForEach(addMemory(preInvariantArguments));
+    SMTRef preInvariant = std::make_unique<Op>(
+        invariantName(ENTRY_MARK, ProgramSelection::Both,
+                      callPair.first.callName + "^" + callPair.second.callName,
+                      InvariantAttr::PRE),
+        preInvariantArguments);
 
-    implArgs.push_back(stringExpr(callPair.first.assignedTo));
-    implArgs.push_back(stringExpr(callPair.second.assignedTo));
-    if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
-        implArgs.push_back(memoryVariable(heapResultName(Program::First)));
-        implArgs.push_back(memoryVariable(heapResultName(Program::Second)));
-    }
-    if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
-        implArgs.push_back(memoryVariable(stackResultName(Program::First)));
-        implArgs.push_back(memoryVariable(stackResultName(Program::Second)));
-    }
+    vector<SharedSMTRef> postInvariantArguments = preInvariantArguments;
+    std::transform(resultValues.begin(), resultValues.end(),
+                   std::back_inserter(postInvariantArguments),
+                   typedVariableFromSortedVar);
     SMTRef postInvariant = std::make_unique<Op>(
         invariantName(ENTRY_MARK, ProgramSelection::Both,
                       callPair.first.callName + "^" + callPair.second.callName,
                       InvariantAttr::NONE, varArgs),
-        implArgs, !hasFixedAbstraction(callPair.first.fun));
+        postInvariantArguments, !hasFixedAbstraction(callPair.first.fun));
+
     SMTRef result = makeOp("=>", std::move(postInvariant), clause);
-    result = std::make_unique<Forall>(args, std::move(result));
+    result = std::make_unique<Forall>(resultValues, std::move(result));
     if (hasMutualFixedAbstraction(
             {&callPair.first.fun, &callPair.second.fun})) {
         return result;
     }
-    SMTRef preInv = std::make_unique<Op>(
-        invariantName(ENTRY_MARK, ProgramSelection::Both,
-                      callPair.first.callName + "^" + callPair.second.callName,
-                      InvariantAttr::PRE),
-        preArgs);
-    return makeOp("and", std::move(preInv), std::move(result));
+    return makeOp("and", std::move(preInvariant), std::move(result));
 }
 
 SMTRef nonMutualFunctionCall(SharedSMTRef clause, CallInfo call, Program prog) {
