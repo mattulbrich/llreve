@@ -321,58 +321,72 @@ nonmutualPaths(const PathMap &pathMap, const FreeVarsMap &freeVarsMap,
                                    functionNumeralConstraints);
 }
 
+template <typename OutputIt>
+static void appendStutterArguments(
+    Program loopingProgram, const std::vector<SortedVar> &loopingArguments,
+    const std::vector<SortedVar> &waitingArguments, OutputIt outputIt) {
+    if (loopingProgram == Program::First) {
+        std::copy(loopingArguments.begin(), loopingArguments.end(), outputIt);
+    }
+    std::transform(waitingArguments.begin(), waitingArguments.end(), outputIt,
+                   [](const auto &arg) {
+                       return SortedVar(arg.name + "_old", arg.type->copy());
+                   });
+    if (loopingProgram == Program::Second) {
+        std::copy(loopingArguments.begin(), loopingArguments.end(), outputIt);
+    }
+}
+
+static void
+addStutterPaths(Mark loopMark, const std::vector<Path> &loopingPaths,
+                llvm::StringRef functionName, Program loopingProgram,
+                const FreeVarsMap &freeVarsMap, const PathMap &otherPathMap,
+                map<MarkPair, vector<SharedSMTRef>> &clauses, bool iterative) {
+    const int progIndex = programIndex(loopingProgram);
+    for (const auto &path : loopingPaths) {
+        const auto waitingArgs =
+            filterVars(swapIndex(progIndex), freeVarsMap.at(loopMark));
+        const auto loopingArgs =
+            filterVars(progIndex, freeVarsMap.at(loopMark));
+        vector<SortedVar> couplingPredicateArguments;
+        // Depending on which program we are looking at
+        appendStutterArguments(loopingProgram, loopingArgs, waitingArgs,
+                               std::back_inserter(couplingPredicateArguments));
+        SMTRef endInvariant;
+        if (iterative) {
+            endInvariant = iterativeCouplingPredicate(
+                loopMark, couplingPredicateArguments, functionName);
+        } else {
+            endInvariant = functionalCouplingPredicate(
+                loopMark, loopMark, freeVarsMap.at(loopMark),
+                couplingPredicateArguments, ProgramSelection::Both,
+                functionName, freeVarsMap);
+        }
+        SMTRef dontLoopInvariant = getDontLoopInvariant(
+            std::move(endInvariant), loopMark, otherPathMap, freeVarsMap,
+            swapProgram(loopingProgram));
+        const auto defs = assignmentsOnPath(
+            path, loopingProgram,
+            filterVars(programIndex(loopingProgram), freeVarsMap.at(loopMark)),
+            false);
+        clauses[{loopMark, loopMark}].push_back(
+            nonmutualSMT(std::move(dontLoopInvariant), defs, loopingProgram));
+    }
+}
+
 static map<MarkPair, vector<SharedSMTRef>>
 stutterPathsForProg(const PathMap &pathMap, const PathMap &otherPathMap,
                     const FreeVarsMap &freeVarsMap, Program prog,
                     string funName, bool iterative) {
-    const int progIndex = programIndex(prog);
     map<MarkPair, vector<SharedSMTRef>> clauses;
     for (const auto &pathMapIt : pathMap) {
-        const Mark startIndex = pathMapIt.first;
-        for (const auto &innerPathMapIt : pathMapIt.second) {
-            const Mark endIndex = innerPathMapIt.first;
-            if (startIndex == endIndex) {
+        const Mark startMark = pathMapIt.first;
+        for (const auto &pathsLeadingTo : pathMapIt.second) {
+            const Mark endMark = pathsLeadingTo.first;
+            if (startMark == endMark) {
                 // we found a loop
-                for (const auto &path : innerPathMapIt.second) {
-                    const auto waitingArgs = filterVars(
-                        swapIndex(progIndex), freeVarsMap.at(startIndex));
-                    const auto loopingArgs =
-                        filterVars(progIndex, freeVarsMap.at(startIndex));
-                    vector<SortedVar> args;
-                    if (prog == Program::First) {
-                        args.insert(args.end(), loopingArgs.begin(),
-                                    loopingArgs.end());
-                        for (auto arg : waitingArgs) {
-                            args.push_back(SortedVar(arg.name + "_old",
-                                                     std::move(arg.type)));
-                        }
-                    } else {
-                        for (auto arg : waitingArgs) {
-                            args.push_back(SortedVar(arg.name + "_old",
-                                                     std::move(arg.type)));
-                        }
-                        args.insert(args.end(), loopingArgs.begin(),
-                                    loopingArgs.end());
-                    }
-                    SMTRef endInvariant;
-                    if (iterative) {
-                        endInvariant = iterativeCouplingPredicate(
-                            startIndex, args, funName);
-                    } else {
-                        endInvariant = functionalCouplingPredicate(
-                            startIndex, startIndex, freeVarsMap.at(startIndex),
-                            args, ProgramSelection::Both, funName, freeVarsMap);
-                    }
-                    SharedSMTRef dontLoopInvariant = getDontLoopInvariant(
-                        std::move(endInvariant), startIndex, otherPathMap,
-                        freeVarsMap, swapProgram(prog));
-                    const auto defs = assignmentsOnPath(
-                        path, prog, filterVars(programIndex(prog),
-                                               freeVarsMap.at(startIndex)),
-                        endIndex == EXIT_MARK);
-                    clauses[{startIndex, startIndex}].push_back(
-                        nonmutualSMT(dontLoopInvariant, defs, prog));
-                }
+                addStutterPaths(startMark, pathsLeadingTo.second, funName, prog,
+                                freeVarsMap, otherPathMap, clauses, iterative);
             }
         }
     }
