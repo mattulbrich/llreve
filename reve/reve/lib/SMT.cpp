@@ -166,6 +166,9 @@ SExprRef Op::toSExpr() const {
     if (opName == "and" && args.size() == 1) {
         return args.front()->toSExpr();
     }
+    if (opName == "=>" && args.at(1)->isConstantFalse()) {
+        return makeOp("not", args.at(0))->toSExpr();
+    }
     for (auto &arg : args) {
         argSExprs.push_back(arg->toSExpr());
     }

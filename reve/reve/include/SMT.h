@@ -77,6 +77,9 @@ class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
     virtual z3::expr
     toZ3Expr(z3::context &cxt, llvm::StringMap<z3::expr> &nameMap,
              const llvm::StringMap<Z3DefineFun> &defineFunMap) const;
+    // Needed because we compile without rtti and thereby can’t use a dynamic
+    // cast to check the type
+    virtual bool isConstantFalse() const { return false; }
 };
 
 using SMTRef = std::unique_ptr<const SMTExpr>;
@@ -265,6 +268,7 @@ class ConstantBool : public SMTExpr {
     z3::expr
     toZ3Expr(z3::context &cxt, llvm::StringMap<z3::expr> &nameMap,
              const llvm::StringMap<Z3DefineFun> &defineFunMap) const override;
+    bool isConstantFalse() const override { return !value; }
 };
 
 // This is for constants or expressions that have not been parsed and should
