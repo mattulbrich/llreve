@@ -347,64 +347,17 @@ SExprRef TypeCast::toSExpr() const {
     }
 }
 
-
-llvm::StringSet<> SMTExpr::uses() const { return {}; }
-
-llvm::StringSet<> Assert::uses() const { return expr->uses(); }
-
-llvm::StringSet<> Forall::uses() const { return expr->uses(); }
-
-llvm::StringSet<> SortedVar::uses() const { return {name}; }
-
-llvm::StringSet<> Let::uses() const {
+struct CollectUsesVisitor : NoopBottomUpVisitor {
     llvm::StringSet<> uses;
-    for (auto def : defs) {
-        const auto defUses = def.second->uses();
-        for (const auto &use : defUses) {
-            uses.insert(use.getKey());
-        }
-    }
-    const auto exprUses = expr->uses();
-    for (const auto &use : exprUses) {
-        uses.insert(use.getKey());
-    }
-    return uses;
+    void dispatch(ConstantString &str) override { uses.insert(str.value); }
+    void dispatch(TypedVariable &var) override { uses.insert(var.name); }
+};
+
+static llvm::StringSet<> collectUses(SMTExpr &expr) {
+    CollectUsesVisitor usesVisitor;
+    expr.acceptBottomUp(usesVisitor);
+    return usesVisitor.uses;
 }
-
-llvm::StringSet<> Op::uses() const {
-    llvm::StringSet<> uses;
-    for (const auto &arg : args) {
-        auto argUses = arg->uses();
-        for (const auto &use : argUses) {
-            uses.insert(use.getKey());
-        }
-    }
-    return uses;
-}
-
-llvm::StringSet<> FPCmp::uses() const {
-    llvm::StringSet<> uses = op0->uses();
-    llvm::StringSet<> op1Uses = op1->uses();
-    for (const auto &use : op1Uses) {
-        uses.insert(use.getKey());
-    }
-    return uses;
-}
-
-llvm::StringSet<> BinaryFPOperator::uses() const {
-    auto uses = op0->uses();
-    auto op1Uses = op1->uses();
-    for (const auto &use : op1Uses) {
-        uses.insert(use.getKey());
-    }
-    return uses;
-}
-
-llvm::StringSet<> TypeCast::uses() const { return operand->uses(); }
-
-llvm::StringSet<> ConstantString::uses() const { return {value}; }
-
-llvm::StringSet<> TypedVariable::uses() const { return {name}; }
 
 // Implementations of compressLets
 
@@ -1102,7 +1055,7 @@ SharedSMTRef nestLets(SharedSMTRef clause, llvm::ArrayRef<Assignment> defs) {
             defsAccum.clear();
         }
         defsAccum.push_back(*i);
-        llvm::StringSet<> usesForExpr = i->second->uses();
+        llvm::StringSet<> usesForExpr = collectUses(*i->second);
         for (const auto &use : usesForExpr) {
             uses.insert(use.getKey());
         }
@@ -1169,6 +1122,9 @@ void GetModel::acceptBottomUp(BottomUpVisitor &visitor) {
 }
 void Let::acceptBottomUp(BottomUpVisitor &visitor) {
     expr->acceptBottomUp(visitor);
+    for (auto& def : defs) {
+        def.second->acceptBottomUp(visitor);
+    }
     visitor.dispatch(*this);
 }
 void ConstantFP::acceptBottomUp(BottomUpVisitor &visitor) {

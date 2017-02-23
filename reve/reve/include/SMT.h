@@ -122,7 +122,6 @@ class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
     virtual ~SMTExpr() = default;
     virtual void acceptBottomUp(BottomUpVisitor &visitor) = 0;
     virtual sexpr::SExprRef toSExpr() const = 0;
-    virtual llvm::StringSet<> uses() const;
     virtual SharedSMTRef compressLets(AssignmentVec defs = {});
     virtual std::vector<SharedSMTRef> splitConjunctions();
     // Rename assignments to unique names. This allows moving things around as
@@ -168,7 +167,6 @@ class Assert : public SMTExpr {
     explicit Assert(std::shared_ptr<SMTExpr> expr) : expr(std::move(expr)) {}
     void acceptBottomUp(BottomUpVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
-    llvm::StringSet<> uses() const override;
     SharedSMTRef
     removeForalls(std::set<SortedVar> &introducedVariables) override;
     SharedSMTRef compressLets(AssignmentVec defs) override;
@@ -197,7 +195,6 @@ class TypedVariable : public SMTExpr {
     void acceptBottomUp(BottomUpVisitor &visitor) override;
     std::unique_ptr<const HeapInfo> heapInfo() const override;
     sexpr::SExprRef toSExpr() const override;
-    llvm::StringSet<> uses() const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) override;
     SharedSMTRef
@@ -214,7 +211,6 @@ class SortedVar {
     SortedVar(std::string name, std::unique_ptr<Type> type)
         : name(std::move(name)), type(std::move(type)) {}
     sexpr::SExprRef toSExpr() const;
-    llvm::StringSet<> uses() const;
     SortedVar &operator=(const SortedVar &other) {
         name = other.name;
         type = other.type->copy();
@@ -256,7 +252,6 @@ class Forall : public SMTExpr {
         : vars(std::move(vars)), expr(std::move(expr)) {}
     void acceptBottomUp(BottomUpVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
-    llvm::StringSet<> uses() const override;
     SharedSMTRef
     removeForalls(std::set<SortedVar> &introducedVariables) override;
     SharedSMTRef compressLets(AssignmentVec defs) override;
@@ -300,7 +295,6 @@ class Let : public SMTExpr {
     sexpr::SExprRef toSExpr() const override;
     SharedSMTRef
     removeForalls(std::set<SortedVar> &introducedVariables) override;
-    llvm::StringSet<> uses() const override;
     SharedSMTRef compressLets(AssignmentVec passedDefs) override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) override;
@@ -357,7 +351,6 @@ class ConstantString : public SMTExpr {
     explicit ConstantString(std::string value) : value(value) {}
     void acceptBottomUp(BottomUpVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override; //  {
-    llvm::StringSet<> uses() const override;
     SharedSMTRef compressLets(AssignmentVec defs) override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) override;
@@ -384,7 +377,6 @@ class Op : public SMTExpr {
     sexpr::SExprRef toSExpr() const override;
     SharedSMTRef
     removeForalls(std::set<SortedVar> &introducedVariables) override;
-    llvm::StringSet<> uses() const override;
     SharedSMTRef compressLets(AssignmentVec defs) override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) override;
@@ -431,7 +423,6 @@ class FPCmp : public SMTExpr {
         : op(op), type(std::move(type)), op0(op0), op1(op1) {}
     void acceptBottomUp(BottomUpVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
-    llvm::StringSet<> uses() const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) override;
     SharedSMTRef
@@ -451,7 +442,6 @@ class BinaryFPOperator : public SMTExpr {
           op1(std::move(op1)) {}
     void acceptBottomUp(BottomUpVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
-    llvm::StringSet<> uses() const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) override;
     SharedSMTRef
@@ -471,7 +461,6 @@ class TypeCast : public SMTExpr {
           destType(std::move(destType)), operand(std::move(operand)) {}
     void acceptBottomUp(BottomUpVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
-    llvm::StringSet<> uses() const override;
     SharedSMTRef
     renameAssignments(std::map<std::string, int> variableMap) override;
     SharedSMTRef
