@@ -10,6 +10,8 @@
 
 #include "Serialize.h"
 
+#include <llvm/ADT/StringMap.h>
+
 #include <fstream>
 #include <iostream>
 
@@ -23,13 +25,45 @@ using namespace llreve::opts;
 
 // Rename variables to a more readable form. This is only done to make the
 // resulting SMT easier to read and has no effect
-static std::map<SortedVar, SortedVar>
-simplifyVariableNames(const std::set<SortedVar> &variableNames) {
-    std::map<SortedVar, SortedVar> variableMap;
-    for (const auto &var : variableNames) {
-        variableMap.insert({var, var});
+static llvm::StringMap<std::string>
+simplifyVariableNames(const std::set<SortedVar> &variables) {
+    llvm::StringMap<std::string> variableNameMap;
+    for (const auto &var : variables) {
+        variableNameMap.insert({var.name, var.name});
     }
-    return variableMap;
+    for (auto &var : variableNameMap) {
+        // Strip "_old" suffix from variable name if such a variable does not
+        // already exist
+        if (var.getValue().size() > 4) {
+            if (var.getValue().compare(var.getValue().size() - 4, 4, "_old") ==
+                0) {
+                std::string shortName =
+                    var.getValue().substr(0, var.getValue().size() - 4);
+                if (variableNameMap.find(shortName) == variableNameMap.end()) {
+                    var.getValue() = shortName;
+                }
+            }
+        }
+    }
+    return variableNameMap;
+}
+
+struct VariableRenamer : smt::NoopBottomUpVisitor {
+    llvm::StringMap<std::string> variableNameMap;
+    VariableRenamer(llvm::StringMap<std::string> variableNameMap)
+        : variableNameMap(std::move(variableNameMap)) {}
+    void dispatch(smt::TypedVariable &var) override {
+        auto foundIt = variableNameMap.find(var.name);
+        if (foundIt != variableNameMap.end()) {
+            var.name = foundIt->second;
+        }
+    }
+};
+
+static void renameVariables(smt::SMTExpr &expr,
+                            llvm::StringMap<std::string> variableNameMap) {
+    VariableRenamer renamer{variableNameMap};
+    expr.acceptBottomUp(renamer);
 }
 
 void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
@@ -69,13 +103,16 @@ void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
                         ->mergeImplications({}));
             }
         }
-        std::map<SortedVar, SortedVar> renamedVariables =
+        const auto renamedVariables =
             simplifyVariableNames(introducedVariables);
         for (const auto &var : introducedVariables) {
-            outFile << *VarDecl(var).toSExpr();
+            outFile << *VarDecl({renamedVariables.lookup(var.name),
+                                 var.type->copy()})
+                            .toSExpr();
             outFile << "\n";
         }
         for (const auto &smt : preparedSMTExprs) {
+            renameVariables(*smt, renamedVariables);
             outFile << *smt->toSExpr();
             outFile << "\n";
         }

@@ -92,26 +92,26 @@ struct BottomUpVisitor {
 };
 
 struct NoopBottomUpVisitor : BottomUpVisitor {
-    virtual void dispatch(SetLogic &expr) { return; }
-    virtual void dispatch(Assert &expr) { return; }
-    virtual void dispatch(TypedVariable &expr) { return; }
-    virtual void dispatch(Forall &expr) { return; }
-    virtual void dispatch(CheckSat &expr) { return; }
-    virtual void dispatch(GetModel &expr) { return; }
-    virtual void dispatch(Let &expr) { return; }
-    virtual void dispatch(ConstantFP &expr) { return; }
-    virtual void dispatch(ConstantInt &expr) { return; }
-    virtual void dispatch(ConstantBool &expr) { return; }
-    virtual void dispatch(ConstantString &expr) { return; }
-    virtual void dispatch(Op &expr) { return; }
-    virtual void dispatch(FPCmp &expr) { return; }
-    virtual void dispatch(BinaryFPOperator &expr) { return; }
-    virtual void dispatch(TypeCast &expr) { return; }
-    virtual void dispatch(Query &expr) { return; }
-    virtual void dispatch(FunDecl &expr) { return; }
-    virtual void dispatch(FunDef &expr) { return; }
-    virtual void dispatch(Comment &expr) { return; }
-    virtual void dispatch(VarDecl &expr) { return; }
+    virtual void dispatch(SetLogic &expr) override { return; }
+    virtual void dispatch(Assert &expr) override { return; }
+    virtual void dispatch(TypedVariable &expr) override { return; }
+    virtual void dispatch(Forall &expr) override { return; }
+    virtual void dispatch(CheckSat &expr) override { return; }
+    virtual void dispatch(GetModel &expr) override { return; }
+    virtual void dispatch(Let &expr) override { return; }
+    virtual void dispatch(ConstantFP &expr) override { return; }
+    virtual void dispatch(ConstantInt &expr) override { return; }
+    virtual void dispatch(ConstantBool &expr) override { return; }
+    virtual void dispatch(ConstantString &expr) override { return; }
+    virtual void dispatch(Op &expr) override { return; }
+    virtual void dispatch(FPCmp &expr) override { return; }
+    virtual void dispatch(BinaryFPOperator &expr) override { return; }
+    virtual void dispatch(TypeCast &expr) override { return; }
+    virtual void dispatch(Query &expr) override { return; }
+    virtual void dispatch(FunDecl &expr) override { return; }
+    virtual void dispatch(FunDef &expr) override { return; }
+    virtual void dispatch(Comment &expr) override { return; }
+    virtual void dispatch(VarDecl &expr) override { return; }
 };
 
 class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
@@ -571,6 +571,7 @@ bool isArray(const Type &type);
 
 std::unique_ptr<SMTExpr> memoryVariable(std::string name);
 std::unique_ptr<TypedVariable> typedVariableFromSortedVar(const SortedVar &var);
+SortedVar sortedVarFromTypedVariable(const TypedVariable &var);
 }
 void setSMTLexerInput(const char *input);
 smt::SharedSMTRef parseSMT(const std::string &input);

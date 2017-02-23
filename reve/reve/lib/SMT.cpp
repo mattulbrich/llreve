@@ -347,7 +347,6 @@ SExprRef TypeCast::toSExpr() const {
     }
 }
 
-// Implementations of uses()
 
 llvm::StringSet<> SMTExpr::uses() const { return {}; }
 
@@ -1142,6 +1141,10 @@ unique_ptr<SMTExpr> memoryVariable(string name) {
 
 unique_ptr<TypedVariable> typedVariableFromSortedVar(const SortedVar &var) {
     return make_unique<TypedVariable>(var.name, var.type->copy());
+}
+
+SortedVar typedVariableFromSortedVar(const TypedVariable &var) {
+    return {var.name, var.type->copy()};
 }
 
 void SetLogic::acceptBottomUp(BottomUpVisitor &visitor) {
