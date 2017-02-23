@@ -163,6 +163,9 @@ SExprRef Op::toSExpr() const {
     if (opName == "and" && args.empty()) {
         return make_unique<Value>("true");
     }
+    if (opName == "and" && args.size() == 1) {
+        return args.front()->toSExpr();
+    }
     for (auto &arg : args) {
         argSExprs.push_back(arg->toSExpr());
     }
