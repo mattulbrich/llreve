@@ -409,40 +409,40 @@ llvm::StringSet<> TypedVariable::uses() const { return {name}; }
 
 // Implementations of compressLets
 
-SharedSMTRef SMTExpr::compressLets(AssignmentVec defs) const {
+SharedSMTRef SMTExpr::compressLets(AssignmentVec defs) {
     assert(defs.empty());
     unused(defs);
     return shared_from_this();
 }
 
-SharedSMTRef Assert::compressLets(AssignmentVec defs) const {
+SharedSMTRef Assert::compressLets(AssignmentVec defs) {
     assert(defs.empty());
     unused(defs);
     return make_shared<Assert>(expr->compressLets());
 }
 
-SharedSMTRef Forall::compressLets(AssignmentVec defs) const {
+SharedSMTRef Forall::compressLets(AssignmentVec defs) {
     return nestLets(make_shared<Forall>(vars, expr->compressLets()), defs);
 }
 
-SharedSMTRef CheckSat::compressLets(AssignmentVec defs) const {
+SharedSMTRef CheckSat::compressLets(AssignmentVec defs) {
     assert(defs.empty());
     unused(defs);
     return shared_from_this();
 }
 
-SharedSMTRef GetModel::compressLets(AssignmentVec defs) const {
+SharedSMTRef GetModel::compressLets(AssignmentVec defs) {
     assert(defs.empty());
     unused(defs);
     return shared_from_this();
 }
 
-SharedSMTRef Let::compressLets(AssignmentVec passedDefs) const {
+SharedSMTRef Let::compressLets(AssignmentVec passedDefs) {
     passedDefs.insert(passedDefs.end(), defs.begin(), defs.end());
     return expr->compressLets(std::move(passedDefs));
 }
 
-SharedSMTRef Op::compressLets(AssignmentVec defs) const {
+SharedSMTRef Op::compressLets(AssignmentVec defs) {
     std::vector<SharedSMTRef> compressedArgs(args.size());
     for (size_t i = 0; i < args.size(); ++i) {
         compressedArgs.at(i) = args.at(i)->compressLets();
@@ -451,22 +451,21 @@ SharedSMTRef Op::compressLets(AssignmentVec defs) const {
         make_shared<Op>(opName, std::move(compressedArgs), instantiate), defs);
 }
 
-SharedSMTRef ConstantString::compressLets(AssignmentVec defs) const {
+SharedSMTRef ConstantString::compressLets(AssignmentVec defs) {
     return nestLets(shared_from_this(), defs);
 }
 
-SharedSMTRef ConstantBool::compressLets(AssignmentVec defs) const {
+SharedSMTRef ConstantBool::compressLets(AssignmentVec defs) {
     return nestLets(shared_from_this(), defs);
 }
 
 // Implementations of renameAssignments
 
-SharedSMTRef SMTExpr::renameAssignments(map<string, int> variableMap) const {
+SharedSMTRef SMTExpr::renameAssignments(map<string, int> variableMap) {
     return shared_from_this();
 }
 
-SharedSMTRef
-ConstantString::renameAssignments(map<string, int> variableMap) const {
+SharedSMTRef ConstantString::renameAssignments(map<string, int> variableMap) {
     if (value.at(0) == '(') {
         return shared_from_this();
     } else {
@@ -478,8 +477,7 @@ ConstantString::renameAssignments(map<string, int> variableMap) const {
     }
 }
 
-SharedSMTRef
-TypedVariable::renameAssignments(map<string, int> variableMap) const {
+SharedSMTRef TypedVariable::renameAssignments(map<string, int> variableMap) {
     string newName = name;
     if (variableMap.find(newName) != variableMap.end()) {
         newName += "_" + std::to_string(variableMap.at(newName));
@@ -487,12 +485,12 @@ TypedVariable::renameAssignments(map<string, int> variableMap) const {
     return make_unique<TypedVariable>(newName, type->copy());
 }
 
-SharedSMTRef Assert::renameAssignments(map<string, int> variableMap) const {
+SharedSMTRef Assert::renameAssignments(map<string, int> variableMap) {
     assert(variableMap.empty());
     return make_shared<Assert>(expr->renameAssignments(variableMap));
 }
 
-SharedSMTRef Let::renameAssignments(map<string, int> variableMap) const {
+SharedSMTRef Let::renameAssignments(map<string, int> variableMap) {
     AssignmentVec newDefs;
     auto newVariableMap = variableMap;
     for (const auto &assgn : defs) {
@@ -503,7 +501,7 @@ SharedSMTRef Let::renameAssignments(map<string, int> variableMap) const {
     return make_shared<Let>(newDefs, expr->renameAssignments(newVariableMap));
 }
 
-SharedSMTRef Op::renameAssignments(map<string, int> variableMap) const {
+SharedSMTRef Op::renameAssignments(map<string, int> variableMap) {
     vector<SharedSMTRef> newArgs;
     for (const auto &arg : this->args) {
         newArgs.push_back(arg->renameAssignments(variableMap));
@@ -511,25 +509,24 @@ SharedSMTRef Op::renameAssignments(map<string, int> variableMap) const {
     return make_shared<Op>(opName, newArgs, instantiate);
 }
 
-SharedSMTRef FPCmp::renameAssignments(map<string, int> variableMap) const {
+SharedSMTRef FPCmp::renameAssignments(map<string, int> variableMap) {
     auto newOp0 = op0->renameAssignments(variableMap);
     auto newOp1 = op1->renameAssignments(variableMap);
     return make_shared<FPCmp>(op, type->copy(), newOp0, newOp1);
 }
 
-SharedSMTRef
-BinaryFPOperator::renameAssignments(map<string, int> variableMap) const {
+SharedSMTRef BinaryFPOperator::renameAssignments(map<string, int> variableMap) {
     auto newOp0 = op0->renameAssignments(variableMap);
     auto newOp1 = op1->renameAssignments(variableMap);
     return make_shared<BinaryFPOperator>(op, type->copy(), newOp0, newOp1);
 }
 
-SharedSMTRef TypeCast::renameAssignments(map<string, int> variableMap) const {
+SharedSMTRef TypeCast::renameAssignments(map<string, int> variableMap) {
     return std::make_unique<TypeCast>(op, sourceType->copy(), destType->copy(),
                                       operand->renameAssignments(variableMap));
 }
 
-SharedSMTRef Forall::renameAssignments(map<string, int> variableMap) const {
+SharedSMTRef Forall::renameAssignments(map<string, int> variableMap) {
     vector<SortedVar> newVars;
     for (auto var : this->vars) {
         variableMap[var.name]++;
@@ -542,8 +539,7 @@ SharedSMTRef Forall::renameAssignments(map<string, int> variableMap) const {
 
 // Implementations of mergeImplications
 
-SharedSMTRef
-SMTExpr::mergeImplications(std::vector<SharedSMTRef> conditions) const {
+SharedSMTRef SMTExpr::mergeImplications(std::vector<SharedSMTRef> conditions) {
     if (conditions.empty()) {
         return shared_from_this();
     } else {
@@ -552,19 +548,17 @@ SMTExpr::mergeImplications(std::vector<SharedSMTRef> conditions) const {
     }
 }
 
-SharedSMTRef
-Assert::mergeImplications(std::vector<SharedSMTRef> conditions) const {
+SharedSMTRef Assert::mergeImplications(std::vector<SharedSMTRef> conditions) {
     assert(conditions.empty());
     return make_shared<Assert>(expr->mergeImplications(std::move(conditions)));
 }
 
-SharedSMTRef
-Let::mergeImplications(std::vector<SharedSMTRef> conditions) const {
+SharedSMTRef Let::mergeImplications(std::vector<SharedSMTRef> conditions) {
     return make_shared<Let>(defs,
                             expr->mergeImplications(std::move(conditions)));
 }
 
-SharedSMTRef Op::mergeImplications(std::vector<SharedSMTRef> conditions) const {
+SharedSMTRef Op::mergeImplications(std::vector<SharedSMTRef> conditions) {
     if (opName == "=>") {
         assert(args.size() == 2);
         conditions.push_back(args.at(0));
@@ -575,19 +569,18 @@ SharedSMTRef Op::mergeImplications(std::vector<SharedSMTRef> conditions) const {
     }
 }
 
-SharedSMTRef
-Forall::mergeImplications(std::vector<SharedSMTRef> conditions) const {
+SharedSMTRef Forall::mergeImplications(std::vector<SharedSMTRef> conditions) {
     return std::make_shared<Forall>(
         vars, expr->mergeImplications(std::move(conditions)));
 }
 
 // Implementations of splitConjunctions()
 
-vector<SharedSMTRef> SMTExpr::splitConjunctions() const {
+vector<SharedSMTRef> SMTExpr::splitConjunctions() {
     return {shared_from_this()};
 }
 
-vector<SharedSMTRef> Assert::splitConjunctions() const {
+vector<SharedSMTRef> Assert::splitConjunctions() {
     vector<SharedSMTRef> smtExprs = expr->splitConjunctions();
     for (auto &expr : smtExprs) {
         expr = make_shared<Assert>(std::move(expr));
@@ -595,7 +588,7 @@ vector<SharedSMTRef> Assert::splitConjunctions() const {
     return smtExprs;
 }
 
-vector<SharedSMTRef> Let::splitConjunctions() const {
+vector<SharedSMTRef> Let::splitConjunctions() {
     vector<SharedSMTRef> smtExprs = expr->splitConjunctions();
     for (auto &expr : smtExprs) {
         expr = make_shared<Let>(defs, std::move(expr));
@@ -603,7 +596,7 @@ vector<SharedSMTRef> Let::splitConjunctions() const {
     return smtExprs;
 }
 
-vector<SharedSMTRef> Op::splitConjunctions() const {
+vector<SharedSMTRef> Op::splitConjunctions() {
     if (opName == "=>") {
         assert(args.size() == 2);
         vector<SharedSMTRef> smtExprs = args.at(1)->splitConjunctions();
@@ -623,7 +616,7 @@ vector<SharedSMTRef> Op::splitConjunctions() const {
     }
 }
 
-vector<SharedSMTRef> Forall::splitConjunctions() const {
+vector<SharedSMTRef> Forall::splitConjunctions() {
     vector<SharedSMTRef> smtExprs = expr->splitConjunctions();
     for (auto &expr : smtExprs) {
         expr = make_shared<Forall>(vars, std::move(expr));
@@ -633,21 +626,21 @@ vector<SharedSMTRef> Forall::splitConjunctions() const {
 
 // Implementations of instantiateArrays
 
-SharedSMTRef SMTExpr::instantiateArrays() const { return shared_from_this(); }
+SharedSMTRef SMTExpr::instantiateArrays() { return shared_from_this(); }
 
-SharedSMTRef Assert::instantiateArrays() const {
+SharedSMTRef Assert::instantiateArrays() {
     return make_shared<Assert>(expr->instantiateArrays());
 }
 
-SharedSMTRef Forall::instantiateArrays() const {
+SharedSMTRef Forall::instantiateArrays() {
     return make_shared<Forall>(vars, expr->instantiateArrays());
 }
 
-SharedSMTRef Let::instantiateArrays() const {
+SharedSMTRef Let::instantiateArrays() {
     return make_shared<Let>(defs, expr->instantiateArrays());
 }
 
-SharedSMTRef Op::instantiateArrays() const {
+SharedSMTRef Op::instantiateArrays() {
     if (opName.compare(0, 4, "INV_") == 0 || opName == "INIT") {
         std::vector<SortedVar> indices;
         std::vector<SharedSMTRef> newArgs;
@@ -680,12 +673,12 @@ SharedSMTRef Op::instantiateArrays() const {
     }
 }
 
-SharedSMTRef FunDef::instantiateArrays() const {
+SharedSMTRef FunDef::instantiateArrays() {
     return make_shared<FunDef>(funName, args, outType->copy(),
                                body->instantiateArrays());
 }
 
-SharedSMTRef FunDecl::instantiateArrays() const {
+SharedSMTRef FunDecl::instantiateArrays() {
     std::vector<unique_ptr<Type>> newInTypes;
     for (const auto &type : inTypes) {
         if (isArray(*type)) {
@@ -716,54 +709,54 @@ unique_ptr<const HeapInfo> TypedVariable::heapInfo() const {
 
 // Implementations of removeForalls
 
-SharedSMTRef SMTExpr::removeForalls(set<SortedVar> &introducedVariables) const {
+SharedSMTRef SMTExpr::removeForalls(set<SortedVar> &introducedVariables) {
     return shared_from_this();
 }
-SharedSMTRef Assert::removeForalls(set<SortedVar> &introducedVariables) const {
+SharedSMTRef Assert::removeForalls(set<SortedVar> &introducedVariables) {
     return make_shared<Assert>(expr->removeForalls(introducedVariables));
 }
-SharedSMTRef Forall::removeForalls(set<SortedVar> &introducedVariables) const {
+SharedSMTRef Forall::removeForalls(set<SortedVar> &introducedVariables) {
     for (const auto &var : vars) {
         introducedVariables.insert(var);
     }
     return expr->removeForalls(introducedVariables);
 }
-SharedSMTRef Op::removeForalls(set<SortedVar> &introducedVariables) const {
+SharedSMTRef Op::removeForalls(set<SortedVar> &introducedVariables) {
     vector<SharedSMTRef> newArgs(args.size());
     for (size_t i = 0; i < args.size(); ++i) {
         newArgs[i] = args[i]->removeForalls(introducedVariables);
     }
     return make_shared<Op>(opName, std::move(newArgs), instantiate);
 }
-SharedSMTRef Let::removeForalls(set<SortedVar> &introducedVariables) const {
+SharedSMTRef Let::removeForalls(set<SortedVar> &introducedVariables) {
     return make_shared<Let>(defs, expr->removeForalls(introducedVariables));
 }
 
 // Implementations of inlineLets
 
-SharedSMTRef SMTExpr::inlineLets(map<string, SharedSMTRef> assignments) const {
+SharedSMTRef SMTExpr::inlineLets(map<string, SharedSMTRef> assignments) {
     return shared_from_this();
 }
 
-SharedSMTRef Assert::inlineLets(map<string, SharedSMTRef> assignments) const {
+SharedSMTRef Assert::inlineLets(map<string, SharedSMTRef> assignments) {
     return make_unique<Assert>(expr->inlineLets(assignments));
 }
 
-SharedSMTRef Let::inlineLets(map<string, SharedSMTRef> assignments) const {
+SharedSMTRef Let::inlineLets(map<string, SharedSMTRef> assignments) {
     for (const auto &def : defs) {
         assignments[def.first] = def.second->inlineLets(assignments);
     }
     return expr->inlineLets(assignments);
 }
 
-SharedSMTRef Forall::inlineLets(map<string, SharedSMTRef> assignments) const {
+SharedSMTRef Forall::inlineLets(map<string, SharedSMTRef> assignments) {
     for (const auto &var : vars) {
         assignments.erase(var.name);
     }
     return make_unique<Forall>(vars, expr->inlineLets(assignments));
 }
 
-SharedSMTRef Op::inlineLets(map<string, SharedSMTRef> assignments) const {
+SharedSMTRef Op::inlineLets(map<string, SharedSMTRef> assignments) {
     vector<SharedSMTRef> newArgs;
     for (const auto &arg : args) {
         newArgs.push_back(arg->inlineLets(assignments));
@@ -771,8 +764,7 @@ SharedSMTRef Op::inlineLets(map<string, SharedSMTRef> assignments) const {
     return make_unique<Op>(opName, newArgs);
 }
 
-SharedSMTRef
-TypedVariable::inlineLets(map<string, SharedSMTRef> assignments) const {
+SharedSMTRef TypedVariable::inlineLets(map<string, SharedSMTRef> assignments) {
     auto mapIt = assignments.find(name);
     if (mapIt == assignments.end()) {
         return shared_from_this();
@@ -780,8 +772,7 @@ TypedVariable::inlineLets(map<string, SharedSMTRef> assignments) const {
     return mapIt->second;
 }
 
-SharedSMTRef
-ConstantString::inlineLets(map<string, SharedSMTRef> assignments) const {
+SharedSMTRef ConstantString::inlineLets(map<string, SharedSMTRef> assignments) {
     auto mapIt = assignments.find(value);
     if (mapIt == assignments.end()) {
         return shared_from_this();
@@ -789,19 +780,19 @@ ConstantString::inlineLets(map<string, SharedSMTRef> assignments) const {
     return mapIt->second;
 }
 
-SharedSMTRef TypeCast::inlineLets(map<string, SharedSMTRef> assignments) const {
+SharedSMTRef TypeCast::inlineLets(map<string, SharedSMTRef> assignments) {
     return std::make_unique<TypeCast>(op, sourceType->copy(), destType->copy(),
                                       operand->inlineLets(assignments));
 }
 
 SharedSMTRef
-BinaryFPOperator::inlineLets(map<string, SharedSMTRef> assignments) const {
+BinaryFPOperator::inlineLets(map<string, SharedSMTRef> assignments) {
     return make_unique<BinaryFPOperator>(op, type->copy(),
                                          op0->inlineLets(assignments),
                                          op1->inlineLets(assignments));
 }
 
-SharedSMTRef FPCmp::inlineLets(map<string, SharedSMTRef> assignments) const {
+SharedSMTRef FPCmp::inlineLets(map<string, SharedSMTRef> assignments) {
     return make_unique<FPCmp>(op, type->copy(), op0->inlineLets(assignments),
                               op1->inlineLets(assignments));
 }
@@ -1131,15 +1122,16 @@ unique_ptr<ConstantString> stringExpr(llvm::StringRef name) {
     return std::make_unique<ConstantString>(name);
 }
 
-unique_ptr<const Op> makeOp(std::string opName, std::vector<std::string> args) {
+unique_ptr<Op> makeOp(std::string opName,
+                      const std::vector<std::string> &args) {
     std::vector<SharedSMTRef> smtArgs;
-    for (auto arg : args) {
+    for (const auto &arg : args) {
         smtArgs.push_back(stringExpr(arg));
     }
     return make_unique<Op>(opName, smtArgs);
 }
 
-unique_ptr<const Assignment> makeAssignment(string name, SharedSMTRef val) {
+unique_ptr<Assignment> makeAssignment(string name, SharedSMTRef val) {
     return make_unique<Assignment>(name, val);
 }
 bool isArray(const Type &type) { return type.getTag() == TypeTag::Array; }
@@ -1151,7 +1143,79 @@ unique_ptr<SMTExpr> memoryVariable(string name) {
 unique_ptr<TypedVariable> typedVariableFromSortedVar(const SortedVar &var) {
     return make_unique<TypedVariable>(var.name, var.type->copy());
 }
+
+void SetLogic::acceptBottomUp(BottomUpVisitor &visitor) {
+    visitor.dispatch(*this);
 }
+void Assert::acceptBottomUp(BottomUpVisitor &visitor) {
+    expr->acceptBottomUp(visitor);
+    visitor.dispatch(*this);
+}
+void TypedVariable::acceptBottomUp(BottomUpVisitor &visitor) {
+    visitor.dispatch(*this);
+}
+void Forall::acceptBottomUp(BottomUpVisitor &visitor) {
+    expr->acceptBottomUp(visitor);
+    visitor.dispatch(*this);
+}
+void CheckSat::acceptBottomUp(BottomUpVisitor &visitor) {
+    visitor.dispatch(*this);
+}
+void GetModel::acceptBottomUp(BottomUpVisitor &visitor) {
+    visitor.dispatch(*this);
+}
+void Let::acceptBottomUp(BottomUpVisitor &visitor) {
+    expr->acceptBottomUp(visitor);
+    visitor.dispatch(*this);
+}
+void ConstantFP::acceptBottomUp(BottomUpVisitor &visitor) {
+    visitor.dispatch(*this);
+}
+void ConstantInt::acceptBottomUp(BottomUpVisitor &visitor) {
+    visitor.dispatch(*this);
+}
+void ConstantBool::acceptBottomUp(BottomUpVisitor &visitor) {
+    visitor.dispatch(*this);
+}
+void ConstantString::acceptBottomUp(BottomUpVisitor &visitor) {
+    visitor.dispatch(*this);
+}
+void Op::acceptBottomUp(BottomUpVisitor &visitor) {
+    for (auto &arg : args) {
+        arg->acceptBottomUp(visitor);
+    }
+    visitor.dispatch(*this);
+}
+void FPCmp::acceptBottomUp(BottomUpVisitor &visitor) {
+    visitor.dispatch(*this);
+}
+void BinaryFPOperator::acceptBottomUp(BottomUpVisitor &visitor) {
+    op0->acceptBottomUp(visitor);
+    op1->acceptBottomUp(visitor);
+    visitor.dispatch(*this);
+}
+void TypeCast::acceptBottomUp(BottomUpVisitor &visitor) {
+    operand->acceptBottomUp(visitor);
+    visitor.dispatch(*this);
+}
+void Query::acceptBottomUp(BottomUpVisitor &visitor) {
+    visitor.dispatch(*this);
+}
+void FunDecl::acceptBottomUp(BottomUpVisitor &visitor) {
+    visitor.dispatch(*this);
+}
+void FunDef::acceptBottomUp(BottomUpVisitor &visitor) {
+    body->acceptBottomUp(visitor);
+    visitor.dispatch(*this);
+}
+void Comment::acceptBottomUp(BottomUpVisitor &visitor) {
+    visitor.dispatch(*this);
+}
+void VarDecl::acceptBottomUp(BottomUpVisitor &visitor) {
+    visitor.dispatch(*this);
+}
+}
+
 static size_t lexerOffset;
 static const char *lexerInput;
 void setSMTLexerInput(const char *input) {

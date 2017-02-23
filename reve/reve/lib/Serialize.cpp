@@ -21,6 +21,17 @@ using std::set;
 
 using namespace llreve::opts;
 
+// Rename variables to a more readable form. This is only done to make the
+// resulting SMT easier to read and has no effect
+static std::map<SortedVar, SortedVar>
+simplifyVariableNames(const std::set<SortedVar> &variableNames) {
+    std::map<SortedVar, SortedVar> variableMap;
+    for (const auto &var : variableNames) {
+        variableMap.insert({var, var});
+    }
+    return variableMap;
+}
+
 void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
     // write to file or to stdout
     std::streambuf *buf;
@@ -39,7 +50,7 @@ void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
     if (muZ) {
         set<SortedVar> introducedVariables;
         vector<SharedSMTRef> preparedSMTExprs;
-        // Explicit casts are a lot easier to debug
+        // Explicit casts are significantly easier to debug
         outFile << *makeOp("set-option", ":int-real-coercions",
                            std::make_unique<smt::ConstantBool>(false))
                         ->toSExpr()
@@ -47,6 +58,8 @@ void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
         for (const auto &smt : smtExprs) {
             const auto splitSMTs = smt->splitConjunctions();
             for (const auto &splitSMT : splitSMTs) {
+                // renaming to unique variable names simplifies the following
+                // steps
                 auto smt_ = splitSMT->compressLets()->renameAssignments({});
                 if (opts.InlineLets) {
                     smt_ = smt->inlineLets({});
@@ -56,6 +69,8 @@ void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
                         ->mergeImplications({}));
             }
         }
+        std::map<SortedVar, SortedVar> renamedVariables =
+            simplifyVariableNames(introducedVariables);
         for (const auto &var : introducedVariables) {
             outFile << *VarDecl(var).toSExpr();
             outFile << "\n";

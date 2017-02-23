@@ -116,7 +116,7 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
 }
 
 /// Convert a single instruction to an assignment
-llvm::SmallVector<std::unique_ptr<const Assignment>, 1>
+llvm::SmallVector<std::unique_ptr<Assignment>, 1>
 instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
                 Program prog) {
     const int progIndex = programIndex(prog);
@@ -185,7 +185,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             phiInst->getType()->isPointerTy()) {
             auto locAssgn = makeAssignment(
                 string(phiInst->getName()) + "_OnStack", instrLocation(val));
-            llvm::SmallVector<std::unique_ptr<const Assignment>, 1> result;
+            llvm::SmallVector<std::unique_ptr<Assignment>, 1> result;
             result.push_back(std::move(assgn));
             result.push_back(std::move(locAssgn));
             return result;
@@ -208,7 +208,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             auto location =
                 makeOp("ite", instrNameOrVal(cond), instrLocation(trueVal),
                        instrLocation(falseVal));
-            llvm::SmallVector<std::unique_ptr<const Assignment>, 1> result;
+            llvm::SmallVector<std::unique_ptr<Assignment>, 1> result;
             result.push_back(std::move(assgn));
             result.push_back(
                 makeAssignment(string(selectInst->getName()) + "_OnStack",
@@ -229,7 +229,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
         auto assgn = makeAssignment(getElementPtrInst->getName(),
                                     resolveGEP(*getElementPtrInst));
         if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
-            llvm::SmallVector<std::unique_ptr<const Assignment>, 1> result;
+            llvm::SmallVector<std::unique_ptr<Assignment>, 1> result;
             result.push_back(std::move(assgn));
             result.push_back(makeAssignment(
                 string(getElementPtrInst->getName()) + "_OnStack",
@@ -321,7 +321,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             typeSize(allocaInst->getAllocatedType(),
                      allocaInst->getModule()->getDataLayout());
         std::string sp = stackPointerName(progIndex);
-        llvm::SmallVector<std::unique_ptr<const Assignment>, 1> result;
+        llvm::SmallVector<std::unique_ptr<Assignment>, 1> result;
         result.push_back(makeAssignment(
             sp, makeOp("-", sp, std::make_unique<ConstantInt>(
                                     llvm::APInt(64, allocatedSize)))));

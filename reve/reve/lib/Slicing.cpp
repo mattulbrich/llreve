@@ -44,17 +44,18 @@ slicingAssertion(MonoPair<llvm::Function *> funPair,
 
     // Ensure all variables in the criterion are equal in both versions
     // of the program using the mutual precondition
-    vector<SharedSMTRef> equalArgs;
+    vector<std::shared_ptr<SMTExpr>> equalArgs;
     std::transform(funArgs1.begin(), funArgs1.end(), funArgs2.begin(),
                    std::back_inserter(equalArgs),
                    [](const auto &arg1, const auto &arg2) {
                        return makeOp("=", arg1.name, arg2.name);
                    });
 
-    SharedSMTRef allEqual = make_shared<Op>("and", equalArgs);
+    std::unique_ptr<SMTExpr> allEqual = make_unique<Op>("and", equalArgs);
     name = invariantName(ENTRY_MARK, ProgramSelection::Both, "__criterion",
                          InvariantAttr::PRE, 0);
-    assertions.push_back(make_shared<FunDef>(name, args, boolType(), allEqual));
+    assertions.push_back(
+        make_unique<FunDef>(name, args, boolType(), std::move(allEqual)));
 
     // Finaly we need to set the invariant for the function itself to true.
     // (The __criterion function does nothing, therefore no restrictions arise)
@@ -62,10 +63,10 @@ slicingAssertion(MonoPair<llvm::Function *> funPair,
     args.push_back(SortedVar("ret1", int64Type()));
     args.push_back(SortedVar("ret2", int64Type()));
 
-    SharedSMTRef invBody = make_unique<ConstantBool>(true);
+    std::shared_ptr<SMTExpr> invBody = make_unique<ConstantBool>(true);
     name = invariantName(ENTRY_MARK, ProgramSelection::Both, "__criterion",
                          InvariantAttr::NONE, 0);
-    assertions.push_back(make_shared<FunDef>(name, args, boolType(), invBody));
+    assertions.push_back(make_unique<FunDef>(name, args, boolType(), invBody));
 
     makeMonoPair(funArgs1, funArgs2)
         .indexedForEachProgram([&assertions, &invBody](auto funArgs,

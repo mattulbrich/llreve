@@ -118,12 +118,12 @@ Paths_ traverse(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks,
         auto TraversedPaths1 =
             traverse(BranchInst->getSuccessor(1), MarkedBlocks, false, Visited);
         for (auto &P : TraversedPaths0) {
-            P.insert(P.begin(), Edge(make_shared<const BooleanCondition>(
+            P.insert(P.begin(), Edge(make_shared<BooleanCondition>(
                                          BranchInst->getCondition(), true),
                                      BranchInst->getSuccessor(0)));
         }
         for (auto &P : TraversedPaths1) {
-            P.insert(P.begin(), Edge(make_shared<const BooleanCondition>(
+            P.insert(P.begin(), Edge(make_shared<BooleanCondition>(
                                          BranchInst->getCondition(), false),
                                      BranchInst->getSuccessor(1)));
         }
@@ -139,7 +139,7 @@ Paths_ traverse(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks,
             auto TraversedPaths_ =
                 traverse(Case.getCaseSuccessor(), MarkedBlocks, false, Visited);
             for (auto &P : TraversedPaths_) {
-                P.insert(P.begin(), Edge(make_shared<const SwitchCondition>(
+                P.insert(P.begin(), Edge(make_shared<SwitchCondition>(
                                              SwitchInst->getCondition(),
                                              Case.getCaseValue()->getValue()),
                                          Case.getCaseSuccessor()));
@@ -151,7 +151,7 @@ Paths_ traverse(llvm::BasicBlock *BB, BidirBlockMarkMap MarkedBlocks,
         auto TraversedPaths_ = traverse(SwitchInst->getDefaultDest(),
                                         MarkedBlocks, false, Visited);
         for (auto &P : TraversedPaths_) {
-            P.insert(P.begin(), Edge(make_shared<const SwitchDefault>(
+            P.insert(P.begin(), Edge(make_shared<SwitchDefault>(
                                          SwitchInst->getCondition(), Vals),
                                      SwitchInst->getDefaultDest()));
         }

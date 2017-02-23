@@ -17,16 +17,17 @@
 
 class Condition {
   public:
-    virtual std::unique_ptr<const smt::SMTExpr> toSmt() const = 0;
+    virtual std::unique_ptr<smt::SMTExpr> toSmt() const = 0;
     virtual ~Condition();
 };
 
 class Edge {
   public:
-    Edge(std::shared_ptr<const Condition> Cond, llvm::BasicBlock *Block)
-        : Cond(std::move(Cond)), Block(std::move(Block)) {}
-    std::shared_ptr<const Condition> Cond;
+    std::shared_ptr<Condition> Cond;
     llvm::BasicBlock *Block;
+
+    Edge(std::shared_ptr<Condition> Cond, llvm::BasicBlock *Block)
+        : Cond(std::move(Cond)), Block(std::move(Block)) {}
 };
 
 class Path {
@@ -41,9 +42,9 @@ class BooleanCondition : public Condition {
   public:
     BooleanCondition(const llvm::Value *Cond, const bool True)
         : Cond(std::move(Cond)), True(std::move(True)) {}
-    const llvm::Value *const Cond;
-    const bool True;
-    std::unique_ptr<const smt::SMTExpr> toSmt() const override;
+    const llvm::Value *Cond;
+    bool True;
+    std::unique_ptr<smt::SMTExpr> toSmt() const override;
 };
 
 class SwitchCondition : public Condition {
@@ -52,7 +53,7 @@ class SwitchCondition : public Condition {
         : Cond(std::move(Cond)), Val(std::move(Val)) {}
     const llvm::Value *const Cond;
     llvm::APInt Val;
-    std::unique_ptr<const smt::SMTExpr> toSmt() const override;
+    std::unique_ptr<smt::SMTExpr> toSmt() const override;
 };
 
 class SwitchDefault : public Condition {
@@ -61,7 +62,7 @@ class SwitchDefault : public Condition {
         : Cond(std::move(Cond)), Vals(std::move(Vals)) {}
     const llvm::Value *const Cond;
     const std::vector<llvm::APInt> Vals;
-    std::unique_ptr<const smt::SMTExpr> toSmt() const override;
+    std::unique_ptr<smt::SMTExpr> toSmt() const override;
 };
 
 // I really suck at finding nice names

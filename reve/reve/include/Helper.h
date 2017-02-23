@@ -19,15 +19,13 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 
-auto instrLocation(const llvm::Value *val)
-    -> std::unique_ptr<const smt::SMTExpr>;
+auto instrLocation(const llvm::Value *val) -> std::unique_ptr<smt::SMTExpr>;
 // convenience wrapper that uses the type of the passed value
-auto instrNameOrVal(const llvm::Value *val)
-    -> std::unique_ptr<const smt::SMTExpr>;
+auto instrNameOrVal(const llvm::Value *val) -> std::unique_ptr<smt::SMTExpr>;
 auto instrNameOrVal(const llvm::Value *val, const llvm::Type *ty)
-    -> std::unique_ptr<const smt::SMTExpr>;
+    -> std::unique_ptr<smt::SMTExpr>;
 auto typeSize(llvm::Type *ty, const llvm::DataLayout &layout) -> int;
-template <typename T> std::unique_ptr<const smt::SMTExpr> resolveGEP(T &gep) {
+template <typename T> std::unique_ptr<smt::SMTExpr> resolveGEP(T &gep) {
     std::vector<smt::SharedSMTRef> args;
     args.push_back(instrNameOrVal(gep.getPointerOperand()));
     const auto type = gep.getSourceElementType();
