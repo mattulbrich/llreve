@@ -48,7 +48,7 @@ simplifyVariableNames(const std::set<SortedVar> &variables) {
     return variableNameMap;
 }
 
-struct VariableRenamer : smt::NoopBottomUpVisitor {
+struct VariableRenamer : smt::BottomUpVisitor {
     llvm::StringMap<std::string> variableNameMap;
     VariableRenamer(llvm::StringMap<std::string> variableNameMap)
         : variableNameMap(std::move(variableNameMap)) {}
@@ -63,7 +63,7 @@ struct VariableRenamer : smt::NoopBottomUpVisitor {
 static void renameVariables(smt::SMTExpr &expr,
                             llvm::StringMap<std::string> variableNameMap) {
     VariableRenamer renamer{variableNameMap};
-    expr.acceptBottomUp(renamer);
+    expr.accept(renamer);
 }
 
 void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
@@ -96,7 +96,7 @@ void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
                 // steps
                 auto smt_ = splitSMT->compressLets()->renameAssignments({});
                 if (opts.InlineLets) {
-                    smt_ = smt->inlineLets({});
+                    smt_ = smt_->inlineLets({});
                 }
                 preparedSMTExprs.push_back(
                     smt_->removeForalls(introducedVariables)

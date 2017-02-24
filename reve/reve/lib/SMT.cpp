@@ -347,7 +347,7 @@ SExprRef TypeCast::toSExpr() const {
     }
 }
 
-struct CollectUsesVisitor : NoopBottomUpVisitor {
+struct CollectUsesVisitor : BottomUpVisitor {
     llvm::StringSet<> uses;
     void dispatch(ConstantString &str) override { uses.insert(str.value); }
     void dispatch(TypedVariable &var) override { uses.insert(var.name); }
@@ -355,7 +355,7 @@ struct CollectUsesVisitor : NoopBottomUpVisitor {
 
 static llvm::StringSet<> collectUses(SMTExpr &expr) {
     CollectUsesVisitor usesVisitor;
-    expr.acceptBottomUp(usesVisitor);
+    expr.accept(usesVisitor);
     return usesVisitor.uses;
 }
 
@@ -1100,79 +1100,110 @@ SortedVar typedVariableFromSortedVar(const TypedVariable &var) {
     return {var.name, var.type->copy()};
 }
 
-void SetLogic::acceptBottomUp(BottomUpVisitor &visitor) {
+void SetLogic::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
+void Assert::accept(BottomUpVisitor &visitor) {
+    expr->accept(visitor);
     visitor.dispatch(*this);
 }
-void Assert::acceptBottomUp(BottomUpVisitor &visitor) {
-    expr->acceptBottomUp(visitor);
+void TypedVariable::accept(BottomUpVisitor &visitor) {
     visitor.dispatch(*this);
 }
-void TypedVariable::acceptBottomUp(BottomUpVisitor &visitor) {
+void Forall::accept(BottomUpVisitor &visitor) {
+    expr->accept(visitor);
     visitor.dispatch(*this);
 }
-void Forall::acceptBottomUp(BottomUpVisitor &visitor) {
-    expr->acceptBottomUp(visitor);
-    visitor.dispatch(*this);
-}
-void CheckSat::acceptBottomUp(BottomUpVisitor &visitor) {
-    visitor.dispatch(*this);
-}
-void GetModel::acceptBottomUp(BottomUpVisitor &visitor) {
-    visitor.dispatch(*this);
-}
-void Let::acceptBottomUp(BottomUpVisitor &visitor) {
-    expr->acceptBottomUp(visitor);
-    for (auto& def : defs) {
-        def.second->acceptBottomUp(visitor);
+void CheckSat::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
+void GetModel::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
+void Let::accept(BottomUpVisitor &visitor) {
+    expr->accept(visitor);
+    for (auto &def : defs) {
+        def.second->accept(visitor);
     }
     visitor.dispatch(*this);
 }
-void ConstantFP::acceptBottomUp(BottomUpVisitor &visitor) {
+void ConstantFP::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
+void ConstantInt::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
+void ConstantBool::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
+void ConstantString::accept(BottomUpVisitor &visitor) {
     visitor.dispatch(*this);
 }
-void ConstantInt::acceptBottomUp(BottomUpVisitor &visitor) {
-    visitor.dispatch(*this);
-}
-void ConstantBool::acceptBottomUp(BottomUpVisitor &visitor) {
-    visitor.dispatch(*this);
-}
-void ConstantString::acceptBottomUp(BottomUpVisitor &visitor) {
-    visitor.dispatch(*this);
-}
-void Op::acceptBottomUp(BottomUpVisitor &visitor) {
+void Op::accept(BottomUpVisitor &visitor) {
     for (auto &arg : args) {
-        arg->acceptBottomUp(visitor);
+        arg->accept(visitor);
     }
     visitor.dispatch(*this);
 }
-void FPCmp::acceptBottomUp(BottomUpVisitor &visitor) {
+void FPCmp::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
+void BinaryFPOperator::accept(BottomUpVisitor &visitor) {
+    op0->accept(visitor);
+    op1->accept(visitor);
     visitor.dispatch(*this);
 }
-void BinaryFPOperator::acceptBottomUp(BottomUpVisitor &visitor) {
-    op0->acceptBottomUp(visitor);
-    op1->acceptBottomUp(visitor);
+void TypeCast::accept(BottomUpVisitor &visitor) {
+    operand->accept(visitor);
     visitor.dispatch(*this);
 }
-void TypeCast::acceptBottomUp(BottomUpVisitor &visitor) {
-    operand->acceptBottomUp(visitor);
+void Query::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
+void FunDecl::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
+void FunDef::accept(BottomUpVisitor &visitor) {
+    body->accept(visitor);
     visitor.dispatch(*this);
 }
-void Query::acceptBottomUp(BottomUpVisitor &visitor) {
+void Comment::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
+void VarDecl::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
+
+void SetLogic::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
+void Assert::accept(TopDownVisitor &visitor) {
+    visitor.dispatch(*this);
+    expr->accept(visitor);
+}
+void TypedVariable::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
+void Forall::accept(TopDownVisitor &visitor) {
+    visitor.dispatch(*this);
+    expr->accept(visitor);
+}
+void CheckSat::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
+void GetModel::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
+void Let::accept(TopDownVisitor &visitor) {
+    // It is slightly unclear if bindings should be traversed before or after
+    // the let itself. However let statements cannot be recursive and it thus
+    // makes sense to traverse them first.
+    for (auto &def : defs) {
+        def.second->accept(visitor);
+    }
+    visitor.dispatch(*this);
+    expr->accept(visitor);
+}
+void ConstantFP::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
+void ConstantInt::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
+void ConstantBool::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
+void ConstantString::accept(TopDownVisitor &visitor) {
     visitor.dispatch(*this);
 }
-void FunDecl::acceptBottomUp(BottomUpVisitor &visitor) {
+void Op::accept(TopDownVisitor &visitor) {
+    visitor.dispatch(*this);
+    for (auto &arg : args) {
+        arg->accept(visitor);
+    }
+}
+void FPCmp::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
+void BinaryFPOperator::accept(TopDownVisitor &visitor) {
+    visitor.dispatch(*this);
+    op0->accept(visitor);
+    op1->accept(visitor);
+}
+void TypeCast::accept(TopDownVisitor &visitor) {
+    operand->accept(visitor);
     visitor.dispatch(*this);
 }
-void FunDef::acceptBottomUp(BottomUpVisitor &visitor) {
-    body->acceptBottomUp(visitor);
+void Query::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
+void FunDecl::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
+void FunDef::accept(TopDownVisitor &visitor) {
     visitor.dispatch(*this);
+    body->accept(visitor);
 }
-void Comment::acceptBottomUp(BottomUpVisitor &visitor) {
-    visitor.dispatch(*this);
-}
-void VarDecl::acceptBottomUp(BottomUpVisitor &visitor) {
-    visitor.dispatch(*this);
-}
+void Comment::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
+void VarDecl::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
 }
 
 static size_t lexerOffset;
