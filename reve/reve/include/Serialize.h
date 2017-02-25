@@ -15,3 +15,9 @@
 
 void serializeSMT(std::vector<smt::SharedSMTRef> smtExprs, bool muZ,
                   llreve::opts::SerializeOpts opts);
+
+// Remove forall and collect quantified variables. These variables are then
+// declared as global variables for Z3.
+std::shared_ptr<smt::SMTExpr>
+removeForalls(smt::SMTExpr &expr,
+              std::set<smt::SortedVar> &introducedVariables);

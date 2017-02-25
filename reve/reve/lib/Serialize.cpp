@@ -20,6 +20,7 @@ using smt::SortedVar;
 using smt::VarDecl;
 using std::vector;
 using std::set;
+using std::shared_ptr;
 
 using namespace llreve::opts;
 
@@ -104,6 +105,24 @@ static void renameAssignments(smt::SMTExpr &expr) {
     expr.accept(visitor);
 };
 
+struct RemoveForallVisitor : smt::TopDownVisitor {
+    std::set<SortedVar> &introducedVariables;
+    RemoveForallVisitor(std::set<SortedVar> &introducedVariables)
+        : introducedVariables(introducedVariables) {}
+    shared_ptr<smt::SMTExpr> reassemble(smt::Forall &forall) {
+        for (const auto &var : forall.vars) {
+            introducedVariables.insert(var);
+        }
+        return forall.expr;
+    }
+};
+
+shared_ptr<smt::SMTExpr>
+removeForalls(smt::SMTExpr &expr, std::set<SortedVar> &introducedVariables) {
+    RemoveForallVisitor visitor{introducedVariables};
+    return expr.accept(visitor);
+}
+
 void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
     // write to file or to stdout
     std::streambuf *buf;
@@ -146,8 +165,8 @@ void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
             if (opts.InlineLets) {
                 expr = expr->inlineLets({});
             }
-            preparedSMTExprs.push_back(expr->removeForalls(introducedVariables)
-                                           ->mergeImplications({}));
+            expr = removeForalls(*expr, introducedVariables);
+            preparedSMTExprs.push_back(expr->mergeImplications({}));
         }
         const auto renamedVariables =
             simplifyVariableNames(introducedVariables);

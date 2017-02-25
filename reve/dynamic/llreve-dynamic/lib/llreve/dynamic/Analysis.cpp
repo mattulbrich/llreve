@@ -504,7 +504,7 @@ cegarDriver(MonoPair<llvm::Module &> modules,
         vector<SharedSMTRef> z3Clauses;
         set<SortedVar> introducedVariables;
         for (const auto &clause : clauses) {
-            z3Clauses.push_back(clause->removeForalls(introducedVariables));
+            z3Clauses.push_back(removeForalls(*clause, introducedVariables));
         }
         vector<SharedSMTRef> introducedClauses;
         for (const auto &var : introducedVariables) {

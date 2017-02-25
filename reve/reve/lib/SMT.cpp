@@ -581,31 +581,6 @@ unique_ptr<const HeapInfo> TypedVariable::heapInfo() const {
     return nullptr;
 }
 
-// Implementations of removeForalls
-
-SharedSMTRef SMTExpr::removeForalls(set<SortedVar> &introducedVariables) {
-    return shared_from_this();
-}
-SharedSMTRef Assert::removeForalls(set<SortedVar> &introducedVariables) {
-    return make_shared<Assert>(expr->removeForalls(introducedVariables));
-}
-SharedSMTRef Forall::removeForalls(set<SortedVar> &introducedVariables) {
-    for (const auto &var : vars) {
-        introducedVariables.insert(var);
-    }
-    return expr->removeForalls(introducedVariables);
-}
-SharedSMTRef Op::removeForalls(set<SortedVar> &introducedVariables) {
-    vector<SharedSMTRef> newArgs(args.size());
-    for (size_t i = 0; i < args.size(); ++i) {
-        newArgs[i] = args[i]->removeForalls(introducedVariables);
-    }
-    return make_shared<Op>(opName, std::move(newArgs), instantiate);
-}
-SharedSMTRef Let::removeForalls(set<SortedVar> &introducedVariables) {
-    return make_shared<Let>(defs, expr->removeForalls(introducedVariables));
-}
-
 // Implementations of inlineLets
 
 SharedSMTRef SMTExpr::inlineLets(map<string, SharedSMTRef> assignments) {
@@ -1074,58 +1049,102 @@ void FunDef::accept(BottomUpVisitor &visitor) {
 void Comment::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
 void VarDecl::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
 
-void SetLogic::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
-void Assert::accept(TopDownVisitor &visitor) {
+shared_ptr<SMTExpr> SetLogic::accept(TopDownVisitor &visitor) {
     visitor.dispatch(*this);
-    expr->accept(visitor);
+    return visitor.reassemble(*this);
 }
-void TypedVariable::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
-void Forall::accept(TopDownVisitor &visitor) {
+shared_ptr<SMTExpr> Assert::accept(TopDownVisitor &visitor) {
     visitor.dispatch(*this);
-    expr->accept(visitor);
+    expr = expr->accept(visitor);
+    return visitor.reassemble(*this);
 }
-void CheckSat::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
-void GetModel::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
-void Let::accept(TopDownVisitor &visitor) {
+shared_ptr<SMTExpr> TypedVariable::accept(TopDownVisitor &visitor) {
+    visitor.dispatch(*this);
+    return visitor.reassemble(*this);
+}
+shared_ptr<SMTExpr> Forall::accept(TopDownVisitor &visitor) {
+    visitor.dispatch(*this);
+    expr = expr->accept(visitor);
+    return visitor.reassemble(*this);
+}
+shared_ptr<SMTExpr> CheckSat::accept(TopDownVisitor &visitor) {
+    visitor.dispatch(*this);
+    return visitor.reassemble(*this);
+}
+shared_ptr<SMTExpr> GetModel::accept(TopDownVisitor &visitor) {
+    visitor.dispatch(*this);
+    return visitor.reassemble(*this);
+}
+shared_ptr<SMTExpr> Let::accept(TopDownVisitor &visitor) {
     // It is slightly unclear if bindings should be traversed before or after
     // the let itself. However let statements cannot be recursive and it thus
     // makes sense to traverse them first.
     for (auto &def : defs) {
-        def.second->accept(visitor);
+        def.second = def.second->accept(visitor);
     }
     visitor.dispatch(*this);
-    expr->accept(visitor);
+    expr = expr->accept(visitor);
+    return visitor.reassemble(*this);
 }
-void ConstantFP::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
-void ConstantInt::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
-void ConstantBool::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
-void ConstantString::accept(TopDownVisitor &visitor) {
+shared_ptr<SMTExpr> ConstantFP::accept(TopDownVisitor &visitor) {
     visitor.dispatch(*this);
+    return visitor.reassemble(*this);
 }
-void Op::accept(TopDownVisitor &visitor) {
+shared_ptr<SMTExpr> ConstantInt::accept(TopDownVisitor &visitor) {
+    visitor.dispatch(*this);
+    return visitor.reassemble(*this);
+}
+shared_ptr<SMTExpr> ConstantBool::accept(TopDownVisitor &visitor) {
+    visitor.dispatch(*this);
+    return visitor.reassemble(*this);
+}
+shared_ptr<SMTExpr> ConstantString::accept(TopDownVisitor &visitor) {
+    visitor.dispatch(*this);
+    return visitor.reassemble(*this);
+}
+shared_ptr<SMTExpr> Op::accept(TopDownVisitor &visitor) {
     visitor.dispatch(*this);
     for (auto &arg : args) {
-        arg->accept(visitor);
+        arg = arg->accept(visitor);
     }
+    return visitor.reassemble(*this);
 }
-void FPCmp::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
-void BinaryFPOperator::accept(TopDownVisitor &visitor) {
+shared_ptr<SMTExpr> FPCmp::accept(TopDownVisitor &visitor) {
     visitor.dispatch(*this);
-    op0->accept(visitor);
-    op1->accept(visitor);
+    return visitor.reassemble(*this);
 }
-void TypeCast::accept(TopDownVisitor &visitor) {
-    operand->accept(visitor);
+shared_ptr<SMTExpr> BinaryFPOperator::accept(TopDownVisitor &visitor) {
     visitor.dispatch(*this);
+    op0 = op0->accept(visitor);
+    op1 = op1->accept(visitor);
+    return visitor.reassemble(*this);
 }
-void Query::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
-void FunDecl::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
-void FunDef::accept(TopDownVisitor &visitor) {
+shared_ptr<SMTExpr> TypeCast::accept(TopDownVisitor &visitor) {
+    operand = operand->accept(visitor);
     visitor.dispatch(*this);
-    body->accept(visitor);
+    return visitor.reassemble(*this);
 }
-void Comment::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
-void VarDecl::accept(TopDownVisitor &visitor) { visitor.dispatch(*this); }
+shared_ptr<SMTExpr> Query::accept(TopDownVisitor &visitor) {
+    visitor.dispatch(*this);
+    return visitor.reassemble(*this);
+}
+shared_ptr<SMTExpr> FunDecl::accept(TopDownVisitor &visitor) {
+    visitor.dispatch(*this);
+    return visitor.reassemble(*this);
+}
+shared_ptr<SMTExpr> FunDef::accept(TopDownVisitor &visitor) {
+    visitor.dispatch(*this);
+    body = body->accept(visitor);
+    return visitor.reassemble(*this);
+}
+shared_ptr<SMTExpr> Comment::accept(TopDownVisitor &visitor) {
+    visitor.dispatch(*this);
+    return visitor.reassemble(*this);
+}
+shared_ptr<SMTExpr> VarDecl::accept(TopDownVisitor &visitor) {
+    visitor.dispatch(*this);
+    return visitor.reassemble(*this);
+}
 }
 
 static size_t lexerOffset;
