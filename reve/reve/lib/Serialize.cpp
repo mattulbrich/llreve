@@ -123,6 +123,49 @@ removeForalls(smt::SMTExpr &expr, std::set<SortedVar> &introducedVariables) {
     return expr.accept(visitor);
 }
 
+struct CompressLetVisitor : smt::TopDownVisitor {
+    std::vector<smt::Assignment> defs;
+    std::map<smt::SMTExpr *, std::vector<smt::Assignment>> storedDefs;
+    CompressLetVisitor() : smt::TopDownVisitor(true) {}
+    void dispatch(smt::Forall &forall) {
+        storedDefs.insert({&forall, defs});
+        defs.clear();
+    }
+    shared_ptr<smt::SMTExpr> reassemble(smt::Forall &forall) {
+        defs.clear();
+        return nestLets(forall.shared_from_this(), storedDefs.at(&forall));
+    }
+    void dispatch(smt::Let &let) {
+        defs.insert(defs.end(), let.defs.begin(), let.defs.end());
+    }
+    shared_ptr<smt::SMTExpr> reassemble(smt::Let &let) { return let.expr; }
+    void dispatch(smt::Op &op) {
+        storedDefs.insert({&op, defs});
+        defs.clear();
+    }
+    shared_ptr<smt::SMTExpr> reassemble(smt::Op &op) {
+        auto ret = nestLets(op.shared_from_this(), storedDefs.at(&op));
+        defs.clear();
+        return ret;
+
+    }
+    shared_ptr<smt::SMTExpr> reassemble(smt::ConstantString &str) {
+        auto ret = nestLets(str.shared_from_this(), defs);
+        defs.clear();
+        return ret;
+    }
+    shared_ptr<smt::SMTExpr> reassemble(smt::ConstantBool &cbool) {
+        auto ret = nestLets(cbool.shared_from_this(), defs);
+        defs.clear();
+        return ret;
+    }
+};
+
+static shared_ptr<smt::SMTExpr> compressLets(smt::SMTExpr &expr) {
+    CompressLetVisitor visitor;
+    return expr.accept(visitor);
+}
+
 void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
     // write to file or to stdout
     std::streambuf *buf;
@@ -149,8 +192,8 @@ void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
         vector<SharedSMTRef> letCompressedExprs;
         for (const auto &smt : smtExprs) {
             const auto splitSMTs = smt->splitConjunctions();
-            for (const auto &splitSMT : splitSMTs) {
-                letCompressedExprs.push_back(splitSMT->compressLets());
+            for (const auto &expr : splitSMTs) {
+                letCompressedExprs.push_back(compressLets(*expr));
                 // renaming to unique variable names simplifies the following
                 // steps
             }
@@ -186,7 +229,7 @@ void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
         // See the comment above on why we first compress all expressions before
         // renaming.
         for (const auto &smt : smtExprs) {
-            letCompressedExprs.push_back(opts.Pretty ? smt->compressLets()
+            letCompressedExprs.push_back(opts.Pretty ? compressLets(*smt)
                                                      : smt);
         }
         for (auto &expr : letCompressedExprs) {

@@ -101,8 +101,6 @@ class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
     virtual void accept(BottomUpVisitor &visitor) = 0;
     virtual std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) = 0;
     virtual sexpr::SExprRef toSExpr() const = 0;
-    // TODO implement using visitor
-    virtual SharedSMTRef compressLets(AssignmentVec defs = {});
     virtual std::vector<SharedSMTRef> splitConjunctions();
     // TODO implement using visitor
     virtual SharedSMTRef
@@ -143,7 +141,6 @@ class Assert : public SMTExpr {
     void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
-    SharedSMTRef compressLets(AssignmentVec defs) override;
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) override;
     std::vector<SharedSMTRef> splitConjunctions() override;
@@ -224,7 +221,6 @@ class Forall : public SMTExpr {
     void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
-    SharedSMTRef compressLets(AssignmentVec defs) override;
     SharedSMTRef instantiateArrays() override;
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) override;
@@ -238,7 +234,6 @@ class CheckSat : public SMTExpr {
     void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
-    SharedSMTRef compressLets(AssignmentVec defs) override;
     void toZ3(z3::context &cxt, z3::solver &solver,
               llvm::StringMap<z3::expr> &nameMap,
               llvm::StringMap<Z3DefineFun> &defineFunMap) const override;
@@ -249,7 +244,6 @@ class GetModel : public SMTExpr {
     void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
-    SharedSMTRef compressLets(AssignmentVec defs) override;
     void toZ3(z3::context &cxt, z3::solver &solver,
               llvm::StringMap<z3::expr> &nameMap,
               llvm::StringMap<Z3DefineFun> &defineFunMap) const override;
@@ -264,7 +258,6 @@ class Let : public SMTExpr {
     void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
-    SharedSMTRef compressLets(AssignmentVec passedDefs) override;
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) override;
     std::vector<SharedSMTRef> splitConjunctions() override;
@@ -306,7 +299,6 @@ class ConstantBool : public SMTExpr {
     void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
-    SharedSMTRef compressLets(AssignmentVec defs) override;
     z3::expr
     toZ3Expr(z3::context &cxt, llvm::StringMap<z3::expr> &nameMap,
              const llvm::StringMap<Z3DefineFun> &defineFunMap) const override;
@@ -322,7 +314,6 @@ class ConstantString : public SMTExpr {
     void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override; //  {
-    SharedSMTRef compressLets(AssignmentVec defs) override;
     SharedSMTRef
     inlineLets(std::map<std::string, SharedSMTRef> assignments) override;
     z3::expr
@@ -345,7 +336,6 @@ class Op : public SMTExpr {
     void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
-    SharedSMTRef compressLets(AssignmentVec defs) override;
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) override;
     std::vector<SharedSMTRef> splitConjunctions() override;
@@ -519,6 +509,10 @@ class VarDecl : public SMTExpr {
 };
 
 struct TopDownVisitor {
+    bool ignoreLetBindings = false;
+    TopDownVisitor() = default;
+    TopDownVisitor(bool ignoreLetBindings)
+        : ignoreLetBindings(ignoreLetBindings) {}
     virtual void dispatch(SetLogic &expr) {}
     virtual void dispatch(Assert &expr) {}
     virtual void dispatch(TypedVariable &expr) {}

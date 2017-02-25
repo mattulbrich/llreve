@@ -359,58 +359,6 @@ static llvm::StringSet<> collectUses(SMTExpr &expr) {
     return usesVisitor.uses;
 }
 
-// Implementations of compressLets
-
-SharedSMTRef SMTExpr::compressLets(AssignmentVec defs) {
-    assert(defs.empty());
-    unused(defs);
-    return shared_from_this();
-}
-
-SharedSMTRef Assert::compressLets(AssignmentVec defs) {
-    assert(defs.empty());
-    unused(defs);
-    return make_shared<Assert>(expr->compressLets());
-}
-
-SharedSMTRef Forall::compressLets(AssignmentVec defs) {
-    return nestLets(make_shared<Forall>(vars, expr->compressLets()), defs);
-}
-
-SharedSMTRef CheckSat::compressLets(AssignmentVec defs) {
-    assert(defs.empty());
-    unused(defs);
-    return shared_from_this();
-}
-
-SharedSMTRef GetModel::compressLets(AssignmentVec defs) {
-    assert(defs.empty());
-    unused(defs);
-    return shared_from_this();
-}
-
-SharedSMTRef Let::compressLets(AssignmentVec passedDefs) {
-    passedDefs.insert(passedDefs.end(), defs.begin(), defs.end());
-    return expr->compressLets(std::move(passedDefs));
-}
-
-SharedSMTRef Op::compressLets(AssignmentVec defs) {
-    std::vector<SharedSMTRef> compressedArgs(args.size());
-    for (size_t i = 0; i < args.size(); ++i) {
-        compressedArgs.at(i) = args.at(i)->compressLets();
-    }
-    return nestLets(
-        make_shared<Op>(opName, std::move(compressedArgs), instantiate), defs);
-}
-
-SharedSMTRef ConstantString::compressLets(AssignmentVec defs) {
-    return nestLets(shared_from_this(), defs);
-}
-
-SharedSMTRef ConstantBool::compressLets(AssignmentVec defs) {
-    return nestLets(shared_from_this(), defs);
-}
-
 // Implementations of mergeImplications
 
 SharedSMTRef SMTExpr::mergeImplications(std::vector<SharedSMTRef> conditions) {
@@ -1079,8 +1027,10 @@ shared_ptr<SMTExpr> Let::accept(TopDownVisitor &visitor) {
     // It is slightly unclear if bindings should be traversed before or after
     // the let itself. However let statements cannot be recursive and it thus
     // makes sense to traverse them first.
-    for (auto &def : defs) {
-        def.second = def.second->accept(visitor);
+    if (!visitor.ignoreLetBindings) {
+        for (auto &def : defs) {
+            def.second = def.second->accept(visitor);
+        }
     }
     visitor.dispatch(*this);
     expr = expr->accept(visitor);
