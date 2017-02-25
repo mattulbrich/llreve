@@ -66,6 +66,44 @@ static void renameVariables(smt::SMTExpr &expr,
     expr.accept(renamer);
 }
 
+struct AssignmentRenameVisitor : smt::TopDownVisitor {
+    llvm::StringMap<unsigned> variableMap;
+    void dispatch(smt::TypedVariable &var) override {
+        auto foundIt = variableMap.find(var.name);
+        if (foundIt != variableMap.end()) {
+            var.name += "_" + std::to_string(foundIt->getValue());
+        }
+    }
+    // There are still some places left where we use ConstantString instead of
+    // TypedVariable so we need rename those as well.
+    void dispatch(smt::ConstantString &str) override {
+        auto foundIt = variableMap.find(str.value);
+        if (foundIt != variableMap.end()) {
+            str.value += "_" + std::to_string(foundIt->getValue());
+        }
+    }
+
+    void dispatch(smt::Let &let) override {
+        for (auto &assignment : let.defs) {
+            int newIndex = ++variableMap[assignment.first];
+            assignment.first += "_" + std::to_string(newIndex);
+        }
+    }
+    void dispatch(smt::Forall &forall) override {
+        for (auto &var : forall.vars) {
+            int newIndex = ++variableMap[var.name];
+            var.name += "_" + std::to_string(newIndex);
+        }
+    }
+};
+
+// Rename assignments to unique names. This allows moving things around as
+// done by mergeImplications.
+static void renameAssignments(smt::SMTExpr &expr) {
+    AssignmentRenameVisitor visitor;
+    expr.accept(visitor);
+};
+
 void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
     // write to file or to stdout
     std::streambuf *buf;
@@ -89,19 +127,27 @@ void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
                            std::make_unique<smt::ConstantBool>(false))
                         ->toSExpr()
                 << "\n";
+        vector<SharedSMTRef> letCompressedExprs;
         for (const auto &smt : smtExprs) {
             const auto splitSMTs = smt->splitConjunctions();
             for (const auto &splitSMT : splitSMTs) {
+                letCompressedExprs.push_back(splitSMT->compressLets());
                 // renaming to unique variable names simplifies the following
                 // steps
-                auto smt_ = splitSMT->compressLets()->renameAssignments({});
-                if (opts.InlineLets) {
-                    smt_ = smt_->inlineLets({});
-                }
-                preparedSMTExprs.push_back(
-                    smt_->removeForalls(introducedVariables)
-                        ->mergeImplications({}));
             }
+        }
+        // Variable renaming can interfer with let compression since variables
+        // are shared between different expressions. By compressing using the
+        // original names and only then renaming, we avoid this problem.
+        // Eventually, it might make sense to remove this sharing since it makes
+        // transformations easier.
+        for (auto &expr : letCompressedExprs) {
+            renameAssignments(*expr);
+            if (opts.InlineLets) {
+                expr = expr->inlineLets({});
+            }
+            preparedSMTExprs.push_back(expr->removeForalls(introducedVariables)
+                                           ->mergeImplications({}));
         }
         const auto renamedVariables =
             simplifyVariableNames(introducedVariables);
@@ -117,18 +163,25 @@ void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
             outFile << "\n";
         }
     } else {
+        vector<SharedSMTRef> letCompressedExprs;
+        // See the comment above on why we first compress all expressions before
+        // renaming.
         for (const auto &smt : smtExprs) {
-            smt::SharedSMTRef out = opts.Pretty ? smt->compressLets() : smt;
+            letCompressedExprs.push_back(opts.Pretty ? smt->compressLets()
+                                                     : smt);
+        }
+        for (auto &expr : letCompressedExprs) {
             if (opts.InlineLets) {
-                out = out->renameAssignments({})->inlineLets({});
+                renameAssignments(*expr);
+                expr = expr->inlineLets({});
             }
             if (opts.MergeImplications) {
-                out = out->mergeImplications({});
+                expr = expr->mergeImplications({});
             }
             if (!opts.DontInstantiate) {
-                out = out->instantiateArrays();
+                expr = expr->instantiateArrays();
             }
-            out->toSExpr()->serialize(outFile, 0, opts.Pretty);
+            expr->toSExpr()->serialize(outFile, 0, opts.Pretty);
             outFile << "\n";
             ++i;
         }

@@ -125,10 +125,6 @@ class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
     virtual sexpr::SExprRef toSExpr() const = 0;
     virtual SharedSMTRef compressLets(AssignmentVec defs = {});
     virtual std::vector<SharedSMTRef> splitConjunctions();
-    // Rename assignments to unique names. This allows moving things around as
-    // done by mergeImplications.
-    virtual SharedSMTRef
-    renameAssignments(std::map<std::string, int> variableMap);
     virtual SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions);
     virtual SharedSMTRef instantiateArrays();
@@ -174,8 +170,6 @@ class Assert : public SMTExpr {
     removeForalls(std::set<SortedVar> &introducedVariables) override;
     SharedSMTRef compressLets(AssignmentVec defs) override;
     SharedSMTRef
-    renameAssignments(std::map<std::string, int> variableMap) override;
-    SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) override;
     std::vector<SharedSMTRef> splitConjunctions() override;
     SharedSMTRef instantiateArrays() override;
@@ -199,8 +193,6 @@ class TypedVariable : public SMTExpr {
     void accept(TopDownVisitor &visitor) override;
     std::unique_ptr<const HeapInfo> heapInfo() const override;
     sexpr::SExprRef toSExpr() const override;
-    SharedSMTRef
-    renameAssignments(std::map<std::string, int> variableMap) override;
     SharedSMTRef
     inlineLets(std::map<std::string, SharedSMTRef> assignments) override;
     z3::expr
@@ -262,8 +254,6 @@ class Forall : public SMTExpr {
     SharedSMTRef compressLets(AssignmentVec defs) override;
     SharedSMTRef instantiateArrays() override;
     SharedSMTRef
-    renameAssignments(std::map<std::string, int> variableMap) override;
-    SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) override;
     std::vector<SharedSMTRef> splitConjunctions() override;
     SharedSMTRef
@@ -304,8 +294,6 @@ class Let : public SMTExpr {
     SharedSMTRef
     removeForalls(std::set<SortedVar> &introducedVariables) override;
     SharedSMTRef compressLets(AssignmentVec passedDefs) override;
-    SharedSMTRef
-    renameAssignments(std::map<std::string, int> variableMap) override;
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) override;
     std::vector<SharedSMTRef> splitConjunctions() override;
@@ -365,8 +353,6 @@ class ConstantString : public SMTExpr {
     sexpr::SExprRef toSExpr() const override; //  {
     SharedSMTRef compressLets(AssignmentVec defs) override;
     SharedSMTRef
-    renameAssignments(std::map<std::string, int> variableMap) override;
-    SharedSMTRef
     inlineLets(std::map<std::string, SharedSMTRef> assignments) override;
     z3::expr
     toZ3Expr(z3::context &cxt, llvm::StringMap<z3::expr> &nameMap,
@@ -391,8 +377,6 @@ class Op : public SMTExpr {
     SharedSMTRef
     removeForalls(std::set<SortedVar> &introducedVariables) override;
     SharedSMTRef compressLets(AssignmentVec defs) override;
-    SharedSMTRef
-    renameAssignments(std::map<std::string, int> variableMap) override;
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) override;
     std::vector<SharedSMTRef> splitConjunctions() override;
@@ -438,8 +422,6 @@ class FPCmp : public SMTExpr {
     void accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
     SharedSMTRef
-    renameAssignments(std::map<std::string, int> variableMap) override;
-    SharedSMTRef
     inlineLets(std::map<std::string, SharedSMTRef> assignments) override;
 };
 
@@ -458,8 +440,6 @@ class BinaryFPOperator : public SMTExpr {
     void accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
     SharedSMTRef
-    renameAssignments(std::map<std::string, int> variableMap) override;
-    SharedSMTRef
     inlineLets(std::map<std::string, SharedSMTRef> assignments) override;
 };
 
@@ -477,8 +457,6 @@ class TypeCast : public SMTExpr {
     void accept(BottomUpVisitor &visitor) override;
     void accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
-    SharedSMTRef
-    renameAssignments(std::map<std::string, int> variableMap) override;
     SharedSMTRef
     inlineLets(std::map<std::string, SharedSMTRef> assignments) override;
     z3::expr
