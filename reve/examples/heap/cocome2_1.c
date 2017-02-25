@@ -6,7 +6,7 @@
            (= paidOnline$1 paidOnline$2)
            (= onlineItemCount$1 0)
            (= paidOnline$1 0)
-           (forall ((i Int)) (= (select HEAP$1 i) (select HEAP$2 i)))) @*/
+           (= HEAP$1 HEAP$2)) @*/
 extern int __mark(int);
 
 int sumItems(int *items, int itemCount, int *onlineItems, int onlineItemCount, int paidOnline) {

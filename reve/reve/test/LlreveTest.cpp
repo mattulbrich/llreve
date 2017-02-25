@@ -129,11 +129,20 @@ INSTANTIATE_TEST_CASE_P(
                      testing::Values(ExpectedResult::NOT_EQUIVALENT),
                      testing::Values(Solver::Z3, Solver::ELDARICA)));
 
+// This example cannot be solved by Z3. It can be solved when we instantiate the
+// array in the custom precondition but Z3 issues a warning and it is unclear if
+// that is actually handled correctly.
+INSTANTIATE_TEST_CASE_P(
+    HeapEldarica, LlreveTest,
+    testing::Combine(testing::Values("heap"), testing::Values("cocome2"),
+                     testing::Values(ExpectedResult::EQUIVALENT),
+                     testing::Values(Solver::ELDARICA)));
+
 INSTANTIATE_TEST_CASE_P(
     Heap, LlreveTest,
     testing::Combine(testing::Values("heap"),
-                     testing::Values("clearstr", "cocome2", "fib", "heap_call",
-                                     "memcpy_a", "memcpy_b", "propagate"),
+                     testing::Values("clearstr", "fib", "heap_call", "memcpy_a",
+                                     "memcpy_b", "propagate"),
                      testing::Values(ExpectedResult::EQUIVALENT),
                      testing::Values(Solver::Z3, Solver::ELDARICA)));
 
