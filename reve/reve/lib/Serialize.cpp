@@ -106,9 +106,9 @@ struct AssignmentRenameVisitor : smt::TopDownVisitor {
 
 // Rename assignments to unique names. This allows moving things around as
 // done by mergeImplications.
-static void renameAssignments(smt::SMTExpr &expr) {
+static shared_ptr<smt::SMTExpr> renameAssignments(smt::SMTExpr &expr) {
     AssignmentRenameVisitor visitor;
-    expr.accept(visitor);
+    return expr.accept(visitor);
 };
 
 struct RemoveForallVisitor : smt::TopDownVisitor {
@@ -198,25 +198,15 @@ void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
                 << "\n";
         vector<SharedSMTRef> letCompressedExprs;
         for (const auto &smt : smtExprs) {
-            const auto splitSMTs = smt->splitConjunctions();
-            for (const auto &expr : splitSMTs) {
-                letCompressedExprs.push_back(compressLets(*expr));
-                // renaming to unique variable names simplifies the following
-                // steps
+            auto splitSMTs = smt->splitConjunctions();
+            for (auto &expr : splitSMTs) {
+                expr = renameAssignments(*compressLets(*expr));
+                if (opts.InlineLets) {
+                    expr = expr->inlineLets({});
+                }
+                expr = removeForalls(*expr, introducedVariables);
+                preparedSMTExprs.push_back(expr->mergeImplications({}));
             }
-        }
-        // Variable renaming can interfer with let compression since variables
-        // are shared between different expressions. By compressing using the
-        // original names and only then renaming, we avoid this problem.
-        // Eventually, it might make sense to remove this sharing since it makes
-        // transformations easier.
-        for (auto &expr : letCompressedExprs) {
-            renameAssignments(*expr);
-            if (opts.InlineLets) {
-                expr = expr->inlineLets({});
-            }
-            expr = removeForalls(*expr, introducedVariables);
-            preparedSMTExprs.push_back(expr->mergeImplications({}));
         }
         const auto renamedVariables =
             simplifyVariableNames(introducedVariables, opts.InlineLets);
@@ -231,17 +221,12 @@ void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
             outFile << "\n";
         }
     } else {
-        vector<SharedSMTRef> letCompressedExprs;
-        // See the comment above on why we first compress all expressions before
-        // renaming.
-        for (const auto &smt : smtExprs) {
-            letCompressedExprs.push_back(opts.Pretty ? compressLets(*smt)
-                                                     : smt);
-        }
-        for (auto &expr : letCompressedExprs) {
+        for (auto &expr : smtExprs) {
+            if (opts.Pretty) {
+                expr = compressLets(*expr);
+            }
             if (opts.InlineLets) {
-                renameAssignments(*expr);
-                expr = expr->inlineLets({});
+                expr = renameAssignments(*expr)->inlineLets({});
             }
             if (opts.MergeImplications) {
                 expr = expr->mergeImplications({});
