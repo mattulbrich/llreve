@@ -81,8 +81,6 @@ class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
     // TODO implement using visitor
     virtual SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions);
-    // TODO implement using visitor
-    virtual SharedSMTRef instantiateArrays();
     virtual std::unique_ptr<const HeapInfo> heapInfo() const;
     virtual SharedSMTRef
     inlineLets(std::map<std::string, SharedSMTRef> assignments);
@@ -118,7 +116,6 @@ class Assert : public SMTExpr {
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) override;
     std::vector<SharedSMTRef> splitConjunctions() override;
-    SharedSMTRef instantiateArrays() override;
     SharedSMTRef
     inlineLets(std::map<std::string, SharedSMTRef> assignments) override;
     void toZ3(z3::context &cxt, z3::solver &solver,
@@ -186,7 +183,6 @@ class Forall : public SMTExpr {
         : vars(std::move(vars)), expr(std::move(expr)) {}
     std::shared_ptr<SMTExpr> accept(SMTVisitor &visitor) const override;
     sexpr::SExprRef toSExpr() const override;
-    SharedSMTRef instantiateArrays() override;
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) override;
     std::vector<SharedSMTRef> splitConjunctions() override;
@@ -223,7 +219,6 @@ class Let : public SMTExpr {
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) override;
     std::vector<SharedSMTRef> splitConjunctions() override;
-    SharedSMTRef instantiateArrays() override;
     SharedSMTRef
     inlineLets(std::map<std::string, SharedSMTRef> assignments) override;
     z3::expr
@@ -296,7 +291,6 @@ class Op : public SMTExpr {
     SharedSMTRef
     mergeImplications(std::vector<SharedSMTRef> conditions) override;
     std::vector<SharedSMTRef> splitConjunctions() override;
-    SharedSMTRef instantiateArrays() override;
     SharedSMTRef
     inlineLets(std::map<std::string, SharedSMTRef> assignments) override;
     z3::expr
@@ -411,7 +405,6 @@ class FunDecl : public SMTExpr {
           outType(std::move(outType)) {}
     std::shared_ptr<SMTExpr> accept(SMTVisitor &visitor) const override;
     sexpr::SExprRef toSExpr() const override;
-    SharedSMTRef instantiateArrays() override;
 };
 
 class FunDef : public SMTExpr {
@@ -427,7 +420,6 @@ class FunDef : public SMTExpr {
           outType(std::move(outType)), body(std::move(body)) {}
     std::shared_ptr<SMTExpr> accept(SMTVisitor &visitor) const override;
     sexpr::SExprRef toSExpr() const override;
-    SharedSMTRef instantiateArrays() override;
     void toZ3(z3::context &cxt, z3::solver &solver,
               llvm::StringMap<z3::expr> &nameMap,
               llvm::StringMap<Z3DefineFun> &defineFunMap) const override;

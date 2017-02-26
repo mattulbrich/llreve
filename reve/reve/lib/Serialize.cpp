@@ -19,6 +19,8 @@ using smt::SharedSMTRef;
 using smt::SortedVar;
 using smt::VarDecl;
 using std::vector;
+using smt::Forall;
+using smt::Op;
 using std::set;
 using std::shared_ptr;
 
@@ -96,7 +98,7 @@ struct AssignmentRenameVisitor : smt::SMTVisitor {
             assignment.first += "_" + std::to_string(newIndex);
         }
     }
-    void dispatch(smt::Forall &forall) override {
+    void dispatch(Forall &forall) override {
         for (auto &var : forall.vars) {
             int newIndex = ++variableMap[var.name];
             var.name += "_" + std::to_string(newIndex);
@@ -115,7 +117,7 @@ struct RemoveForallVisitor : smt::SMTVisitor {
     std::set<SortedVar> &introducedVariables;
     RemoveForallVisitor(std::set<SortedVar> &introducedVariables)
         : introducedVariables(introducedVariables) {}
-    shared_ptr<smt::SMTExpr> reassemble(smt::Forall &forall) override {
+    shared_ptr<smt::SMTExpr> reassemble(Forall &forall) override {
         for (const auto &var : forall.vars) {
             introducedVariables.insert(var);
         }
@@ -133,11 +135,11 @@ struct CompressLetVisitor : smt::SMTVisitor {
     std::vector<smt::Assignment> defs;
     std::map<smt::SMTExpr *, std::vector<smt::Assignment>> storedDefs;
     CompressLetVisitor() : smt::SMTVisitor(true) {}
-    void dispatch(smt::Forall &forall) override {
+    void dispatch(Forall &forall) override {
         storedDefs.insert({&forall, defs});
         defs.clear();
     }
-    shared_ptr<smt::SMTExpr> reassemble(smt::Forall &forall) override {
+    shared_ptr<smt::SMTExpr> reassemble(Forall &forall) override {
         defs.clear();
         return nestLets(forall.shared_from_this(), storedDefs.at(&forall));
     }
@@ -147,11 +149,11 @@ struct CompressLetVisitor : smt::SMTVisitor {
     shared_ptr<smt::SMTExpr> reassemble(smt::Let &let) override {
         return let.expr;
     }
-    void dispatch(smt::Op &op) override {
+    void dispatch(Op &op) override {
         storedDefs.insert({&op, defs});
         defs.clear();
     }
-    shared_ptr<smt::SMTExpr> reassemble(smt::Op &op) override {
+    shared_ptr<smt::SMTExpr> reassemble(Op &op) override {
         auto ret = nestLets(op.shared_from_this(), storedDefs.at(&op));
         defs.clear();
         return ret;
@@ -170,6 +172,59 @@ struct CompressLetVisitor : smt::SMTVisitor {
 
 static shared_ptr<smt::SMTExpr> compressLets(smt::SMTExpr &expr) {
     CompressLetVisitor visitor;
+    return expr.accept(visitor);
+}
+
+struct InstantiateArraysVisitor : smt::SMTVisitor {
+    InstantiateArraysVisitor() : smt::SMTVisitor(true) {}
+    shared_ptr<smt::SMTExpr> reassemble(Op &op) {
+        if (op.opName.compare(0, 4, "INV_") == 0 || op.opName == "INIT") {
+            std::vector<SortedVar> indices;
+            std::vector<SharedSMTRef> newArgs;
+            for (const auto &arg : op.args) {
+                if (auto array = arg->heapInfo()) {
+                    if (op.instantiate) {
+                        std::string index = "i" + array->index + array->suffix;
+                        newArgs.push_back(smt::stringExpr(index));
+                        newArgs.push_back(
+                            makeOp("select", arg, smt::stringExpr(index)));
+                        indices.push_back({index, smt::pointerType()});
+                    } else {
+                        newArgs.push_back(arg);
+                    }
+                } else {
+                    newArgs.push_back(arg);
+                }
+            }
+            return std::make_shared<Forall>(
+                indices, std::make_shared<Op>(op.opName, newArgs));
+        }
+        if (op.opName == "=" && op.args.size() == 2 &&
+            op.args.at(0)->heapInfo()) {
+            std::vector<SortedVar> indices = {{"i", smt::pointerType()}};
+            return std::make_shared<Forall>(
+                indices, makeOp("=", makeOp("select", op.args.at(0), "i"),
+                                makeOp("select", op.args.at(1), "i")));
+        }
+        return op.shared_from_this();
+    }
+    shared_ptr<smt::SMTExpr> reassemble(smt::FunDecl &funDecl) {
+        std::vector<smt::Type> newInTypes;
+        for (const auto &type : funDecl.inTypes) {
+            if (isArray(type)) {
+                newInTypes.push_back(smt::int64Type());
+                newInTypes.push_back(smt::IntType(8));
+            } else {
+                newInTypes.push_back(type);
+            }
+        }
+        funDecl.inTypes = std::move(newInTypes);
+        return funDecl.shared_from_this();
+    }
+};
+
+static shared_ptr<smt::SMTExpr> instantiateArrays(smt::SMTExpr &expr) {
+    InstantiateArraysVisitor visitor;
     return expr.accept(visitor);
 }
 
@@ -232,7 +287,7 @@ void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
                 expr = expr->mergeImplications({});
             }
             if (!opts.DontInstantiate) {
-                expr = expr->instantiateArrays();
+                expr = instantiateArrays(*expr);
             }
             expr->toSExpr()->serialize(outFile, 0, opts.Pretty);
             outFile << "\n";
