@@ -55,7 +55,7 @@ simplifyVariableNames(const std::set<SortedVar> &variables, bool inlineLets) {
     return variableNameMap;
 }
 
-struct VariableRenamer : smt::TopDownVisitor {
+struct VariableRenamer : smt::SMTVisitor {
     const llvm::StringMap<std::string> &variableNameMap;
     VariableRenamer(const llvm::StringMap<std::string> &variableNameMap)
         : variableNameMap(variableNameMap) {}
@@ -73,7 +73,7 @@ static void renameVariables(smt::SMTExpr &expr,
     expr.accept(renamer);
 }
 
-struct AssignmentRenameVisitor : smt::TopDownVisitor {
+struct AssignmentRenameVisitor : smt::SMTVisitor {
     llvm::StringMap<unsigned> variableMap;
     void dispatch(smt::TypedVariable &var) override {
         auto foundIt = variableMap.find(var.name);
@@ -111,7 +111,7 @@ static shared_ptr<smt::SMTExpr> renameAssignments(smt::SMTExpr &expr) {
     return expr.accept(visitor);
 };
 
-struct RemoveForallVisitor : smt::TopDownVisitor {
+struct RemoveForallVisitor : smt::SMTVisitor {
     std::set<SortedVar> &introducedVariables;
     RemoveForallVisitor(std::set<SortedVar> &introducedVariables)
         : introducedVariables(introducedVariables) {}
@@ -129,10 +129,10 @@ removeForalls(smt::SMTExpr &expr, std::set<SortedVar> &introducedVariables) {
     return expr.accept(visitor);
 }
 
-struct CompressLetVisitor : smt::TopDownVisitor {
+struct CompressLetVisitor : smt::SMTVisitor {
     std::vector<smt::Assignment> defs;
     std::map<smt::SMTExpr *, std::vector<smt::Assignment>> storedDefs;
-    CompressLetVisitor() : smt::TopDownVisitor(true) {}
+    CompressLetVisitor() : smt::SMTVisitor(true) {}
     void dispatch(smt::Forall &forall) override {
         storedDefs.insert({&forall, defs});
         defs.clear();

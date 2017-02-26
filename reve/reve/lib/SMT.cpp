@@ -342,7 +342,7 @@ SExprRef TypeCast::toSExpr() const {
     }
 }
 
-struct CollectUsesVisitor : TopDownVisitor {
+struct CollectUsesVisitor : SMTVisitor {
     llvm::StringSet<> uses;
     void dispatch(ConstantString &str) override { uses.insert(str.value); }
     void dispatch(TypedVariable &var) override { uses.insert(var.name); }
@@ -938,39 +938,39 @@ SortedVar sortedVarFromTypedVariable(const TypedVariable &var) {
     return {var.name, var.type};
 }
 
-shared_ptr<SMTExpr> SetLogic::accept(TopDownVisitor &visitor) const {
+shared_ptr<SMTExpr> SetLogic::accept(SMTVisitor &visitor) const {
     shared_ptr<SetLogic> result{new SetLogic(*this)};
     visitor.dispatch(*result);
     return visitor.reassemble(*result);
 }
-shared_ptr<SMTExpr> Assert::accept(TopDownVisitor &visitor) const {
+shared_ptr<SMTExpr> Assert::accept(SMTVisitor &visitor) const {
     shared_ptr<Assert> result{new Assert(*this)};
     visitor.dispatch(*result);
     result->expr = result->expr->accept(visitor);
     return visitor.reassemble(*result);
 }
-shared_ptr<SMTExpr> TypedVariable::accept(TopDownVisitor &visitor) const {
+shared_ptr<SMTExpr> TypedVariable::accept(SMTVisitor &visitor) const {
     shared_ptr<TypedVariable> result{new TypedVariable(*this)};
     visitor.dispatch(*result);
     return visitor.reassemble(*result);
 }
-shared_ptr<SMTExpr> Forall::accept(TopDownVisitor &visitor) const {
+shared_ptr<SMTExpr> Forall::accept(SMTVisitor &visitor) const {
     shared_ptr<Forall> result{new Forall(*this)};
     visitor.dispatch(*result);
     result->expr = result->expr->accept(visitor);
     return visitor.reassemble(*result);
 }
-shared_ptr<SMTExpr> CheckSat::accept(TopDownVisitor &visitor) const {
+shared_ptr<SMTExpr> CheckSat::accept(SMTVisitor &visitor) const {
     shared_ptr<CheckSat> result{new CheckSat(*this)};
     visitor.dispatch(*result);
     return visitor.reassemble(*result);
 }
-shared_ptr<SMTExpr> GetModel::accept(TopDownVisitor &visitor) const {
+shared_ptr<SMTExpr> GetModel::accept(SMTVisitor &visitor) const {
     shared_ptr<GetModel> result{new GetModel(*this)};
     visitor.dispatch(*result);
     return visitor.reassemble(*result);
 }
-shared_ptr<SMTExpr> Let::accept(TopDownVisitor &visitor) const {
+shared_ptr<SMTExpr> Let::accept(SMTVisitor &visitor) const {
     shared_ptr<Let> result{new Let(*this)};
     // It is slightly unclear if bindings should be traversed before or after
     // the let itself. However let statements cannot be recursive and it thus
@@ -984,27 +984,27 @@ shared_ptr<SMTExpr> Let::accept(TopDownVisitor &visitor) const {
     result->expr = result->expr->accept(visitor);
     return visitor.reassemble(*result);
 }
-shared_ptr<SMTExpr> ConstantFP::accept(TopDownVisitor &visitor) const {
+shared_ptr<SMTExpr> ConstantFP::accept(SMTVisitor &visitor) const {
     shared_ptr<ConstantFP> result{new ConstantFP(*this)};
     visitor.dispatch(*result);
     return visitor.reassemble(*result);
 }
-shared_ptr<SMTExpr> ConstantInt::accept(TopDownVisitor &visitor) const {
+shared_ptr<SMTExpr> ConstantInt::accept(SMTVisitor &visitor) const {
     shared_ptr<ConstantInt> result{new ConstantInt(*this)};
     visitor.dispatch(*result);
     return visitor.reassemble(*result);
 }
-shared_ptr<SMTExpr> ConstantBool::accept(TopDownVisitor &visitor) const {
+shared_ptr<SMTExpr> ConstantBool::accept(SMTVisitor &visitor) const {
     shared_ptr<ConstantBool> result{new ConstantBool(*this)};
     visitor.dispatch(*result);
     return visitor.reassemble(*result);
 }
-shared_ptr<SMTExpr> ConstantString::accept(TopDownVisitor &visitor) const {
+shared_ptr<SMTExpr> ConstantString::accept(SMTVisitor &visitor) const {
     shared_ptr<ConstantString> result{new ConstantString(*this)};
     visitor.dispatch(*result);
     return visitor.reassemble(*result);
 }
-shared_ptr<SMTExpr> Op::accept(TopDownVisitor &visitor) const {
+shared_ptr<SMTExpr> Op::accept(SMTVisitor &visitor) const {
     shared_ptr<Op> result{new Op(*this)};
     visitor.dispatch(*result);
     for (auto &arg : result->args) {
@@ -1012,46 +1012,46 @@ shared_ptr<SMTExpr> Op::accept(TopDownVisitor &visitor) const {
     }
     return visitor.reassemble(*result);
 }
-shared_ptr<SMTExpr> FPCmp::accept(TopDownVisitor &visitor) const {
+shared_ptr<SMTExpr> FPCmp::accept(SMTVisitor &visitor) const {
     shared_ptr<FPCmp> result{new FPCmp(*this)};
     visitor.dispatch(*result);
     return visitor.reassemble(*result);
 }
-shared_ptr<SMTExpr> BinaryFPOperator::accept(TopDownVisitor &visitor) const {
+shared_ptr<SMTExpr> BinaryFPOperator::accept(SMTVisitor &visitor) const {
     shared_ptr<BinaryFPOperator> result{new BinaryFPOperator(*this)};
     visitor.dispatch(*result);
     result->op0 = result->op0->accept(visitor);
     result->op1 = result->op1->accept(visitor);
     return visitor.reassemble(*result);
 }
-shared_ptr<SMTExpr> TypeCast::accept(TopDownVisitor &visitor) const {
+shared_ptr<SMTExpr> TypeCast::accept(SMTVisitor &visitor) const {
     shared_ptr<TypeCast> result{new TypeCast(*this)};
     result->operand = result->operand->accept(visitor);
     visitor.dispatch(*result);
     return visitor.reassemble(*result);
 }
-shared_ptr<SMTExpr> Query::accept(TopDownVisitor &visitor) const {
+shared_ptr<SMTExpr> Query::accept(SMTVisitor &visitor) const {
     shared_ptr<Query> result{new Query(*this)};
     visitor.dispatch(*result);
     return visitor.reassemble(*result);
 }
-shared_ptr<SMTExpr> FunDecl::accept(TopDownVisitor &visitor) const {
+shared_ptr<SMTExpr> FunDecl::accept(SMTVisitor &visitor) const {
     shared_ptr<FunDecl> result{new FunDecl(*this)};
     visitor.dispatch(*result);
     return visitor.reassemble(*result);
 }
-shared_ptr<SMTExpr> FunDef::accept(TopDownVisitor &visitor) const {
+shared_ptr<SMTExpr> FunDef::accept(SMTVisitor &visitor) const {
     shared_ptr<FunDef> result{new FunDef(*this)};
     visitor.dispatch(*result);
     result->body = result->body->accept(visitor);
     return visitor.reassemble(*result);
 }
-shared_ptr<SMTExpr> Comment::accept(TopDownVisitor &visitor) const {
+shared_ptr<SMTExpr> Comment::accept(SMTVisitor &visitor) const {
     shared_ptr<Comment> result{new Comment(*this)};
     visitor.dispatch(*result);
     return visitor.reassemble(*result);
 }
-shared_ptr<SMTExpr> VarDecl::accept(TopDownVisitor &visitor) const {
+shared_ptr<SMTExpr> VarDecl::accept(SMTVisitor &visitor) const {
     shared_ptr<VarDecl> result{new VarDecl(*this)};
     visitor.dispatch(*result);
     return visitor.reassemble(*result);
