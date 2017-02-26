@@ -26,26 +26,27 @@ using namespace llreve::opts;
 /* -------------------------------------------------------------------------- */
 // Functions related to generating invariants
 
-static void addArgumentsForSelection(
-    ProgramSelection SMTFor, std::function<std::string(Program)> getVarName,
-    std::unique_ptr<Type> varType, std::vector<TypedVariable> &argVec) {
+static void
+addArgumentsForSelection(ProgramSelection SMTFor,
+                         std::function<std::string(Program)> getVarName,
+                         Type varType, std::vector<TypedVariable> &argVec) {
     switch (SMTFor) {
     case ProgramSelection::First:
-        argVec.emplace_back(getVarName(Program::First), varType->copy());
+        argVec.emplace_back(getVarName(Program::First), varType);
         break;
     case ProgramSelection::Second:
-        argVec.emplace_back(getVarName(Program::Second), varType->copy());
+        argVec.emplace_back(getVarName(Program::Second), varType);
         break;
     case ProgramSelection::Both:
-        argVec.emplace_back(getVarName(Program::First), varType->copy());
-        argVec.emplace_back(getVarName(Program::Second), varType->copy());
+        argVec.emplace_back(getVarName(Program::First), varType);
+        argVec.emplace_back(getVarName(Program::Second), varType);
         break;
     }
 }
 
 static std::unique_ptr<TypedVariable>
 cloneTypedVariable(const TypedVariable &var) {
-    return make_unique<TypedVariable>(var.name, var.type->copy());
+    return make_unique<TypedVariable>(var.name, var.type);
 }
 
 SMTRef functionalCouplingPredicate(Mark currentCallMark, Mark tailCallMark,
@@ -80,16 +81,14 @@ SMTRef functionalCouplingPredicate(Mark currentCallMark, Mark tailCallMark,
 
     // Arguments passed into the current invariant
     vector<SharedSMTRef> currentCallArgumentsPost;
-    std::transform(currentCallArguments.begin(), currentCallArguments.end(),
-                   std::back_inserter(currentCallArgumentsPost),
-                   [](const SortedVar &var) {
-                       return make_unique<TypedVariable>(var.name + "_old",
-                                                         var.type->copy());
-                   });
+    std::transform(
+        currentCallArguments.begin(), currentCallArguments.end(),
+        std::back_inserter(currentCallArgumentsPost), [](const SortedVar &var) {
+            return make_unique<TypedVariable>(var.name + "_old", var.type);
+        });
     std::transform(resultValues.begin(), resultValues.end(),
                    std::back_inserter(currentCallArgumentsPost),
                    cloneTypedVariable);
-
     SMTRef currentCallInvariant = std::make_unique<Op>(
         invariantName(currentCallMark, SMTFor, functionName),
         currentCallArgumentsPost);
@@ -101,11 +100,10 @@ SMTRef functionalCouplingPredicate(Mark currentCallMark, Mark tailCallMark,
     // In this case, a tail call is necessary to get the result values which can
     // then be used in the invariant of the current call.
     vector<SortedVar> forallArguments;
-    std::transform(resultValues.begin(), resultValues.end(),
-                   std::back_inserter(forallArguments),
-                   [](const TypedVariable &var) {
-                       return SortedVar(var.name, var.type->copy());
-                   });
+    std::transform(
+        resultValues.begin(), resultValues.end(),
+        std::back_inserter(forallArguments),
+        [](const TypedVariable &var) { return SortedVar(var.name, var.type); });
     if (tailCallMark == UNREACHABLE_MARK) {
         return std::make_unique<Forall>(forallArguments,
                                         std::move(currentCallInvariant));
@@ -145,8 +143,7 @@ SMTRef iterativeCouplingPredicate(Mark EndIndex, vector<SortedVar> FreeVars,
             // No stack in output
             if (arg.name.compare(0, 5, "STACK") &&
                 arg.name.compare(0, 2, "SP")) {
-                args.push_back(std::make_unique<TypedVariable>(
-                    arg.name, arg.type->copy()));
+                args.push_back(typedVariableFromSortedVar(arg));
             }
         }
         return std::make_unique<Op>("OUT_INV", std::move(args));
@@ -169,14 +166,11 @@ MonoPair<SMTRef> invariantDeclaration(Mark BlockIndex,
                                       vector<SortedVar> FreeVars,
                                       ProgramSelection For, std::string FunName,
                                       const llvm::Type *resultType) {
-    vector<unique_ptr<Type>> args;
+    vector<Type> args;
     for (auto arg : FreeVars) {
-        args.push_back(std::move(arg.type));
+        args.push_back(arg.type);
     }
-    vector<unique_ptr<Type>> preArgs;
-    for (const auto &arg : args) {
-        preArgs.push_back(arg->copy());
-    }
+    vector<Type> preArgs = args;
     // add results
     args.push_back(llvmType(resultType));
     if (For == ProgramSelection::Both) {
@@ -250,11 +244,10 @@ SharedSMTRef mainInvariantDeclaration(Mark BlockIndex,
                                       vector<SortedVar> FreeVars,
                                       ProgramSelection For,
                                       std::string FunName) {
-    vector<unique_ptr<Type>> args;
+    vector<Type> args;
     for (auto &arg : FreeVars) {
-        args.push_back(std::move(arg.type));
+        args.push_back(arg.type);
     }
-
     return std::make_shared<class FunDecl>(
         invariantName(BlockIndex, For, FunName, InvariantAttr::MAIN),
         std::move(args), boolType());

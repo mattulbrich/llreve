@@ -221,8 +221,7 @@ void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
         const auto renamedVariables =
             simplifyVariableNames(introducedVariables, opts.InlineLets);
         for (const auto &var : introducedVariables) {
-            outFile << *VarDecl({renamedVariables.lookup(var.name),
-                                 var.type->copy()})
+            outFile << *VarDecl({renamedVariables.lookup(var.name), var.type})
                             .toSExpr();
             outFile << "\n";
         }

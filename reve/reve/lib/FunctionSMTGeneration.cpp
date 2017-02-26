@@ -328,10 +328,9 @@ static void appendStutterArguments(
     if (loopingProgram == Program::First) {
         std::copy(loopingArguments.begin(), loopingArguments.end(), outputIt);
     }
-    std::transform(waitingArguments.begin(), waitingArguments.end(), outputIt,
-                   [](const auto &arg) {
-                       return SortedVar(arg.name + "_old", arg.type->copy());
-                   });
+    std::transform(
+        waitingArguments.begin(), waitingArguments.end(), outputIt,
+        [](const auto &arg) { return SortedVar(arg.name + "_old", arg.type); });
     if (loopingProgram == Program::Second) {
         std::copy(loopingArguments.begin(), loopingArguments.end(), outputIt);
     }
@@ -416,8 +415,7 @@ vector<AssignmentCallBlock> assignmentsOnPath(const Path &path, Program prog,
     oldDefs.reserve(freeVars.size());
     for (const auto &var : freeVars) {
         oldDefs.emplace_back(make_unique<Assignment>(
-            var.name,
-            make_unique<TypedVariable>(var.name + "_old", var.type->copy())));
+            var.name, make_unique<TypedVariable>(var.name + "_old", var.type)));
     }
     vector<AssignmentCallBlock> allDefs;
     allDefs.reserve(2 + path.Edges.size());
@@ -624,9 +622,9 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
     vector<SharedSMTRef> preVars;
     for (const auto &arg : freeVars) {
         std::smatch matchResult;
-        vars.push_back(SortedVar(arg.name + "_old", arg.type->copy()));
+        vars.push_back(SortedVar(arg.name + "_old", arg.type));
         preVars.push_back(
-            make_unique<TypedVariable>(arg.name + "_old", arg.type->copy()));
+            make_unique<TypedVariable>(arg.name + "_old", arg.type));
     }
 
     if (vars.empty()) {
@@ -639,8 +637,8 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
 
         vector<SharedSMTRef> args;
         for (const auto &arg : freeVars) {
-            args.push_back(make_unique<TypedVariable>(arg.name + "_old",
-                                                      arg.type->copy()));
+            args.push_back(
+                make_unique<TypedVariable>(arg.name + "_old", arg.type));
         }
 
         clause = makeOp("=>", make_unique<Op>(opname, std::move(args)), clause);
@@ -721,7 +719,7 @@ SharedSMTRef equalInputsEqualOutputs(const vector<SortedVar> &funArgs1,
     std::sort(sortedFunArgs2.begin(), sortedFunArgs2.end());
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
         for (const auto &arg : funArgs1) {
-            if (!isArray(*arg.type)) {
+            if (!isArray(arg.type)) {
                 outArgs.push_back(typedVariableFromSortedVar(arg));
             }
         }
@@ -731,7 +729,7 @@ SharedSMTRef equalInputsEqualOutputs(const vector<SortedVar> &funArgs1,
     }
     if (SMTGenerationOpts::getInstance().PassInputThrough) {
         for (const auto &arg : funArgs2) {
-            if (!isArray(*arg.type)) {
+            if (!isArray(arg.type)) {
                 outArgs.push_back(typedVariableFromSortedVar(arg));
             }
         }

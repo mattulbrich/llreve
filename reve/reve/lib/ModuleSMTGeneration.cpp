@@ -38,9 +38,8 @@ vector<SharedSMTRef> generateSMT(MonoPair<const llvm::Module &> modules,
     SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
 
     if (smtOpts.OutputFormat == SMTFormat::Z3) {
-        vector<std::unique_ptr<Type>> args;
         declarations.push_back(make_shared<smt::FunDecl>(
-            "END_QUERY", std::move(args), boolType()));
+            "END_QUERY", std::vector<Type>(), boolType()));
     }
     std::vector<SharedSMTRef> assertions;
     std::vector<SharedSMTRef> smtExprs;
@@ -377,9 +376,9 @@ outInvariant(MonoPair<vector<smt::SortedVar>> functionArgs, SharedSMTRef body,
 }
 
 SMTRef initPredicate(const FunDef &inInv) {
-    vector<std::unique_ptr<Type>> funArgs;
+    vector<Type> funArgs;
     for (const auto &var : inInv.args) {
-        funArgs.push_back(var.type->copy());
+        funArgs.push_back(var.type);
     }
 
     return make_unique<smt::FunDecl>("INIT", std::move(funArgs), boolType());

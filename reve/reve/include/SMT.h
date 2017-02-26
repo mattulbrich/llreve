@@ -132,8 +132,8 @@ class Assert : public SMTExpr {
 class TypedVariable : public SMTExpr {
   public:
     std::string name;
-    std::unique_ptr<Type> type;
-    TypedVariable(std::string name, std::unique_ptr<Type> type)
+    Type type;
+    TypedVariable(std::string name, Type type)
         : name(std::move(name)), type(std::move(type)) {}
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     std::unique_ptr<const HeapInfo> heapInfo() const override;
@@ -148,17 +148,10 @@ class TypedVariable : public SMTExpr {
 class SortedVar {
   public:
     std::string name;
-    std::unique_ptr<Type> type;
-    SortedVar(std::string name, std::unique_ptr<Type> type)
+    Type type;
+    SortedVar(std::string name, Type type)
         : name(std::move(name)), type(std::move(type)) {}
     sexpr::SExprRef toSExpr() const;
-    SortedVar &operator=(const SortedVar &other) {
-        name = other.name;
-        type = other.type->copy();
-        return *this;
-    }
-    SortedVar(const SortedVar &other)
-        : name(other.name), type(other.type->copy()) {}
 };
 
 inline bool operator<(const SortedVar &lhs, const SortedVar &rhs) {
@@ -335,11 +328,10 @@ class FPCmp : public SMTExpr {
     Predicate op;
     // This is the type of the two arguments that an fcmp instruction retrieves
     // (they have to be identical)
-    std::unique_ptr<Type> type;
+    Type type;
     SharedSMTRef op0;
     SharedSMTRef op1;
-    FPCmp(Predicate op, std::unique_ptr<Type> type, SharedSMTRef op0,
-          SharedSMTRef op1)
+    FPCmp(Predicate op, Type type, SharedSMTRef op0, SharedSMTRef op1)
         : op(op), type(std::move(type)), op0(op0), op1(op1) {}
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
@@ -351,11 +343,11 @@ class BinaryFPOperator : public SMTExpr {
   public:
     enum class Opcode { FAdd, FSub, FMul, FDiv, FRem };
     Opcode op;
-    std::unique_ptr<Type> type;
+    Type type;
     std::shared_ptr<SMTExpr> op0;
     std::shared_ptr<SMTExpr> op1;
-    BinaryFPOperator(Opcode op, std::unique_ptr<Type> type,
-                     std::shared_ptr<SMTExpr> op0, std::shared_ptr<SMTExpr> op1)
+    BinaryFPOperator(Opcode op, Type type, std::shared_ptr<SMTExpr> op0,
+                     std::shared_ptr<SMTExpr> op1)
         : op(std::move(op)), type(std::move(type)), op0(std::move(op0)),
           op1(std::move(op1)) {}
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
@@ -367,12 +359,12 @@ class BinaryFPOperator : public SMTExpr {
 class TypeCast : public SMTExpr {
   public:
     llvm::Instruction::CastOps op;
-    std::unique_ptr<Type> sourceType;
-    std::unique_ptr<Type> destType;
+    Type sourceType;
+    Type destType;
     std::shared_ptr<SMTExpr> operand;
 
-    TypeCast(llvm::Instruction::CastOps op, std::unique_ptr<Type> sourceType,
-             std::unique_ptr<Type> destType, std::shared_ptr<SMTExpr> operand)
+    TypeCast(llvm::Instruction::CastOps op, Type sourceType, Type destType,
+             std::shared_ptr<SMTExpr> operand)
         : op(std::move(op)), sourceType(std::move(sourceType)),
           destType(std::move(destType)), operand(std::move(operand)) {}
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
@@ -411,11 +403,10 @@ auto makeOp(std::string opName, std::vector<std::string> args)
 class FunDecl : public SMTExpr {
   public:
     std::string funName;
-    std::vector<std::unique_ptr<Type>> inTypes;
-    std::unique_ptr<Type> outType;
+    std::vector<Type> inTypes;
+    Type outType;
 
-    FunDecl(std::string funName, std::vector<std::unique_ptr<Type>> inTypes,
-            std::unique_ptr<Type> outType)
+    FunDecl(std::string funName, std::vector<Type> inTypes, Type outType)
         : funName(std::move(funName)), inTypes(std::move(inTypes)),
           outType(std::move(outType)) {}
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
@@ -427,11 +418,11 @@ class FunDef : public SMTExpr {
   public:
     std::string funName;
     std::vector<SortedVar> args;
-    std::unique_ptr<Type> outType;
+    Type outType;
     std::shared_ptr<SMTExpr> body;
 
-    FunDef(std::string funName, std::vector<SortedVar> args,
-           std::unique_ptr<Type> outType, std::shared_ptr<SMTExpr> body)
+    FunDef(std::string funName, std::vector<SortedVar> args, Type outType,
+           std::shared_ptr<SMTExpr> body)
         : funName(std::move(funName)), args(std::move(args)),
           outType(std::move(outType)), body(std::move(body)) {}
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;

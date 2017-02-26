@@ -42,44 +42,30 @@ SExprRef FloatType::toSExpr() const {
 }
 SExprRef ArrayType::toSExpr() const {
     SExprVec args;
-    args.push_back(domain->toSExpr());
-    args.push_back(target->toSExpr());
+    args.push_back(domain.toSExpr());
+    args.push_back(target.toSExpr());
     return std::make_unique<Apply>("Array", std::move(args));
 }
+ArrayType memoryType() { return ArrayType(int64Type(), IntType(8)); }
 
-unique_ptr<Type> BoolType::copy() const { return make_unique<BoolType>(); }
-unique_ptr<Type> IntType::copy() const {
-    return make_unique<IntType>(this->bitWidth);
-}
-unique_ptr<Type> FloatType::copy() const {
-    return make_unique<FloatType>(this->exponentWidth, this->significandWidth);
-}
-unique_ptr<Type> ArrayType::copy() const {
-    return make_unique<ArrayType>(domain->copy(), target->copy());
-}
+IntType int64Type() { return IntType(64); }
 
-unique_ptr<ArrayType> memoryType() {
-    return make_unique<ArrayType>(int64Type(), make_unique<IntType>(8));
-}
+BoolType boolType() { return BoolType(); }
 
-unique_ptr<IntType> int64Type() { return make_unique<IntType>(64); }
-
-unique_ptr<BoolType> boolType() { return make_unique<BoolType>(); }
-
-unique_ptr<IntType> pointerType() { return make_unique<IntType>(64); }
+IntType pointerType() { return IntType(64); }
 
 static unsigned semanticsExponent(const llvm::fltSemantics &semantics) {
     return llvm::APFloat::semanticsSizeInBits(semantics) -
            llvm::APFloat::semanticsPrecision(semantics);
 }
 
-unique_ptr<Type> llvmType(const llvm::Type *type) {
+Type llvmType(const llvm::Type *type) {
     if (type->isPointerTy()) {
         return pointerType();
     } else if (type->isIntegerTy()) {
-        return make_unique<IntType>(type->getIntegerBitWidth());
+        return IntType(type->getIntegerBitWidth());
     } else if (type->isFloatingPointTy()) {
-        return make_unique<FloatType>(
+        return FloatType(
             semanticsExponent(type->getFltSemantics()),
             llvm::APFloat::semanticsPrecision(type->getFltSemantics()));
     } else if (type->isVoidTy()) {
@@ -91,7 +77,7 @@ unique_ptr<Type> llvmType(const llvm::Type *type) {
     }
 }
 
-unique_ptr<Type> inferTypeByName(string arg) {
+Type inferTypeByName(string arg) {
     if (std::regex_match(arg, HEAP_REGEX) ||
         oneOf(arg, heapResultName(Program::First),
               heapResultName(Program::Second))) {

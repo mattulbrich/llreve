@@ -42,7 +42,7 @@ vector<vector<string>> polynomialTermsOfDegree(vector<smt::SortedVar> variables,
 vector<SortedVar> removeHeapVariables(const vector<SortedVar> &freeVariables) {
     vector<SortedVar> result;
     for (const auto &var : freeVariables) {
-        if (!isArray(*var.type)) {
+        if (!isArray(var.type)) {
             result.push_back(var);
         }
     }

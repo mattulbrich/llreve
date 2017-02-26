@@ -139,7 +139,7 @@ SExprRef Forall::toSExpr() const {
 
 SExprRef SortedVar::toSExpr() const {
     SExprVec typeSExpr;
-    typeSExpr.push_back(type->toSExpr());
+    typeSExpr.push_back(type.toSExpr());
     return std::make_unique<Apply>(name, std::move(typeSExpr));
 }
 
@@ -178,13 +178,13 @@ SExprRef Op::toSExpr() const {
 SExprRef FunDecl::toSExpr() const {
     SExprVec inTypeSExprs;
     for (const auto &inType : inTypes) {
-        inTypeSExprs.push_back(inType->toSExpr());
+        inTypeSExprs.push_back(inType.toSExpr());
     }
     SExprVec args;
     args.push_back(stringExpr(funName)->toSExpr());
     args.push_back(std::make_unique<List>(std::move(inTypeSExprs)));
     if (SMTGenerationOpts::getInstance().OutputFormat == SMTFormat::SMTHorn) {
-        args.push_back(outType->toSExpr());
+        args.push_back(outType.toSExpr());
     }
     const string keyword =
         SMTGenerationOpts::getInstance().OutputFormat == SMTFormat::Z3
@@ -201,7 +201,7 @@ SExprRef FunDef::toSExpr() const {
     SExprVec args;
     args.push_back(stringExpr(funName)->toSExpr());
     args.push_back(std::make_unique<List>(std::move(argSExprs)));
-    args.push_back(outType->toSExpr());
+    args.push_back(outType.toSExpr());
     args.push_back(body->toSExpr());
     return std::make_unique<Apply>("define-fun", std::move(args));
 }
@@ -213,7 +213,7 @@ SExprRef Comment::toSExpr() const {
 SExprRef VarDecl::toSExpr() const {
     SExprVec args;
     args.push_back(stringExpr(var.name)->toSExpr());
-    args.push_back(var.type->toSExpr());
+    args.push_back(var.type.toSExpr());
     return std::make_unique<Apply>("declare-var", std::move(args));
 }
 
@@ -285,11 +285,10 @@ SExprRef BinaryFPOperator::toSExpr() const {
 SExprRef TypeCast::toSExpr() const {
     // Extending 1bit integers (i.e. booleans) to integers is an SMT type
     // conversion and we have to deal with it separately
-    if (destType->getTag() == TypeTag::Int &&
-        static_cast<IntType &>(*destType).bitWidth > 1 &&
-        sourceType->getTag() == TypeTag::Int &&
-        static_cast<IntType &>(*sourceType).bitWidth == 1) {
-        unsigned destBitWidth = static_cast<IntType &>(*destType).bitWidth;
+    if (destType.getTag() == TypeTag::Int && destType.unsafeBitWidth() > 1 &&
+        sourceType.getTag() == TypeTag::Int &&
+        sourceType.unsafeBitWidth() == 1) {
+        unsigned destBitWidth = destType.unsafeBitWidth();
         vector<SharedSMTRef> args = {
             operand,
             std::make_unique<ConstantInt>(llvm::APInt(destBitWidth, 1)),
@@ -301,25 +300,21 @@ SExprRef TypeCast::toSExpr() const {
         args.push_back(operand->toSExpr());
         switch (this->op) {
         case llvm::Instruction::Trunc: {
-            assert(destType->getTag() == TypeTag::Int);
-            IntType intDestType = static_cast<IntType &>(*destType);
-            unsigned bitWidth = intDestType.bitWidth;
+            unsigned bitWidth = destType.unsafeBitWidth();
             string opName =
                 "(_ extract " + std::to_string(bitWidth - 1) + " 0)";
             return std::make_unique<Apply>(opName, std::move(args));
         }
         case llvm::Instruction::ZExt: {
-            unsigned destBitWidth = static_cast<IntType &>(*destType).bitWidth;
-            unsigned sourceBitWidth =
-                static_cast<IntType &>(*sourceType).bitWidth;
+            unsigned destBitWidth = destType.unsafeBitWidth();
+            unsigned sourceBitWidth = sourceType.unsafeBitWidth();
             string opName = "(_ zero_extend " +
                             std::to_string(destBitWidth - sourceBitWidth) + ")";
             return std::make_unique<Apply>(opName, std::move(args));
         }
         case llvm::Instruction::SExt: {
-            unsigned destBitWidth = static_cast<IntType &>(*destType).bitWidth;
-            unsigned sourceBitWidth =
-                static_cast<IntType &>(*sourceType).bitWidth;
+            unsigned destBitWidth = destType.unsafeBitWidth();
+            unsigned sourceBitWidth = sourceType.unsafeBitWidth();
             string opName = "(_ sign_extend " +
                             std::to_string(destBitWidth - sourceBitWidth) + ")";
             return std::make_unique<Apply>(opName, std::move(args));
@@ -496,22 +491,21 @@ SharedSMTRef Op::instantiateArrays() {
 }
 
 SharedSMTRef FunDef::instantiateArrays() {
-    return make_shared<FunDef>(funName, args, outType->copy(),
+    return make_shared<FunDef>(funName, args, outType,
                                body->instantiateArrays());
 }
 
 SharedSMTRef FunDecl::instantiateArrays() {
-    std::vector<unique_ptr<Type>> newInTypes;
+    std::vector<Type> newInTypes;
     for (const auto &type : inTypes) {
-        if (isArray(*type)) {
+        if (isArray(type)) {
             newInTypes.push_back(int64Type());
-            newInTypes.push_back(make_unique<IntType>(8));
+            newInTypes.push_back(IntType(8));
         } else {
-            newInTypes.push_back(type->copy());
+            newInTypes.push_back(type);
         }
     }
-    return make_shared<FunDecl>(funName, std::move(newInTypes),
-                                outType->copy());
+    return make_shared<FunDecl>(funName, std::move(newInTypes), outType);
 }
 
 // Implementations of heapInfo
@@ -578,19 +572,18 @@ SharedSMTRef ConstantString::inlineLets(map<string, SharedSMTRef> assignments) {
 }
 
 SharedSMTRef TypeCast::inlineLets(map<string, SharedSMTRef> assignments) {
-    return std::make_unique<TypeCast>(op, sourceType->copy(), destType->copy(),
+    return std::make_unique<TypeCast>(op, sourceType, destType,
                                       operand->inlineLets(assignments));
 }
 
 SharedSMTRef
 BinaryFPOperator::inlineLets(map<string, SharedSMTRef> assignments) {
-    return make_unique<BinaryFPOperator>(op, type->copy(),
-                                         op0->inlineLets(assignments),
+    return make_unique<BinaryFPOperator>(op, type, op0->inlineLets(assignments),
                                          op1->inlineLets(assignments));
 }
 
 SharedSMTRef FPCmp::inlineLets(map<string, SharedSMTRef> assignments) {
-    return make_unique<FPCmp>(op, type->copy(), op0->inlineLets(assignments),
+    return make_unique<FPCmp>(op, type, op0->inlineLets(assignments),
                               op1->inlineLets(assignments));
 }
 
@@ -599,20 +592,20 @@ SharedSMTRef FPCmp::inlineLets(map<string, SharedSMTRef> assignments) {
 void VarDecl::toZ3(z3::context &cxt, z3::solver & /* unused */,
                    llvm::StringMap<z3::expr> &nameMap,
                    llvm::StringMap<Z3DefineFun> & /* unused */) const {
-    if (var.type->getTag() == TypeTag::Int) {
+    if (var.type.getTag() == TypeTag::Int) {
         z3::expr c = cxt.int_const(var.name.c_str());
         auto it = nameMap.insert({var.name, c});
         if (!it.second) {
             it.first->second = c;
         }
-    } else if (var.type->getTag() == TypeTag::Array) {
+    } else if (var.type.getTag() == TypeTag::Array) {
         z3::sort intArraySort = cxt.array_sort(cxt.int_sort(), cxt.int_sort());
         z3::expr c = cxt.constant(var.name.c_str(), intArraySort);
         auto it = nameMap.insert({var.name, c});
         if (!it.second) {
             it.first->second = c;
         }
-    } else if (var.type->getTag() == TypeTag::Bool) {
+    } else if (var.type.getTag() == TypeTag::Bool) {
         z3::expr c = cxt.bool_const(var.name.c_str());
         auto it = nameMap.insert({var.name, c});
         if (!it.second) {
@@ -853,14 +846,14 @@ void FunDef::toZ3(z3::context &cxt, z3::solver & /* unused */,
                   llvm::StringMap<Z3DefineFun> &defineFunMap) const {
     z3::expr_vector vars(cxt);
     for (const auto &arg : args) {
-        if (arg.type->getTag() == TypeTag::Int) {
+        if (arg.type.getTag() == TypeTag::Int) {
             z3::expr c = cxt.int_const(arg.name.c_str());
             vars.push_back(c);
             auto it = nameMap.insert({arg.name, c});
             if (!it.second) {
                 it.first->second = c;
             }
-        } else if (arg.type->getTag() == TypeTag::Array) {
+        } else if (arg.type.getTag() == TypeTag::Array) {
             z3::sort intArraySort =
                 cxt.array_sort(cxt.int_sort(), cxt.int_sort());
             z3::expr c = cxt.constant(arg.name.c_str(), intArraySort);
@@ -870,7 +863,7 @@ void FunDef::toZ3(z3::context &cxt, z3::solver & /* unused */,
                 it.first->second = c;
             }
         } else {
-            std::cerr << "Unknown argument type: " << *arg.type->toSExpr()
+            std::cerr << "Unknown argument type: " << *arg.type.toSExpr()
                       << "\n";
             exit(1);
         }
@@ -938,11 +931,11 @@ unique_ptr<SMTExpr> memoryVariable(string name) {
 }
 
 unique_ptr<TypedVariable> typedVariableFromSortedVar(const SortedVar &var) {
-    return make_unique<TypedVariable>(var.name, var.type->copy());
+    return make_unique<TypedVariable>(var.name, var.type);
 }
 
-SortedVar typedVariableFromSortedVar(const TypedVariable &var) {
-    return {var.name, var.type->copy()};
+SortedVar sortedVarFromTypedVariable(const TypedVariable &var) {
+    return {var.name, var.type};
 }
 
 shared_ptr<SMTExpr> SetLogic::accept(TopDownVisitor &visitor) {

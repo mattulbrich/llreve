@@ -58,8 +58,8 @@ Exprs : Expr { $$ = new std::vector<smt::SharedSMTRef>({ smt::SharedSMTRef($1) }
       | Exprs Expr { $1->push_back(smt::SharedSMTRef($2)); $$ = $1; }
 TypeList : SortedVar { $$ = new std::vector<smt::SortedVar>({ *$1 }); delete $1; }
          | TypeList SortedVar { $1->push_back(*$2); delete $2; $$ = $1; }
-SortedVar : LPAR IDENTIFIER Sort RPAR { $$ = new smt::SortedVar(*$2 + "_0", std::unique_ptr<smt::Type>($3)); delete $2; }
-Sort : INT { $$ = new smt::IntType(32); }
+SortedVar : LPAR IDENTIFIER Sort RPAR { $$ = new smt::SortedVar(*$2 + "_0", *$3); delete $2; delete $3; }
+Sort : INT { $$ = new smt::Type(smt::IntType(32)); }
 %%
 
 smt::SharedSMTRef parseSMT(const std::string& input) {
