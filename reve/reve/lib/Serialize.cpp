@@ -27,10 +27,16 @@ using namespace llreve::opts;
 // Rename variables to a more readable form. This is only done to make the
 // resulting SMT easier to read and has no effect
 static llvm::StringMap<std::string>
-simplifyVariableNames(const std::set<SortedVar> &variables) {
+simplifyVariableNames(const std::set<SortedVar> &variables, bool inlineLets) {
     llvm::StringMap<std::string> variableNameMap;
     for (const auto &var : variables) {
         variableNameMap.insert({var.name, var.name});
+    }
+    if (!inlineLets) {
+        // The following transformations assume that 'variables' contains all
+        // variables in an expression. This is not the case if lets have not
+        // been inlined.
+        return variableNameMap;
     }
     for (auto &var : variableNameMap) {
         // Strip "_old" suffix from variable name if such a variable does not
@@ -49,10 +55,10 @@ simplifyVariableNames(const std::set<SortedVar> &variables) {
     return variableNameMap;
 }
 
-struct VariableRenamer : smt::BottomUpVisitor {
-    llvm::StringMap<std::string> variableNameMap;
-    VariableRenamer(llvm::StringMap<std::string> variableNameMap)
-        : variableNameMap(std::move(variableNameMap)) {}
+struct VariableRenamer : smt::TopDownVisitor {
+    const llvm::StringMap<std::string> &variableNameMap;
+    VariableRenamer(const llvm::StringMap<std::string> &variableNameMap)
+        : variableNameMap(variableNameMap) {}
     void dispatch(smt::TypedVariable &var) override {
         auto foundIt = variableNameMap.find(var.name);
         if (foundIt != variableNameMap.end()) {
@@ -109,7 +115,7 @@ struct RemoveForallVisitor : smt::TopDownVisitor {
     std::set<SortedVar> &introducedVariables;
     RemoveForallVisitor(std::set<SortedVar> &introducedVariables)
         : introducedVariables(introducedVariables) {}
-    shared_ptr<smt::SMTExpr> reassemble(smt::Forall &forall) {
+    shared_ptr<smt::SMTExpr> reassemble(smt::Forall &forall) override {
         for (const auto &var : forall.vars) {
             introducedVariables.insert(var);
         }
@@ -127,34 +133,35 @@ struct CompressLetVisitor : smt::TopDownVisitor {
     std::vector<smt::Assignment> defs;
     std::map<smt::SMTExpr *, std::vector<smt::Assignment>> storedDefs;
     CompressLetVisitor() : smt::TopDownVisitor(true) {}
-    void dispatch(smt::Forall &forall) {
+    void dispatch(smt::Forall &forall) override {
         storedDefs.insert({&forall, defs});
         defs.clear();
     }
-    shared_ptr<smt::SMTExpr> reassemble(smt::Forall &forall) {
+    shared_ptr<smt::SMTExpr> reassemble(smt::Forall &forall) override {
         defs.clear();
         return nestLets(forall.shared_from_this(), storedDefs.at(&forall));
     }
-    void dispatch(smt::Let &let) {
+    void dispatch(smt::Let &let) override {
         defs.insert(defs.end(), let.defs.begin(), let.defs.end());
     }
-    shared_ptr<smt::SMTExpr> reassemble(smt::Let &let) { return let.expr; }
-    void dispatch(smt::Op &op) {
+    shared_ptr<smt::SMTExpr> reassemble(smt::Let &let) override {
+        return let.expr;
+    }
+    void dispatch(smt::Op &op) override {
         storedDefs.insert({&op, defs});
         defs.clear();
     }
-    shared_ptr<smt::SMTExpr> reassemble(smt::Op &op) {
+    shared_ptr<smt::SMTExpr> reassemble(smt::Op &op) override {
         auto ret = nestLets(op.shared_from_this(), storedDefs.at(&op));
         defs.clear();
         return ret;
-
     }
-    shared_ptr<smt::SMTExpr> reassemble(smt::ConstantString &str) {
+    shared_ptr<smt::SMTExpr> reassemble(smt::ConstantString &str) override {
         auto ret = nestLets(str.shared_from_this(), defs);
         defs.clear();
         return ret;
     }
-    shared_ptr<smt::SMTExpr> reassemble(smt::ConstantBool &cbool) {
+    shared_ptr<smt::SMTExpr> reassemble(smt::ConstantBool &cbool) override {
         auto ret = nestLets(cbool.shared_from_this(), defs);
         defs.clear();
         return ret;
@@ -212,7 +219,7 @@ void serializeSMT(vector<SharedSMTRef> smtExprs, bool muZ, SerializeOpts opts) {
             preparedSMTExprs.push_back(expr->mergeImplications({}));
         }
         const auto renamedVariables =
-            simplifyVariableNames(introducedVariables);
+            simplifyVariableNames(introducedVariables, opts.InlineLets);
         for (const auto &var : introducedVariables) {
             outFile << *VarDecl({renamedVariables.lookup(var.name),
                                  var.type->copy()})

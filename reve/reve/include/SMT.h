@@ -68,37 +68,13 @@ class FunDef;
 class Comment;
 class VarDecl;
 
-struct BottomUpVisitor {
-    virtual void dispatch(SetLogic &expr) {}
-    virtual void dispatch(Assert &expr) {}
-    virtual void dispatch(TypedVariable &expr) {}
-    virtual void dispatch(Forall &expr) {}
-    virtual void dispatch(CheckSat &expr) {}
-    virtual void dispatch(GetModel &expr) {}
-    virtual void dispatch(Let &expr) {}
-    virtual void dispatch(ConstantFP &expr) {}
-    virtual void dispatch(ConstantInt &expr) {}
-    virtual void dispatch(ConstantBool &expr) {}
-    virtual void dispatch(ConstantString &expr) {}
-    virtual void dispatch(Op &expr) {}
-    virtual void dispatch(FPCmp &expr) {}
-    virtual void dispatch(BinaryFPOperator &expr) {}
-    virtual void dispatch(TypeCast &expr) {}
-    virtual void dispatch(Query &expr) {}
-    virtual void dispatch(FunDecl &expr) {}
-    virtual void dispatch(FunDef &expr) {}
-    virtual void dispatch(Comment &expr) {}
-    virtual void dispatch(VarDecl &expr) {}
-};
-
-class TopDownVisitor;
+struct TopDownVisitor;
 class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
   public:
     SMTExpr(const SMTExpr & /*unused*/) = default;
     SMTExpr &operator=(SMTExpr &) = delete;
     SMTExpr() = default;
     virtual ~SMTExpr() = default;
-    virtual void accept(BottomUpVisitor &visitor) = 0;
     virtual std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) = 0;
     virtual sexpr::SExprRef toSExpr() const = 0;
     virtual std::vector<SharedSMTRef> splitConjunctions();
@@ -128,7 +104,6 @@ auto makeAssignment(std::string name, SharedSMTRef val)
 class SetLogic : public SMTExpr {
   public:
     explicit SetLogic(std::string logic) : logic(std::move(logic)) {}
-    void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
     std::string logic;
@@ -138,7 +113,6 @@ class Assert : public SMTExpr {
   public:
     std::shared_ptr<SMTExpr> expr;
     explicit Assert(std::shared_ptr<SMTExpr> expr) : expr(std::move(expr)) {}
-    void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
     SharedSMTRef
@@ -161,7 +135,6 @@ class TypedVariable : public SMTExpr {
     std::unique_ptr<Type> type;
     TypedVariable(std::string name, std::unique_ptr<Type> type)
         : name(std::move(name)), type(std::move(type)) {}
-    void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     std::unique_ptr<const HeapInfo> heapInfo() const override;
     sexpr::SExprRef toSExpr() const override;
@@ -218,7 +191,6 @@ class Forall : public SMTExpr {
     std::shared_ptr<SMTExpr> expr;
     Forall(std::vector<SortedVar> vars, std::shared_ptr<SMTExpr> expr)
         : vars(std::move(vars)), expr(std::move(expr)) {}
-    void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
     SharedSMTRef instantiateArrays() override;
@@ -231,7 +203,6 @@ class Forall : public SMTExpr {
 
 class CheckSat : public SMTExpr {
   public:
-    void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
     void toZ3(z3::context &cxt, z3::solver &solver,
@@ -241,7 +212,6 @@ class CheckSat : public SMTExpr {
 
 class GetModel : public SMTExpr {
   public:
-    void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
     void toZ3(z3::context &cxt, z3::solver &solver,
@@ -255,7 +225,6 @@ class Let : public SMTExpr {
     std::shared_ptr<SMTExpr> expr;
     Let(AssignmentVec defs, std::shared_ptr<SMTExpr> expr)
         : defs(std::move(defs)), expr(std::move(expr)) {}
-    void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
     SharedSMTRef
@@ -275,7 +244,6 @@ class ConstantFP : public SMTExpr {
   public:
     llvm::APFloat value;
     explicit ConstantFP(const llvm::APFloat value) : value(value) {}
-    void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
 };
@@ -284,7 +252,6 @@ class ConstantInt : public SMTExpr {
   public:
     llvm::APInt value;
     explicit ConstantInt(const llvm::APInt value) : value(value) {}
-    void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
     z3::expr
@@ -296,7 +263,6 @@ class ConstantBool : public SMTExpr {
   public:
     bool value;
     explicit ConstantBool(bool value) : value(value) {}
-    void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
     z3::expr
@@ -311,7 +277,6 @@ class ConstantString : public SMTExpr {
   public:
     std::string value;
     explicit ConstantString(std::string value) : value(value) {}
-    void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override; //  {
     SharedSMTRef
@@ -333,7 +298,6 @@ class Op : public SMTExpr {
        bool instantiate)
         : opName(std::move(opName)), args(std::move(args)),
           instantiate(instantiate) {}
-    void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
     SharedSMTRef
@@ -377,7 +341,6 @@ class FPCmp : public SMTExpr {
     FPCmp(Predicate op, std::unique_ptr<Type> type, SharedSMTRef op0,
           SharedSMTRef op1)
         : op(op), type(std::move(type)), op0(op0), op1(op1) {}
-    void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
     SharedSMTRef
@@ -395,7 +358,6 @@ class BinaryFPOperator : public SMTExpr {
                      std::shared_ptr<SMTExpr> op0, std::shared_ptr<SMTExpr> op1)
         : op(std::move(op)), type(std::move(type)), op0(std::move(op0)),
           op1(std::move(op1)) {}
-    void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
     SharedSMTRef
@@ -413,7 +375,6 @@ class TypeCast : public SMTExpr {
              std::unique_ptr<Type> destType, std::shared_ptr<SMTExpr> operand)
         : op(std::move(op)), sourceType(std::move(sourceType)),
           destType(std::move(destType)), operand(std::move(operand)) {}
-    void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
     SharedSMTRef
@@ -428,7 +389,6 @@ class Query : public SMTExpr {
 
   public:
     Query(std::string queryName) : queryName(std::move(queryName)) {}
-    void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
 };
@@ -458,7 +418,6 @@ class FunDecl : public SMTExpr {
             std::unique_ptr<Type> outType)
         : funName(std::move(funName)), inTypes(std::move(inTypes)),
           outType(std::move(outType)) {}
-    void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
     SharedSMTRef instantiateArrays() override;
@@ -475,8 +434,6 @@ class FunDef : public SMTExpr {
            std::unique_ptr<Type> outType, std::shared_ptr<SMTExpr> body)
         : funName(std::move(funName)), args(std::move(args)),
           outType(std::move(outType)), body(std::move(body)) {}
-
-    void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
     SharedSMTRef instantiateArrays() override;
@@ -490,7 +447,6 @@ class Comment : public SMTExpr {
     std::string val;
 
     Comment(std::string val) : val(std::move(val)) {}
-    void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
 };
@@ -500,7 +456,6 @@ class VarDecl : public SMTExpr {
     SortedVar var;
 
     VarDecl(SortedVar var) : var(std::move(var)) {}
-    void accept(BottomUpVisitor &visitor) override;
     std::shared_ptr<SMTExpr> accept(TopDownVisitor &visitor) override;
     sexpr::SExprRef toSExpr() const override;
     void toZ3(z3::context &cxt, z3::solver &solver,

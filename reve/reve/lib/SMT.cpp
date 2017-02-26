@@ -347,7 +347,7 @@ SExprRef TypeCast::toSExpr() const {
     }
 }
 
-struct CollectUsesVisitor : BottomUpVisitor {
+struct CollectUsesVisitor : TopDownVisitor {
     llvm::StringSet<> uses;
     void dispatch(ConstantString &str) override { uses.insert(str.value); }
     void dispatch(TypedVariable &var) override { uses.insert(var.name); }
@@ -944,58 +944,6 @@ unique_ptr<TypedVariable> typedVariableFromSortedVar(const SortedVar &var) {
 SortedVar typedVariableFromSortedVar(const TypedVariable &var) {
     return {var.name, var.type->copy()};
 }
-
-void SetLogic::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
-void Assert::accept(BottomUpVisitor &visitor) {
-    expr->accept(visitor);
-    visitor.dispatch(*this);
-}
-void TypedVariable::accept(BottomUpVisitor &visitor) {
-    visitor.dispatch(*this);
-}
-void Forall::accept(BottomUpVisitor &visitor) {
-    expr->accept(visitor);
-    visitor.dispatch(*this);
-}
-void CheckSat::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
-void GetModel::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
-void Let::accept(BottomUpVisitor &visitor) {
-    expr->accept(visitor);
-    for (auto &def : defs) {
-        def.second->accept(visitor);
-    }
-    visitor.dispatch(*this);
-}
-void ConstantFP::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
-void ConstantInt::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
-void ConstantBool::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
-void ConstantString::accept(BottomUpVisitor &visitor) {
-    visitor.dispatch(*this);
-}
-void Op::accept(BottomUpVisitor &visitor) {
-    for (auto &arg : args) {
-        arg->accept(visitor);
-    }
-    visitor.dispatch(*this);
-}
-void FPCmp::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
-void BinaryFPOperator::accept(BottomUpVisitor &visitor) {
-    op0->accept(visitor);
-    op1->accept(visitor);
-    visitor.dispatch(*this);
-}
-void TypeCast::accept(BottomUpVisitor &visitor) {
-    operand->accept(visitor);
-    visitor.dispatch(*this);
-}
-void Query::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
-void FunDecl::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
-void FunDef::accept(BottomUpVisitor &visitor) {
-    body->accept(visitor);
-    visitor.dispatch(*this);
-}
-void Comment::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
-void VarDecl::accept(BottomUpVisitor &visitor) { visitor.dispatch(*this); }
 
 shared_ptr<SMTExpr> SetLogic::accept(TopDownVisitor &visitor) {
     visitor.dispatch(*this);
