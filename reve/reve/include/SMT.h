@@ -454,6 +454,12 @@ class VarDecl : public SMTExpr {
               llvm::StringMap<Z3DefineFun> &defineFunMap) const override;
 };
 
+// This visitor first does a top-down traversal and calls 'dispatch' on each
+// expression. Then it does a bottom up traversal and calls 'reassemble' to
+// create
+// the final expression that is returned. 'dispatch' and 'reassemble' both
+// operate on copies of the original value since expressions are sometimes
+// shared and modifying directly can create problems in that case.
 struct SMTVisitor {
     // Do not traverse let bindings
     bool ignoreLetBindings = false;
