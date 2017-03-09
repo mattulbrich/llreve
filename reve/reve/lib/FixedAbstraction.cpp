@@ -8,7 +8,6 @@
 
 #include <set>
 
-using std::make_shared;
 using std::make_unique;
 using std::set;
 using std::string;
@@ -68,32 +67,39 @@ void externDeclarations(const llvm::Module &mod1, const llvm::Module &mod2,
                     assumeEquivalent.end()) {
                     auto decls = equivalentExternDecls(
                         *functionPair.first, *functionPair.second, funCondMap);
-                    declarations.insert(declarations.end(), decls.begin(),
-                                        decls.end());
+                    declarations.insert(declarations.end(),
+                                        std::make_move_iterator(decls.begin()),
+                                        std::make_move_iterator(decls.end()));
                 } else {
                     auto decls = notEquivalentExternDecls(*functionPair.first,
                                                           *functionPair.second);
-                    declarations.insert(declarations.end(), decls.begin(),
-                                        decls.end());
+                    declarations.insert(declarations.end(),
+                                        std::make_move_iterator(decls.begin()),
+                                        std::make_move_iterator(decls.end()));
                 }
             } else {
                 auto decls = equivalentExternDecls(
                     *functionPair.first, *functionPair.second, funCondMap);
-                declarations.insert(declarations.end(), decls.begin(),
-                                    decls.end());
+                declarations.insert(declarations.end(),
+                                    std::make_move_iterator(decls.begin()),
+                                    std::make_move_iterator(decls.end()));
             }
         }
     }
     for (auto &fun1 : mod1) {
         if (hasFixedAbstraction(fun1) && !isLlreveIntrinsic(fun1)) {
             auto decls = externFunDecl(fun1, Program::First);
-            declarations.insert(declarations.end(), decls.begin(), decls.end());
+            declarations.insert(declarations.end(),
+                                std::make_move_iterator(decls.begin()),
+                                std::make_move_iterator(decls.end()));
         }
     }
     for (auto &fun2 : mod2) {
         if (hasFixedAbstraction(fun2) && !isLlreveIntrinsic(fun2)) {
             auto decls = externFunDecl(fun2, Program::Second);
-            declarations.insert(declarations.end(), decls.begin(), decls.end());
+            declarations.insert(declarations.end(),
+                                std::make_move_iterator(decls.begin()),
+                                std::make_move_iterator(decls.end()));
         }
     }
 }
@@ -162,10 +168,10 @@ static SMTRef equalInputs(const llvm::Function &fun1,
     return make_unique<Op>("and", equal);
 }
 
-std::vector<SharedSMTRef>
+std::vector<std::unique_ptr<smt::SMTExpr>>
 equivalentExternDecls(const llvm::Function &fun1, const llvm::Function &fun2,
                       std::multimap<string, string> funCondMap) {
-    vector<SharedSMTRef> declarations;
+    vector<std::unique_ptr<smt::SMTExpr>> declarations;
     set<uint32_t> varArgs = getVarArgs(fun1);
     set<uint32_t> varArgs2 = getVarArgs(fun2);
     for (auto el : varArgs2) {
@@ -182,16 +188,17 @@ equivalentExternDecls(const llvm::Function &fun1, const llvm::Function &fun2,
         SMTRef eqInputs = equalInputs(fun1, fun2, argNum);
         SMTRef body = makeOp("=>", std::move(eqInputs), std::move(eqOutputs));
 
-        SharedSMTRef mainInv =
-            make_shared<FunDef>(funName, args, boolType(), std::move(body));
+        auto mainInv =
+            make_unique<FunDef>(funName, args, boolType(), std::move(body));
         declarations.push_back(std::move(mainInv));
     }
     return declarations;
 }
 
-std::vector<SharedSMTRef> notEquivalentExternDecls(const llvm::Function &fun1,
-                                                   const llvm::Function &fun2) {
-    vector<SharedSMTRef> declarations;
+std::vector<std::unique_ptr<smt::SMTExpr>>
+notEquivalentExternDecls(const llvm::Function &fun1,
+                         const llvm::Function &fun2) {
+    vector<std::unique_ptr<smt::SMTExpr>> declarations;
     set<uint32_t> varArgs = getVarArgs(fun1);
     set<uint32_t> varArgs2 = getVarArgs(fun2);
     for (auto el : varArgs2) {
@@ -203,16 +210,16 @@ std::vector<SharedSMTRef> notEquivalentExternDecls(const llvm::Function &fun1,
             invariantName(ENTRY_MARK, ProgramSelection::Both,
                           fun1.getName().str() + "^" + fun2.getName().str(),
                           InvariantAttr::NONE, argNum);
-        SharedSMTRef mainInv = make_shared<FunDef>(
-            funName, args, boolType(), make_unique<ConstantBool>(true));
+        auto mainInv = make_unique<FunDef>(funName, args, boolType(),
+                                           make_unique<ConstantBool>(true));
         declarations.push_back(std::move(mainInv));
     }
     return declarations;
 }
 
-std::vector<SharedSMTRef> externFunDecl(const llvm::Function &fun,
-                                        Program program) {
-    std::vector<SharedSMTRef> decls;
+std::vector<std::unique_ptr<smt::SMTExpr>>
+externFunDecl(const llvm::Function &fun, Program program) {
+    std::vector<std::unique_ptr<smt::SMTExpr>> decls;
     set<uint32_t> varArgs = getVarArgs(fun);
     for (auto argNum : varArgs) {
         std::vector<SortedVar> args = functionArgs(fun);
@@ -228,8 +235,9 @@ std::vector<SharedSMTRef> externFunDecl(const llvm::Function &fun,
         std::string funName =
             invariantName(ENTRY_MARK, asSelection(program), fun.getName().str(),
                           InvariantAttr::NONE, argNum);
-        SharedSMTRef body = make_unique<ConstantBool>(true);
-        decls.push_back(make_shared<FunDef>(funName, args, boolType(), body));
+        auto body = make_unique<ConstantBool>(true);
+        decls.push_back(
+            make_unique<FunDef>(funName, args, boolType(), std::move(body)));
     }
     return decls;
 }
