@@ -104,7 +104,7 @@ auto getSynchronizedPaths(const PathMap &pathMap1, const PathMap &pathMap2,
                           const FreeVarsMap &freeVarsMap1,
                           const FreeVarsMap &freeVarsMap2,
                           ReturnInvariantGenerator generateReturnInvariant)
-    -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
+    -> std::map<MarkPair, std::vector<std::unique_ptr<smt::SMTExpr>>>;
 
 /// Find all paths with the same start but different end marks
 /**
@@ -127,7 +127,7 @@ auto nonmutualPaths(const PathMap &pathMap, const FreeVarsMap &freeVarsMap,
 auto getStutterPaths(const PathMap &pathMap1, const PathMap &pathMap2,
                      const FreeVarsMap &freeVarsMap, std::string funName,
                      bool main)
-    -> std::map<MarkPair, std::vector<smt::SharedSMTRef>>;
+    -> std::map<MarkPair, std::vector<std::unique_ptr<smt::SMTExpr>>>;
 
 /* -------------------------------------------------------------------------- */
 // Functions for generating SMT for a single/mutual path

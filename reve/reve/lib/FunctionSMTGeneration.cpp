@@ -51,7 +51,7 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> functions,
     const auto freeVarsMap1 = analysisResults.at(functions.first).freeVariables;
     const auto freeVarsMap2 =
         analysisResults.at(functions.second).freeVariables;
-    const auto synchronizedPaths = getSynchronizedPaths(
+    auto synchronizedPaths = getSynchronizedPaths(
         pathMaps.first, pathMaps.second, freeVarsMap1, freeVarsMap2,
         [&freeVarsMap, funName](Mark startIndex, Mark endIndex) {
             return functionalCouplingPredicate(
@@ -61,11 +61,11 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> functions,
         });
 
     map<MarkPair, vector<SharedSMTRef>> smtExprs;
-    for (const auto &it : synchronizedPaths) {
-        for (const auto &path : it.second) {
+    for (auto &it : synchronizedPaths) {
+        for (auto &path : it.second) {
             auto clause = forallStartingAt(
-                path, freeVarsMap.at(it.first.startMark), it.first.startMark,
-                ProgramSelection::Both, funName, false);
+                std::move(path), freeVarsMap.at(it.first.startMark),
+                it.first.startMark, ProgramSelection::Both, funName, false);
             smtExprs[it.first].push_back(clause);
         }
     }
@@ -83,12 +83,12 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> functions,
 
     if (SMTGenerationOpts::getInstance().PerfectSync ==
         PerfectSynchronization::Disabled) {
-        const auto stutterPaths = getStutterPaths(
-            pathMaps.first, pathMaps.second, freeVarsMap, funName, false);
-        for (const auto &it : stutterPaths) {
-            for (const auto &path : it.second) {
+        auto stutterPaths = getStutterPaths(pathMaps.first, pathMaps.second,
+                                            freeVarsMap, funName, false);
+        for (auto &it : stutterPaths) {
+            for (auto &path : it.second) {
                 auto clause = forallStartingAt(
-                    path, freeVarsMap.at(it.first.startMark),
+                    std::move(path), freeVarsMap.at(it.first.startMark),
                     it.first.startMark, ProgramSelection::Both, funName, false);
                 smtExprs[{it.first.startMark, it.first.startMark}].push_back(
                     clause);
@@ -144,17 +144,18 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
         pathMaps, marked, freeVarsMap1, freeVarsMap2, funName, true);
     if (SMTGenerationOpts::getInstance().PerfectSync ==
         PerfectSynchronization::Disabled) {
-        const auto stutterPaths = getStutterPaths(
-            pathMaps.first, pathMaps.second, freeVarsMap, funName, true);
-        synchronizedPaths = mergeVectorMaps(synchronizedPaths, stutterPaths);
+        auto stutterPaths = getStutterPaths(pathMaps.first, pathMaps.second,
+                                            freeVarsMap, funName, true);
+        synchronizedPaths = mergeVectorMaps(std::move(synchronizedPaths),
+                                            std::move(stutterPaths));
     }
 
     map<MarkPair, vector<SharedSMTRef>> clauses;
-    for (const auto &it : synchronizedPaths) {
+    for (auto &it : synchronizedPaths) {
         for (auto &path : it.second) {
             auto clause = forallStartingAt(
-                path, freeVarsMap.at(it.first.startMark), it.first.startMark,
-                ProgramSelection::Both, funName, true);
+                std::move(path), freeVarsMap.at(it.first.startMark),
+                it.first.startMark, ProgramSelection::Both, funName, true);
             clauses[it.first].push_back(clause);
         }
     }
@@ -180,7 +181,7 @@ static void addSynchronizedPaths(
     const std::vector<Path> &paths2, const FreeVarsMap &freeVarsMap1,
     const FreeVarsMap &freeVarsMap2,
     ReturnInvariantGenerator generateReturnInvariant,
-    map<MarkPair, vector<SharedSMTRef>> &clauses) {
+    map<MarkPair, vector<std::unique_ptr<smt::SMTExpr>>> &clauses) {
     for (const auto &path1 : paths1) {
         for (const auto &path2 : paths2) {
             bool returnPath = endMark == EXIT_MARK;
@@ -195,12 +196,12 @@ static void addSynchronizedPaths(
     }
 }
 
-map<MarkPair, vector<SharedSMTRef>>
+map<MarkPair, vector<std::unique_ptr<smt::SMTExpr>>>
 getSynchronizedPaths(const PathMap &pathMap1, const PathMap &pathMap2,
                      const FreeVarsMap &freeVarsMap1,
                      const FreeVarsMap &freeVarsMap2,
                      ReturnInvariantGenerator generateReturnInvariant) {
-    map<MarkPair, vector<SharedSMTRef>> clauses;
+    map<MarkPair, vector<std::unique_ptr<smt::SMTExpr>>> clauses;
     for (const auto &pathMapIt : pathMap1) {
         const Mark startIndex = pathMapIt.first;
         for (const auto &innerPathMapIt : pathMapIt.second) {
@@ -340,7 +341,8 @@ static void
 addStutterPaths(Mark loopMark, const std::vector<Path> &loopingPaths,
                 llvm::StringRef functionName, Program loopingProgram,
                 const FreeVarsMap &freeVarsMap, const PathMap &otherPathMap,
-                map<MarkPair, vector<SharedSMTRef>> &clauses, bool iterative) {
+                map<MarkPair, vector<std::unique_ptr<smt::SMTExpr>>> &clauses,
+                bool iterative) {
     const int progIndex = programIndex(loopingProgram);
     for (const auto &path : loopingPaths) {
         const auto waitingArgs =
@@ -373,11 +375,11 @@ addStutterPaths(Mark loopMark, const std::vector<Path> &loopingPaths,
     }
 }
 
-static map<MarkPair, vector<SharedSMTRef>>
+static map<MarkPair, vector<std::unique_ptr<smt::SMTExpr>>>
 stutterPathsForProg(const PathMap &pathMap, const PathMap &otherPathMap,
                     const FreeVarsMap &freeVarsMap, Program prog,
                     string funName, bool iterative) {
-    map<MarkPair, vector<SharedSMTRef>> clauses;
+    map<MarkPair, vector<std::unique_ptr<smt::SMTExpr>>> clauses;
     for (const auto &pathMapIt : pathMap) {
         const Mark startMark = pathMapIt.first;
         for (const auto &pathsLeadingTo : pathMapIt.second) {
@@ -392,10 +394,9 @@ stutterPathsForProg(const PathMap &pathMap, const PathMap &otherPathMap,
     return clauses;
 }
 
-map<MarkPair, vector<SharedSMTRef>>
+map<MarkPair, vector<std::unique_ptr<smt::SMTExpr>>>
 getStutterPaths(const PathMap &pathMap1, const PathMap &pathMap2,
                 const FreeVarsMap &freeVarsMap, string funName, bool main) {
-    vector<SharedSMTRef> paths;
     auto firstPaths = stutterPathsForProg(pathMap1, pathMap2, freeVarsMap,
                                           Program::First, funName, main);
     auto secondPaths = stutterPathsForProg(pathMap2, pathMap1, freeVarsMap,

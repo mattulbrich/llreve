@@ -82,11 +82,12 @@ template <typename T> std::unique_ptr<smt::SMTExpr> resolveGEP(T &gep) {
 template <typename Key, typename Val>
 auto unionWith(std::map<Key, Val> mapA, std::map<Key, Val> mapB,
                std::function<Val(Val, Val)> combine) -> std::map<Key, Val> {
-    for (auto pair : mapB) {
+    for (auto &pair : mapB) {
         if (mapA.find(pair.first) == mapA.end()) {
-            mapA.insert(pair);
+            mapA.emplace(pair.first, std::move(pair.second));
         } else {
-            mapA.at(pair.first) = combine(mapA.at(pair.first), pair.second);
+            mapA.at(pair.first) =
+                combine(std::move(mapA.at(pair.first)), std::move(pair.second));
         }
     }
     return mapA;
@@ -115,11 +116,13 @@ template <typename K, typename V>
 auto mergeVectorMaps(std::map<K, std::vector<V>> a,
                      std::map<K, std::vector<V>> b)
     -> std::map<K, std::vector<V>> {
-    return unionWith<K, std::vector<V>>(
-        a, b, [](std::vector<V> a, std::vector<V> b) {
-            a.insert(a.end(), b.begin(), b.end());
-            return a;
-        });
+    return unionWith<K, std::vector<V>>(std::move(a), std::move(b),
+                                        [](std::vector<V> a, std::vector<V> b) {
+                                            for (auto &x : b) {
+                                                a.push_back(std::move(x));
+                                            }
+                                            return a;
+                                        });
 }
 template <typename K1, typename K2, typename V>
 auto mergeNestedVectorMaps(std::map<K1, std::map<K2, std::vector<V>>> a,
