@@ -20,7 +20,6 @@
 
 #include "llvm/IR/Constants.h"
 
-using std::make_shared;
 using std::make_unique;
 using std::shared_ptr;
 using std::string;
@@ -38,13 +37,13 @@ vector<SharedSMTRef> generateSMT(MonoPair<const llvm::Module &> modules,
     SMTGenerationOpts &smtOpts = SMTGenerationOpts::getInstance();
 
     if (smtOpts.OutputFormat == SMTFormat::Z3) {
-        declarations.push_back(make_shared<smt::FunDecl>(
+        declarations.push_back(make_unique<smt::FunDecl>(
             "END_QUERY", std::vector<Type>(), boolType()));
     }
     std::vector<SharedSMTRef> assertions;
     std::vector<SharedSMTRef> smtExprs;
     if (smtOpts.OutputFormat == SMTFormat::SMTHorn && !smtOpts.Invert) {
-        smtExprs.push_back(std::make_shared<SetLogic>("HORN"));
+        smtExprs.push_back(make_unique<SetLogic>("HORN"));
     }
 
     if (smtOpts.Stack == StackOpt::Enabled) {
@@ -117,10 +116,10 @@ vector<SharedSMTRef> generateSMT(MonoPair<const llvm::Module &> modules,
         }
     }
     if (smtOpts.OutputFormat == SMTFormat::Z3) {
-        smtExprs.push_back(make_shared<Query>("END_QUERY"));
+        smtExprs.push_back(make_unique<Query>("END_QUERY"));
     } else {
-        smtExprs.push_back(make_shared<CheckSat>());
-        smtExprs.push_back(make_shared<GetModel>());
+        smtExprs.push_back(make_unique<CheckSat>());
+        smtExprs.push_back(make_unique<GetModel>());
     }
     return smtExprs;
 }
@@ -209,9 +208,9 @@ vector<SharedSMTRef> globalDeclarationsForMod(int globalPointer,
             }
             std::vector<SortedVar> empty;
             auto constDef1 =
-                make_shared<FunDef>(globalName, empty, int64Type(),
+                make_unique<FunDef>(globalName, empty, int64Type(),
                                     makeOp("-", std::to_string(globalPointer)));
-            declarations.push_back(constDef1);
+            declarations.push_back(std::move(constDef1));
         }
     }
     return declarations;
@@ -240,13 +239,13 @@ std::vector<SharedSMTRef> globalDeclarations(const llvm::Module &mod1,
             }
             std::vector<SortedVar> empty;
             auto constDef1 =
-                make_shared<FunDef>(globalName, empty, int64Type(),
+                make_unique<FunDef>(globalName, empty, int64Type(),
                                     makeOp("-", std::to_string(globalPointer)));
             auto constDef2 =
-                make_shared<FunDef>(otherGlobalName, empty, int64Type(),
+                make_unique<FunDef>(otherGlobalName, empty, int64Type(),
                                     makeOp("-", std::to_string(globalPointer)));
-            declarations.push_back(constDef1);
-            declarations.push_back(constDef2);
+            declarations.push_back(std::move(constDef1));
+            declarations.push_back(std::move(constDef2));
         }
     }
     auto decls1 = globalDeclarationsForMod(globalPointer, mod1, mod2, 1);
@@ -273,7 +272,7 @@ vector<SharedSMTRef> stringConstants(const llvm::Module &mod, string memory) {
             }
         }
         if (!stringConstant.empty()) {
-            stringConstants.push_back(make_shared<Op>("and", stringConstant));
+            stringConstants.push_back(make_unique<Op>("and", stringConstant));
         }
     }
     return stringConstants;
@@ -319,7 +318,7 @@ std::unique_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
         equalInputs.push_back(body);
     }
     if (body == nullptr || additionalIn) {
-        body = make_shared<Op>("and", equalInputs);
+        body = make_unique<Op>("and", equalInputs);
     }
     if (strings) {
         // Add values of static arrays, strings and similar things
@@ -333,7 +332,7 @@ std::unique_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
         if (!stringConstants2.empty()) {
             smtArgs.push_back(make_unique<Op>("and", stringConstants2));
         }
-        body = make_shared<Op>("and", smtArgs);
+        body = make_unique<Op>("and", smtArgs);
     }
 
     return make_unique<FunDef>("IN_INV", funArgs, boolType(), body);

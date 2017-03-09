@@ -27,7 +27,6 @@ using llvm::CmpInst;
 
 using std::function;
 using std::make_pair;
-using std::make_shared;
 using std::make_unique;
 using std::map;
 using std::set;
@@ -839,8 +838,8 @@ SMTRef getDontLoopInvariant(SMTRef endClause, Mark startIndex,
         dontLoopExprs.push_back(std::move(smt));
     }
     if (!dontLoopExprs.empty()) {
-        auto andExpr = make_shared<Op>("and", dontLoopExprs);
-        clause = makeOp("=>", andExpr, std::move(clause));
+        auto andExpr = make_unique<Op>("and", dontLoopExprs);
+        clause = makeOp("=>", std::move(andExpr), std::move(clause));
     }
     return clause;
 }

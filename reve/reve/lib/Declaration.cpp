@@ -98,13 +98,13 @@ vector<SharedSMTRef> relationalIterativeDeclarations(
             if (foundIt ==
                 SMTGenerationOpts::getInstance()
                     .IterativeRelationalInvariants.end()) {
-                const auto invariant = mainInvariantDeclaration(
+                auto invariant = mainInvariantDeclaration(
                     startIndex, freeVarsMap.at(startIndex),
                     ProgramSelection::Both, functionName);
                 declarations.push_back(
                     mainInvariantComment(startIndex, freeVarsMap.at(startIndex),
                                          ProgramSelection::Both, functionName));
-                declarations.push_back(invariant);
+                declarations.push_back(std::move(invariant));
             } else {
                 declarations.push_back(foundIt->second);
             }
