@@ -66,18 +66,18 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> functions,
             auto clause = forallStartingAt(
                 std::move(path), freeVarsMap.at(it.first.startMark),
                 it.first.startMark, ProgramSelection::Both, funName, false);
-            smtExprs[it.first].push_back(clause);
+            smtExprs[it.first].push_back(std::move(clause));
         }
     }
 
-    const auto forbiddenPaths = getForbiddenPaths(
-        pathMaps, marked, freeVarsMap1, freeVarsMap2, funName, false);
-    for (const auto &it : forbiddenPaths) {
-        for (const auto &path : it.second) {
-            auto clause =
-                forallStartingAt(path, freeVarsMap.at(it.first), it.first,
-                                 ProgramSelection::Both, funName, false);
-            smtExprs[{it.first, FORBIDDEN_MARK}].push_back(clause);
+    auto forbiddenPaths = getForbiddenPaths(pathMaps, marked, freeVarsMap1,
+                                            freeVarsMap2, funName, false);
+    for (auto &it : forbiddenPaths) {
+        for (auto &path : it.second) {
+            auto clause = forallStartingAt(
+                std::move(path), freeVarsMap.at(it.first), it.first,
+                ProgramSelection::Both, funName, false);
+            smtExprs[{it.first, FORBIDDEN_MARK}].push_back(std::move(clause));
         }
     }
 
@@ -91,7 +91,7 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> functions,
                     std::move(path), freeVarsMap.at(it.first.startMark),
                     it.first.startMark, ProgramSelection::Both, funName, false);
                 smtExprs[{it.first.startMark, it.first.startMark}].push_back(
-                    clause);
+                    std::move(clause));
             }
         }
     }
@@ -140,8 +140,6 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
             return endInvariant;
         });
 
-    const auto forbiddenPaths = getForbiddenPaths(
-        pathMaps, marked, freeVarsMap1, freeVarsMap2, funName, true);
     if (SMTGenerationOpts::getInstance().PerfectSync ==
         PerfectSynchronization::Disabled) {
         auto stutterPaths = getStutterPaths(pathMaps.first, pathMaps.second,
@@ -156,15 +154,18 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
             auto clause = forallStartingAt(
                 std::move(path), freeVarsMap.at(it.first.startMark),
                 it.first.startMark, ProgramSelection::Both, funName, true);
-            clauses[it.first].push_back(clause);
+            clauses[it.first].push_back(std::move(clause));
         }
     }
-    for (const auto &it : forbiddenPaths) {
+
+    auto forbiddenPaths = getForbiddenPaths(pathMaps, marked, freeVarsMap1,
+                                            freeVarsMap2, funName, true);
+    for (auto &it : forbiddenPaths) {
         for (auto &path : it.second) {
-            auto clause =
-                forallStartingAt(path, freeVarsMap.at(it.first), it.first,
-                                 ProgramSelection::Both, funName, true);
-            clauses[{it.first, FORBIDDEN_MARK}].push_back(clause);
+            auto clause = forallStartingAt(
+                std::move(path), freeVarsMap.at(it.first), it.first,
+                ProgramSelection::Both, funName, true);
+            clauses[{it.first, FORBIDDEN_MARK}].push_back(std::move(clause));
         }
     }
 
@@ -220,13 +221,12 @@ getSynchronizedPaths(const PathMap &pathMap1, const PathMap &pathMap2,
     return clauses;
 }
 
-static void addForbiddenPaths(Mark startIndex, Mark endIndex1, Mark endIndex2,
-                              const std::vector<Path> &paths1,
-                              const std::vector<Path> &paths2,
-                              const FreeVarsMap &freeVarsMap1,
-                              const FreeVarsMap &freeVarsMap2,
-                              const MonoPair<BidirBlockMarkMap> &marked,
-                              map<Mark, vector<SharedSMTRef>> &pathExprs) {
+static void addForbiddenPaths(
+    Mark startIndex, Mark endIndex1, Mark endIndex2,
+    const std::vector<Path> &paths1, const std::vector<Path> &paths2,
+    const FreeVarsMap &freeVarsMap1, const FreeVarsMap &freeVarsMap2,
+    const MonoPair<BidirBlockMarkMap> &marked,
+    map<Mark, vector<std::unique_ptr<smt::SMTExpr>>> &pathExprs) {
     for (const Path &path1 : paths1) {
         for (const Path &path2 : paths2) {
             const auto endBlocks =
@@ -256,12 +256,12 @@ static void addForbiddenPaths(Mark startIndex, Mark endIndex1, Mark endIndex2,
     }
 };
 
-map<Mark, vector<SharedSMTRef>>
+map<Mark, vector<std::unique_ptr<smt::SMTExpr>>>
 getForbiddenPaths(const MonoPair<PathMap> &pathMaps,
                   const MonoPair<BidirBlockMarkMap> &marked,
                   const FreeVarsMap &freeVarsMap1,
                   const FreeVarsMap &freeVarsMap2, string funName, bool main) {
-    map<Mark, vector<SharedSMTRef>> pathExprs;
+    map<Mark, vector<std::unique_ptr<smt::SMTExpr>>> pathExprs;
     for (const auto &pathMapIt : pathMaps.first) {
         const Mark startIndex = pathMapIt.first;
         for (const auto &pathsLeadingTo1 : pathMapIt.second) {
@@ -313,7 +313,7 @@ nonmutualPaths(const PathMap &pathMap, const FreeVarsMap &freeVarsMap,
                     nonmutualSMT(std::move(endInvariant1), defs, prog),
                     freeVarsMap.at(startIndex), startIndex, asSelection(prog),
                     funName, false);
-                smtExprs[{startIndex, endIndex}].push_back(clause);
+                smtExprs[{startIndex, endIndex}].push_back(std::move(clause));
             }
         }
     }
@@ -621,9 +621,10 @@ SMTRef nonMutualFunctionCall(std::unique_ptr<smt::SMTExpr> clause,
 }
 
 /// Wrap the clause in a forall
-SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
-                              Mark blockIndex, ProgramSelection prog,
-                              string funName, bool main) {
+std::unique_ptr<smt::SMTExpr>
+forallStartingAt(std::unique_ptr<smt::SMTExpr> clause,
+                 vector<SortedVar> freeVars, Mark blockIndex,
+                 ProgramSelection prog, string funName, bool main) {
     vector<SortedVar> vars;
     vector<SharedSMTRef> preVars;
     for (const auto &arg : freeVars) {
@@ -647,16 +648,17 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
                 make_unique<TypedVariable>(arg.name + "_old", arg.type));
         }
 
-        clause = makeOp("=>", make_unique<Op>(opname, std::move(args)), clause);
+        clause = makeOp("=>", make_unique<Op>(opname, std::move(args)),
+                        std::move(clause));
 
     } else {
         InvariantAttr attr = main ? InvariantAttr::MAIN : InvariantAttr::PRE;
         SMTRef preInv = make_unique<Op>(
             invariantName(blockIndex, prog, funName, attr), preVars);
-        clause = makeOp("=>", std::move(preInv), clause);
+        clause = makeOp("=>", std::move(preInv), std::move(clause));
     }
 
-    return std::make_unique<Forall>(vars, clause);
+    return std::make_unique<Forall>(vars, std::move(clause));
 }
 
 /* --------------------------------------------------------------------------

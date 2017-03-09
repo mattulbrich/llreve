@@ -118,7 +118,7 @@ auto getForbiddenPaths(const MonoPair<PathMap> &pathMaps,
                        const FreeVarsMap &freeVarsMap1,
                        const FreeVarsMap &freeVarsMap2, std::string funName,
                        bool main)
-    -> std::map<Mark, std::vector<smt::SharedSMTRef>>;
+    -> std::map<Mark, std::vector<std::unique_ptr<smt::SMTExpr>>>;
 /// Get the assertions for a single program
 auto nonmutualPaths(const PathMap &pathMap, const FreeVarsMap &freeVarsMap,
                     Program prog, std::string funName, const llvm::Type *type,
@@ -150,10 +150,10 @@ auto mutualFunctionCall(std::unique_ptr<smt::SMTExpr> clause,
                         MonoPair<CallInfo> callPair) -> smt::SMTRef;
 auto nonMutualFunctionCall(std::unique_ptr<smt::SMTExpr> clause, CallInfo call,
                            Program prog) -> smt::SMTRef;
-auto forallStartingAt(smt::SharedSMTRef clause,
+auto forallStartingAt(std::unique_ptr<smt::SMTExpr> clause,
                       std::vector<smt::SortedVar> freeVars, Mark blockIndex,
                       ProgramSelection prog, std::string funName, bool main)
-    -> smt::SharedSMTRef;
+    -> std::unique_ptr<smt::SMTExpr>;
 
 /* -------------------------------------------------------------------------- */
 // Functions forcing arguments to be equal
