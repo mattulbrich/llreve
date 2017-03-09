@@ -96,7 +96,7 @@ class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
 };
 
 using SMTRef = std::unique_ptr<SMTExpr>;
-auto makeAssignment(std::string name, SharedSMTRef val)
+auto makeAssignment(std::string name, std::unique_ptr<SMTExpr> val)
     -> std::unique_ptr<Assignment>;
 
 class SetLogic : public SMTExpr {

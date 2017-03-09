@@ -93,14 +93,14 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
     if (const auto retInst =
             llvm::dyn_cast<llvm::ReturnInst>(BB.getTerminator())) {
         // TODO (moritz): use a more clever approach for void functions
-        SharedSMTRef retName =
+        unique_ptr<SMTExpr> retName =
             std::make_unique<ConstantInt>(llvm::APInt(64, 0));
         if (retInst->getReturnValue() != nullptr) {
             retName =
                 instrNameOrVal(retInst->getReturnValue(), retInst->getType());
         }
-        definitions.push_back(
-            DefOrCallInfo(makeAssignment(resultName(prog), retName)));
+        definitions.push_back(DefOrCallInfo(
+            makeAssignment(resultName(prog), std::move(retName))));
         if (SMTGenerationOpts::getInstance().Heap == HeapOpt::Enabled) {
             definitions.push_back(DefOrCallInfo(makeAssignment(
                 heapResultName(prog), memoryVariable(heapName(progIndex)))));
@@ -242,17 +242,18 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
         if (SMTGenerationOpts::getInstance().BitVect) {
             // We load single bytes
             unsigned bytes = loadInst->getType()->getIntegerBitWidth() / 8;
-            SharedSMTRef load =
+            auto load =
                 makeOp("select", memoryVariable(heapName(progIndex)), pointer);
             for (unsigned i = 1; i < bytes; ++i) {
                 load =
-                    makeOp("concat", load,
+                    makeOp("concat", std::move(load),
                            makeOp("select", memoryVariable(heapName(progIndex)),
                                   makeOp("bvadd", pointer,
                                          std::make_unique<ConstantInt>(
                                              llvm::APInt(64, i)))));
             }
-            return vecSingleton(makeAssignment(loadInst->getName(), load));
+            return vecSingleton(
+                makeAssignment(loadInst->getName(), std::move(load)));
         } else {
             if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
                 SMTRef load =
@@ -277,7 +278,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             int bytes =
                 storeInst->getValueOperand()->getType()->getIntegerBitWidth() /
                 8;
-            SharedSMTRef newHeap = memoryVariable(heap);
+            auto newHeap = memoryVariable(heap);
             for (int i = 0; i < bytes; ++i) {
                 SharedSMTRef offset =
                     makeOp("bvadd", pointer,
@@ -286,10 +287,12 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
                     "(_ extract " + std::to_string(8 * (bytes - i - 1) + 7) +
                         " " + std::to_string(8 * (bytes - i - 1)) + ")",
                     val);
-                const std::vector<SharedSMTRef> args = {newHeap, offset, elem};
-                newHeap = make_unique<Op>("store", args);
+                std::vector<SharedSMTRef> args = {std::move(newHeap), offset,
+                                                  elem};
+                newHeap = make_unique<Op>("store", std::move(args));
             }
-            return vecSingleton(makeAssignment(heapName(progIndex), newHeap));
+            return vecSingleton(
+                makeAssignment(heapName(progIndex), std::move(newHeap)));
         } else {
             if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
                 const std::vector<SharedSMTRef> args = {

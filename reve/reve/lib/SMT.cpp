@@ -854,8 +854,8 @@ unique_ptr<Op> makeOp(std::string opName,
     return make_unique<Op>(opName, smtArgs);
 }
 
-unique_ptr<Assignment> makeAssignment(string name, SharedSMTRef val) {
-    return make_unique<Assignment>(name, val);
+unique_ptr<Assignment> makeAssignment(string name, unique_ptr<SMTExpr> val) {
+    return make_unique<Assignment>(name, std::move(val));
 }
 bool isArray(const Type &type) { return type.getTag() == TypeTag::Array; }
 
