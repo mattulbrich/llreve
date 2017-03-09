@@ -19,9 +19,7 @@
 #include "llvm/IR/Operator.h"
 
 using std::vector;
-using std::make_shared;
 using std::make_unique;
-using std::shared_ptr;
 using std::unique_ptr;
 using std::string;
 using llvm::Instruction;
@@ -116,7 +114,7 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
 }
 
 /// Convert a single instruction to an assignment
-llvm::SmallVector<std::unique_ptr<Assignment>, 1>
+llvm::SmallVector<unique_ptr<Assignment>, 1>
 instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
                 Program prog) {
     const int progIndex = programIndex(prog);
@@ -185,7 +183,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             phiInst->getType()->isPointerTy()) {
             auto locAssgn = makeAssignment(
                 string(phiInst->getName()) + "_OnStack", instrLocation(val));
-            llvm::SmallVector<std::unique_ptr<Assignment>, 1> result;
+            llvm::SmallVector<unique_ptr<Assignment>, 1> result;
             result.push_back(std::move(assgn));
             result.push_back(std::move(locAssgn));
             return result;
@@ -201,14 +199,14 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
                                            instrNameOrVal(trueVal),
                                            instrNameOrVal(falseVal)};
         auto assgn = makeAssignment(selectInst->getName(),
-                                    std::make_shared<class Op>("ite", args));
+                                    std::make_unique<Op>("ite", args));
         if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled &&
             trueVal->getType()->isPointerTy()) {
             assert(falseVal->getType()->isPointerTy());
             auto location =
                 makeOp("ite", instrNameOrVal(cond), instrLocation(trueVal),
                        instrLocation(falseVal));
-            llvm::SmallVector<std::unique_ptr<Assignment>, 1> result;
+            llvm::SmallVector<unique_ptr<Assignment>, 1> result;
             result.push_back(std::move(assgn));
             result.push_back(
                 makeAssignment(string(selectInst->getName()) + "_OnStack",
@@ -229,7 +227,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
         auto assgn = makeAssignment(getElementPtrInst->getName(),
                                     resolveGEP(*getElementPtrInst));
         if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
-            llvm::SmallVector<std::unique_ptr<Assignment>, 1> result;
+            llvm::SmallVector<unique_ptr<Assignment>, 1> result;
             result.push_back(std::move(assgn));
             result.push_back(makeAssignment(
                 string(getElementPtrInst->getName()) + "_OnStack",
@@ -289,7 +287,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
                         " " + std::to_string(8 * (bytes - i - 1)) + ")",
                     val);
                 const std::vector<SharedSMTRef> args = {newHeap, offset, elem};
-                newHeap = make_shared<Op>("store", args);
+                newHeap = make_unique<Op>("store", args);
             }
             return vecSingleton(makeAssignment(heapName(progIndex), newHeap));
         } else {
@@ -298,13 +296,15 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
                     memoryVariable(heap), memoryVariable(stackName(progIndex)),
                     pointer, instrLocation(storeInst->getPointerOperand()),
                     val};
-                const auto store = make_shared<Op>("store_", args);
-                return vecSingleton(makeAssignment(heapName(progIndex), store));
+                auto store = make_unique<Op>("store_", args);
+                return vecSingleton(
+                    makeAssignment(heapName(progIndex), std::move(store)));
             } else {
                 const std::vector<SharedSMTRef> args = {memoryVariable(heap),
                                                         pointer, val};
-                const auto store = make_shared<Op>("store", args);
-                return vecSingleton(makeAssignment(heapName(progIndex), store));
+                auto store = make_unique<Op>("store", args);
+                return vecSingleton(
+                    makeAssignment(heapName(progIndex), std::move(store)));
             }
         }
     }
@@ -321,7 +321,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             typeSize(allocaInst->getAllocatedType(),
                      allocaInst->getModule()->getDataLayout());
         std::string sp = stackPointerName(progIndex);
-        llvm::SmallVector<std::unique_ptr<Assignment>, 1> result;
+        llvm::SmallVector<unique_ptr<Assignment>, 1> result;
         result.push_back(makeAssignment(
             sp, makeOp("-", sp, std::make_unique<ConstantInt>(
                                     llvm::APInt(64, allocatedSize)))));
@@ -560,7 +560,6 @@ SMTRef combineOp(const llvm::BinaryOperator &Op, std::string opName,
 
 vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *callInst,
                                       Program prog) {
-    const int program = programIndex(prog);
     vector<DefOrCallInfo> definitions;
     const auto castInst0 =
         llvm::dyn_cast<llvm::CastInst>(callInst->getArgOperand(0));
@@ -600,7 +599,7 @@ vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *callInst,
                                               llvm::APInt(64, i))),
                         std::move(select)};
                     definitions.push_back(makeAssignment(
-                        heapNameStore, make_shared<Op>("store", args)));
+                        heapNameStore, make_unique<Op>("store", args)));
                     ++i;
                 }
             }
@@ -617,8 +616,8 @@ vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *callInst,
     return definitions;
 }
 
-std::unique_ptr<CallInfo> toCallInfo(string assignedTo, Program prog,
-                                     const llvm::CallInst &callInst) {
+unique_ptr<CallInfo> toCallInfo(string assignedTo, Program prog,
+                                const llvm::CallInst &callInst) {
     vector<SharedSMTRef> args;
     if (assignedTo.empty()) {
         assignedTo = "res" + std::to_string(programIndex(prog));
