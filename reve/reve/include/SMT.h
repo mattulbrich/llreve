@@ -542,8 +542,9 @@ struct SMTVisitor {
 auto nestLets(SharedSMTRef clause, llvm::ArrayRef<Assignment> defs)
     -> SharedSMTRef;
 
-auto fastNestLets(SharedSMTRef clause, llvm::ArrayRef<Assignment> defs)
-    -> SharedSMTRef;
+auto fastNestLets(std::unique_ptr<smt::SMTExpr> clause,
+                  llvm::ArrayRef<Assignment> defs)
+    -> std::unique_ptr<smt::SMTExpr>;
 
 bool isArray(const Type &type);
 

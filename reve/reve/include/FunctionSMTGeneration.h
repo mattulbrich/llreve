@@ -135,20 +135,20 @@ auto getStutterPaths(const PathMap &pathMap1, const PathMap &pathMap2,
 auto assignmentsOnPath(const Path &path, Program prog,
                        const std::vector<smt::SortedVar> &freeVars, bool toEnd)
     -> std::vector<AssignmentCallBlock>;
-auto interleaveAssignments(smt::SharedSMTRef endClause,
+auto interleaveAssignments(std::unique_ptr<smt::SMTExpr> endClause,
                            llvm::ArrayRef<AssignmentCallBlock> assignment1,
                            llvm::ArrayRef<AssignmentCallBlock> assignment2)
-    -> smt::SharedSMTRef;
-auto nonmutualSMT(smt::SharedSMTRef endClause,
+    -> std::unique_ptr<smt::SMTExpr>;
+auto nonmutualSMT(std::unique_ptr<smt::SMTExpr> endClause,
                   llvm::ArrayRef<AssignmentCallBlock> assignments, Program prog)
-    -> smt::SharedSMTRef;
+    -> std::unique_ptr<smt::SMTExpr>;
 
 /* -------------------------------------------------------------------------- */
 // Functions to generate various foralls
 
-auto mutualFunctionCall(smt::SharedSMTRef clause, MonoPair<CallInfo> callPair)
-    -> smt::SMTRef;
-auto nonMutualFunctionCall(smt::SharedSMTRef clause, CallInfo call,
+auto mutualFunctionCall(std::unique_ptr<smt::SMTExpr> clause,
+                        MonoPair<CallInfo> callPair) -> smt::SMTRef;
+auto nonMutualFunctionCall(std::unique_ptr<smt::SMTExpr> clause, CallInfo call,
                            Program prog) -> smt::SMTRef;
 auto forallStartingAt(smt::SharedSMTRef clause,
                       std::vector<smt::SortedVar> freeVars, Mark blockIndex,
@@ -189,9 +189,9 @@ auto getDontLoopInvariant(smt::SMTRef endClause, Mark startIndex,
                           const PathMap &pathMap,
                           const FreeVarsMap &freeVarsMap, Program prog)
     -> smt::SMTRef;
-auto addAssignments(const smt::SharedSMTRef end,
+auto addAssignments(std::unique_ptr<smt::SMTExpr> end,
                     llvm::ArrayRef<AssignmentBlock> assignments)
-    -> smt::SharedSMTRef;
+    -> std::unique_ptr<smt::SMTExpr>;
 auto addMemory(std::vector<smt::SharedSMTRef> &implArgs)
     -> std::function<void(CallInfo call, int index)>;
 

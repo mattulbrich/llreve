@@ -247,9 +247,9 @@ static void addForbiddenPaths(Mark startIndex, Mark endIndex1, Mark endIndex2,
                 // We need to interleave here, because
                 // otherwise
                 // extern functions are not matched
-                const auto smt = interleaveAssignments(
+                auto smt = interleaveAssignments(
                     make_unique<ConstantBool>(false), smt1, smt2);
-                pathExprs[startIndex].push_back(smt);
+                pathExprs[startIndex].push_back(std::move(smt));
             }
         }
     }
@@ -442,9 +442,10 @@ vector<AssignmentCallBlock> assignmentsOnPath(const Path &path, Program prog,
     return allDefs;
 }
 
-SharedSMTRef addAssignments(const SharedSMTRef end,
-                            llvm::ArrayRef<AssignmentBlock> assignments) {
-    SharedSMTRef clause = end;
+std::unique_ptr<smt::SMTExpr>
+addAssignments(std::unique_ptr<smt::SMTExpr> end,
+               llvm::ArrayRef<AssignmentBlock> assignments) {
+    std::unique_ptr<smt::SMTExpr> clause = std::move(end);
     for (auto assgnIt = assignments.rbegin(); assgnIt != assignments.rend();
          ++assgnIt) {
         clause = fastNestLets(std::move(clause), assgnIt->definitions);
@@ -455,11 +456,11 @@ SharedSMTRef addAssignments(const SharedSMTRef end,
     return clause;
 }
 
-SharedSMTRef interleaveAssignments(
-    SharedSMTRef endClause,
+std::unique_ptr<smt::SMTExpr> interleaveAssignments(
+    std::unique_ptr<smt::SMTExpr> endClause,
     llvm::ArrayRef<AssignmentCallBlock> assignmentCallBlocks1,
     llvm::ArrayRef<AssignmentCallBlock> assignmentCallBlocks2) {
-    SharedSMTRef clause = endClause;
+    std::unique_ptr<smt::SMTExpr> clause = std::move(endClause);
     const auto splitAssignments1 =
         splitAssignmentsFromCalls(assignmentCallBlocks1);
     const auto splitAssignments2 =
@@ -488,23 +489,25 @@ SharedSMTRef interleaveAssignments(
     for (InterleaveStep step : makeReverse(interleaveSteps)) {
         switch (step) {
         case InterleaveStep::StepFirst:
-            clause = addAssignments(clause, *assignmentIt1);
-            clause = nonMutualFunctionCall(clause, *callIt1, Program::First);
+            clause = addAssignments(std::move(clause), *assignmentIt1);
+            clause = nonMutualFunctionCall(std::move(clause), *callIt1,
+                                           Program::First);
             ++callIt1;
             ++assignmentIt1;
             break;
         case InterleaveStep::StepSecond:
-            clause = addAssignments(clause, *assignmentIt2);
-            clause = nonMutualFunctionCall(clause, *callIt2, Program::Second);
+            clause = addAssignments(std::move(clause), *assignmentIt2);
+            clause = nonMutualFunctionCall(std::move(clause), *callIt2,
+                                           Program::Second);
             ++callIt2;
             ++assignmentIt2;
             break;
         case InterleaveStep::StepBoth:
             assert(coupledCalls(*callIt1, *callIt2));
-            clause = addAssignments(clause, *assignmentIt2);
-            clause = addAssignments(clause, *assignmentIt1);
-            clause =
-                mutualFunctionCall(clause, makeMonoPair(*callIt1, *callIt2));
+            clause = addAssignments(std::move(clause), *assignmentIt2);
+            clause = addAssignments(std::move(clause), *assignmentIt1);
+            clause = mutualFunctionCall(std::move(clause),
+                                        makeMonoPair(*callIt1, *callIt2));
             ++callIt1;
             ++callIt2;
             ++assignmentIt1;
@@ -515,8 +518,8 @@ SharedSMTRef interleaveAssignments(
     // There is always one more block than there are calls, so we have to
     // add it
     // separately at the end
-    clause = addAssignments(clause, *assignmentIt2);
-    clause = addAssignments(clause, *assignmentIt1);
+    clause = addAssignments(std::move(clause), *assignmentIt2);
+    clause = addAssignments(std::move(clause), *assignmentIt1);
     ++assignmentIt1;
     ++assignmentIt2;
 
@@ -528,11 +531,11 @@ SharedSMTRef interleaveAssignments(
     return clause;
 }
 
-SharedSMTRef
-nonmutualSMT(SharedSMTRef endClause,
+std::unique_ptr<smt::SMTExpr>
+nonmutualSMT(std::unique_ptr<smt::SMTExpr> endClause,
              llvm::ArrayRef<AssignmentCallBlock> assignmentCallBlocks,
              Program prog) {
-    SharedSMTRef clause = endClause;
+    std::unique_ptr<smt::SMTExpr> clause = std::move(endClause);
     const auto splitAssignments =
         splitAssignmentsFromCalls(assignmentCallBlocks);
     const auto assignmentBlocks = splitAssignments.assignments;
@@ -544,15 +547,16 @@ nonmutualSMT(SharedSMTRef endClause,
         if (first) {
             first = false;
         } else {
-            clause = nonMutualFunctionCall(clause, *callIt, prog);
+            clause = nonMutualFunctionCall(std::move(clause), *callIt, prog);
             ++callIt;
         }
-        clause = addAssignments(clause, assgnsVec);
+        clause = addAssignments(std::move(clause), assgnsVec);
     }
     return clause;
 }
 
-SMTRef mutualFunctionCall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
+SMTRef mutualFunctionCall(std::unique_ptr<smt::SMTExpr> clause,
+                          MonoPair<CallInfo> callPair) {
     const uint32_t varArgs = callPair.first.varArgs;
     const vector<SortedVar> resultValues =
         getMutualResultValues(callPair.first.assignedTo, callPair.first.fun,
@@ -576,7 +580,7 @@ SMTRef mutualFunctionCall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
                       InvariantAttr::NONE, varArgs),
         postInvariantArguments, !hasFixedAbstraction(callPair.first.fun));
 
-    SMTRef result = makeOp("=>", std::move(postInvariant), clause);
+    SMTRef result = makeOp("=>", std::move(postInvariant), std::move(clause));
     result = std::make_unique<Forall>(resultValues, std::move(result));
     if (hasMutualFixedAbstraction(
             {&callPair.first.fun, &callPair.second.fun})) {
@@ -585,7 +589,8 @@ SMTRef mutualFunctionCall(SharedSMTRef clause, MonoPair<CallInfo> callPair) {
     return makeOp("and", std::move(preInvariant), std::move(result));
 }
 
-SMTRef nonMutualFunctionCall(SharedSMTRef clause, CallInfo call, Program prog) {
+SMTRef nonMutualFunctionCall(std::unique_ptr<smt::SMTExpr> clause,
+                             CallInfo call, Program prog) {
     const uint32_t varArgs = call.varArgs;
     vector<SortedVar> resultValues =
         getResultValues(prog, call.assignedTo, call.fun);
@@ -606,7 +611,7 @@ SMTRef nonMutualFunctionCall(SharedSMTRef clause, CallInfo call, Program prog) {
                       InvariantAttr::NONE, varArgs),
         postInvariantArguments, !hasFixedAbstraction(call.fun));
 
-    SMTRef result = makeOp("=>", std::move(postInvariant), clause);
+    SMTRef result = makeOp("=>", std::move(postInvariant), std::move(clause));
     result = std::make_unique<Forall>(resultValues, std::move(result));
     if (hasFixedAbstraction(call.fun)) {
         return result;
@@ -826,7 +831,7 @@ SMTRef getDontLoopInvariant(SMTRef endClause, Mark startIndex,
             path, prog, filterVars(programIndex(prog), freeVars.at(startIndex)),
             false);
         auto smt = nonmutualSMT(make_unique<ConstantBool>(false), defs, prog);
-        dontLoopExprs.push_back(smt);
+        dontLoopExprs.push_back(std::move(smt));
     }
     if (!dontLoopExprs.empty()) {
         auto andExpr = make_shared<Op>("and", dontLoopExprs);
