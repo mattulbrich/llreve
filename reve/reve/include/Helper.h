@@ -230,3 +230,15 @@ template <typename V> auto vecSingleton(V x) -> llvm::SmallVector<V, 1> {
     result.push_back(std::move(x));
     return result;
 }
+
+// This should eventually be removed but it’s useful for transitioning from
+// shared_ptrs to unique_ptrs
+template <typename T>
+std::vector<std::shared_ptr<T>>
+toVecOfSharedPtr(std::vector<std::unique_ptr<T>> vec) {
+    std::vector<std::shared_ptr<T>> result(vec.size());
+    for (size_t i = 0; i < vec.size(); ++i) {
+        result[i] = std::move(vec[i]);
+    }
+    return result;
+}

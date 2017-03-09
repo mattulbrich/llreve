@@ -39,7 +39,7 @@ using std::vector;
 using namespace smt;
 using namespace llreve::opts;
 
-vector<SharedSMTRef>
+vector<std::unique_ptr<smt::SMTExpr>>
 relationalFunctionAssertions(MonoPair<const llvm::Function *> functions,
                              const AnalysisResultsMap &analysisResults) {
     const auto pathMaps = getPathMaps(functions, analysisResults);
@@ -60,7 +60,7 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> functions,
                 freeVarsMap);
         });
 
-    map<MarkPair, vector<SharedSMTRef>> smtExprs;
+    map<MarkPair, vector<std::unique_ptr<smt::SMTExpr>>> smtExprs;
     for (auto &it : synchronizedPaths) {
         for (auto &path : it.second) {
             auto clause = forallStartingAt(
@@ -96,14 +96,15 @@ relationalFunctionAssertions(MonoPair<const llvm::Function *> functions,
         }
     }
 
-    return clauseMapToClauseVector(smtExprs, false, ProgramSelection::Both,
+    return clauseMapToClauseVector(std::move(smtExprs), false,
+                                   ProgramSelection::Both,
                                    getFunctionNumeralConstraints(functions));
 }
 
 // the main function that we want to check doesn’t need the output
 // parameters in
 // the assertions since it is never called
-vector<SharedSMTRef>
+vector<std::unique_ptr<smt::SMTExpr>>
 relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
                               const AnalysisResultsMap &analysisResults) {
     const auto pathMaps = getPathMaps(functions, analysisResults);
@@ -115,7 +116,7 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
     const auto freeVarsMap1 = analysisResults.at(functions.first).freeVariables;
     const auto freeVarsMap2 =
         analysisResults.at(functions.second).freeVariables;
-    vector<SharedSMTRef> smtExprs;
+    vector<std::unique_ptr<smt::SMTExpr>> smtExprs;
 
     if (SMTGenerationOpts::getInstance().OnlyRecursive ==
         FunctionEncoding::OnlyRecursive) {
@@ -148,7 +149,7 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
                                             std::move(stutterPaths));
     }
 
-    map<MarkPair, vector<SharedSMTRef>> clauses;
+    map<MarkPair, vector<std::unique_ptr<smt::SMTExpr>>> clauses;
     for (auto &it : synchronizedPaths) {
         for (auto &path : it.second) {
             auto clause = forallStartingAt(
@@ -169,7 +170,8 @@ relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
         }
     }
 
-    return clauseMapToClauseVector(clauses, true, ProgramSelection::Both,
+    return clauseMapToClauseVector(std::move(clauses), true,
+                                   ProgramSelection::Both,
                                    getFunctionNumeralConstraints(functions));
 }
 
@@ -280,7 +282,7 @@ getForbiddenPaths(const MonoPair<PathMap> &pathMaps,
     return pathExprs;
 }
 
-vector<SharedSMTRef>
+vector<std::unique_ptr<smt::SMTExpr>>
 functionalFunctionAssertions(const llvm::Function *f,
                              const AnalysisResultsMap &analysisResults,
                              Program prog) {
@@ -292,11 +294,11 @@ functionalFunctionAssertions(const llvm::Function *f,
     return nonmutualPaths(pathMap, freeVarsMap, prog, funName, returnType,
                           getFunctionNumeralConstraints(f, prog));
 }
-vector<SharedSMTRef>
-nonmutualPaths(const PathMap &pathMap, const FreeVarsMap &freeVarsMap,
-               Program prog, string funName, const llvm::Type *returnType,
-               vector<SharedSMTRef> functionNumeralConstraints) {
-    map<MarkPair, vector<SharedSMTRef>> smtExprs;
+vector<std::unique_ptr<smt::SMTExpr>> nonmutualPaths(
+    const PathMap &pathMap, const FreeVarsMap &freeVarsMap, Program prog,
+    string funName, const llvm::Type *returnType,
+    vector<std::unique_ptr<smt::SMTExpr>> functionNumeralConstraints) {
+    map<MarkPair, vector<std::unique_ptr<smt::SMTExpr>>> smtExprs;
     for (const auto &pathMapIt : pathMap) {
         const Mark startIndex = pathMapIt.first;
         for (const auto &innerPathMapIt : pathMapIt.second) {
@@ -318,8 +320,9 @@ nonmutualPaths(const PathMap &pathMap, const FreeVarsMap &freeVarsMap,
         }
     }
 
-    return clauseMapToClauseVector(smtExprs, false, asSelection(prog),
-                                   functionNumeralConstraints);
+    return clauseMapToClauseVector(std::move(smtExprs), false,
+                                   asSelection(prog),
+                                   std::move(functionNumeralConstraints));
 }
 
 template <typename OutputIt>
@@ -686,12 +689,10 @@ SharedSMTRef makeFunArgsEqual(SharedSMTRef clause, SharedSMTRef preClause,
 /// Create an assertion to require that if the recursive invariant holds and
 /// the
 /// arguments are equal the outputs are equal
-SharedSMTRef equalInputsEqualOutputs(const vector<SortedVar> &funArgs1,
-                                     const vector<SortedVar> &funArgs2,
-                                     const llvm::Function &function1,
-                                     const llvm::Function &function2,
-                                     string funName,
-                                     const FreeVarsMap &freeVarsMap) {
+std::unique_ptr<smt::SMTExpr> equalInputsEqualOutputs(
+    const vector<SortedVar> &funArgs1, const vector<SortedVar> &funArgs2,
+    const llvm::Function &function1, const llvm::Function &function2,
+    string funName, const FreeVarsMap &freeVarsMap) {
     vector<SortedVar> forallArgs;
     vector<SharedSMTRef> args;
     vector<SharedSMTRef> preInvArgs;
@@ -758,7 +759,7 @@ SharedSMTRef equalInputsEqualOutputs(const vector<SortedVar> &funArgs1,
     const auto equalArgs =
         makeFunArgsEqual(equalResults, std::move(preInv), funArgs1, funArgs2);
     const auto forallInputs = make_shared<Forall>(forallArgs, equalArgs);
-    return make_shared<Assert>(forallInputs);
+    return make_unique<Assert>(forallInputs);
 }
 
 /// Swap the program index
@@ -867,10 +868,12 @@ void generateRelationalFunctionSMT(
         relationalFunctionAssertions(preprocessedFunction, analysisResults);
     auto newDeclarations =
         relationalFunctionDeclarations(preprocessedFunction, analysisResults);
-    assertions.insert(assertions.end(), newAssertions.begin(),
-                      newAssertions.end());
-    declarations.insert(declarations.end(), newDeclarations.begin(),
-                        newDeclarations.end());
+    assertions.insert(assertions.end(),
+                      std::make_move_iterator(newAssertions.begin()),
+                      std::make_move_iterator(newAssertions.end()));
+    declarations.insert(declarations.end(),
+                        std::make_move_iterator(newDeclarations.begin()),
+                        std::make_move_iterator(newDeclarations.end()));
 }
 void generateFunctionalFunctionSMT(const llvm::Function *preprocessedFunction,
                                    const AnalysisResultsMap &analysisResults,
@@ -881,10 +884,12 @@ void generateFunctionalFunctionSMT(const llvm::Function *preprocessedFunction,
                                                       analysisResults, prog);
     auto newDeclarations = functionalFunctionDeclarations(
         preprocessedFunction, analysisResults, prog);
-    assertions.insert(assertions.end(), newAssertions.begin(),
-                      newAssertions.end());
-    declarations.insert(declarations.end(), newDeclarations.begin(),
-                        newDeclarations.end());
+    assertions.insert(assertions.end(),
+                      std::make_move_iterator(newAssertions.begin()),
+                      std::make_move_iterator(newAssertions.end()));
+    declarations.insert(declarations.end(),
+                        std::make_move_iterator(newDeclarations.begin()),
+                        std::make_move_iterator(newDeclarations.end()));
 }
 
 void generateRelationalIterativeSMT(
@@ -895,28 +900,31 @@ void generateRelationalIterativeSMT(
         relationalIterativeAssertions(preprocessedFunctions, analysisResults);
     auto newDeclarations =
         relationalIterativeDeclarations(preprocessedFunctions, analysisResults);
-    assertions.insert(assertions.end(), newAssertions.begin(),
-                      newAssertions.end());
-    declarations.insert(declarations.end(), newDeclarations.begin(),
-                        newDeclarations.end());
+    assertions.insert(assertions.end(),
+                      std::make_move_iterator(newAssertions.begin()),
+                      std::make_move_iterator(newAssertions.end()));
+    declarations.insert(declarations.end(),
+                        std::make_move_iterator(newDeclarations.begin()),
+                        std::make_move_iterator(newDeclarations.end()));
 }
 
-vector<SharedSMTRef>
-clauseMapToClauseVector(const map<MarkPair, vector<SharedSMTRef>> &clauseMap,
-                        bool main, ProgramSelection programSelection,
-                        vector<SharedSMTRef> functionNumeralConstraints) {
+vector<std::unique_ptr<smt::SMTExpr>> clauseMapToClauseVector(
+    map<MarkPair, vector<std::unique_ptr<smt::SMTExpr>>> clauseMap, bool main,
+    ProgramSelection programSelection,
+    vector<std::unique_ptr<smt::SMTExpr>> functionNumeralConstraints) {
     if (SMTGenerationOpts::getInstance().Invert) {
         bool program1 = oneOf(programSelection, ProgramSelection::First,
                               ProgramSelection::Both);
         bool program2 = oneOf(programSelection, ProgramSelection::Second,
                               ProgramSelection::Both);
-        vector<SharedSMTRef> clauses;
-        for (const auto it : clauseMap) {
+        vector<std::unique_ptr<smt::SMTExpr>> clauses;
+        for (auto &it : clauseMap) {
             vector<SharedSMTRef> clausesForMark;
-            for (const auto &path : it.second) {
-                clausesForMark.push_back(makeOp("not", path));
+            for (auto &path : it.second) {
+                clausesForMark.push_back(makeOp("not", std::move(path)));
             }
-            vector<SharedSMTRef> conjuncts = functionNumeralConstraints;
+            vector<std::unique_ptr<smt::SMTExpr>> conjuncts =
+                std::move(functionNumeralConstraints);
             conjuncts.push_back(
                 makeOp("=", "INV_INDEX_START",
                        std::make_unique<ConstantInt>(llvm::APInt(
@@ -932,37 +940,44 @@ clauseMapToClauseVector(const map<MarkPair, vector<SharedSMTRef>> &clauseMap,
             conjuncts.push_back(makeOp(
                 "=", "PROGRAM_2", std::make_unique<ConstantBool>(program2)));
             conjuncts.push_back(make_unique<Op>("or", clausesForMark));
-            clauses.push_back(make_unique<Op>("and", conjuncts));
+            clauses.push_back(
+                make_unique<Op>("and", toVecOfSharedPtr(std::move(conjuncts))));
         }
         return clauses;
     } else {
-        vector<SharedSMTRef> clauses;
-        for (const auto it : clauseMap) {
-            for (const auto &clause : it.second) {
-                clauses.push_back(clause);
+        vector<std::unique_ptr<smt::SMTExpr>> clauses;
+        for (auto &it : clauseMap) {
+            for (auto &clause : it.second) {
+                clauses.push_back(std::move(clause));
             }
         }
         return clauses;
     }
 }
 
-vector<SharedSMTRef> getFunctionNumeralConstraints(const llvm::Function *f,
-                                                   Program prog) {
+vector<std::unique_ptr<smt::SMTExpr>>
+getFunctionNumeralConstraints(const llvm::Function *f, Program prog) {
     string name = prog == Program::First ? "FUNCTION_1" : "FUNCTION_2";
-    return {makeOp(
+    vector<std::unique_ptr<smt::SMTExpr>> vec;
+    vec.emplace_back(makeOp(
         "=", name,
         std::make_unique<ConstantInt>(llvm::APInt(
-            64, SMTGenerationOpts::getInstance().FunctionNumerals.at(f))))};
+            64, SMTGenerationOpts::getInstance().FunctionNumerals.at(f)))));
+    return vec;
 }
 
-vector<SharedSMTRef>
+vector<std::unique_ptr<smt::SMTExpr>>
 getFunctionNumeralConstraints(MonoPair<const llvm::Function *> functions) {
-    return {makeOp("=", "FUNCTION_1",
-                   std::make_unique<ConstantInt>(llvm::APInt(
-                       64, SMTGenerationOpts::getInstance().FunctionNumerals.at(
-                               functions.first)))),
-            makeOp("=", "FUNCTION_2",
-                   std::make_unique<ConstantInt>(llvm::APInt(
-                       64, SMTGenerationOpts::getInstance().FunctionNumerals.at(
-                               functions.second))))};
+    vector<std::unique_ptr<smt::SMTExpr>> vec;
+    vec.emplace_back(
+        makeOp("=", "FUNCTION_1",
+               std::make_unique<ConstantInt>(llvm::APInt(
+                   64, SMTGenerationOpts::getInstance().FunctionNumerals.at(
+                           functions.first)))));
+    vec.emplace_back(
+        makeOp("=", "FUNCTION_2",
+               std::make_unique<ConstantInt>(llvm::APInt(
+                   64, SMTGenerationOpts::getInstance().FunctionNumerals.at(
+                           functions.second)))));
+    return vec;
 }

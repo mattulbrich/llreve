@@ -58,11 +58,11 @@ the function. Each jump is modeled as a possibly recursive call.
 auto relationalFunctionAssertions(
     MonoPair<const llvm::Function *> preprocessedFuns,
     const AnalysisResultsMap &analysisResults)
-    -> std::vector<smt::SharedSMTRef>;
+    -> std::vector<std::unique_ptr<smt::SMTExpr>>;
 auto functionalFunctionAssertions(
     MonoPair<const llvm::Function *> preprocessedFun,
     const AnalysisResultsMap &analysisResults, Program prog)
-    -> std::vector<smt::SharedSMTRef>;
+    -> std::vector<std::unique_ptr<smt::SMTExpr>>;
 
 /// Create the assertion for the passed main function.
 /**
@@ -70,11 +70,9 @@ The main function is special because it is never called so the predicates don’
 need to contain the output parameters. While it’s not necessary to use this
 encoding it seems to perform better in some cases.
  */
-auto relationalIterativeAssertions(
-    MonoPair<const llvm::Function *> preprocessedFuns,
-    const AnalysisResultsMap &analysisResults,
-    std::vector<smt::SharedSMTRef> &declarations, bool onlyRec)
-    -> std::vector<smt::SharedSMTRef>;
+auto relationalIterativeAssertions(MonoPair<const llvm::Function *> functions,
+                                   const AnalysisResultsMap &analysisResults)
+    -> std::vector<std::unique_ptr<smt::SMTExpr>>;
 
 /// Get all combinations of paths that have the same start and end mark.
 /**
@@ -120,10 +118,11 @@ auto getForbiddenPaths(const MonoPair<PathMap> &pathMaps,
                        bool main)
     -> std::map<Mark, std::vector<std::unique_ptr<smt::SMTExpr>>>;
 /// Get the assertions for a single program
-auto nonmutualPaths(const PathMap &pathMap, const FreeVarsMap &freeVarsMap,
-                    Program prog, std::string funName, const llvm::Type *type,
-                    std::vector<smt::SharedSMTRef> functionNumeralConstraints)
-    -> std::vector<smt::SharedSMTRef>;
+auto nonmutualPaths(
+    const PathMap &pathMap, const FreeVarsMap &freeVarsMap, Program prog,
+    std::string funName, const llvm::Type *type,
+    std::vector<std::unique_ptr<smt::SMTExpr>> functionNumeralConstraints)
+    -> std::vector<std::unique_ptr<smt::SMTExpr>>;
 auto getStutterPaths(const PathMap &pathMap1, const PathMap &pathMap2,
                      const FreeVarsMap &freeVarsMap, std::string funName,
                      bool main)
@@ -167,7 +166,7 @@ auto equalInputsEqualOutputs(const std::vector<smt::SortedVar> &funArgs1,
                              const llvm::Function &function2,
                              std::string funName,
                              const FreeVarsMap &freeVarsMap)
-    -> smt::SharedSMTRef;
+    -> std::unique_ptr<smt::SMTExpr>;
 
 /* -------------------------------------------------------------------------- */
 // Miscellanous helper functions that don't really belong anywhere
@@ -219,14 +218,14 @@ auto generateRelationalIterativeSMT(
     std::vector<smt::SharedSMTRef> &declarations) -> void;
 
 auto getFunctionNumeralConstraints(const llvm::Function *f, Program prog)
-    -> std::vector<smt::SharedSMTRef>;
+    -> std::vector<std::unique_ptr<smt::SMTExpr>>;
 auto getFunctionNumeralConstraints(MonoPair<const llvm::Function *> functions)
-    -> std::vector<smt::SharedSMTRef>;
+    -> std::vector<std::unique_ptr<smt::SMTExpr>>;
 auto clauseMapToClauseVector(
-    const std::map<MarkPair, std::vector<smt::SharedSMTRef>> &clauseMap,
+    std::map<MarkPair, std::vector<std::unique_ptr<smt::SMTExpr>>> clauseMap,
     bool main, ProgramSelection programSelection,
-    std::vector<smt::SharedSMTRef> functionNumeralConstraints)
-    -> std::vector<smt::SharedSMTRef>;
+    std::vector<std::unique_ptr<smt::SMTExpr>> functionNumeralConstraints)
+    -> std::vector<std::unique_ptr<smt::SMTExpr>>;
 
 template <typename T>
 std::vector<InterleaveStep> matchFunCalls(
