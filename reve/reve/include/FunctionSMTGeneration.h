@@ -159,7 +159,8 @@ auto forallStartingAt(std::unique_ptr<smt::SMTExpr> clause,
 
 auto makeFunArgsEqual(smt::SharedSMTRef clause, smt::SharedSMTRef preClause,
                       std::vector<smt::SortedVar> args1,
-                      std::vector<smt::SortedVar> args2) -> smt::SharedSMTRef;
+                      std::vector<smt::SortedVar> args2)
+    -> std::unique_ptr<smt::SMTExpr>;
 auto equalInputsEqualOutputs(const std::vector<smt::SortedVar> &funArgs1,
                              const std::vector<smt::SortedVar> &funArgs2,
                              const llvm::Function &function1,

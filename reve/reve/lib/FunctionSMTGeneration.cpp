@@ -668,9 +668,10 @@ forallStartingAt(std::unique_ptr<smt::SMTExpr> clause,
  */
 // Functions forcing arguments to be equal
 
-SharedSMTRef makeFunArgsEqual(SharedSMTRef clause, SharedSMTRef preClause,
-                              vector<SortedVar> Args1,
-                              vector<SortedVar> Args2) {
+std::unique_ptr<smt::SMTExpr> makeFunArgsEqual(SharedSMTRef clause,
+                                               SharedSMTRef preClause,
+                                               vector<SortedVar> Args1,
+                                               vector<SortedVar> Args2) {
     assert(Args1.size() == Args2.size());
 
     vector<SharedSMTRef> args;
@@ -756,10 +757,10 @@ std::unique_ptr<smt::SMTExpr> equalInputsEqualOutputs(
                                       funName, InvariantAttr::PRE),
                         preInvArgs);
 
-    const auto equalArgs =
+    auto equalArgs =
         makeFunArgsEqual(equalResults, std::move(preInv), funArgs1, funArgs2);
-    const auto forallInputs = make_shared<Forall>(forallArgs, equalArgs);
-    return make_unique<Assert>(forallInputs);
+    auto forallInputs = make_unique<Forall>(forallArgs, std::move(equalArgs));
+    return make_unique<Assert>(std::move(forallInputs));
 }
 
 /// Swap the program index

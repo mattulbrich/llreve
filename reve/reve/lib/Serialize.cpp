@@ -197,7 +197,7 @@ struct InstantiateArraysVisitor : smt::SMTVisitor {
                 }
             }
             return std::make_shared<Forall>(
-                indices, std::make_shared<Op>(op.opName, newArgs));
+                indices, std::make_unique<Op>(op.opName, newArgs));
         }
         if (op.opName == "=" && op.args.size() == 2 &&
             op.args.at(0)->heapInfo()) {
