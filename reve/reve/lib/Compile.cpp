@@ -36,11 +36,11 @@ using namespace llreve::opts;
 
 MonoPair<unique_ptr<llvm::Module>>
 compileToModules(const char *exeName, InputOpts &opts,
-                 MonoPair<std::shared_ptr<CodeGenAction>> acts) {
-    executeCodeGenActions(exeName, opts, acts);
+                 std::pair<CodeGenAction &, CodeGenAction &> actions) {
+    executeCodeGenActions(exeName, opts, actions);
 
-    unique_ptr<llvm::Module> mod1 = acts.first->takeModule();
-    unique_ptr<llvm::Module> mod2 = acts.second->takeModule();
+    unique_ptr<llvm::Module> mod1 = actions.first.takeModule();
+    unique_ptr<llvm::Module> mod2 = actions.second.takeModule();
     if (!mod1 || !mod2) {
         logError("Module was not successful\n");
         exit(1);
@@ -50,8 +50,9 @@ compileToModules(const char *exeName, InputOpts &opts,
 
 /// Compile the inputs to llvm assembly and return the corresponding
 /// CodeGenActions
-void executeCodeGenActions(const char *exeName, InputOpts &opts,
-                           MonoPair<std::shared_ptr<CodeGenAction>> acts) {
+void executeCodeGenActions(
+    const char *exeName, InputOpts &opts,
+    std::pair<CodeGenAction &, CodeGenAction &> actions) {
     auto diags = initializeDiagnostics();
     auto driver = initializeDriver(*diags);
     auto args = initializeArgs(exeName, opts);
@@ -69,14 +70,13 @@ void executeCodeGenActions(const char *exeName, InputOpts &opts,
     }
     auto cmdArgs = cmdArgsOrError.get();
 
-    executeCodeGenAction(cmdArgs.first, *diags, acts.first);
-    executeCodeGenAction(cmdArgs.second, *diags, acts.second);
+    executeCodeGenAction(cmdArgs.first, *diags, actions.first);
+    executeCodeGenAction(cmdArgs.second, *diags, actions.second);
 }
 
 /// Build the CodeGenAction corresponding to the arguments
 void executeCodeGenAction(const ArgStringList &ccArgs,
-                          clang::DiagnosticsEngine &diags,
-                          shared_ptr<CodeGenAction> act) {
+                          clang::DiagnosticsEngine &diags, CodeGenAction &act) {
     auto ci = std::make_unique<CompilerInvocation>();
     CompilerInvocation::CreateFromArgs(*ci, (ccArgs.data()),
                                        (ccArgs.data()) + ccArgs.size(), diags);
@@ -88,7 +88,7 @@ void executeCodeGenAction(const ArgStringList &ccArgs,
         logError("Couldn’t enable diagnostics\n");
         exit(1);
     }
-    if (!clang.ExecuteAction(*act)) {
+    if (!clang.ExecuteAction(act)) {
         logError("Couldn’t execute action\n");
         exit(1);
     }

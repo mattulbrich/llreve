@@ -99,11 +99,12 @@ int main(int argc, const char **argv) {
                         FileName2Flag);
     PreprocessOpts preprocessOpts(ShowCFGFlag, ShowMarkedCFGFlag, false);
 
-    MonoPair<shared_ptr<CodeGenAction>> acts =
-        makeMonoPair(make_shared<clang::EmitLLVMOnlyAction>(),
-                     make_shared<clang::EmitLLVMOnlyAction>());
+    std::unique_ptr<CodeGenAction> act1 =
+        std::make_unique<clang::EmitLLVMOnlyAction>();
+    std::unique_ptr<CodeGenAction> act2 =
+        std::make_unique<clang::EmitLLVMOnlyAction>();
     MonoPair<shared_ptr<llvm::Module>> modules =
-        compileToModules(argv[0], inputOpts, acts);
+        compileToModules(argv[0], inputOpts, {*act1, *act2});
     llvm::legacy::PassManager PM;
     PM.add(llvm::createStripSymbolsPass(true));
     PM.run(*modules.first);
