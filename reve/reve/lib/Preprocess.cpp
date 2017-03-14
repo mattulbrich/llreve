@@ -10,7 +10,6 @@
 
 #include "Preprocess.h"
 
-#include "CFGPrinter.h"
 #include "Helper.h"
 #include "InferMarks.h"
 #include "InlinePass.h"
@@ -21,16 +20,18 @@
 #include "RemoveMarkPass.h"
 #include "RemoveMarkRefsPass.h"
 #include "SplitEntryBlockPass.h"
+#include "UnifyFunctionExitNodes.h"
 #include "UniqueNamePass.h"
 
+#include "llvm/Analysis/CFGPrinter.h"
 #include "llvm/Analysis/LoopInfo.h"
-#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/ADCE.h"
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
-#include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
+#include "llvm/Transforms/Utils/LoopSimplify.h"
+#include "llvm/Transforms/Utils/Mem2Reg.h"
 
 using std::map;
 using std::vector;
@@ -106,52 +107,55 @@ static llvm::ReturnInst *getReturnInstruction(llvm::Function &fun) {
 
 PassAnalysisResults runFunctionPasses(llvm::Function &fun, Program prog,
                                       PreprocessOpts opts) {
-    auto fpm =
-        std::make_unique<llvm::legacy::FunctionPassManager>(fun.getParent());
-    fpm->add(llvm::createUnifyFunctionExitNodesPass());
+    llvm::FunctionAnalysisManager fam(false);
+    llvm::FunctionPassManager fpm(false);
+    llvm::PassBuilder pb;
+    pb.registerFunctionAnalyses(fam);
+    fpm.addPass(UnifyFunctionExitNodes{});
+    fam.registerPass([] { return FunctionExitNodeAnalysis(); });
 
-    fpm->add(new InlinePass());
-    fpm->add(llvm::createPromoteMemoryToRegisterPass()); // mem2reg
-    fpm->add(llvm::createLoopSimplifyPass());
-    fpm->add(llvm::createCFGSimplificationPass());
-    fpm->add(new SplitBlockPass());
+    // TODO reenable
+    // fpm.addPass(new InlinePass());
+    fpm.addPass(llvm::PromotePass{});
+    fpm.addPass(llvm::LoopSimplifyPass{});
+    fpm.addPass(llvm::SimplifyCFGPass{});
+    // TODO reenable
+    // fpm->add(new SplitBlockPass());
 
-    MarkAnalysis *markAnalysis = new MarkAnalysis();
-    InferMarksAnalysis *inferMarkAnalysis = new InferMarksAnalysis();
-    fpm->add(inferMarkAnalysis);
-    fpm->add(markAnalysis);
+    MarkAnalysis markAnalysis{};
+    fam.registerPass([] { return InferMarksAnalysis(); });
+    fam.registerPass([] { return MarkAnalysis{}; });
     if (!opts.InferMarks) {
-        fpm->add(new RemoveMarkRefsPass());
+        fpm.addPass(RemoveMarkRefsPass{});
     }
-    fpm->add(new InstCombinePass());
-    fpm->add(llvm::createAggressiveDCEPass());
-    fpm->add(llvm::createConstantPropagationPass());
-    // Passes need to have a default ctor
+    fpm.addPass(InstCombinePass{});
+    fpm.addPass(llvm::ADCEPass()); // supported
+    // TODO reenable
+    // fpm->add(llvm::createConstantPropagationPass());
+    // // Passes need to have a default ctor
     UniqueNamePass::Prefix = std::to_string(programIndex(prog));
-    fpm->add(new UniqueNamePass()); // prefix register names
+    fpm.addPass(UniqueNamePass{}); // prefix register names
     if (opts.ShowMarkedCFG) {
-        fpm->add(new CFGViewerPass()); // show marked cfg
+        fpm.addPass(llvm::CFGViewerPass()); // show marked cfg
     }
     if (!opts.InferMarks) {
-        fpm->add(new RemoveMarkPass());
+        fpm.addPass(RemoveMarkPass{});
     }
-    PathAnalysis *pathAnalysis = new PathAnalysis();
-    pathAnalysis->InferMarks = opts.InferMarks;
-    fpm->add(pathAnalysis);
+    fam.registerPass([&] { return PathAnalysis(opts.InferMarks); });
     if (opts.ShowCFG) {
-        fpm->add(new CFGViewerPass()); // show cfg
+        fpm.addPass(llvm::CFGViewerPass{}); // show cfg
     }
-    fpm->add(llvm::createVerifierPass());
+    fpm.addPass(llvm::VerifierPass());
     // FPM.addPass(llvm::PrintFunctionPass(errs())); // dump function
-    fpm->doInitialization();
-    fpm->run(fun);
+    fpm.run(fun, fam);
 
     auto retInst = getReturnInstruction(fun);
     if (opts.InferMarks) {
-        return {inferMarkAnalysis->BlockMarkMap, pathAnalysis->PathsMap,
-                retInst};
+        return {fam.getResult<InferMarksAnalysis>(fun),
+                fam.getResult<PathAnalysis>(fun), retInst};
     } else {
-        return {markAnalysis->BlockMarkMap, pathAnalysis->PathsMap, retInst};
+        return {fam.getResult<MarkAnalysis>(fun),
+                fam.getResult<PathAnalysis>(fun), retInst};
     }
 }
 

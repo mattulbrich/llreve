@@ -14,7 +14,8 @@
 
 #include "llvm/IR/Constants.h"
 
-bool InstCombinePass::runOnFunction(llvm::Function &Fun) {
+llvm::PreservedAnalyses
+InstCombinePass::run(llvm::Function &Fun, llvm::FunctionAnalysisManager &am) {
     for (auto &BB : Fun) {
         for (auto &Instr : BB) {
             // Casting a i1 to an i32 and then comparing to 0 is a noop
@@ -41,17 +42,5 @@ bool InstCombinePass::runOnFunction(llvm::Function &Fun) {
             }
         }
     }
-    return true;
-}
-
-char InstCombinePass::ID = 0;
-
-static llvm::RegisterPass<InstCombinePass>
-    RegisterMarkAnalysis("inst-combine-pass", "Combine instructions", false,
-                         false);
-
-void InstCombinePass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
-    AU.addPreserved<MarkAnalysis>();
-    AU.addPreserved<PathAnalysis>();
-    AU.setPreservesCFG();
+    return llvm::PreservedAnalyses::all();
 }

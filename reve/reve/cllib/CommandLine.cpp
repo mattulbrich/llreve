@@ -749,7 +749,7 @@ void cl::TokenizeGNUCommandLine(StringRef Src, StringSaver &Saver,
         // End the token if this is whitespace.
         if (isWhitespace(Src[I])) {
             if (!Token.empty())
-                NewArgv.push_back(Saver.save(Token.c_str()));
+                NewArgv.push_back(Saver.save(StringRef(Token)).data());
             Token.clear();
             continue;
         }
@@ -760,7 +760,7 @@ void cl::TokenizeGNUCommandLine(StringRef Src, StringSaver &Saver,
 
     // Append the last token after hitting EOF with no whitespace.
     if (!Token.empty())
-        NewArgv.push_back(Saver.save(Token.c_str()));
+        NewArgv.push_back(Saver.save(StringRef(Token)).data());
     // Mark the end of response files
     if (MarkEOLs)
         NewArgv.push_back(nullptr);
@@ -841,7 +841,7 @@ void cl::TokenizeWindowsCommandLine(StringRef Src, StringSaver &Saver,
         if (State == UNQUOTED) {
             // Whitespace means the end of the token.
             if (isWhitespace(Src[I])) {
-                NewArgv.push_back(Saver.save(Token.c_str()));
+                NewArgv.push_back(Saver.save(StringRef(Token)).data());
                 Token.clear();
                 State = INIT;
                 // Mark the end of lines in response files
@@ -876,7 +876,7 @@ void cl::TokenizeWindowsCommandLine(StringRef Src, StringSaver &Saver,
     }
     // Append the last token after hitting EOF with no whitespace.
     if (!Token.empty())
-        NewArgv.push_back(Saver.save(Token.c_str()));
+        NewArgv.push_back(Saver.save(StringRef(Token)).data());
     // Mark the end of response files
     if (MarkEOLs)
         NewArgv.push_back(nullptr);
@@ -991,7 +991,7 @@ void cl::ParseEnvironmentOptions(const char *progName, const char *envVar,
     SmallVector<const char *, 20> newArgv;
     BumpPtrAllocator A;
     StringSaver Saver(A);
-    newArgv.push_back(Saver.save(progName));
+    newArgv.push_back(Saver.save(progName).data());
 
     // Parse the value of the environment variable into a "command line"
     // and hand it off to ParseCommandLineOptions().

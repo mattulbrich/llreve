@@ -11,9 +11,9 @@
 #pragma once
 
 #include "MarkAnalysis.h"
-#include "SMT.h"
-
-#include "llvm/IR/PassManager.h"
+namespace smt {
+class SMTExpr;
+}
 
 class Condition {
   public:
@@ -69,19 +69,38 @@ class SwitchDefault : public Condition {
 using Path_ = std::vector<Edge>;
 using Paths_ = std::vector<Path_>;
 using Paths = std::vector<Path>;
-using PathMap = std::map<Mark, std::map<Mark, Paths>>;
 
-class PathAnalysis : public llvm::FunctionPass {
+// This just wraps an std::map specialized to the appropriate types. The only
+// reason why this is a struct instead of a type is to avoid ADL kicking in when
+// instantiating this pass
+struct PathMap {
+  private:
+    std::map<Mark, std::map<Mark, Paths>> value;
+
+  public:
+    auto begin() { return value.begin(); }
+    auto end() { return value.end(); }
+    auto begin() const { return value.begin(); }
+    auto end() const { return value.end(); }
+    std::map<Mark, Paths> &at(Mark mark) { return value.at(mark); }
+    const std::map<Mark, Paths> &at(Mark mark) const { return value.at(mark); }
+    auto find(Mark mark) { return value.find(mark); }
+    auto find(Mark mark) const { return value.find(mark); }
+    auto &operator[](Mark mark) { return value[mark]; }
+};
+
+class PathAnalysis : public llvm::AnalysisInfoMixin<PathAnalysis> {
   public:
     using Result = PathMap;
-    static llvm::StringRef name() { return "PathAnalysis"; }
-    bool runOnFunction(llvm::Function &F) override;
-    PathAnalysis() : llvm::FunctionPass(ID) {}
-    PathMap getPathMap() const;
-    void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
-    static char ID;
-    PathMap PathsMap;
+    PathMap run(llvm::Function &F, llvm::FunctionAnalysisManager &am);
+    PathAnalysis(bool inferMarks) : InferMarks(inferMarks) {}
+
+  private:
+    PathMap pathMap;
     bool InferMarks;
+    bool firstRun = true;
+    friend llvm::AnalysisInfoMixin<PathAnalysis>;
+    static llvm::AnalysisKey Key;
 };
 
 auto lastBlock(Path Path) -> llvm::BasicBlock *;

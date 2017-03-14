@@ -27,17 +27,23 @@ using smt::SMTRef;
 using smt::SMTExpr;
 using smt::ConstantInt;
 
-char PathAnalysis::ID = 0;
+llvm::AnalysisKey PathAnalysis::Key;
 
-bool PathAnalysis::runOnFunction(llvm::Function & /*unused*/) {
-    if (InferMarks) {
-        auto markedBlocks = getAnalysis<InferMarksAnalysis>().getBlockMarkMap();
-        PathsMap = findPaths(markedBlocks);
-    } else {
-        auto markedBlocks = getAnalysis<MarkAnalysis>().getBlockMarkMap();
-        PathsMap = findPaths(markedBlocks);
+PathMap PathAnalysis::run(llvm::Function &fun,
+                          llvm::FunctionAnalysisManager &am) {
+    // This analysis should only ever run once
+    if (!firstRun) {
+        return pathMap;
     }
-    return false;
+    firstRun = false;
+    if (InferMarks) {
+        auto markedBlocks = am.getResult<InferMarksAnalysis>(fun);
+        pathMap = findPaths(markedBlocks);
+    } else {
+        auto markedBlocks = am.getResult<MarkAnalysis>(fun);
+        pathMap = findPaths(markedBlocks);
+    }
+    return pathMap;
 }
 
 PathMap findPaths(BidirBlockMarkMap markedBlocks) {
@@ -57,14 +63,6 @@ PathMap findPaths(BidirBlockMarkMap markedBlocks) {
         }
     }
     return MyPaths;
-}
-
-PathMap PathAnalysis::getPathMap() const { return PathsMap; }
-
-void PathAnalysis::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
-    AU.setPreservesAll();
-    AU.addRequired<MarkAnalysis>();
-    AU.addRequired<InferMarksAnalysis>();
 }
 
 std::map<Mark, Paths> findPathsStartingAt(Mark For, llvm::BasicBlock *BB,
@@ -211,6 +209,3 @@ SMTRef SwitchDefault::toSmt() const {
     StringVals.push_back(instrNameOrVal(Cond));
     return std::make_unique<Op>("distinct", StringVals);
 }
-
-static llvm::RegisterPass<PathAnalysis>
-    RegisterMarkAnalysis("path-analysis", "Path Analysis", true, true);

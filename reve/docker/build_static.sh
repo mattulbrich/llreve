@@ -1,5 +1,5 @@
 #!/bin/bash
-# currently we assume that an image named cocreature/llreve:llvm-3.9_z3-4.5 already exists
+# currently we assume that an image named cocreature/llreve:llvm-4.0_z3-4.5 already exists
 set -o nounset
 set -o errexit
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -11,7 +11,7 @@ BUILD_COMMAND='rm -rf /llreve/reve/build && \
                cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release \
                                 -DLLREVE_STATIC=ON \
                ninja'
-CONTAINER="$(docker create cocreature/llreve:llvm-3.9_z3-4.5 sh -c "${BUILD_COMMAND}")"
+CONTAINER="$(docker create cocreature/llreve:llvm-4.0_z3-4.5 sh -c "${BUILD_COMMAND}")"
 function finish {
     docker rm "${CONTAINER}"
 }

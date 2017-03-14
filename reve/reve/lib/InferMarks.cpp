@@ -10,29 +10,30 @@
 
 #include "InferMarks.h"
 
+#include "UnifyFunctionExitNodes.h"
+
 #include <iostream>
 
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Instructions.h"
-#include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
 
 using std::make_pair;
 using std::set;
 
-char InferMarksAnalysis::ID = 0;
+llvm::AnalysisKey InferMarksAnalysis::Key;
 
-bool InferMarksAnalysis::runOnFunction(llvm::Function &Fun) {
+BidirBlockMarkMap InferMarksAnalysis::run(llvm::Function &Fun,
+                                          llvm::FunctionAnalysisManager &am) {
     std::map<Mark, set<llvm::BasicBlock *>> MarkedBlocks;
     std::map<llvm::BasicBlock *, set<Mark>> BlockedMarks;
     MarkedBlocks[ENTRY_MARK].insert(&Fun.getEntryBlock());
     BlockedMarks[&Fun.getEntryBlock()].insert(ENTRY_MARK);
     MarkedBlocks[EXIT_MARK].insert(
-        getAnalysis<llvm::UnifyFunctionExitNodes>().ReturnBlock);
-    BlockedMarks[getAnalysis<llvm::UnifyFunctionExitNodes>().ReturnBlock]
+        am.getResult<FunctionExitNodeAnalysis>(Fun).returnBlock);
+    BlockedMarks[am.getResult<FunctionExitNodeAnalysis>(Fun).returnBlock]
         .insert(EXIT_MARK);
-    llvm::LoopInfo &loopInfo =
-        getAnalysis<llvm::LoopInfoWrapperPass>().getLoopInfo();
+    llvm::LoopInfo &loopInfo = am.getResult<llvm::LoopAnalysis>(Fun);
     int i = 1;
     for (auto loop : loopInfo) {
         for (auto subLoop : loop->getSubLoops()) {
@@ -46,19 +47,5 @@ bool InferMarksAnalysis::runOnFunction(llvm::Function &Fun) {
     }
 
     BlockMarkMap = BidirBlockMarkMap(BlockedMarks, MarkedBlocks);
-    return false; // Did not modify CFG
-}
-
-void InferMarksAnalysis::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
-    AU.setPreservesAll();
-    AU.addRequired<llvm::UnifyFunctionExitNodes>();
-    AU.addRequired<llvm::LoopInfoWrapperPass>();
-}
-
-BidirBlockMarkMap InferMarksAnalysis::getBlockMarkMap() const {
     return BlockMarkMap;
 }
-
-static llvm::RegisterPass<InferMarksAnalysis>
-    RegisterInferMarksAnalysis("infer-mark-analysis", "Mark Analysis", true,
-                               true);

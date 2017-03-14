@@ -13,7 +13,7 @@
 #include <map>
 #include <set>
 
-#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/PassManager.h"
 
 struct Mark {
   private:
@@ -58,16 +58,14 @@ struct BidirBlockMarkMap {
         std::map<Mark, std::set<llvm::BasicBlock *>> MarkToBlocksMap)
         : BlockToMarksMap(BlockToMarksMap), MarkToBlocksMap(MarkToBlocksMap) {}
 };
-class MarkAnalysis : public llvm::FunctionPass {
+class MarkAnalysis : public llvm::AnalysisInfoMixin<MarkAnalysis> {
   public:
     using Result = BidirBlockMarkMap;
-    static llvm::StringRef name() { return "MarkAnalysis"; }
-    bool runOnFunction(llvm::Function &Fun) override;
-    void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
-    BidirBlockMarkMap getBlockMarkMap() const;
-    MarkAnalysis() : llvm::FunctionPass(ID) {}
-    static char ID;
-    // it’s not possible to have non default constructors with the legacy
-    // passmanager so we can’t just pass a pointer there to escape this
-    BidirBlockMarkMap BlockMarkMap;
+    Result run(llvm::Function &fun, llvm::FunctionAnalysisManager &am);
+    BidirBlockMarkMap blockMarkMap;
+
+  private:
+    bool firstRun = true;
+    friend llvm::AnalysisInfoMixin<MarkAnalysis>;
+    static llvm::AnalysisKey Key;
 };

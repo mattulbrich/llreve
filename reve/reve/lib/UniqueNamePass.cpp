@@ -18,8 +18,8 @@
 
 using std::string;
 
-char UniqueNamePass::ID = 0;
-bool UniqueNamePass::runOnFunction(llvm::Function &F) {
+llvm::PreservedAnalyses UniqueNamePass::run(llvm::Function &F,
+                                            llvm::FunctionAnalysisManager &am) {
     std::map<string, int> InstructionNames;
     std::string funName = F.getName();
 
@@ -35,7 +35,7 @@ bool UniqueNamePass::runOnFunction(llvm::Function &F) {
             makePrefixed(Inst, Prefix, InstructionNames);
         }
     }
-    return true;
+    return llvm::PreservedAnalyses::all();
 }
 
 void makePrefixed(llvm::Value &Val, std::string Prefix,
@@ -60,13 +60,4 @@ void makePrefixed(llvm::Value &Val, std::string Prefix,
     }
 }
 
-static llvm::RegisterPass<UniqueNamePass>
-    RegisterMarkAnalysis("unique-names", "Create unique names", false, false);
-
 string UniqueNamePass::Prefix = "ERROR";
-
-void UniqueNamePass::getAnalysisUsage(llvm::AnalysisUsage& AU) const {
-    AU.setPreservesCFG();
-    AU.addPreserved<MarkAnalysis>();
-    AU.addPreserved<PathAnalysis>();
-}

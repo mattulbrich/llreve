@@ -213,11 +213,6 @@ int main(int argc, const char **argv) {
                             parseFunctionPairFlags(CoupleFunctionsFlag)),
         functionNumerals, reversedFunctionNumerals);
 
-    llvm::legacy::PassManager PM;
-    PM.add(llvm::createStripSymbolsPass(true));
-    PM.run(moduleRefs.first);
-    PM.run(moduleRefs.second);
-
     const auto analysisResults = preprocessModules(moduleRefs, preprocessOpts);
 
     vector<SharedSMTRef> smtExprs =

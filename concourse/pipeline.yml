@@ -31,7 +31,7 @@ jobs:
         type: docker-image
         source:
           repository: cocreature/llreve
-          tag: llvm-3.9_z3-4.5
+          tag: llvm-4.0_z3-4.5
       inputs:
         - name: llreve-git
       outputs:

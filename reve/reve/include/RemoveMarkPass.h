@@ -15,11 +15,12 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/PassManager.h"
 
-class RemoveMarkPass : public llvm::FunctionPass {
+class RemoveMarkPass : public llvm::PassInfoMixin<RemoveMarkPass> {
   public:
-    static char ID;
-    static llvm::StringRef name() { return "RemoveMarkPass"; }
-    bool runOnFunction(llvm::Function &Fun) override;
-    RemoveMarkPass() : llvm::FunctionPass(ID) {}
-    void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
+    llvm::PreservedAnalyses run(llvm::Function &Fun,
+                                llvm::FunctionAnalysisManager &am);
+
+  private:
+    friend llvm::AnalysisInfoMixin<RemoveMarkPass>;
+    static llvm::AnalysisKey Key;
 };

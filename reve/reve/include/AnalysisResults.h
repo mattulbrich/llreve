@@ -10,10 +10,9 @@
 
 #pragma once
 
-#include "FreeVariables.h"
-#include "MarkAnalysis.h"
-#include "MonoPair.h"
 #include "PathAnalysis.h"
+#include "FreeVariables.h"
+#include "MonoPair.h"
 
 struct AnalysisResults {
     BidirBlockMarkMap blockMarkMap;

@@ -11,13 +11,13 @@
 #include "MarkAnalysis.h"
 
 #include "Helper.h"
+#include "UnifyFunctionExitNodes.h"
 
 #include <iostream>
 
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Instructions.h"
-#include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
 
 using std::make_pair;
 using std::set;
@@ -28,16 +28,22 @@ bool Mark::hasInvariant() const {
     return noneOf(*this, EXIT_MARK, UNREACHABLE_MARK, FORBIDDEN_MARK);
 }
 
-char MarkAnalysis::ID = 0;
+llvm::AnalysisKey MarkAnalysis::Key;
 
-bool MarkAnalysis::runOnFunction(llvm::Function &Fun) {
+BidirBlockMarkMap MarkAnalysis::run(llvm::Function &Fun,
+                                    llvm::FunctionAnalysisManager &am) {
+    // This analysis should only ever run once
+    if (!firstRun) {
+        return blockMarkMap;
+    }
+    firstRun = false;
     std::map<Mark, set<llvm::BasicBlock *>> MarkedBlocks;
     std::map<llvm::BasicBlock *, set<Mark>> BlockedMarks;
     MarkedBlocks[ENTRY_MARK].insert(&Fun.getEntryBlock());
     BlockedMarks[&Fun.getEntryBlock()].insert(ENTRY_MARK);
     MarkedBlocks[EXIT_MARK].insert(
-        getAnalysis<llvm::UnifyFunctionExitNodes>().ReturnBlock);
-    BlockedMarks[getAnalysis<llvm::UnifyFunctionExitNodes>().ReturnBlock]
+        am.getResult<FunctionExitNodeAnalysis>(Fun).returnBlock);
+    BlockedMarks[am.getResult<FunctionExitNodeAnalysis>(Fun).returnBlock]
         .insert(EXIT_MARK);
     for (auto &BB : Fun) {
         for (auto &Inst : BB) {
@@ -66,7 +72,7 @@ bool MarkAnalysis::runOnFunction(llvm::Function &Fun) {
     }
     // loop rotation duplicates marks, so we need to remove the marks that are
     // outside the loop
-    llvm::LoopInfo &LI = getAnalysis<llvm::LoopInfoWrapperPass>().getLoopInfo();
+    llvm::LoopInfo &LI = am.getResult<llvm::LoopAnalysis>(Fun);
     for (auto it : MarkedBlocks) {
         set<llvm::BasicBlock *> newMarkedBlocks;
         if (it.second.size() > 1) {
@@ -84,17 +90,6 @@ bool MarkAnalysis::runOnFunction(llvm::Function &Fun) {
             it.second = newMarkedBlocks;
         }
     }
-    BlockMarkMap = BidirBlockMarkMap(BlockedMarks, MarkedBlocks);
-    return false; // Did not modify CFG
+    blockMarkMap = BidirBlockMarkMap(BlockedMarks, MarkedBlocks);
+    return blockMarkMap;
 }
-
-void MarkAnalysis::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
-    AU.setPreservesAll();
-    AU.addRequired<llvm::UnifyFunctionExitNodes>();
-    AU.addRequired<llvm::LoopInfoWrapperPass>();
-}
-
-BidirBlockMarkMap MarkAnalysis::getBlockMarkMap() const { return BlockMarkMap; }
-
-static llvm::RegisterPass<MarkAnalysis>
-    RegisterMarkAnalysis("mark-analysis", "Mark Analysis", true, true);

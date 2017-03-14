@@ -17,16 +17,15 @@
 #include <map>
 #include <set>
 
-class InferMarksAnalysis : public llvm::FunctionPass {
+class InferMarksAnalysis : public llvm::AnalysisInfoMixin<InferMarksAnalysis> {
   public:
     using Result = BidirBlockMarkMap;
-    static llvm::StringRef name() { return "InferMarksAnalysis"; }
-    bool runOnFunction(llvm::Function &Fun) override;
-    void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
-    BidirBlockMarkMap getBlockMarkMap() const;
-    InferMarksAnalysis() : llvm::FunctionPass(ID) {}
-    static char ID;
+    Result run(llvm::Function &Fun, llvm::FunctionAnalysisManager &am);
     // it’s not possible to have non default constructors with the legacy
     // passmanager so we can’t just pass a pointer there to escape this
     BidirBlockMarkMap BlockMarkMap;
+
+  private:
+    friend llvm::AnalysisInfoMixin<InferMarksAnalysis>;
+    static llvm::AnalysisKey Key;
 };

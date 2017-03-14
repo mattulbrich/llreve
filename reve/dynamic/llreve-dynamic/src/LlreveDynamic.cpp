@@ -105,10 +105,6 @@ int main(int argc, const char **argv) {
         std::make_unique<clang::EmitLLVMOnlyAction>();
     MonoPair<shared_ptr<llvm::Module>> modules =
         compileToModules(argv[0], inputOpts, {*act1, *act2});
-    llvm::legacy::PassManager PM;
-    PM.add(llvm::createStripSymbolsPass(true));
-    PM.run(*modules.first);
-    PM.run(*modules.second);
     MonoPair<llvm::Module &> moduleRefs = {*modules.first, *modules.second};
 
     std::map<const llvm::Function *, int> functionNumerals;
