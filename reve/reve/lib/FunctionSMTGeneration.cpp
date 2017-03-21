@@ -905,8 +905,8 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
     }
 
 
-    if (main && blockIndex == ENTRY_MARK) {
-        if (!vars.empty()) { // We dont need to imply in_inv => sth. if in_inv has no parameters
+    if (!vars.empty()) { // We dont need to imply in_inv => sth. if in_inv has no parameters
+        if (main && blockIndex == ENTRY_MARK) {
             string opname =
                 SMTGenerationOpts::getInstance().InitPredicate ?
                 "INIT" : "IN_INV";
@@ -917,13 +917,13 @@ SharedSMTRef forallStartingAt(SharedSMTRef clause, vector<SortedVar> freeVars,
             }
 
             clause = makeBinOp("=>", makeOp(opname, args), clause);
+        } else {
+            InvariantAttr attr = main ? InvariantAttr::MAIN : InvariantAttr::PRE;
+            preVars = fillUpArgs(preVars, freeVarsMap, memory, prog, attr);
+            SMTRef preInv =
+                makeOp(invariantName(blockIndex, prog, funName, attr), preVars);
+            clause = makeBinOp("=>", std::move(preInv), clause);
         }
-    } else {
-        InvariantAttr attr = main ? InvariantAttr::MAIN : InvariantAttr::PRE;
-        preVars = fillUpArgs(preVars, freeVarsMap, memory, prog, attr);
-        SMTRef preInv =
-            makeOp(invariantName(blockIndex, prog, funName, attr), preVars);
-        clause = makeBinOp("=>", std::move(preInv), clause);
     }
 
     if (SMTGenerationOpts::getInstance().MuZ ||
