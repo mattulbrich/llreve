@@ -10,12 +10,10 @@
 
 #pragma once
 
-#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/PassManager.h"
 
-class InlinePass : public llvm::FunctionPass {
+class InlinePass : public llvm::PassInfoMixin<InlinePass> {
   public:
-    static llvm::StringRef name() { return "MarkAnalysis"; }
-    bool runOnFunction(llvm::Function &fun);
-    static char ID;
-    InlinePass() : llvm::FunctionPass(ID) {}
+    llvm::PreservedAnalyses run(llvm::Function &fun,
+                                llvm::FunctionAnalysisManager &fam);
 };

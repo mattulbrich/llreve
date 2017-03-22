@@ -114,8 +114,7 @@ PassAnalysisResults runFunctionPasses(llvm::Function &fun, Program prog,
     fpm.addPass(UnifyFunctionExitNodes{});
     fam.registerPass([] { return FunctionExitNodeAnalysis(); });
 
-    // TODO reenable
-    // fpm.addPass(new InlinePass());
+    fpm.addPass(InlinePass{});
     fpm.addPass(llvm::PromotePass{});
     fpm.addPass(llvm::LoopSimplifyPass{});
     fpm.addPass(llvm::SimplifyCFGPass{});

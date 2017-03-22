@@ -14,7 +14,8 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 
-bool InlinePass::runOnFunction(llvm::Function &fun) {
+llvm::PreservedAnalyses InlinePass::run(llvm::Function &fun,
+                                        llvm::FunctionAnalysisManager &fam) {
     std::vector<llvm::Instruction *> toDelete;
     std::vector<llvm::CallInst *> toBeInlined;
     for (auto &bb : fun) {
@@ -51,9 +52,5 @@ bool InlinePass::runOnFunction(llvm::Function &fun) {
         llvm::InlineFunctionInfo InlineInfo;
         llvm::InlineFunction(instr, InlineInfo);
     }
-    return true;
+    return llvm::PreservedAnalyses::none();
 }
-
-char InlinePass::ID = 0;
-static llvm::RegisterPass<InlinePass>
-    RegisterMarkAnalysis("inlinepass", "Inlining", false, false);
