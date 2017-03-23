@@ -69,6 +69,16 @@ static llreve::cl::opt<string> FileName2Flag(llreve::cl::Positional,
                                              llreve::cl::Required,
                                              llreve::cl::cat(ReveCategory));
 
+static llreve::cl::opt<string> IRFileName1(
+    "write-ir-1",
+    llreve::cl::desc(
+        "Serialize the first module in LLVM IR to the specified file"),
+    llreve::cl::cat(ReveCategory));
+static llreve::cl::opt<string> IRFileName2(
+    "write-ir-2",
+    llreve::cl::desc(
+        "Serialize the second module in LLVM IR to the specified file"),
+    llreve::cl::cat(ReveCategory));
 // Serialize flags
 static llreve::cl::opt<string>
     OutputFileNameFlag("o", llreve::cl::desc("SMT output filename"),
@@ -168,6 +178,16 @@ static llreve::cl::opt<bool> InlineLets("inline-lets",
 static void printVersion() {
     std::cout << "llreve version " << g_GIT_SHA1 << "\n";
 }
+
+static void printModule(llvm::Module &mod, llvm::StringRef fileName) {
+    if (fileName.empty()) {
+        return;
+    }
+    std::error_code errorCode;
+    llvm::raw_fd_ostream stream(fileName, errorCode, llvm::sys::fs::F_None);
+    mod.print(stream, nullptr);
+}
+
 int main(int argc, const char **argv) {
     llreve::cl::SetVersionPrinter(printVersion);
     parseCommandLineArguments(argc, argv);
@@ -214,6 +234,8 @@ int main(int argc, const char **argv) {
         functionNumerals, reversedFunctionNumerals);
 
     const auto analysisResults = preprocessModules(moduleRefs, preprocessOpts);
+    printModule(*modules.first, IRFileName1);
+    printModule(*modules.second, IRFileName2);
 
     vector<SharedSMTRef> smtExprs =
         generateSMT(moduleRefs, analysisResults, fileOpts);
