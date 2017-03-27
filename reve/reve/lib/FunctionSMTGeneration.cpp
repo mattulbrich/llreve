@@ -235,11 +235,11 @@ static void addForbiddenPaths(
             const auto endIndices = makeMonoPair(
                 marked.first.BlockToMarksMap.at(endBlocks.first),
                 marked.second.BlockToMarksMap.at(endBlocks.second));
-            if (SMTGenerationOpts::getInstance().PerfectSync ==
-                    PerfectSynchronization::Enabled ||
-                (startIndex != endIndex1 && // no cycles
-                 startIndex != endIndex2 &&
-                 intersection(endIndices.first, endIndices.second).empty())) {
+            if (intersection(endIndices.first, endIndices.second).empty() &&
+                (SMTGenerationOpts::getInstance().PerfectSync ==
+                     PerfectSynchronization::Enabled ||
+                 (startIndex != endIndex1 && // no cycles
+                  startIndex != endIndex2))) {
                 const auto smt2 = assignmentsOnPath(path2, Program::Second,
                                                     freeVarsMap2.at(startIndex),
                                                     endIndex2 == EXIT_MARK);
