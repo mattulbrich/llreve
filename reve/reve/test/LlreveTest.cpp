@@ -34,6 +34,15 @@ std::ostream &operator<<(::std::ostream &os, ExpectedResult result) {
     }
 }
 
+std::ostream &operator<<(::std::ostream &os, Solver solver) {
+    switch (solver) {
+    case Solver::Z3:
+        return os << "z3";
+    case Solver::ELDARICA:
+        return os << "eldarica";
+    }
+}
+
 ExpectedResult parseZ3Result(const std::string &output) {
     if (std::regex_search(output, std::regex("(^|\n)unsat"))) {
         return ExpectedResult::EQUIVALENT;
@@ -72,9 +81,9 @@ TEST_P(LlreveTest, Llreve) {
         PathToTestExecutable + "../../examples/" + directory + "/" + fileName;
     auto smtOutput = std::tmpnam(nullptr);
     std::ostringstream llreveCommand;
-    llreveCommand << PathToTestExecutable << "llreve -inline-opts -o "
-                  << smtOutput << " -I=" << PathToTestExecutable
-                  << "../../examples/headers"
+    llreveCommand << PathToTestExecutable
+                  << "llreve -inline-opts -o=" << smtOutput
+                  << " -I=" << PathToTestExecutable << "../../examples/headers"
                   << " ";
     if (solver == Solver::Z3) {
         llreveCommand << "-muz ";
@@ -152,7 +161,7 @@ INSTANTIATE_TEST_CASE_P(
                      testing::Values("ackermann", "add-horn", "cocome1",
                                      "inlining", "limit1unrolled", "limit2",
                                      "limit3", "loop_rec", "mccarthy91",
-                                     "rec_while", "triangular"),
+                                     /* "rec_while", */ "triangular"),
                      testing::Values(ExpectedResult::EQUIVALENT),
                      testing::Values(Solver::Z3, Solver::ELDARICA)));
 
@@ -170,12 +179,17 @@ INSTANTIATE_TEST_CASE_P(
                      testing::Values(ExpectedResult::EQUIVALENT),
                      testing::Values(Solver::Z3, Solver::ELDARICA)));
 
+INSTANTIATE_TEST_CASE_P(
+    Redis, LlreveTest,
+    testing::Combine(testing::Values("redis/t_zset"), testing::Values("t_zset"),
+                     testing::Values(ExpectedResult::EQUIVALENT),
+                     testing::Values(Solver::Z3)));
+
 static std::string getDirectory(std::string filePath) {
     auto pos = filePath.rfind('/');
     if (pos != std::string::npos) {
         filePath = filePath.substr(0, pos) + "/";
     }
-    std::cout << filePath << "\n";
     return filePath;
 }
 
