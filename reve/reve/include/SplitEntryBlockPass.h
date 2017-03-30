@@ -10,13 +10,10 @@
 
 #pragma once
 
-#include "llvm/IR/Instructions.h"
-#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/PassManager.h"
 
-class SplitBlockPass : public llvm::FunctionPass {
+class SplitBlockPass : public llvm::PassInfoMixin<SplitBlockPass> {
   public:
-    static llvm::StringRef name() { return "SplitEntryBlockPass"; }
-    bool runOnFunction(llvm::Function &Fun);
-    SplitBlockPass() : llvm::FunctionPass(ID) {}
-    static char ID;
+    llvm::PreservedAnalyses run(llvm::Function &Fun,
+                                llvm::FunctionAnalysisManager &fam);
 };

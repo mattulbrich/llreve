@@ -118,8 +118,7 @@ PassAnalysisResults runFunctionPasses(llvm::Function &fun, Program prog,
     fpm.addPass(llvm::PromotePass{});
     fpm.addPass(llvm::LoopSimplifyPass{});
     fpm.addPass(llvm::SimplifyCFGPass{});
-    // TODO reenable
-    // fpm->add(new SplitBlockPass());
+    fpm.addPass(SplitBlockPass{});
 
     MarkAnalysis markAnalysis{};
     fam.registerPass([] { return InferMarksAnalysis(); });

@@ -10,10 +10,13 @@
 
 #include "SplitEntryBlockPass.h"
 
-bool SplitBlockPass::runOnFunction(llvm::Function &Fun) {
+#include "llvm/IR/Instructions.h"
+
+llvm::PreservedAnalyses
+SplitBlockPass::run(llvm::Function &Fun, llvm::FunctionAnalysisManager &fam) {
     auto &Entry = Fun.getEntryBlock();
     Entry.splitBasicBlock(Entry.begin());
-    std::vector<llvm::Instruction*> splitAt;
+    std::vector<llvm::Instruction *> splitAt;
     for (auto &BB : Fun) {
         for (auto &Inst : BB) {
             if (const auto CallInst = llvm::dyn_cast<llvm::CallInst>(&Inst)) {
@@ -30,9 +33,5 @@ bool SplitBlockPass::runOnFunction(llvm::Function &Fun) {
         i->getParent()->splitBasicBlock(i);
         instr->getParent()->splitBasicBlock(instr);
     }
-    return true;
+    return llvm::PreservedAnalyses::none();
 }
-
-char SplitBlockPass::ID = 0;
-static llvm::RegisterPass<SplitBlockPass>
-    RegisterMarkAnalysis("split-entry-block", "Split Entry Block", false, false);
