@@ -1192,4 +1192,7 @@ int memtest_preserving_test(unsigned long *m, size_t bytes, int passes);
 #define redisDebugMark() \
     printf("-- MARK %s:%d --\n", __FILE__, __LINE__)
 
+void _serverPanic(char *msg, char *file, int line);
+#define serverPanic(_e) _serverPanic(#_e,__FILE__,__LINE__),_exit(1)
+
 #endif

@@ -2,7 +2,6 @@
 #include "server.h"
 #include <math.h>
 
-extern void serverPanic(const char*);
 extern void serverAssert(int);
 extern void serverAssertWithInfo(client *c, robj *o, int);
 extern unsigned char *zzlFind(unsigned char *zl, sds ele, int *score);
@@ -38,9 +37,9 @@ int zsetDel(unsigned zobjEncoding, robj *zobj, sds ele) {
             return 1;
         }
     }
-    // else {
-    //     serverPanic("Unknown sorted set encoding");
-    // }
+    else {
+        serverPanic("Unknown sorted set encoding");
+    }
     return 0; /* No such element found. */
 }
 
@@ -48,16 +47,14 @@ void zremCommand(client *c) {
     robj *key = c->argv[1];
     robj *zobj;
     int deleted = 0, keyremoved = 0, j;
+    int argc = c->argc;
 
     if ((zobj = lookupKeyWriteOrReply(c, key, shared.czero)) == NULL ||
         checkType(c, zobj, OBJ_ZSET))
         return;
 
-    if (zobj->encoding != OBJ_ENCODING_ZIPLIST && zobj->encoding != OBJ_ENCODING_SKIPLIST) {
-        return;
-    }
     unsigned zobjEncoding = zobj->encoding;
-    for (j = 2; __mark(0) & __mark(1) & (j < c->argc); j++) {
+    for (j = 2; __mark(0) & __mark(1) & __mark(3) & (j < argc); j++) {
         if (zsetDel(zobjEncoding, zobj, c->argv[j]->ptr)) {
             deleted++;
             if (zzlLength(zobj->ptr) == 0) {

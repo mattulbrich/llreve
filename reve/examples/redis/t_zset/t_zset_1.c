@@ -1,29 +1,28 @@
+/*@ pre (> (select HEAP$1 (+ c$1 28)) 2) @*/
 #include "server.h"
 #include <math.h>
 
-extern void serverPanic(const char*);
 extern void serverAssertWithInfo(client *c, robj *o, int);
 extern unsigned char *zzlFind(unsigned char *zl, sds ele, int *score);
 extern unsigned char *zzlDelete(unsigned char *zl, unsigned char *eptr);
 extern unsigned int zzlLength(unsigned char *zl);
 extern int __mark(int);
+extern int __splitmark(int);
 
 void zremCommand(client *c) {
     robj *key = c->argv[1];
     robj *zobj;
     int deleted = 0, keyremoved = 0, j;
+    int argc = c->argc;
 
     if ((zobj = lookupKeyWriteOrReply(c, key, shared.czero)) == NULL ||
         checkType(c, zobj, OBJ_ZSET))
         return;
 
-    if (zobj->encoding != OBJ_ENCODING_ZIPLIST && zobj->encoding != OBJ_ENCODING_SKIPLIST) {
-        return;
-    }
     if (zobj->encoding == OBJ_ENCODING_ZIPLIST) {
         unsigned char *eptr;
 
-        for (j = 2; __mark(0) & (j < c->argc); j++) {
+        for (j = 2; __mark(0) & (j < argc); j++) {
             if ((eptr = zzlFind(zobj->ptr, c->argv[j]->ptr, NULL)) != NULL) {
                 deleted++;
                 zobj->ptr = zzlDelete(zobj->ptr, eptr);
@@ -36,7 +35,7 @@ void zremCommand(client *c) {
         }
     }
      else if (zobj->encoding == OBJ_ENCODING_SKIPLIST) {
-        for (j = 2; __mark(1) & (j < c->argc); j++) {
+        for (j = 2; __mark(1) & (j < argc); j++) {
             zset *zs = zobj->ptr;
             dictEntry *de;
             int score;
@@ -59,9 +58,10 @@ void zremCommand(client *c) {
             }
         }
     }
-    // else {
-    //     serverPanic("Unknown sorted set encoding");
-    // }
+    else {
+        __splitmark(3);
+        serverPanic("Unknown sorted set encoding");
+    }
 
     if (deleted) {
         notifyKeyspaceEvent(NOTIFY_ZSET, "zrem", key, c->db->id);
