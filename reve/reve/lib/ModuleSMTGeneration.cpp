@@ -305,19 +305,18 @@ std::unique_ptr<FunDef> inInvariant(MonoPair<const llvm::Function *> funs,
                    functionArgumentsPair.second.end(),
                    std::back_inserter(functionArguments2),
                    typedVariableFromSortedVar);
-    assert(functionArguments1.size() == functionArguments2.size());
 
-    vector<SharedSMTRef> equalInputs;
-    std::transform(functionArguments1.begin(), functionArguments1.end(),
-                   functionArguments2.begin(), std::back_inserter(equalInputs),
-                   [](auto &arg1, auto &arg2) {
-                       return makeOp("=", std::move(arg1), std::move(arg2));
-                   });
-
-    if (additionalIn) {
-        equalInputs.push_back(body);
-    }
     if (body == nullptr || additionalIn) {
+        assert(functionArguments1.size() == functionArguments2.size());
+        vector<SharedSMTRef> equalInputs;
+        std::transform(functionArguments1.begin(), functionArguments1.end(),
+                       functionArguments2.begin(), std::back_inserter(equalInputs),
+                       [](auto &arg1, auto &arg2) {
+                           return makeOp("=", std::move(arg1), std::move(arg2));
+                       });
+        if (additionalIn) {
+            equalInputs.push_back(body);
+        }
         body = make_unique<Op>("and", equalInputs);
     }
     if (strings) {
