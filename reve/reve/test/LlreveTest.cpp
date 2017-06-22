@@ -79,7 +79,13 @@ TEST_P(LlreveTest, Llreve) {
     std::tie(directory, fileName, expectedResult, solver) = GetParam();
     fileName =
         PathToTestExecutable + "../../examples/" + directory + "/" + fileName;
-    auto smtOutput = std::tmpnam(nullptr);
+    char smtOutput[7] = "XXXXXX";
+    int fd = mkstemp(smtOutput);
+    if (fd == -1) {
+        perror("mkstemp");
+        exit(1);
+    }
+    close(fd);
     std::ostringstream llreveCommand;
     llreveCommand << PathToTestExecutable
                   << "llreve -inline-opts -o=" << smtOutput
