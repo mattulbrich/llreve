@@ -63,7 +63,11 @@ Type llvmType(const llvm::Type *type) {
     if (type->isPointerTy()) {
         return pointerType();
     } else if (type->isIntegerTy()) {
-        return IntType(type->getIntegerBitWidth());
+        if (type->getIntegerBitWidth() == 1) {
+            return boolType();
+        } else {
+            return IntType(type->getIntegerBitWidth());
+        }
     } else if (type->isFloatingPointTy()) {
         return FloatType(
             semanticsExponent(type->getFltSemantics()),

@@ -286,8 +286,9 @@ SExprRef TypeCast::toSExpr() const {
     // Extending 1bit integers (i.e. booleans) to integers is an SMT type
     // conversion and we have to deal with it separately
     if (destType.getTag() == TypeTag::Int && destType.unsafeBitWidth() > 1 &&
-        sourceType.getTag() == TypeTag::Int &&
-        sourceType.unsafeBitWidth() == 1) {
+        ((sourceType.getTag() == TypeTag::Int &&
+          sourceType.unsafeBitWidth() == 1) ||
+         sourceType.getTag() == TypeTag::Bool)) {
         unsigned destBitWidth = destType.unsafeBitWidth();
         vector<SharedSMTRef> args = {
             operand,
