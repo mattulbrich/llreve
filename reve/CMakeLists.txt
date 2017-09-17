@@ -35,7 +35,7 @@ if(${LLREVE_SANITIZE})
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined -fsanitize=address")
 endif()
 
-find_package(LLVM 4.0 REQUIRED CONFIG)
+find_package(LLVM 5.0 REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
 find_package(Threads REQUIRED)
 find_package(BISON REQUIRED)

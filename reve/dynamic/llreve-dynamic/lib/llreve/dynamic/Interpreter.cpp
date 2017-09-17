@@ -15,35 +15,35 @@
 
 #include "llvm/IR/Constants.h"
 
-using llvm::LoadInst;
-using llvm::StoreInst;
-using llvm::GetElementPtrInst;
 using llvm::Argument;
 using llvm::BasicBlock;
 using llvm::BinaryOperator;
 using llvm::BranchInst;
-using llvm::Function;
-using llvm::SwitchInst;
-using llvm::ICmpInst;
+using llvm::CastInst;
 using llvm::CmpInst;
+using llvm::ConstantInt;
+using llvm::Function;
+using llvm::GetElementPtrInst;
+using llvm::ICmpInst;
 using llvm::Instruction;
-using llvm::SelectInst;
+using llvm::LoadInst;
 using llvm::PHINode;
 using llvm::ReturnInst;
+using llvm::SelectInst;
+using llvm::StoreInst;
+using llvm::SwitchInst;
 using llvm::TerminatorInst;
 using llvm::Value;
 using llvm::dyn_cast;
 using llvm::isa;
-using llvm::ConstantInt;
-using llvm::CastInst;
 
-using std::vector;
-using std::string;
+using std::function;
+using std::make_shared;
 using std::map;
 using std::shared_ptr;
-using std::make_shared;
 using std::static_pointer_cast;
-using std::function;
+using std::string;
+using std::vector;
 
 using nlohmann::json;
 
@@ -186,7 +186,7 @@ interpretBlock(const BasicBlock &block, const BasicBlock *prevBlock,
         if (const auto call = dyn_cast<llvm::CallInst>(&*instrIterator)) {
             const Function *fun = call->getCalledFunction();
             FastVarMap args;
-            auto argIt = fun->getArgumentList().begin();
+            auto argIt = fun->arg_begin();
             for (const auto &arg : call->arg_operands()) {
                 args.insert(std::make_pair(
                     &*argIt, resolveValue(arg, state, arg->getType())));
@@ -590,5 +590,5 @@ json stateToJSON(State<T> state, function<string(T)> getName) {
     j["heapBackground"] = toJSON(state.heap.background);
     return j;
 }
-}
-}
+} // namespace dynamic
+} // namespace llreve

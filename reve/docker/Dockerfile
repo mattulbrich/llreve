@@ -1,6 +1,6 @@
 FROM ubuntu:16.04
 MAINTAINER Moritz Kiefer <moritz.kiefer@purelyfunctional.org>
-ENV LLVM_VERSION 4.0.0
+ENV LLVM_VERSION 5.0.0
 ENV Z3_VERSION 4.5.0
 RUN apt-get update && \
     apt-get install -y \

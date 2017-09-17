@@ -41,18 +41,18 @@
 using llvm::Module;
 using llvm::Optional;
 
-using std::make_unique;
-using std::make_shared;
-using std::shared_ptr;
-using std::string;
-using std::vector;
-using std::list;
 using std::ifstream;
 using std::ios;
+using std::list;
+using std::make_shared;
+using std::make_unique;
 using std::map;
-using std::set;
-using std::static_pointer_cast;
 using std::multiset;
+using std::set;
+using std::shared_ptr;
+using std::static_pointer_cast;
+using std::string;
+using std::vector;
 
 using namespace smt;
 using namespace std::placeholders;
@@ -341,13 +341,12 @@ static void iterateTracesInRange(
     assert(!(funs.first->isVarArg() || funs.second->isVarArg()));
     std::vector<Integer> argValues;
 
-    assert(funs.first->getArgumentList().size() ==
-           funs.second->getArgumentList().size());
+    assert(funs.first->arg_size() == funs.second->arg_size());
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> distribution(0, 100);
     for (unsigned i = 0; i < randomExamples; ++i) {
-        std::vector<mpz_class> vals(funs.first->getArgumentList().size());
+        std::vector<mpz_class> vals(funs.first->arg_size());
         for (auto &val : vals) {
             val = mpz_class(distribution(gen));
         }
@@ -1274,5 +1273,5 @@ void dumpCounterExample(Mark cexStartMark, Mark cexEndMark,
 
     dumpArrays(arrays);
 }
-}
-}
+} // namespace dynamic
+} // namespace llreve

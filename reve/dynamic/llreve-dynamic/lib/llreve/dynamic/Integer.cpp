@@ -275,17 +275,17 @@ Integer Integer::ashr(const Integer &rhs) const {
 Integer Integer::and_(const Integer &rhs) const {
     assert(type == IntType::Bounded);
     assert(type == IntType::Bounded);
-    return Integer(bounded.And(rhs.bounded));
+    return Integer(bounded & rhs.bounded);
 }
 Integer Integer::or_(const Integer &rhs) const {
     assert(type == IntType::Bounded);
     assert(type == IntType::Bounded);
-    return Integer(bounded.Or(rhs.bounded));
+    return Integer(bounded | rhs.bounded);
 }
 Integer Integer::xor_(const Integer &rhs) const {
     assert(type == IntType::Bounded);
     assert(type == IntType::Bounded);
-    return Integer(bounded.Xor(rhs.bounded));
+    return Integer(bounded ^ rhs.bounded);
 }
 
 Integer Integer::asPointer() const {
