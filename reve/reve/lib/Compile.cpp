@@ -18,9 +18,6 @@
 #include "clang/Frontend/FrontendDiagnostic.h"
 #include "clang/Frontend/TextDiagnosticPrinter.h"
 
-using std::shared_ptr;
-using std::string;
-using std::unique_ptr;
 using clang::CodeGenAction;
 using clang::CompilerInstance;
 using clang::CompilerInvocation;
@@ -31,6 +28,9 @@ using clang::driver::JobList;
 using llvm::ErrorOr;
 using llvm::IntrusiveRefCntPtr;
 using llvm::opt::ArgStringList;
+using std::shared_ptr;
+using std::string;
+using std::unique_ptr;
 
 using namespace llreve::opts;
 
@@ -74,12 +74,25 @@ void executeCodeGenActions(
     executeCodeGenAction(cmdArgs.second, *diags, actions.second);
 }
 
+static ArgStringList filterCC1Args(const ArgStringList &ccArgs) {
+    ArgStringList newCcArgs;
+    llvm::StringSet<> ignoredArgs = {"-discard-value-names"};
+    for (auto &arg : ccArgs) {
+        if (ignoredArgs.find(arg) == ignoredArgs.end()) {
+            newCcArgs.push_back(arg);
+        }
+    }
+    return newCcArgs;
+}
+
 /// Build the CodeGenAction corresponding to the arguments
 void executeCodeGenAction(const ArgStringList &ccArgs,
                           clang::DiagnosticsEngine &diags, CodeGenAction &act) {
+    ArgStringList filteredCcArgs = filterCC1Args(ccArgs);
     auto ci = std::make_unique<CompilerInvocation>();
-    CompilerInvocation::CreateFromArgs(*ci, (ccArgs.data()),
-                                       (ccArgs.data()) + ccArgs.size(), diags);
+    CompilerInvocation::CreateFromArgs(
+        *ci, filteredCcArgs.data(),
+        filteredCcArgs.data() + filteredCcArgs.size(), diags);
     ci->getFrontendOpts().DisableFree = false;
     CompilerInstance clang;
     clang.setInvocation(std::move(ci));
