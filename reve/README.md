@@ -1,7 +1,8 @@
 Regression Verification on LLVM
 ===============================
 
-For a description of the technial isntallation and usage conditions, please refer to the README.md of the subdirectory reve.
+For a description of the **technial details, installation and usage**,
+please refer to the README.md of the **subdirectory reve**.
 
 ----------
 

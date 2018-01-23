@@ -1,5 +1,113 @@
 # llrêve
 
+## Installation and compilation
+
+### Prerequisites
+
+LLVM and Clang 5.0 are required, other version probably won't work, so
+make sure you have the right one.  You also need version 4.5 of the
+SMT solver [z3](https://github.com/Z3Prover/z3).  *Caution: Newer
+versions than 4.5 seem to interpret the input differently and do not
+seem to work with llreve.*
+
+### Compilation
+
+Go to the llreve directory and run
+
+    cd reve
+    mkdir build
+    cd build
+    cmake .. -GNinja
+    ninja
+
+The resulting binary will be in `reve/llreve`.
+
+### Docker
+
+The easiest way to build llreve is to use a docker image containing
+the right llvm and z3.
+
+#### Download image
+    docker pull cocreature/llreve:llvm-5.0_z3-4.5
+
+#### Start container 
+    docker run -it --rm -v $YOUR_PATH_TO_LLREVE:/llreve cocreature/llreve:llvm-5.0_z3-4.5 /bin/sh
+    
+#### Now within the container execute:
+    cd /llreve/reve && mkdir build && cd build  
+    cmake .. -GNinja
+    ninja
+
+Please consult the [official docker
+documentation](https://docs.docker.com/engine/getstarted/) if needed.
+
+### Ubuntu/Debian
+
+Ubuntu & Debian completely messed up the cmake config so both the
+packages provided by the distros as well as the packages provided by
+llvm.org are unusable.
+
+Best is to use the Docker image.
+
+### Archlinux
+
+Just install the packages from the repo and be happy that you have to
+do way less work than everybody else.
+
+### Windows
+
+First of all you need to install `Visual Studio 2015` (other versions
+may work but have not been tested). The free community edition is
+enough for our purposes. Make sure to select the C++ toolchain during
+the installation process.
+
+Before we start building anything, download the
+[`ninja` build system](https://github.com/ninja-build/ninja/releases)
+and add the executable to your path. In `Powershell` you can do this
+permanently via
+
+```
+[Environment]::SetEnvironmentVariable("Path", "$env:Path;C:\path\to\directory\containing\ninja\", "User")
+```
+
+From now on you should run everything from inside the `Developer
+Command Prompt for VS2015` which you can find in the start menu.
+
+You can now install LLVM & Clang via the usual installation procedure
+using Ninja. (I’ll leave it up to you to translate the commands to
+windows).
+
+```
+wget -c http://llvm.org/releases/3.8.0/llvm-3.8.0.src.tar.xz
+wget -c http://llvm.org/releases/3.8.0/cfe-3.8.0.src.tar.xz
+tar xvf llvm-3.8.0.src.tar.xz
+tar xvf cfe-3.8.0.src.tar.xz
+mkdir llvm-3.8.0.src/tools/clang
+cp -r cfe-3.8.0.src/* llvm-3.8.0.src/tools/clang
+cd llvm-3.8.0.src
+mkdir build
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=C:\Where\You\Want\To\Install\LLVM -GNinja
+ninja
+ninja install
+```
+
+Now you can install [Z3](https://github.com/Z3Prover/z3.git) from the
+git master branch using the
+[cmake](https://github.com/Z3Prover/z3/blob/master/README-CMake.md)
+instructions. The important customizations here are `-GNinja` and
+`-DCMAKE_INSTALL_PREFIX`, `-DBUILD_LIBZ3_SHARED=OFF`. You also need to make sure to set
+`-DCMAKE_BUILD_TYPE=Release`.
+
+Now that all dependencies are setup we can finally build `llreve`
+using the usual cmake dance. Again you should use `-GNinja` and if
+`Z3` is not detected, pass
+`-DZ3_LIB=C:\Z3\Install_prefix\lib\libz3.lib` and
+`-DZ3_INCLUDE_DIRS=C:\Z3\Install_prefix\include` to cmake.
+
+
+
+
 ## Usage
 
 The inputs to llrêve are two C source files. Most of the C language
@@ -71,103 +179,3 @@ extern function.
 
 #### Other annotations
 ` __attribute__((always_inline))`
-
-## Installation
-
-### Prerequisites
-
-LLVM and Clang 3.8.0 are required, other version probably won't work,
-so make sure you have the right one.
-Also you need to build z3 from the master branch
-
-### Vagrant
-
-If you don’t want to mess with your system and are not familiar with
-the LLVM build process you can build the vagrant image.
-To do so, execute the following commands:
-
-```
-cd reve/vagrant
-vagrant up
-# This will take a long time since it builds llvm & clang but this is a one time process.
-```
-
-After that you can either run `vagrant ssh` and work inside of the vm
-or execute `build.sh` to build static binaries which can be used for
-the webinterface.
-
-### Docker
-
-There is a docker image in `reve/docker` based on
-[Alpine Linux](https://alpinelinux.org/) which is great for static
-linking. It has the big advantage over vagrant that Alpine includes
-working packages of Clang & LLVM so the docker image builds a lot
-faster than the corresponding vagrant image. I won’t explain Docker
-here so please consult the
-[official documentation](https://docs.docker.com/engine/getstarted/).
-
-### Ubuntu/Debian
-
-Ubuntu & Debian completely messed up the cmake config so both the
-packages provided by the distros as well as the packages provided by
-llvm.org are unusable.
-
-The easiest solution to this problem is probably to insult the package
-maintainers until they stop messing with upstream packages and just
-distribute them like they are intended.
-
-### Archlinux
-
-Just install the packages from the repo and be happy that you have to
-do way less work than everybody else.
-
-### Windows
-
-First of all you need to install `Visual Studio 2015` (other versions
-may work but have not been tested). The free community edition is
-enough for our purposes. Make sure to select the C++ toolchain during
-the installation process.
-
-Before we start building anything, download the
-[`ninja` build system](https://github.com/ninja-build/ninja/releases)
-and add the executable to your path. In `Powershell` you can do this
-permanently via
-
-```
-[Environment]::SetEnvironmentVariable("Path", "$env:Path;C:\path\to\directory\containing\ninja\", "User")
-```
-
-From now on you should run everything from inside the `Developer
-Command Prompt for VS2015` which you can find in the start menu.
-
-You can now install LLVM & Clang via the usual installation procedure
-using Ninja. (I’ll leave it up to you to translate the commands to
-windows).
-
-```
-wget -c http://llvm.org/releases/3.8.0/llvm-3.8.0.src.tar.xz
-wget -c http://llvm.org/releases/3.8.0/cfe-3.8.0.src.tar.xz
-tar xvf llvm-3.8.0.src.tar.xz
-tar xvf cfe-3.8.0.src.tar.xz
-mkdir llvm-3.8.0.src/tools/clang
-cp -r cfe-3.8.0.src/* llvm-3.8.0.src/tools/clang
-cd llvm-3.8.0.src
-mkdir build
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=C:\Where\You\Want\To\Install\LLVM -GNinja
-ninja
-ninja install
-```
-
-Now you can install [Z3](https://github.com/Z3Prover/z3.git) from the
-git master branch using the
-[cmake](https://github.com/Z3Prover/z3/blob/master/README-CMake.md)
-instructions. The important customizations here are `-GNinja` and
-`-DCMAKE_INSTALL_PREFIX`, `-DBUILD_LIBZ3_SHARED=OFF`. You also need to make sure to set
-`-DCMAKE_BUILD_TYPE=Release`.
-
-Now that all dependencies are setup we can finally build `llreve`
-using the usual cmake dance. Again you should use `-GNinja` and if
-`Z3` is not detected, pass
-`-DZ3_LIB=C:\Z3\Install_prefix\lib\libz3.lib` and
-`-DZ3_INCLUDE_DIRS=C:\Z3\Install_prefix\include` to cmake.
