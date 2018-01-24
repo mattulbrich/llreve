@@ -246,11 +246,16 @@ static void addForbiddenPaths(
                 const auto smt1 = assignmentsOnPath(path1, Program::First,
                                                     freeVarsMap1.at(startIndex),
                                                     endIndex1 == EXIT_MARK);
-                // We need to interleave here, because
-                // otherwise
-                // extern functions are not matched
-                auto smt = interleaveAssignments(
-                    make_unique<ConstantBool>(false), smt1, smt2);
+                // The datalog input format of Z3 cannot handle clauses whose
+                // head is "false". We need to use the query predicate instead.
+                unique_ptr<SMTExpr> clauseHead =
+                    SMTGenerationOpts::getInstance().OutputFormat ==
+                            SMTFormat::Z3
+                        ? unique_ptr<SMTExpr>(make_unique<Query>("END_QUERY"))
+                        : unique_ptr<SMTExpr>(make_unique<ConstantBool>(false));
+                // We need to interleave here, to match calls to
+                // extern functions.
+                auto smt = interleaveAssignments(std::move(clauseHead), smt1, smt2);
                 pathExprs[startIndex].push_back(std::move(smt));
             }
         }
