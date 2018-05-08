@@ -251,7 +251,7 @@ static void addForbiddenPaths(
                 unique_ptr<SMTExpr> clauseHead =
                     SMTGenerationOpts::getInstance().OutputFormat ==
                             SMTFormat::Z3
-                        ? unique_ptr<SMTExpr>(make_unique<Query>("END_QUERY"))
+                        ? unique_ptr<SMTExpr>(make_unique<TypedVariable>("END_QUERY", boolType()))
                         : unique_ptr<SMTExpr>(make_unique<ConstantBool>(false));
                 // We need to interleave here, to match calls to
                 // extern functions.
