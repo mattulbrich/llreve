@@ -1,4 +1,4 @@
-/*@ rel_in (and (= dst_name$1_0 dst_name$2_0) (= dest_desc$1_0 dest_desc$2_0) (= uid$1_0 uid$2_0) (= gid$1_0 gid$2_0) (= fchown_dest_desc_uid_gid$1_0 fchown_dest_desc_uid_gid$2_0) (= chown_dst_name_uid_gid$1_0 chown_dst_name_uid_gid$2_0) (= chown_failure_ok_x$1_0 chown_failure_ok_x$2_0) (= x_require_preserve$1_0 x_require_preserve$2_0) (= errno$1_0 errno$2_0) (= fchown_dest_desc_uid_gid$1_0 0) (= chown_dst_name_uid_gid$1_0 0) (forall ((i Int)) (= (select HEAP$1 i) (select HEAP$2 i))) (>= dst_name$1_0 0) (>= dst_name$2_0 0)) @*/
+/*@ rel_in (and (= dst_name$1 dst_name$2) (= dest_desc$1 dest_desc$2) (= uid$1 uid$2) (= gid$1 gid$2) (= fchown_dest_desc_uid_gid$1 fchown_dest_desc_uid_gid$2) (= chown_dst_name_uid_gid$1 chown_dst_name_uid_gid$2) (= chown_failure_ok_x$1 chown_failure_ok_x$2) (= x_require_preserve$1 x_require_preserve$2) (= errno$1 errno$2) (= fchown_dest_desc_uid_gid$1 0) (= chown_dst_name_uid_gid$1 0) (forall ((i Int)) (= (select HEAP$1 i) (select HEAP$2 i))) (>= dst_name$1 0) (>= dst_name$2 0)) @*/
 typedef int uid_t;
 typedef int gid_t;
 

@@ -1,4 +1,4 @@
-/*@ rel_in (and (= net$1_0 net$2_0) (= uaddr$1_0 uaddr$2_0) (= uaddr_len$1_0 uaddr_len$2_0) (= sap$1_0 sap$2_0) (= salen$1_0 salen$2_0) (forall ((i Int)) (= (select HEAP$1 i) (select HEAP$2 i))) (>= net$1_0 0) (>= uaddr$1_0 0) (>= sap$1_0 0) (>= net$2_0 0) (>= uaddr$2_0 0) (>= sap$2_0 0) (or (> uaddr_len$1_0 42) (<= uaddr_len$1_0 40))) @*/
+/*@ rel_in (and (= net$1 net$2) (= uaddr$1 uaddr$2) (= uaddr_len$1 uaddr_len$2) (= sap$1 sap$2) (= salen$1 salen$2) (forall ((i Int)) (= (select HEAP$1 i) (select HEAP$2 i))) (>= net$1 0) (>= uaddr$1 0) (>= sap$1 0) (>= net$2 0) (>= uaddr$2 0) (>= sap$2 0) (or (> uaddr_len$1 42) (<= uaddr_len$1 40))) @*/
 #define RPCBIND_MAXUADDRLEN  	(42)
 #define NULL 			(0)
 #define unlikely(c)		(c)

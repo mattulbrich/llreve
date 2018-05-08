@@ -1,4 +1,4 @@
-/*@ pre (and (>= a$1_0 0) (< b$1_0 n$1_0) (<= a$1_0 b$1_0)) @*/
+/*@ pre (and (>= a$1 0) (< b$1 n$1) (<= a$1 b$1)) @*/
 int sep1(int *x, int n, int a, int b) {
     int cnt_even = 0;
     int cnt_odd = 0;

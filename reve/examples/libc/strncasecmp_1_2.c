@@ -3,9 +3,9 @@
 extern int __mark(int);
 /*@ rel_in
 (and
-         (= s1$1_0 s1$2_0)
-         (= s2$1_0 s2$2_0)
-         (= len$1_0 len$2_0)
+         (= s1$1 s1$2)
+         (= s2$1 s2$2)
+         (= len$1 len$2)
          (forall
             ((i Int))
             (and

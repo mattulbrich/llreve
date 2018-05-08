@@ -1,11 +1,11 @@
 extern int __mark(int);
 /*@ rel_in
 (and
-      (= votes$1_0 votes$2_0)
-      (= res$1_0 res$2_0)
-      (= length$1_0 length$2_0)
-      (> length$1_0 2)
-      (< (+ votes$1_0 length$1_0) res$1_0)
+      (= votes$1 votes$2)
+      (= res$1 res$2)
+      (= length$1 length$2)
+      (> length$1 2)
+      (< (+ votes$1 length$1) res$1)
       (forall ((i Int))
               (and (= (select HEAP$1 i) (select HEAP$2 i))
                    (>= 1 (select HEAP$1 i))

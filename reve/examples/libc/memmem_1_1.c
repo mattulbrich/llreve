@@ -2,14 +2,14 @@
 // openbsd
 /*@ rel_in
 (and
-      (= haystack$1_0 haystack$2_0)
-      (= hl$1_0 hl$2_0)
-      (= needle$1_0 needle$2_0)
-      (= nl$1_0 nl$2_0)
-      (>= haystack$1_0 0)
-      (>= hl$1_0 0)
-      (>= nl$1_0 0)
-      (>= needle$1_0 0)
+      (= haystack$1 haystack$2)
+      (= hl$1 hl$2)
+      (= needle$1 needle$2)
+      (= nl$1 nl$2)
+      (>= haystack$1 0)
+      (>= hl$1 0)
+      (>= nl$1 0)
+      (>= needle$1 0)
       (forall
          ((i Int))
          (= (select HEAP$1 i) (select HEAP$2 i))))

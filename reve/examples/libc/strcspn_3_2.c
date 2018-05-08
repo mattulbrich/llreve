@@ -1,9 +1,9 @@
 /* glibc */
 /*@ rel_in
    (and
-      (= s$1_0 s$2_0)
-      (= reject$1_0 reject$2_0)
-      (> reject$1_0 0)
+      (= s$1 s$2)
+      (= reject$1 reject$2)
+      (> reject$1 0)
       (forall
          ((i Int))
          (= (select HEAP$1 i) (select HEAP$2 i))))

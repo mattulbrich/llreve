@@ -1,4 +1,4 @@
-/*@ rel_in (and (= n$1_0 n$2_0) (<= 0 n$1_0) (<= n$1_0 1)) @*/
+/*@ rel_in (and (= n$1 n$2) (<= 0 n$1) (<= n$1 1)) @*/
 extern int __mark(int);
 
 int g(int n)

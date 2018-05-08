@@ -1,4 +1,4 @@
-/*@ rel_in (and (= a$1_0 a$2_0) (= b$1_0 b$2_0) (= n$1_0 n$2_0) (forall ((i Int)) (= (select HEAP$1 i) (select HEAP$2 i))) (> a$1_0 (+ b$1_0 n$1_0))) @*/
+/*@ rel_in (and (= a$1 a$2) (= b$1 b$2) (= n$1 n$2) (forall ((i Int)) (= (select HEAP$1 i) (select HEAP$2 i))) (> a$1 (+ b$1 n$1))) @*/
 extern int __mark(int);
 
 void swap(int *a, int *b, int n) {

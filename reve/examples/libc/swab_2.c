@@ -1,14 +1,14 @@
 /* openbsd */
 /*@ rel_in
 (and
-      (= src$1_0 from$2_0)
-      (= dest$1_0 to$2_0)
-      (= nbytes$1_0 len$2_0)
+      (= src$1 from$2)
+      (= dest$1 to$2)
+      (= nbytes$1 len$2)
       (forall
          ((i Int))
          (= (select HEAP$1 i) (select HEAP$2 i)))
 ; no overlap
-      (<= (+ src$1_0 nbytes$1_0) dest$1_0))
+      (<= (+ src$1 nbytes$1) dest$1))
 @*/
 #include <unistd.h>
 extern int __mark(int);
