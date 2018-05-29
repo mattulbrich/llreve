@@ -422,7 +422,7 @@ vector<AssignmentCallBlock> assignmentsOnPath(const Path &path, Program prog,
     vector<DefOrCallInfo> oldDefs;
     oldDefs.reserve(freeVars.size());
     for (const auto &var : freeVars) {
-        oldDefs.emplace_back(make_unique<Assignment>(
+        oldDefs.emplace_back(make_unique<AssignmentGroup>(
             var.name, make_unique<TypedVariable>(var.name + "_old", var.type)));
     }
     vector<AssignmentCallBlock> allDefs;
@@ -781,7 +781,7 @@ SplitAssignments splitAssignmentsFromCalls(
     vector<struct AssignmentBlock> currentAssignmentsList;
     for (auto &assignments : assignmentCallBlocks) {
         SharedSMTRef condition = assignments.condition;
-        vector<Assignment> currentDefinitions;
+        vector<AssignmentGroup> currentDefinitions;
         for (auto &defOrCall : assignments.definitions) {
             if (defOrCall.tag == DefOrCallInfoTag::Def) {
                 currentDefinitions.emplace_back(

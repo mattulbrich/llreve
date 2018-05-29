@@ -15,14 +15,14 @@
 #include <fstream>
 #include <iostream>
 
+using smt::Forall;
+using smt::Op;
 using smt::SharedSMTRef;
 using smt::SortedVar;
 using smt::VarDecl;
-using std::vector;
-using smt::Forall;
-using smt::Op;
 using std::set;
 using std::shared_ptr;
+using std::vector;
 
 using namespace llreve::opts;
 
@@ -93,7 +93,7 @@ struct AssignmentRenameVisitor : smt::SMTVisitor {
     }
 
     void dispatch(smt::Let &let) override {
-        for (auto &assignment : let.defs) {
+        for (auto &assignment : let.defs.assgns) {
             int newIndex = ++variableMap[assignment.first];
             assignment.first += "_" + std::to_string(newIndex);
         }
@@ -132,8 +132,8 @@ removeForalls(smt::SMTExpr &expr, std::set<SortedVar> &introducedVariables) {
 }
 
 struct CompressLetVisitor : smt::SMTVisitor {
-    std::vector<smt::Assignment> defs;
-    std::map<smt::SMTExpr *, std::vector<smt::Assignment>> storedDefs;
+    std::vector<smt::AssignmentGroup> defs;
+    std::map<smt::SMTExpr *, std::vector<smt::AssignmentGroup>> storedDefs;
     CompressLetVisitor() : smt::SMTVisitor(true) {}
     void dispatch(Forall &forall) override {
         storedDefs.insert({&forall, defs});
@@ -144,7 +144,7 @@ struct CompressLetVisitor : smt::SMTVisitor {
         return nestLets(forall.shared_from_this(), storedDefs.at(&forall));
     }
     void dispatch(smt::Let &let) override {
-        defs.insert(defs.end(), let.defs.begin(), let.defs.end());
+        defs.emplace_back(let.defs);
     }
     shared_ptr<smt::SMTExpr> reassemble(smt::Let &let) override {
         return let.expr;

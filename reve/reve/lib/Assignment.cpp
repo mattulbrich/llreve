@@ -18,12 +18,12 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Operator.h"
 
-using std::vector;
-using std::make_unique;
-using std::unique_ptr;
-using std::string;
-using llvm::Instruction;
 using llvm::CmpInst;
+using llvm::Instruction;
+using std::make_unique;
+using std::string;
+using std::unique_ptr;
+using std::vector;
 
 using namespace smt;
 using namespace llreve::opts;
@@ -37,6 +37,7 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
     definitions.reserve(BB.size());
     assert(BB.size() >= 1); // There should be at least a terminator instruction
     bool ignorePhis = prevBb == nullptr;
+    AssignmentVec phiAssgns;
     for (auto instr = BB.begin(), e = std::prev(BB.end(), 1); instr != e;
          ++instr) {
         // Ignore phi nodes if we are in a loop as they're bound in a
@@ -44,8 +45,14 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
         if (!ignorePhis && llvm::isa<llvm::PHINode>(instr)) {
             auto assignments = instrAssignment(*instr, prevBb, prog);
             for (auto &assignment : assignments) {
-                definitions.emplace_back(std::move(assignment));
+                phiAssgns.insert(phiAssgns.end(), assignment->assgns.begin(),
+                                 assignment->assgns.end());
             }
+        }
+        if (!llvm::isa<llvm::PHINode>(instr)) {
+            definitions.emplace_back(
+                std::make_unique<AssignmentGroup>(std::move(phiAssgns)));
+            phiAssgns.clear();
         }
         if (!onlyPhis && !llvm::isa<llvm::PHINode>(instr)) {
             if (const auto CallInst = llvm::dyn_cast<llvm::CallInst>(instr)) {
@@ -90,6 +97,10 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
             }
         }
     }
+    if (!phiAssgns.empty()) {
+        definitions.emplace_back(
+            std::make_unique<AssignmentGroup>(std::move(phiAssgns)));
+    }
     if (const auto retInst =
             llvm::dyn_cast<llvm::ReturnInst>(BB.getTerminator())) {
         // TODO (moritz): use a more clever approach for void functions
@@ -114,7 +125,7 @@ vector<DefOrCallInfo> blockAssignments(const llvm::BasicBlock &BB,
 }
 
 /// Convert a single instruction to an assignment
-llvm::SmallVector<unique_ptr<Assignment>, 1>
+llvm::SmallVector<unique_ptr<AssignmentGroup>, 1>
 instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
                 Program prog) {
     const int progIndex = programIndex(prog);
@@ -183,7 +194,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             phiInst->getType()->isPointerTy()) {
             auto locAssgn = makeAssignment(
                 string(phiInst->getName()) + "_OnStack", instrLocation(val));
-            llvm::SmallVector<unique_ptr<Assignment>, 1> result;
+            llvm::SmallVector<unique_ptr<AssignmentGroup>, 1> result;
             result.push_back(std::move(assgn));
             result.push_back(std::move(locAssgn));
             return result;
@@ -206,7 +217,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             auto location =
                 makeOp("ite", instrNameOrVal(cond), instrLocation(trueVal),
                        instrLocation(falseVal));
-            llvm::SmallVector<unique_ptr<Assignment>, 1> result;
+            llvm::SmallVector<unique_ptr<AssignmentGroup>, 1> result;
             result.push_back(std::move(assgn));
             result.push_back(
                 makeAssignment(string(selectInst->getName()) + "_OnStack",
@@ -227,7 +238,7 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
         auto assgn = makeAssignment(getElementPtrInst->getName(),
                                     resolveGEP(*getElementPtrInst));
         if (SMTGenerationOpts::getInstance().Stack == StackOpt::Enabled) {
-            llvm::SmallVector<unique_ptr<Assignment>, 1> result;
+            llvm::SmallVector<unique_ptr<AssignmentGroup>, 1> result;
             result.push_back(std::move(assgn));
             result.push_back(makeAssignment(
                 string(getElementPtrInst->getName()) + "_OnStack",
@@ -324,10 +335,11 @@ instrAssignment(const llvm::Instruction &Instr, const llvm::BasicBlock *prevBb,
             typeSize(allocaInst->getAllocatedType(),
                      allocaInst->getModule()->getDataLayout());
         std::string sp = stackPointerName(progIndex);
-        llvm::SmallVector<unique_ptr<Assignment>, 1> result;
-        result.push_back(makeAssignment(
-            sp, makeOp("-", sp, std::make_unique<ConstantInt>(
-                                    llvm::APInt(64, allocatedSize)))));
+        llvm::SmallVector<unique_ptr<AssignmentGroup>, 1> result;
+        result.push_back(
+            makeAssignment(sp, makeOp("-", sp,
+                                      std::make_unique<ConstantInt>(
+                                          llvm::APInt(64, allocatedSize)))));
         result.push_back(
             makeAssignment(allocaInst->getName(),
                            make_unique<TypedVariable>(sp, pointerType())));
@@ -597,9 +609,10 @@ vector<DefOrCallInfo> memcpyIntrinsic(const llvm::CallInst *callInst,
                                                   std::make_unique<ConstantInt>(
                                                       llvm::APInt(64, i))));
                     const vector<SharedSMTRef> args = {
-                        heapStore, makeOp("+", basePointerDest,
-                                          std::make_unique<ConstantInt>(
-                                              llvm::APInt(64, i))),
+                        heapStore,
+                        makeOp(
+                            "+", basePointerDest,
+                            std::make_unique<ConstantInt>(llvm::APInt(64, i))),
                         std::move(select)};
                     definitions.push_back(makeAssignment(
                         heapNameStore, make_unique<Op>("store", args)));
@@ -664,7 +677,6 @@ auto coupledCalls(const CallInfo &call1, const CallInfo &call2) -> bool {
     if (!hasFixedAbstraction(call1.fun) || !hasFixedAbstraction(call2.fun)) {
         return coupledNames;
     }
-    return coupledNames &&
-           call1.fun.getFunctionType()->getNumParams() ==
-               call2.fun.getFunctionType()->getNumParams();
+    return coupledNames && call1.fun.getFunctionType()->getNumParams() ==
+                               call2.fun.getFunctionType()->getNumParams();
 }

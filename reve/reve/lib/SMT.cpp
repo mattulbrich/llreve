@@ -18,13 +18,13 @@
 #include <iostream>
 
 namespace smt {
-using std::map;
 using std::make_shared;
 using std::make_unique;
-using std::shared_ptr;
-using std::unique_ptr;
+using std::map;
 using std::set;
+using std::shared_ptr;
 using std::string;
+using std::unique_ptr;
 using std::vector;
 
 using namespace llreve::opts;
@@ -145,7 +145,7 @@ SExprRef SortedVar::toSExpr() const {
 
 SExprRef Let::toSExpr() const {
     SExprVec defSExprs;
-    for (const auto &def : defs) {
+    for (const auto &def : defs.assgns) {
         SExprVec argSExprs;
         argSExprs.push_back(def.second->toSExpr());
         defSExprs.push_back(
@@ -468,8 +468,9 @@ SharedSMTRef Assert::inlineLets(map<string, SharedSMTRef> assignments) {
 }
 
 SharedSMTRef Let::inlineLets(map<string, SharedSMTRef> assignments) {
-    for (const auto &def : defs) {
-        assignments[def.first] = def.second->inlineLets(assignments);
+    map<string, SharedSMTRef> oldAssignments = assignments;
+    for (const auto &def : defs.assgns) {
+        assignments[def.first] = def.second->inlineLets(oldAssignments);
     }
     return expr->inlineLets(assignments);
 }
@@ -643,7 +644,7 @@ ConstantInt::toZ3Expr(z3::context &cxt,
 
 z3::expr Let::toZ3Expr(z3::context &cxt, llvm::StringMap<z3::expr> &nameMap,
                        const llvm::StringMap<Z3DefineFun> &defineFunMap) const {
-    for (const auto &assgn : defs) {
+    for (const auto &assgn : defs.assgns) {
         auto e = assgn.second->toZ3Expr(cxt, nameMap, defineFunMap);
         auto it = nameMap.insert({assgn.first, e});
         if (!it.second) {
@@ -806,30 +807,44 @@ void FunDef::toZ3(z3::context &cxt, z3::solver & /* unused */,
     defineFunMap.insert({funName, {vars, z3Body}});
 }
 
-std::unique_ptr<smt::SMTExpr> fastNestLets(std::unique_ptr<smt::SMTExpr> clause,
-                                           llvm::ArrayRef<Assignment> defs) {
+std::unique_ptr<smt::SMTExpr>
+fastNestLets(std::unique_ptr<smt::SMTExpr> clause,
+             llvm::ArrayRef<AssignmentGroup> defs) {
     for (auto i = defs.rbegin(); i != defs.rend(); ++i) {
-        clause = std::make_unique<Let>(AssignmentVec({std::move(*i)}),
-                                       std::move(clause));
+        clause = std::make_unique<Let>(i->assgns, std::move(clause));
     }
     return clause;
 }
 
-SharedSMTRef nestLets(SharedSMTRef clause, llvm::ArrayRef<Assignment> defs) {
+// Returns true if any of the definitions redefines a variable in uses.
+static bool usesRedefined(const AssignmentGroup &assgn,
+                          llvm::StringSet<> uses) {
+    for (auto &x : assgn.assgns) {
+        if (uses.find(x.first) != uses.end()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+SharedSMTRef nestLets(SharedSMTRef clause,
+                      llvm::ArrayRef<AssignmentGroup> defs) {
     SharedSMTRef lets = std::move(clause);
     llvm::StringSet<> uses;
     AssignmentVec defsAccum;
     for (auto i = defs.rbegin(), e = defs.rend(); i != e; ++i) {
-        if (uses.find(i->first) != uses.end()) {
+        if (usesRedefined(*i, uses)) {
             std::reverse(defsAccum.begin(), defsAccum.end());
             lets = std::make_unique<Let>(std::move(defsAccum), std::move(lets));
             uses = llvm::StringSet<>();
             defsAccum.clear();
         }
-        defsAccum.push_back(*i);
-        llvm::StringSet<> usesForExpr = collectUses(*i->second);
-        for (const auto &use : usesForExpr) {
-            uses.insert(use.getKey());
+        defsAccum.insert(defsAccum.end(), i->assgns.begin(), i->assgns.end());
+        for (auto &def : i->assgns) {
+            llvm::StringSet<> usesForExpr = collectUses(*def.second);
+            for (const auto &use : usesForExpr) {
+                uses.insert(use.getKey());
+            }
         }
     }
     if (!defsAccum.empty()) {
@@ -855,8 +870,9 @@ unique_ptr<Op> makeOp(std::string opName,
     return make_unique<Op>(opName, smtArgs);
 }
 
-unique_ptr<Assignment> makeAssignment(string name, unique_ptr<SMTExpr> val) {
-    return make_unique<Assignment>(name, std::move(val));
+unique_ptr<AssignmentGroup> makeAssignment(string name,
+                                           unique_ptr<SMTExpr> val) {
+    return make_unique<AssignmentGroup>(name, std::move(val));
 }
 bool isArray(const Type &type) { return type.getTag() == TypeTag::Array; }
 
@@ -910,7 +926,7 @@ shared_ptr<SMTExpr> Let::accept(SMTVisitor &visitor) const {
     // the let itself. However let statements cannot be recursive and it thus
     // makes sense to traverse them first.
     if (!visitor.ignoreLetBindings) {
-        for (auto &def : result->defs) {
+        for (auto &def : result->defs.assgns) {
             def.second = def.second->accept(visitor);
         }
     }
@@ -990,7 +1006,7 @@ shared_ptr<SMTExpr> VarDecl::accept(SMTVisitor &visitor) const {
     visitor.dispatch(*result);
     return visitor.reassemble(*result);
 }
-}
+} // namespace smt
 
 static size_t lexerOffset;
 static const char *lexerInput;

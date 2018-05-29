@@ -31,8 +31,21 @@ class SortedVar;
 class SMTExpr;
 using SharedSMTRef = std::shared_ptr<SMTExpr>;
 
-using Assignment = std::pair<std::string, SharedSMTRef>;
-using AssignmentVec = llvm::SmallVector<Assignment, 3>;
+using AssignmentVec =
+    llvm::SmallVector<std::pair<std::string, SharedSMTRef>, 3>;
+
+struct AssignmentGroup {
+    // A list of independent assignments that should be bound in a single let.
+    AssignmentVec assgns;
+    AssignmentGroup() {}
+    AssignmentGroup(std::string name, SharedSMTRef val) {
+        assgns.push_back({name, val});
+    }
+    AssignmentGroup(std::pair<std::string, SharedSMTRef> def) {
+        assgns.push_back(std::move(def));
+    }
+    AssignmentGroup(AssignmentVec assgns) : assgns(std::move(assgns)) {}
+};
 
 struct HeapInfo {
     std::string arrayName;
@@ -97,7 +110,7 @@ class SMTExpr : public std::enable_shared_from_this<SMTExpr> {
 
 using SMTRef = std::unique_ptr<SMTExpr>;
 auto makeAssignment(std::string name, std::unique_ptr<SMTExpr> val)
-    -> std::unique_ptr<Assignment>;
+    -> std::unique_ptr<AssignmentGroup>;
 
 class SetLogic : public SMTExpr {
   public:
@@ -210,10 +223,16 @@ class GetModel : public SMTExpr {
 
 class Let : public SMTExpr {
   public:
-    AssignmentVec defs;
+    AssignmentGroup defs;
     std::shared_ptr<SMTExpr> expr;
-    Let(AssignmentVec defs, std::shared_ptr<SMTExpr> expr)
+    Let(AssignmentGroup defs, std::shared_ptr<SMTExpr> expr)
         : defs(std::move(defs)), expr(std::move(expr)) {}
+    Let(AssignmentVec defs_, std::shared_ptr<SMTExpr> expr)
+        : expr(std::move(expr)) {
+        for (auto &def : defs_) {
+            defs.assgns.push_back(def);
+        }
+    }
     std::shared_ptr<SMTExpr> accept(SMTVisitor &visitor) const override;
     sexpr::SExprRef toSExpr() const override;
     SharedSMTRef
@@ -539,11 +558,11 @@ struct SMTVisitor {
     }
 };
 
-auto nestLets(SharedSMTRef clause, llvm::ArrayRef<Assignment> defs)
+auto nestLets(SharedSMTRef clause, llvm::ArrayRef<AssignmentGroup> defs)
     -> SharedSMTRef;
 
 auto fastNestLets(std::unique_ptr<smt::SMTExpr> clause,
-                  llvm::ArrayRef<Assignment> defs)
+                  llvm::ArrayRef<AssignmentGroup> defs)
     -> std::unique_ptr<smt::SMTExpr>;
 
 bool isArray(const Type &type);
@@ -551,6 +570,6 @@ bool isArray(const Type &type);
 std::unique_ptr<SMTExpr> memoryVariable(std::string name);
 std::unique_ptr<TypedVariable> typedVariableFromSortedVar(const SortedVar &var);
 SortedVar sortedVarFromTypedVariable(const TypedVariable &var);
-}
+} // namespace smt
 void setSMTLexerInput(const char *input);
 smt::SharedSMTRef parseSMT(const std::string &input);

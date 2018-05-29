@@ -42,9 +42,9 @@ struct AssignmentCallBlock {
 };
 
 struct AssignmentBlock {
-    std::vector<smt::Assignment> definitions;
+    std::vector<smt::AssignmentGroup> definitions;
     smt::SharedSMTRef condition;
-    AssignmentBlock(std::vector<smt::Assignment> definitions,
+    AssignmentBlock(std::vector<smt::AssignmentGroup> definitions,
                     smt::SharedSMTRef condition)
         : definitions(std::move(definitions)), condition(std::move(condition)) {
     }

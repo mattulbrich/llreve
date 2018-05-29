@@ -37,10 +37,10 @@ auto coupledCalls(const CallInfo &call1, const CallInfo &call2) -> bool;
 enum class DefOrCallInfoTag { Call, Def };
 
 struct DefOrCallInfo {
-    std::unique_ptr<smt::Assignment> definition;
+    std::unique_ptr<smt::AssignmentGroup> definition;
     std::unique_ptr<CallInfo> callInfo;
     DefOrCallInfoTag tag;
-    DefOrCallInfo(std::unique_ptr<smt::Assignment> definition)
+    DefOrCallInfo(std::unique_ptr<smt::AssignmentGroup> definition)
         : definition(std::move(definition)), callInfo(nullptr),
           tag(DefOrCallInfoTag::Def) {}
     DefOrCallInfo(std::unique_ptr<struct CallInfo> callInfo)
@@ -53,7 +53,7 @@ auto blockAssignments(const llvm::BasicBlock &bb,
                       Program prog) -> std::vector<DefOrCallInfo>;
 auto instrAssignment(const llvm::Instruction &instr,
                      const llvm::BasicBlock *prevBb, Program prog)
-    -> llvm::SmallVector<std::unique_ptr<smt::Assignment>, 1>;
+    -> llvm::SmallVector<std::unique_ptr<smt::AssignmentGroup>, 1>;
 auto predicateName(const llvm::CmpInst::Predicate pred) -> std::string;
 auto predicateFun(const llvm::CmpInst &pred, smt::SMTRef) -> smt::SMTRef;
 auto fpPredicate(const llvm::CmpInst::Predicate pred) -> smt::FPCmp::Predicate;
