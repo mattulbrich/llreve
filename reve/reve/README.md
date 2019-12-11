@@ -114,6 +114,10 @@ The inputs to llrêve are two C source files. Most of the C language
 the preprocessor are supported. Notable exceptions are bit operations
 and floating points.
 
+The output of the tool is a file in SMT-Lib format that can be sent to
+to an SMT solver to be solved. The solver must support constraint Horn 
+clauses
+
 There are two (mostly orthogonal) ways to customize the behavior of llrêve:
 
 ### CLI Arguments
@@ -137,9 +141,9 @@ are placed manually they have to break all cycles in the CFG.
 
 - `__splitmark`
 
-This is almost identical to `__mark` but the call to `__splitmark`
+This is almost identical to `__mark`, but the call to `__splitmark`
 ends up in a basic block on its own. This is mostly useful when
-multiple marks are in in a program segement without cycles.
+multiple marks are in in a program segment without cycles.
 
 - `__inlineCall`
 
@@ -154,28 +158,51 @@ This allows specifying commandline options directly in the source via
 `arguments`. This is mostly useful in the webinterface where this is
 the only way to specify cli args.
 
-- /*@ rel_in arg @*/
+- `/*@ rel_in arg @*/`
 
 Replace the input relation (equality by default) by `arg`. `arg` needs
 to be valid SMT (this is currently not checked). A function parameter called `n`
 in program `i` can be accessed via the SMT variable `n$i_0`
 
-- /*@ rel_out arg @*/
+- `/*@ rel_out arg @*/`
 
 Replace the output relation (equality by default) by `arg`. `arg`
 needs to be valid SMT (this is currently not checked). The two return
 values can be accessed via the SMT variable `ret$1` and `ret$2`.
 
-- /*@ pre arg @*/
+- `/*@ pre arg @*/`
 
 Add `arg` conjunctively to the input relation. `arg` needs to be valid
 SMT (this is currently not checked). A function parameter called `n`
 in program `i` can be accessed via the SMT variable `n$i_0`.
 
-- /*@ addfuncond function cond @*/
+- `/*@ addfuncond function cond @*/`
 
 Add `cond` conjunctively to the output of the specification for an
 extern function.
 
 #### Other annotations
 ` __attribute__((always_inline))`
+
+
+## SMT solvers
+
+Currently, llreve works well with
+[Z3](https://github.com/Z3Prover/z3) and
+[eldarica](https://github.com/uuverifiers/eldarica).
+
+For eldarica, the SMT produced by llreve can directly be send to the
+tool:
+
+    $LLREVE $file1.c $file2.c -inline-opts -o reve.smt2
+    $ELDARICA -ssol -t:300 reve.smt2
+
+This invoked the eldarica binary (either `eldarica` or `eld-client`
+from the solver project) with a timeout of 5 minutes.
+
+    $LLREVE $file1.c $file2.c -inline-opts -muz -o reve.smt2
+    $Z3 fixedpoint.engine=duality -T:300 reve.smt2
+
+Alternatively, instead of `duality`, other engines can be used. In
+particular the more recent `spacer` solver performs better in some
+cases (but not always).
