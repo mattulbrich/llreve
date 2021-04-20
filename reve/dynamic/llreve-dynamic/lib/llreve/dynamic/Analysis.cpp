@@ -370,7 +370,8 @@ driver(MonoPair<llvm::Module &> modules, AnalysisResultsMap &analysisResults,
         getFunctionArguments(functionPair, analysisResults);
     std::vector<SortedVar> funArgs;
     funArgs.insert(funArgs.end(), funArgsPair.first.begin(),
-                   funArgsPair.second.end());
+                   // MU bugfix? funArgsPair.second.end());
+                   funArgsPair.first.end());
     funArgs.insert(funArgs.end(), funArgsPair.second.begin(),
                    funArgsPair.second.end());
 
