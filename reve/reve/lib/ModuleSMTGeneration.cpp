@@ -410,5 +410,7 @@ SMTRef initImplication(const FunDef &funDecl) {
     SMTRef forall =
         std::make_unique<smt::Forall>(funDecl.args, std::move(clause));
 
-    return make_unique<smt::Assert>(std::move(forall));
+    // return make_unique<smt::Assert>(std::move(forall));
+    // MU: Potential bugfix for #21
+    return forall;
 }
